@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rick-mcgeer-us-ignite-org-binding
+  namespace: rick-mcgeer-us-ignite-org
+subjects:
+- kind: User
+  name: rick-mcgeer-us-ignite-org
+  apiGroup: ""
+roleRef:
+  kind: Role
+  name: deployment-manager
+  apiGroup: ""

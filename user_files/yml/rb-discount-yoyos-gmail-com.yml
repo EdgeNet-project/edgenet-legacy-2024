@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: discount-yoyos-gmail-com-binding
+  namespace: discount-yoyos-gmail-com
+subjects:
+- kind: User
+  name: discount-yoyos-gmail-com
+  apiGroup: ""
+roleRef:
+  kind: Role
+  name: deployment-manager
+  apiGroup: ""

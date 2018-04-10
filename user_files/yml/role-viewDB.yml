@@ -1,0 +1,19 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: view-dashboard
+rules:
+- apiGroups:
+  - ""
+  attributeRestrictions: null
+  resources:
+  - dashboard
+  verbs:
+  - get
+  - watch
+  - list
+- attributeRestrictions: null
+  nonResourceURLs:
+  - '*'
+  verbs:
+  - '*'

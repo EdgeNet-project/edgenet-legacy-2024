@@ -1,0 +1,9 @@
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: discount-yoyos-gmail-com
+  name: discount-yoyos-gmail-com-admin
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]

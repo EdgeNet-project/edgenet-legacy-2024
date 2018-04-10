@@ -1,0 +1,13 @@
+kind: RoleBinding
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: matt-binding
+    namespace: matt
+  subjects:
+  - kind: User
+    name: matt
+    apiGroup: ""
+  roleRef:
+    kind: Role
+    name: matt-admin
+    apiGroup: ""
