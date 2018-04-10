@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+{% autoescape true %}
+<html>
+<head>
+  <title>AUP</title>
+</head>
+<body>
+  <p> I, email {{email}}, solmenly swear that I am up to no good.
+  <form action="/aup_agree" method="post">
+    <input type="hidden" name="email" value={{email}}>
+    <input type="submit" value="Agree">
+  </form>
+  <a href="/">Back</a>
+</body>
+</html>
+{% endautoescape %}

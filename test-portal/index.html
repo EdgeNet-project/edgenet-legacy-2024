@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+{% autoescape true %}
+<html>
+<head>
+  <title>Test Page</title>
+</head>
+<body>
+  <p> I have detected a user with nickname {{user}} and email {{email}}.  <a href={{url}}>{{url_linktext}}</a>
+  {% if display_next %}
+  .  <a href={{next_url}}>{{next_url_linktext}}</a>
+  {% endif %}
+  <p> There are {{ users | length }} users
+  <table>
+    <tr>
+      <th>Email</th>
+      <th>AUP</th>
+    </tr>
+    {% for user in users %}
+    <tr>
+      <td> {{user["email"]}} </td>
+      <td> {{user["agreed_to_AUP"]}} </td>
+    </tr>
+    {% endfor %}
+  </table>
+ 
+</body>
+</html>
+{% endautoescape %}
