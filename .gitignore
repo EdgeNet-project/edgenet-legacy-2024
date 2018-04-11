@@ -1,2 +1,9 @@
 user_files/conf/**
 user_files/keys/**
+
+# Ignore OS X metadata files
+._*
+
+# Python bytecode
+*.pyc
+
