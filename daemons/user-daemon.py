@@ -19,7 +19,19 @@ def hello():
         return result
     except subprocess.CalledProcessError as e:
         return "Error: %s " % (str(e))
-    
+
+@app.route("/nodes")
+def get_nodes():
+    try:
+      cmd = ['./get_nodes.sh']
+      print(cmd)
+      result = subprocess.Popen(cmd,shell=False,stdout=subprocess.PIPE,bufsize=1).communicate()
+      f = StringIO()
+      f.write(unicode(result[0],"utf-8"))
+      f.seek(0)
+      return result
+    except subprocess.CalledProcessError as e:
+      return "Error in Get Nodes: %s " % (str(e))    
  
 if __name__ == "__main__":
     app.run(host='0.0.0.0',port=8181,debug=True)
