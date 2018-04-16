@@ -1,0 +1,5 @@
+cron:
+- description: "update nodes in the database"
+  url: /update_nodes
+  schedule: every 10 mins
+
