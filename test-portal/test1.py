@@ -26,7 +26,7 @@
 import os
 import urllib
 import sys
-import cloudstorage
+# import cloudstorage
 import datetime
 import json
 
@@ -196,6 +196,11 @@ def fetch_from_url(query_url, max_retries = 2):
       retries = retries + 1
   # didn't get it after max_retries, punting...
   return None
+
+#
+# A utility to add the current node list and timestamp to the values structure which 
+# gets passed to the templates...
+#
 
 def add_node_record_to_values(values):
   current_nodelist = get_current_nodelist_record()
