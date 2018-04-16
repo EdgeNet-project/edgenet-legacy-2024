@@ -6,11 +6,12 @@
 </head>
 <body>
   <p> I, email {{email}}, solmenly swear that I am up to no good.
-  <form action="/aup_agree" method="post">
+  <form action="/next_page/aup_agree" method="post">
     <input type="hidden" name="email" value={{email}}>
     <input type="submit" value="Agree">
   </form>
   <a href="/">Back</a>
+  <a href={{logout}}>Logout</a>
 </body>
 </html>
 {% endautoescape %}
