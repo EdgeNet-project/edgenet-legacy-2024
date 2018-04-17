@@ -8,6 +8,18 @@ handlers:
   static_files: favicon.ico
   upload: favicon\.ico
 
+- url: /images
+  static_dir: images
+
+- url: /styles
+  static_dir: styles
+
+- url: /update_nodes
+  script: test1.app
+  login: optional
+  secure: always
+  redirect_http_response_code: 301
+
 - url: /.*
   script: test1.app
   login: required

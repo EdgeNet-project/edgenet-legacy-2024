@@ -1,22 +1,8 @@
-<!DOCTYPE html>
-{% autoescape true %}
-<html>
-<head>
-  <title>Sundew Main Page</title>
-</head>
-<body>
-  <p> User  {{email}} is logged in.  <a href={{logout}}>Logout</a> <a href="/next_page/"> Use Sundew</a>.  Bucket is {{bucket}}.
-  {% if nodes %}
-  <center>
-    <table>
-      <tr><th> Current Sundew Node List Fetched at {{node_fetch_time}} UTC </th></tr>
-      {% for node in nodes %}
-      <tr><td>{{ node }}</td></tr>
-      {% endfor %}
-    </table>
-  </center>
-  {% endif %}
- 
-</body>
-</html>
-{% endautoescape %}
+{% extends "layout.html" %}
+{% block pageHeader %}
+
+  <p> This portal will let you create a namespace on the global Sundew cluster and download a configuration file which will let you access it.
+{% endblock %}
+{% block pageOptions %}
+  <p> User  {{email}} is logged in.  <a href="/next_page/"> Use Sundew</a>.
+{% endblock %}

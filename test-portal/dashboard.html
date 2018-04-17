@@ -1,25 +1,7 @@
-<!DOCTYPE html>
-{% autoescape true %}
-<html>
-<head>
-  <title>Dashboard</title>
-</head>
-<body>
+{% extends "layout.html"  %}
+{% block pageHeader %}
   <p> Dashboard for user {{email}} with namespace {{namespace}}.
-  <p> Get your configuration file  <a href="/download_config">here</a>.  Use it at <a href={{kubernetes_head_node}}> {{kubernetes_head_text}}</a> and choose namespace {{namespace}}
-  <p>
-  <a href="/"> Back </a>
-  <a href={{logout}}>Logout</a>
-  {% if nodes %}
-  <center>
-    <table>
-      <tr><th> Current Sundew Node List Fetched at {{node_fetch_time}} UTC </th></tr>
-      {% for node in nodes %}
-      <tr><td>{{ node }}</td></tr>
-      {% endfor %}
-    </table>
-  </center>
-  {% endif %}
-</body>
-</html>
-{% endautoescape %}
+{% endblock %}
+{% block pageOptions %}
+<p>Get your configuration file  <a href="/download_config">here</a>.  Use it at <a href={{kubernetes_head_node}}> {{kubernetes_head_text}}</a> and choose namespace {{namespace}}
+{% endblock %}

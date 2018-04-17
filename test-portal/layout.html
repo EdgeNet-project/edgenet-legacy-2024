@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+{% autoescape true %}
+<html>
+<head>
+		<title>
+			{% if title %}
+				{{title}}
+		  {% else %}
+		     Sundew
+		  {% endif %}
+		</title>
+		  <link rel="stylesheet" type="text/css" href="/styles/main.css">
+		  <link href='http://fonts.googleapis.com/css?family=PT+Sans' rel='stylesheet' type='text/css'>
+		{% block custhead %}
+		{% endblock %}
+</head>
+<body>
+	  <div id="imageHeader">
+		  <a href="/"><img src='/images/PlanetIgniteLogo.png' alt='PlanetIgnite Logo'/></a>
+	  </div>
+	  <div id="fullWrapper">
+	  	<div id="pageHeader">
+	  		{% block pageHeader %}
+		    {% endblock %}
+		  
+	    </div>
+	    <div id="pageOptions">
+	  		{% block pageOptions %}
+		    {% endblock %}
+		  
+	    </div>
+		  
+	  </div>
+		
+		<br>
+		<div id="content">
+			{% block content %}
+			{% endblock %}
+		</div>
+		<div id="nodeTable">
+			<style>
+			.nodetable table {
+				border: 1px solid black; 
+			}
+			.nodehead th {
+				height: 50px;
+				border: 1px solid black; 
+			}
+			.noderow tr:nth-child(even) {background-color: #f2f2f2;}
+			</style>
+			{% if nodes %}
+			  <center>
+			  	<table class="nodetable">
+			  		<tr><th class="nodehead"> Current Sundew Node List Fetched at {{node_fetch_time}} UTC </th></tr>
+			  		{% for node in nodes %}
+			  		<tr class="noderow"><td>{{ node }}</td></tr>
+			  		{% endfor %}
+			  	</table>
+			  </center>
+			 {% endif %}
+		</div>
+		<div id="footer">
+			<a href="/">Back</a>
+			<a href={{logout}}>Logout</a>
+		</div>
+</body>
+{% endautoescape %}
+</html>

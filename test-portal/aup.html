@@ -1,17 +1,23 @@
-<!DOCTYPE html>
-{% autoescape true %}
-<html>
-<head>
-  <title>AUP</title>
-</head>
-<body>
-  <p> I, email {{email}}, solmenly swear that I am up to no good.
+{% extends "layout.html" %}
+{% block pageHeader %}
+Please agree to the following Acceptable Use Policy for Sundew by clicking "Agree":
+{% endblock %}
+{% block pageOptions %}
+<style>
+table {
+  border: 1px, black;
+}
+</style>
+<br>
+<br>
+<center>
+<table>
+<tr><td align="center">I, {{email}}, solemnly swear that I am up to no good.</td></tr>
+<tr><td align="center">
   <form action="/next_page/aup_agree" method="post">
     <input type="hidden" name="email" value={{email}}>
     <input type="submit" value="Agree">
   </form>
-  <a href="/">Back</a>
-  <a href={{logout}}>Logout</a>
-</body>
-</html>
-{% endautoescape %}
+</td></tr></table>
+</center>
+{% endblock %}

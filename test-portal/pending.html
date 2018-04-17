@@ -1,13 +1,4 @@
-<!DOCTYPE html>
-{% autoescape true %}
-<html>
-<head>
-  <title>Pending Approval</title>
-</head>
-<body>
+{% extends "layout.html"  %}
+{% block pageOptions %}
   <p> Account for user {{email}} is pending approval.
-  <a href="/">Back</a>
-  <a href={{logout_url}}>Logout</a>
-</body>
-</html>
-{% endautoescape %}
+{% endblock %}

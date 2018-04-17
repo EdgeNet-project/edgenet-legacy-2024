@@ -156,8 +156,6 @@ def create_or_find_user(user_email):
   user_record = find_user(user_email)
   if user_record: return user_record
   agreed_to_AUP =  approved =  administrator = False
-  if user_email in admin_users:
-    agreed_to_AUP =  approved =  administrator = True
   namespace = make_new_namespace(user_email)
   user_record = User(email=user_email, namespace = namespace, agreed_to_AUP = agreed_to_AUP , approved = approved, administrator = administrator)
   user_record.put()
@@ -192,7 +190,7 @@ def fetch_from_url(query_url, max_retries = 2):
     try:
       response = urllib.urlopen(query_url).read()
       return response
-    except urllib.HTTPException:
+    except urllib.HTTPError:
       retries = retries + 1
   # didn't get it after max_retries, punting...
   return None
@@ -226,6 +224,7 @@ def display_next_page(user_record, request, response):
     values["namespace"] = user_record.namespace
     values["kubernetes_head_node"] = kubernetes_head_node
     values["kubernetes_head_text"] = kubernetes_head_text
+    values["title"] = "Sundew Dashboard for " + user_record.email
     if user_record.administrator: 
       # add the admin dashboard code here: fetch all the user records from the database and let the administrator 
       # administer them
@@ -233,11 +232,13 @@ def display_next_page(user_record, request, response):
     template = JINJA_ENVIRONMENT.get_template('dashboard.html')
     response.write(template.render(values))
   elif user_record.agreed_to_AUP:
+    values["title"] = "Sundew Pending Approval"
     template = JINJA_ENVIRONMENT.get_template('pending.html')
     response.write(template.render(values))
   else:
+    values["title"] = "Sundew AUP"
     template = JINJA_ENVIRONMENT.get_template('aup.html')
-    response.write(template.render(email=user_record.email))
+    response.write(template.render(values))
 
 # 
 # [START main_page]
@@ -246,7 +247,7 @@ def display_next_page(user_record, request, response):
 class MainPage(webapp2.RequestHandler):
   def get(self):
     nickname, email = get_current_user_nickname_and_email()
-    values = {"email": email, "logout": users.create_logout_url(self.request.uri), "bucket": bucket_name}
+    values = {"email": email, "logout": users.create_logout_url(self.request.uri), "title": "Sundew Main Page", "bucket": bucket_name}
     add_node_record_to_values(values)
     template = JINJA_ENVIRONMENT.get_template('index.html')
     self.response.write(template.render(values))
