@@ -47,6 +47,7 @@ JINJA_ENVIRONMENT = jinja2.Environment(
 
 #
 # get the default bucket
+# Since we aren't using CloudStorage at present, this is not live code
 #
 bucket_name = os.environ.get('BUCKET_NAME', app_identity.get_default_gcs_bucket_name())
 
@@ -92,6 +93,8 @@ class NodeList(ndb.Model):
 #
 # get the current nodelist record from the db.  This is used in a couple of places, so it's broken out
 # as a separate method.
+# get the current nodelist (most recent snapshot)
+# returns: the nodelist record if there is one that has active set to true, None otherwise
 #
 def get_current_nodelist_record():
   active =  NodeList.query(NodeList.active == True).fetch()
@@ -101,6 +104,9 @@ def get_current_nodelist_record():
 
 #
 # Store a list of nodes as the current nodelist, with a timestamp to show it's current
+# nodelist: the list of nodes as an array of strings
+# returns: no return
+# side effects: stores the current nodelist
 #
 def store_new_nodelist(nodelist):
   active = get_current_nodelist_record()
@@ -111,12 +117,17 @@ def store_new_nodelist(nodelist):
   record = NodeList(active = True, time = datetime.datetime.now(), nodes = json.dumps(nodelist))
   record.put()
 
+# 
 # Tweak the user email so it's a valid Kubernetes namespace.  A namespace is a field in an FQDN, so it
 # can only contain the characters in a field in an FQDN: 0-9, -, _, +, a-z.  A valid email address contains
 # those characters and @ and '.'.  So we replace those characters with a '-', and, since both email and FQDNs 
 # are case-insensitive, set everything to lower-case.  So Foo.Bar@waldo.com becomes foo-bar-waldo-com.  To ensure there
 # are no conflicts, check to see if there is already such a namespace, and if so add a '0' to the end, then '1', etc..
 # return the resulting namespace
+# email: the user's email as a string
+# returns: the modified email address
+# side effects: None
+#
 
 def make_new_namespace(email):
   email = email.lower()
@@ -134,6 +145,9 @@ def make_new_namespace(email):
 # get a user record corresponding to email, returning None if there is no record
 # convenience method (we do this a lot)
 # Returns a record, not a list.  There should never be more than one.
+# user_email: the user's email as a string
+# returns: the user record for this email if one is found, or None
+# side effects: None
 #
 def find_user(user_email):
   user_email = user_email.lower()
@@ -148,6 +162,9 @@ def find_user(user_email):
 # db, with the fields:
 # email = user_email, namespace = make_new_namespace(email), and agreed_to_AUP, approved, and admininistrator all False
 # return the record.  After this routine, the user is in the db.
+# user_email: the user's email as a string
+# returns: the user record corresponding to that email address
+# side effects: creates the record if it didn't exist
 #
 
 
@@ -166,6 +183,9 @@ def create_or_find_user(user_email):
 # Hook to the builtin Google App Engine authentication.  Get the user's email and nickname (Google App Engine defined)
 # We will use the user's email (all lower case) as our user identifier.  Since this page requires login, get_current_user() is
 # always true
+# returns: the user's nickname and email address as a tuple, nickname first
+# side effects: none
+# note: should it just return None if there is no email address?
 #
 
 def get_current_user_nickname_and_email():
@@ -183,6 +203,11 @@ kubernetes_head_text = 'Sundew Head Node'
 # A little utility to pull data from an URL.  Robust against some failures, since one of the servers we talk to can be
 # slow on the first query...
 #
+# query_url: the url do do the fetch
+# max_retries: the number of times to retry in the event of error
+# returns: the response from the query
+# side effects: none
+#
 
 def fetch_from_url(query_url, max_retries = 2):
   retries = 0
@@ -190,7 +215,7 @@ def fetch_from_url(query_url, max_retries = 2):
     try:
       response = urllib.urlopen(query_url).read()
       return response
-    except urllib.HTTPError:
+    except urllib.error.HTTPError:
       retries = retries + 1
   # didn't get it after max_retries, punting...
   return None
@@ -198,6 +223,10 @@ def fetch_from_url(query_url, max_retries = 2):
 #
 # A utility to add the current node list and timestamp to the values structure which 
 # gets passed to the templates...
+# 
+# values: a dictionary of values to be used in writing a template
+# returns: No return value
+# side effects: updates values with the current node list and time
 #
 
 def add_node_record_to_values(values):
@@ -214,6 +243,12 @@ def add_node_record_to_values(values):
 # 2. If the user has signed the AUP but has not been approved, show a pending page
 # 3. If the user has not signed the AUP, show that.
 #
+# user_record: the record of the user (see class User for fields)
+# request: an instance of webapp2.RequestHandler.request
+# response: an instance of webapp2.RequestHandler.response
+# returns: no return value
+# side effects: writes the appropriate next page on response
+#
 
 def display_next_page(user_record, request, response):
   logout_url = users.create_logout_url(request.uri)
@@ -228,7 +263,7 @@ def display_next_page(user_record, request, response):
     if user_record.administrator: 
       # add the admin dashboard code here: fetch all the user records from the database and let the administrator 
       # administer them
-      x = 3
+      pass
     template = JINJA_ENVIRONMENT.get_template('dashboard.html')
     response.write(template.render(values))
   elif user_record.agreed_to_AUP:
@@ -271,7 +306,7 @@ class NextPage(webapp2.RequestHandler):
 
 class AUP_AGREE(webapp2.RequestHandler):
   def post(self):
-    email = self.request.get('email')
+    nickname, email = get_current_user_nickname_and_email()
     record = create_or_find_user(email)
     record.agreed_to_AUP = True
     record.put()
