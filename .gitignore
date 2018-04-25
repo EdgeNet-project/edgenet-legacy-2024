@@ -1,6 +1,6 @@
 user_files/conf/**
 user_files/keys/**
-
+user_files/yml/*.yml
 # Ignore OS X metadata files
 ._*
 
