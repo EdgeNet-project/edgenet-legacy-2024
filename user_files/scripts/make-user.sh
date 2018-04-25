@@ -15,7 +15,7 @@ openssl x509 -req -in ../keys/$USER.csr -CA $CA_LOCATION/ca.crt -CAkey $CA_LOCAT
 kubectl config set-credentials $USER --client-certificate=../keys/$USER.crt  --client-key=../keys/$USER.key
 sed "s/template/$USER/g" ../yml/templates/role-template.yml > ../yml/role-$USER.yml
 sed "s/template/$USER/g" ../yml/templates/rb-template.yml > ../yml/rb-$USER.yml
-#kubectl create -f ../yml/role-$USER.yml
-#kubectl create -f ../yml/rb-$USER.yml
-#kubectl create rolebinding $USER-rolebind --clusterrole=admin --serviceaccount=$USER:default --namespace=$USER
+kubectl create -f ../yml/role-$USER.yml
+kubectl create -f ../yml/rb-$USER.yml
+kubectl create rolebinding $USER-rolebind --clusterrole=admin --serviceaccount=$USER:default --namespace=$USER
 #kubectl -n $USER describe secret $(kubectl -n kube-system get secret | grep $USER | awk '{print $1}')
