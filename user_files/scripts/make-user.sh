@@ -8,6 +8,7 @@ fi
 
 USER=$1
 
+kubectl create namespace $USER
 openssl genrsa -out ../keys/$USER.key 2048
 openssl req -new -key ../keys/$USER.key -out ../keys/$USER.csr -subj "/CN=$USER/O=sundew"
 openssl x509 -req -in ../keys/$USER.csr -CA $CA_LOCATION/ca.crt -CAkey $CA_LOCATION/ca.key -CAcreateserial -out ../keys/$USER.crt -days 500
