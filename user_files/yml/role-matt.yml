@@ -1,9 +1,0 @@
-kind: Role
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  namespace: matt
-  name: matt-admin
-rules:
-  - apiGroups: ["*"]
-    resources: ["*"]
-    verbs: ["*"]

@@ -1,9 +1,0 @@
-kind: Role
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  namespace: kube-system
-  name: db-view
-rules:
-  - apiGroups: ["services/https:kubernetes-dashboard"]
-    resources: ["*"]
-    verbs: ["get","list","watch"]
