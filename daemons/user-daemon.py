@@ -29,6 +29,7 @@ def hello():
 
 @app.route('/make-user')
 def make_user():
+    return "User creation disabled"
     try:
         user = request.args.get('user')
         cmd = ['sudo', './make-user.sh',user]
