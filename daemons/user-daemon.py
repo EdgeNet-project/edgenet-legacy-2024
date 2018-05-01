@@ -53,4 +53,4 @@ if __name__ == "__main__":
     key = '/etc/letsencrypt/live/head.sundewproject.org/privkey.pem'
     cert = '/etc/letsencrypt/live/head.sundewproject.org/cert.pem'
     context = (cert,key)
-    app.run(host='0.0.0.0',port=8181,debug=True, ssl_context=context)
+    app.run(host='0.0.0.0',port=8181,debug=True, threaded=True, ssl_context=context)
