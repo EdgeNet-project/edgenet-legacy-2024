@@ -30,17 +30,15 @@ def hello():
 
 @app.route('/make-user')
 def make_user():
-    return "User creation disabled"
     try:
         user = request.args.get('user')
         cmd = ['sudo', './make-user.sh',user]
         print(cmd)
         print('user creation request for: ' + user)
         result = make_call(cmd,r'../user_files/scripts')
-        return result
+        return jsonify(status="Success")
     except subprocess.CalledProcessError as e:
-        return 'Error in user creation:'
-
+        return jsonify(status= "Fail")
 @app.route("/nodes")
 def get_nodes():
     try:
