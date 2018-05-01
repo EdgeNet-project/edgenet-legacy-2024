@@ -1,7 +1,8 @@
 #!/usr/bin/python
-from flask import Flask, request, send_file
+from flask import Flask, request, send_file, jsonify
 import subprocess
 from io import StringIO
+from OpenSSL import SSL
 
 app = Flask(__name__)
 
@@ -51,4 +52,7 @@ def get_nodes():
       return "Error in Get Nodes: %s " % (str(e))    
  
 if __name__ == "__main__":
-    app.run(host='0.0.0.0',port=8181,debug=True)
+    key = '/etc/letsencrypt/live/head.sundewproject.org/privkey.pem'
+    cert = '/etc/letsencrypt/live/head.sundewproject.org/cert.pem'
+    context = (cert,key)
+    app.run(host='0.0.0.0',port=8181,debug=True, ssl_context=context)
