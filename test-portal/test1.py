@@ -25,6 +25,7 @@
 # [START imports]
 import os
 import urllib
+import httplib
 import sys
 # import cloudstorage
 import datetime
@@ -215,7 +216,7 @@ def fetch_from_url(query_url, max_retries = 2):
     try:
       response = urllib.urlopen(query_url).read()
       return response
-    except urllib.error.HTTPError:
+    except httplib.HTTPException:
       retries = retries + 1
   # didn't get it after max_retries, punting...
   return None
@@ -335,6 +336,8 @@ class DownloadConfig(webapp2.RequestHandler):
         self.response.out.write(head_node_response)
       else:
         values["no_response"] - True
+        self.response.write(template.render(values))
+
     else:
       self.response.write(template.render(values))
 
