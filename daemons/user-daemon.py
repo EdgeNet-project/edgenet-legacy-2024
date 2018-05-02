@@ -6,6 +6,12 @@ from OpenSSL import SSL
 
 app = Flask(__name__)
 
+def noblock_call(cmd,cwd="."):
+    try:
+      result = subprocess.Popen(cmd,shell=False,stdout=subprocess.PIPE,bufsize=1,cwd=cwd)
+      return jsonify(status="Acknowledged")
+    except subprocess.CalledProcessError as e:
+      return "Error: " + e
 def make_call(cmd,cwd='.'):
     try:
         result = subprocess.Popen(cmd,shell=False,stdout=subprocess.PIPE,bufsize=1,cwd=cwd).communicate()
@@ -33,10 +39,9 @@ def make_user():
     try:
         user = request.args.get('user')
         cmd = ['sudo', './make-user.sh',user]
-        print(cmd)
-        print('user creation request for: ' + user)
-        result = make_call(cmd,r'../user_files/scripts')
-        return jsonify(status="Success")
+        log('user creation request for: ' + user)
+        result = noblock_call(cmd,r'../user_files/scripts')
+        return result
     except subprocess.CalledProcessError as e:
         return jsonify(status= "Fail")
 @app.route("/nodes")
