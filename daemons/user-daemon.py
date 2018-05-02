@@ -6,6 +6,9 @@ from OpenSSL import SSL
 
 app = Flask(__name__)
 
+def log(logString):
+    print('[log]: ' + str(logString))
+
 def noblock_call(cmd,cwd="."):
     try:
       result = subprocess.Popen(cmd,shell=False,stdout=subprocess.PIPE,bufsize=1,cwd=cwd)
@@ -27,8 +30,8 @@ def hello():
     try:
         user = request.args.get('user')
         cmd = ['../user_files/scripts/make-config.sh','default','-n',user]
-	print(cmd)
-        print('request for user: ' + user)
+	log(cmd)
+        log('request for user: ' + user)
         result = make_call(cmd)
         return result
     except subprocess.CalledProcessError as e:
@@ -48,7 +51,8 @@ def make_user():
 def get_nodes():
     try:
       cmd = ['./get_nodes.sh']
-      print(cmd)
+      log(cmd)
+      log('node request')
       result = make_call(cmd)
       return result
     except subprocess.CalledProcessError as e:
