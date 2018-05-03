@@ -51,6 +51,7 @@ JINJA_ENVIRONMENT = jinja2.Environment(
 # Since we aren't using CloudStorage at present, this is not live code
 #
 bucket_name = os.environ.get('BUCKET_NAME', app_identity.get_default_gcs_bucket_name())
+NULL_NAMESPACE_NAME = "No Namespace"
 
 #
 # A User of the system.  Note that passwords are not stored here, and ATM the only
@@ -68,10 +69,11 @@ class User(ndb.Model):
   A boolean which tells us if the user is an administrator
   """
   email = ndb.StringProperty(indexed = True, required = True)
-  namespace = ndb.StringProperty(indexed = True, required = True)
+  namespace = ndb.StringProperty(indexed = True, required = True, default = NULL_NAMESPACE_NAME)
   agreed_to_AUP = ndb.BooleanProperty('ok', indexed=False, required = True, default = False)
   approved = ndb.BooleanProperty('approved', indexed=False, required = True, default = False)
-  administrator = ndb.BooleanProperty('admin', indexed=False, required = True, default = False)
+  administrator = ndb.BooleanProperty(indexed=False, required = True, default = False)
+  config = ndb.TextProperty(indexed = False, required = False)
 
 
 #
@@ -173,9 +175,8 @@ def create_or_find_user(user_email):
   user_email = user_email.lower()
   user_record = find_user(user_email)
   if user_record: return user_record
-  agreed_to_AUP =  approved =  administrator = False
-  namespace = make_new_namespace(user_email)
-  user_record = User(email=user_email, namespace = namespace, agreed_to_AUP = agreed_to_AUP , approved = approved, administrator = administrator)
+  # namespace = make_new_namespace(user_email)
+  user_record = User(email=user_email, namespace = None, agreed_to_AUP = False, approved = False, administrator = administrator)
   user_record.put()
   return user_record
 
@@ -196,7 +197,8 @@ def get_current_user_nickname_and_email():
   return user.nickname(), user.nickname()
 
    
-head_node_url = 'http://head.sundew.ch-geni-net.instageni.washington.edu:8181/' 
+# head_node_url = 'http://head.sundew.ch-geni-net.instageni.washington.edu:8181/' 
+head_node_url = 'https://head.sundewproject.org:8181/'
 kubernetes_head_node = 'https://head.sundewproject.org/'
 kubernetes_head_text = 'Sundew Head Node'
 
@@ -220,6 +222,27 @@ def fetch_from_url(query_url, max_retries = 2):
       retries = retries + 1
   # didn't get it after max_retries, punting...
   return None
+#
+# Fetch the config file for namespace namespace.  This is a thin wrapper over
+# fetch_from_url, broken out separately because it is called from a few places
+#
+# namespace: namespace to fetch the config file for
+# returns: the config file or None if there was an error
+# 
+def fetch_config_file(namespace):
+  query_url = '%s?user=%s' % (head_node_url, namespace)
+  return fetch_from_url(query_url, 2)
+
+#
+# Make a new namespace with namespace.  Return success or failure...
+#
+# namespace: namespace to create
+# returns: None (fail to connect) or structure with success/failure information
+# side effect: on success, creates the namespace on the head node
+#
+def make_namespace_on_head_node(namespace):
+  query_url = '%smake-user?user=%s' %(head_node_url, namespace)
+  return fetch_from_url(query_url, 2)
 
 #
 # A utility to add the current node list and timestamp to the values structure which 
@@ -314,6 +337,20 @@ class AUP_AGREE(webapp2.RequestHandler):
     display_next_page(record, self.request, self.response)
 
 #
+# Write a configuration file to the user. 
+# 
+# response: an instance of webapp2.RequestHandler.response
+# returns: no return value
+# side effects: writes the configuration file to the user
+# 
+
+def write_config(response, config):
+  response.headers['Content-Type'] = 'text/csv'
+  response.headers['Content-Disposition'] = "attachment; filename=sundew.cfg"
+  response.out.write(config)
+
+
+#
 # Download the Kubernetest configuration file.  Catches /download_config requests.  Checks to see if the user can download the config
 # file, and if so, calls the head node to get it and then downloads it to the user as a text blob, with headers to tell the user's OS
 # to save it as a file.
@@ -325,19 +362,19 @@ class DownloadConfig(webapp2.RequestHandler):
   def get(self):
     nickname, email = get_current_user_nickname_and_email()
     user_record = create_or_find_user(email)
-    values = {"email": email, "logout": users.create_logout_url(self.request.uri), "no_response": False, "approved": user_record.approved, "aup": user_record.agreed_to_AUP}
+    values = {"email": email, "namespace": user_record.namespace, "logout": users.create_logout_url(self.request.uri), "no_response": False, "approved": user_record.approved, "aup": user_record.agreed_to_AUP}
     template = JINJA_ENVIRONMENT.get_template('config_error.html')
-    if user_record.approved:
-      query_url = '%s?user=%s' % (head_node_url, user_record.namespace)
-      head_node_response = fetch_from_url(query_url, 2)
+    if user_record.config:
+      write_config(self.response, user_record.config)
+    elif user_record.namespace:
+      head_node_response = fetch_config_file(user_record.namespace)
       if head_node_response:
-        self.response.headers['Content-Type'] = 'text/csv'
-        self.response.headers['Content-Disposition'] = "attachment; filename=sundew.cfg"
-        self.response.out.write(head_node_response)
+        user_record.config = head_node_response
+        user_record.put()
+        write_config(self.response, user_record.config)
       else:
         values["no_response"] - True
         self.response.write(template.render(values))
-
     else:
       self.response.write(template.render(values))
 
@@ -359,6 +396,67 @@ class UpdateNodes(webapp2.RequestHandler):
     else:
       self.response.out.write('Node list fetch failed')
 
+#
+# update the configuration files in the db
+# This is intended to be run as a cron job, though it does output stuff for testing.
+#
+class UpdateConfigs(webapp2.RequestHandler):
+  # Variables to hold the status and the errors
+  def get(self):
+    namespaces_created = configs_stored = []
+    errors = []
+    # first, find the users in the db who have been approved but for whom there is no namespace
+    newUsers = User.query(User.namespace == NULL_NAMESPACE_NAME).fetch()
+    newUsers = [user for user in newUsers if user.approved]
+    # for each such user, tell the head node to create a namespace
+    for user in newUsers:
+      # create the namespace
+      namespace = make_new_namespace(user.email)
+      result = make_namespace_on_head_node(namespace)
+      # result is a json structure with one field: Success or Failure
+      # Three outcomes: 
+      # (1) No connectivity, in which case result = None
+      # (2) Failure in which case status["status"] = "Failure"
+      # (3) Success, in which case status["status"] = "Success".  In this case we
+      #     record the user's namespace in the DB
+      # If a failure, record the error
+      if result:
+        status = json.loads(result)
+        if (status["status"] == "Success"):
+          user.namespace = namespace
+          user.put()
+          namespaces_created.append(namespace)
+        else: 
+          errors.append('Namespace creation failed for ' + namespace)
+      else:
+        errors.append('No response from server on attempt to create namespace ' + namespace)
+
+    #
+    # Get and store configuration files for any user with a namespace but no config file
+    # Will either succeed or fail to connect.
+    #
+
+    noConfigs = User.query(User.namespace == NULL_NAMESPACE_NAME)
+    noConfigs = [user for user in noConfigs if user.config == None]
+    for user_record in noConfigs:
+      head_node_response = fetch_config_file(user_record.namespace)
+      if head_node_response:
+          user_record.config = head_node_response
+          user_record.put()
+          configs_stored.append(user_record.namespace)
+      else:
+        errors.append('No response from server on attempt to get config for  namespace ' + user_record.namespace)
+
+    # Turn the arrays into strings and write the result for debugging
+
+    create_string = ", ".join(namespaces_created)
+    config_string = ", ".join(configs_stored)
+    error_string = "\n".join(errors)
+
+    self.response.out.write('Namespaces created: %s\n Configurations stored for: %s\n Errors: %s\n' % (create_string, config_string, error_string))
+
+
+
 
 
     
@@ -367,6 +465,7 @@ app = webapp2.WSGIApplication([
   ('/next_page/', NextPage),
   ('/next_page/aup_agree', AUP_AGREE),
   ('/download_config', DownloadConfig),
-  ('/update_nodes', UpdateNodes)
+  ('/update_nodes', UpdateNodes),
+  ('/update_configs', UpdateConfigs)
   ], debug=True)
 # [END app]
