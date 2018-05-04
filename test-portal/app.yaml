@@ -20,11 +20,21 @@ handlers:
   secure: always
   redirect_http_response_code: 301
 
+- url: /update_configs
+  script: test1.app
+  login: optional
+  secure: always
+  redirect_http_response_code: 301
+
 - url: /.*
   script: test1.app
   login: required
   secure: always
   redirect_http_response_code: 301
+
+- url: /admin/.*
+  script: google.appengine.ext.admin.application
+  login: admin
 
 
 

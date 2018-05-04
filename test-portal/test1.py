@@ -52,6 +52,15 @@ JINJA_ENVIRONMENT = jinja2.Environment(
 #
 bucket_name = os.environ.get('BUCKET_NAME', app_identity.get_default_gcs_bucket_name())
 NULL_NAMESPACE_NAME = "No Namespace"
+#
+# Status Values for User.namespace_status.  A namespace_status is one of
+# NO_NAMESPACE, NAMESPACE_REQUESTED, NAMESPACE_ASSIGNED.  These values
+# should NEVER be changed without updating the datastore simultaneously
+#
+NO_NAMESPACE = 0
+NAMESPACE_REQUESTED = 1
+NAMESPACE_ASSIGNED = 2
+
 
 #
 # A User of the system.  Note that passwords are not stored here, and ATM the only
@@ -70,9 +79,11 @@ class User(ndb.Model):
   """
   email = ndb.StringProperty(indexed = True, required = True)
   namespace = ndb.StringProperty(indexed = True, required = True, default = NULL_NAMESPACE_NAME)
+  namespace_status = ndb.IntegerProperty(indexed = True, required = True, default = NO_NAMESPACE)
   agreed_to_AUP = ndb.BooleanProperty('ok', indexed=False, required = True, default = False)
   approved = ndb.BooleanProperty('approved', indexed=False, required = True, default = False)
-  administrator = ndb.BooleanProperty(indexed=False, required = True, default = False)
+  administrator = ndb.BooleanProperty(indexed=False, required = True, default = False) 
+  has_config = ndb.BooleanProperty(indexed = True, required = True, default = False)
   config = ndb.TextProperty(indexed = False, required = False)
 
 
@@ -176,7 +187,7 @@ def create_or_find_user(user_email):
   user_record = find_user(user_email)
   if user_record: return user_record
   # namespace = make_new_namespace(user_email)
-  user_record = User(email=user_email, namespace = None, agreed_to_AUP = False, approved = False, administrator = administrator)
+  user_record = User(email=user_email,  agreed_to_AUP = False, approved = False, administrator = False)
   user_record.put()
   return user_record
 
@@ -364,16 +375,17 @@ class DownloadConfig(webapp2.RequestHandler):
     user_record = create_or_find_user(email)
     values = {"email": email, "namespace": user_record.namespace, "logout": users.create_logout_url(self.request.uri), "no_response": False, "approved": user_record.approved, "aup": user_record.agreed_to_AUP}
     template = JINJA_ENVIRONMENT.get_template('config_error.html')
-    if user_record.config:
+    if user_record.has_config:
       write_config(self.response, user_record.config)
     elif user_record.namespace:
       head_node_response = fetch_config_file(user_record.namespace)
       if head_node_response:
         user_record.config = head_node_response
+        user_record.has_config = True
         user_record.put()
         write_config(self.response, user_record.config)
       else:
-        values["no_response"] - True
+        values["no_response"] = True
         self.response.write(template.render(values))
     else:
       self.response.write(template.render(values))
@@ -383,7 +395,7 @@ class DownloadConfig(webapp2.RequestHandler):
 #
 class UpdateNodes(webapp2.RequestHandler):
   def get(self):
-    response = fetch_from_url('http://head.sundewproject.org:8181/nodes')
+    response = fetch_from_url(head_node_url + 'nodes')
     if response:
       nodes = response.split('\n')
       if len(nodes) == 0: 
@@ -406,7 +418,7 @@ class UpdateConfigs(webapp2.RequestHandler):
     namespaces_created = configs_stored = []
     errors = []
     # first, find the users in the db who have been approved but for whom there is no namespace
-    newUsers = User.query(User.namespace == NULL_NAMESPACE_NAME).fetch()
+    newUsers = User.query(User.namespace_status == NO_NAMESPACE).fetch()
     newUsers = [user for user in newUsers if user.approved]
     # for each such user, tell the head node to create a namespace
     for user in newUsers:
@@ -422,8 +434,9 @@ class UpdateConfigs(webapp2.RequestHandler):
       # If a failure, record the error
       if result:
         status = json.loads(result)
-        if (status["status"] == "Success"):
+        if (status["status"] == "Acknowledged"):
           user.namespace = namespace
+          user.namespace_status = NAMESPACE_ASSIGNED
           user.put()
           namespaces_created.append(namespace)
         else: 
@@ -436,12 +449,13 @@ class UpdateConfigs(webapp2.RequestHandler):
     # Will either succeed or fail to connect.
     #
 
-    noConfigs = User.query(User.namespace == NULL_NAMESPACE_NAME)
-    noConfigs = [user for user in noConfigs if user.config == None]
+    noConfigs = User.query(User.namespace_status == NAMESPACE_ASSIGNED and User.has_config == False)
+    
     for user_record in noConfigs:
       head_node_response = fetch_config_file(user_record.namespace)
       if head_node_response:
           user_record.config = head_node_response
+          user_record.has_config = True
           user_record.put()
           configs_stored.append(user_record.namespace)
       else:
