@@ -436,7 +436,7 @@ class UpdateConfigs(webapp2.RequestHandler):
         status = json.loads(result)
         if (status["status"] == "Acknowledged"):
           user.namespace = namespace
-          user.namespace_status = NAMESPACE_ASSIGNED
+          user.namespace_status = NAMESPACE_REQUESTED
           user.put()
           namespaces_created.append(namespace)
         else: 
@@ -470,7 +470,22 @@ class UpdateConfigs(webapp2.RequestHandler):
     self.response.out.write('Namespaces created: %s\n Configurations stored for: %s\n Errors: %s\n' % (create_string, config_string, error_string))
 
 
-
+class ConfirmNamespace(webapp2.RequestHandler):
+  def post(self):
+    namespace_name = self.request.get('namespace')
+    if not namespace_name:
+      self.response.out.write('No Namespace sent!')
+    else:
+      records = User.query(User.namespace == namespace_name)
+      if (len(records) == 0):
+        result = {'outcome': 'Failure', 'reason': 'No records for namespace ' + namespace_name + ' found!'}
+      elif len(records) == 1:
+        records[0].namespace_status = NAMESPACE_ASSIGNED
+        result = {'outcome': 'Success', 'reason': 'Namespace ' + namespace_name + ' confirmed!'}
+        records[0].put()
+      else:
+        result = {'outcome': 'Failure', 'reason': 'Multiple records for namespace ' + namespace_name + ' found!'}
+      self.response.out.write(json.dumps(result))
 
 
     
@@ -480,6 +495,7 @@ app = webapp2.WSGIApplication([
   ('/next_page/aup_agree', AUP_AGREE),
   ('/download_config', DownloadConfig),
   ('/update_nodes', UpdateNodes),
-  ('/update_configs', UpdateConfigs)
+  ('/update_configs', UpdateConfigs),
+  ('/confirm_namespace', ConfirmNamespace)
   ], debug=True)
 # [END app]
