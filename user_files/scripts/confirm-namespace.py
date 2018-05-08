@@ -10,8 +10,8 @@
 import requests
 import sys
 if __name__ == "__main__":
-  if len(sys.argv) != 1:
-    print >> sys.stderr, "Error: confirm-namespace.py takes exactly one argument, not %d" % len(sys.argv)
+  if len(sys.argv) != 2:
+    print >> sys.stderr, "Error: confirm-namespace.py takes exactly one argument, not %d" % len(sys.argv) - 1
     sys.exit(1)
   r = requests.post('http://sundewcluster.appspot.com/confirm_namespace', data = {'namespace':sys.argv[1]})
   if r.status_code == requests.code.ok:

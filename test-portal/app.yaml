@@ -26,7 +26,7 @@ handlers:
   secure: always
   redirect_http_response_code: 301
 
--url: /confirm_namespace
+- url: /confirm_namespace
   script: test1.app
   login: optional
   secure: always
