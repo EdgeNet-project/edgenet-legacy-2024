@@ -57,7 +57,13 @@ def get_nodes():
       return result
     except subprocess.CalledProcessError as e:
       return "Error in Get Nodes: %s " % (str(e))    
- 
+
+@app.route("/get_secret")
+def get_secret():
+  cmd = ['sudo','kubeadm','token','create','--ttl', '30s']
+  log ('created token')
+  result = make_call(cmd)
+  return result 
 if __name__ == "__main__":
     key = '/etc/letsencrypt/live/head.sundewproject.org/privkey.pem'
     cert = '/etc/letsencrypt/live/head.sundewproject.org/cert.pem'
