@@ -19,3 +19,4 @@ kubectl create -f ../yml/role-$USER.yml
 kubectl create -f ../yml/rb-$USER.yml
 kubectl create rolebinding $USER-rolebind --clusterrole=admin --serviceaccount=$USER:default --namespace=$USER
 #kubectl -n $USER describe secret $(kubectl -n kube-system get secret | grep $USER | awk '{print $1}')
+python ./confirm-namespace.py
