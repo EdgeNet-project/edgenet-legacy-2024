@@ -16,7 +16,9 @@ if __name__ == "__main__":
   r = requests.post('http://sundewcluster.appspot.com/confirm_namespace', data = {'namespace':sys.argv[1]})
   if r.status_code == requests.codes.ok:
     # do something with the response, which is a JSON dictionary with two fields: outcome (Success/Failure) and reason (a text string)
+    print r
     pass
   else:
+    print r.status_code
     pass
     # Should log a bad request
