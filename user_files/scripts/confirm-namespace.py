@@ -13,7 +13,7 @@ if __name__ == "__main__":
   if len(sys.argv) != 2:
     print >> sys.stderr, "Error: confirm-namespace.py takes exactly one argument, not %d" % len(sys.argv) - 1
     sys.exit(1)
-  r = requests.post('http://sundewcluster.appspot.com/confirm_namespace', data = {'namespace':sys.argv[1]})
+  r = requests.post('https://sundewcluster.appspot.com/confirm_namespace', data = {'namespace':sys.argv[1]})
   if r.status_code == requests.codes.ok:
     # do something with the response, which is a JSON dictionary with two fields: outcome (Success/Failure) and reason (a text string)
     print r
