@@ -476,7 +476,7 @@ class ConfirmNamespace(webapp2.RequestHandler):
     if not namespace_name:
       self.response.out.write('No Namespace sent!')
     else:
-      records = User.query(User.namespace == namespace_name)
+      records = User.query(User.namespace == namespace_name).fetch()
       if (len(records) == 0):
         result = {'outcome': 'Failure', 'reason': 'No records for namespace ' + namespace_name + ' found!'}
       elif len(records) == 1:
