@@ -7,10 +7,10 @@ import json
 from pymongo import MongoClient, ReturnDocument
 
 host = 'http://api.sandbox.namecheap.com/xml.response'
-authentication = 'ApiUser=rick1&ApiKey=0a1a2799eed246f791af0f2d941808b0&UserName=rick1'
-domainInfo = 'SLD=planet-ignite&TLD=net'
-clientIP='clientIP=171.67.92.194'
-autoDomainName = '.planet-ignite.net'
+authentication = ''
+domainInfo = ''
+clientIP=''
+autoDomainName = ''
 
 
 
