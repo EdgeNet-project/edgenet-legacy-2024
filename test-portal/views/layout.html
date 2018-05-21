@@ -6,7 +6,7 @@
 			{% if title %}
 				{{title}}
 		  {% else %}
-		     Sundew
+		     edgeNet
 		  {% endif %}
 		</title>
 		  <link rel="stylesheet" type="text/css" href="/styles/main.css">
@@ -16,7 +16,7 @@
 </head>
 <body>
 	  <div id="imageHeader">
-		  <a href="/"><img src='/images/PlanetIgniteLogo.png' alt='PlanetIgnite Logo'/></a>
+		  <a href="/"><img src='/images/edgeNetLogo.png' alt='edgeNet Logo'/></a>
 	  </div>
 	  <div id="fullWrapper">
 	  	<div id="pageHeader">
@@ -51,7 +51,7 @@
 			{% if nodes %}
 			  <center>
 			  	<table class="nodetable">
-			  		<tr><th class="nodehead"> Current Sundew Node List Fetched at {{node_fetch_time}} UTC </th></tr>
+			  		<tr><th class="nodehead"> Current edgeNet Node List Fetched at {{node_fetch_time}} UTC </th></tr>
 			  		{% for node in nodes %}
 			  		<tr class="noderow"><td>{{ node }}</td></tr>
 			  		{% endfor %}
@@ -60,8 +60,18 @@
 			 {% endif %}
 		</div>
 		<div id="footer">
-			<a href="/">Back</a>
-			<a href={{logout}}>Logout</a>
+			{% block footer %}
+			{% endblock %}
+		</div>
+		<div id="credits">
+			<p>edgeNet is a joint project between US Ignite and New York University Tandon School of Engineering, and is supported by the National Science Foundation</p>
+			<table style="border-collapse: separate; border-spacing: 30px;">
+				<tr>
+					<td><img src='/images/ignite.jpeg' alt='US Ignite' height = 30/></td>
+					<td><img src='/images/tandon.png' alt='NYU Tandon' height = 30/></td>
+					<td><img src='/images/nsf.png' alt='NSF' height = 30/></td>
+				</tr
+			</table>
 		</div>
 </body>
 {% endautoescape %}

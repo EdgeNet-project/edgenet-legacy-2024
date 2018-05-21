@@ -1,0 +1,22 @@
+{% extends "views/layout.html" %}
+{% block pageHeader %}
+<H1>Welcome to edgeNet</H1>
+<p>edgeNet is a distributed edge  cloud, in the family of PlanetLab, GENI, Canada’s SAVI infrastructure, Japan’s JGN-X, Germany’s G-Lab, and PlanetLab Europe.  It is a modern distributed edge cloud, incorporating advances in Cloud technologies over the past few years.</p>
+<p>edgeNet is based on <em>industry-standard Cloud software</em>, with <a href="https://www.docker.com/">Docker</a> as the containerization technology and <a href="https://kubernetes.io/">Kubernetes</a> as the node manager and deployment solution.  It is an <em>opt-in</em>global Kubernetes cluster; once a user has authenticated with this portal and been approved, she will be able to use standard Kubernetes tools and technologies to deploy an application across the edgeNet infrastructure</p>
+
+  <p> This portal will let you create a namespace on the global edgeNet cluster and download a configuration file which will let you access it.
+{% endblock %}
+
+{% block pageOptions %}
+{% if logged_in %}
+  <p> User  {{email}} is logged in.  
+{% else %}
+  <p> Login with a Google account to use edgeNet.
+{% endif %}
+<a href="/next_page/"> Use edgeNet</a>
+{% endblock %}
+{% block footer %}
+{% if logged_in %}
+<a href={{logout}}>Logout</a>
+{% endif %}
+{% endblock %}

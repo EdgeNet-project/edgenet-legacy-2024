@@ -34,6 +34,7 @@ import json
 from google.appengine.api import app_identity
 from google.appengine.api import users
 from google.appengine.ext import ndb
+from google.appengine.api import mail
 
 
 import jinja2
@@ -76,13 +77,14 @@ class User(ndb.Model):
   Sundew until he has agreed to the AUP.
   A boolean which tells us if the user has been approved
   A boolean which tells us if the user is an administrator
+  the configuration file, a text blob which the user can use to access his namespace
   """
   email = ndb.StringProperty(indexed = True, required = True)
   namespace = ndb.StringProperty(indexed = True, required = True, default = NULL_NAMESPACE_NAME)
   namespace_status = ndb.IntegerProperty(indexed = True, required = True, default = NO_NAMESPACE)
   agreed_to_AUP = ndb.BooleanProperty('ok', indexed=False, required = True, default = False)
   approved = ndb.BooleanProperty('approved', indexed=False, required = True, default = False)
-  administrator = ndb.BooleanProperty(indexed=False, required = True, default = False) 
+  administrator = ndb.BooleanProperty(indexed=True, required = True, default = False) 
   has_config = ndb.BooleanProperty(indexed = True, required = True, default = False)
   config = ndb.TextProperty(indexed = False, required = False)
 
@@ -194,8 +196,9 @@ def create_or_find_user(user_email):
 
 #
 # Hook to the builtin Google App Engine authentication.  Get the user's email and nickname (Google App Engine defined)
-# We will use the user's email (all lower case) as our user identifier.  Since this page requires login, get_current_user() is
-# always true
+# We will use the user's email (all lower case) as our user identifier.  If users.get_current_user() returns None (no
+# login), this procedure returns None, None
+# 
 # returns: the user's nickname and email address as a tuple, nickname first
 # side effects: none
 # note: should it just return None if there is no email address?
@@ -203,6 +206,8 @@ def create_or_find_user(user_email):
 
 def get_current_user_nickname_and_email():
   user = users.get_current_user()
+  if not user:
+    return None, None
   if (user.email()):
     return user.nickname(), user.email()
   return user.nickname(), user.nickname()
@@ -211,7 +216,7 @@ def get_current_user_nickname_and_email():
 # head_node_url = 'http://head.sundew.ch-geni-net.instageni.washington.edu:8181/' 
 head_node_url = 'https://head.sundewproject.org:8181/'
 kubernetes_head_node = 'https://head.sundewproject.org/'
-kubernetes_head_text = 'Sundew Head Node'
+kubernetes_head_text = 'edgeNet Head Node'
 
 #
 # A little utility to pull data from an URL.  Robust against some failures, since one of the servers we talk to can be
@@ -256,6 +261,49 @@ def make_namespace_on_head_node(namespace):
   return fetch_from_url(query_url, 2)
 
 #
+# Utilities to send mail.  There are two email notifications: an email to administrators
+# that accounts are pending approval, and an email to users when their account has been approved
+#
+
+#
+# Send a notification to administrators to approve records which have agreed to the AUP but not yet been approved
+# user_records_for_approval: The list of user records which (a) have an AUP signed; (b) have not been approved;
+#      and (c) for whom an approval email has not been sent
+# returns: None
+# side effect: sends mail to the administrators to get them to approve these records, and marks the 
+#      records as having the email sent
+#
+def send_approval_request(user_record_for_approval):
+  admins = User.query(User.administrator == True).fetch()
+  url = "https://console.cloud.google.com/datastore/stats?project=sundewcluster"
+  admin_emails = [admin.email for admin in admins]
+  toLine = ",".join(admin_emails)
+  sender = "daemon@sundewcluster.appspotmail.com"
+  user_string = "User " + user_record_for_approval.email
+  subjectLine = "User Waiting for Approval"
+  body = user_string + " is waiting for approval.  Please go to " + url + " to handle this request."
+  mail.send_mail(sender = sender, subject = subjectLine, to=toLine, body=body)
+
+#
+# Send an email to a user that his account has been approved 
+# user_record: The user record that has been approved
+# returns: None
+# side effect: sends mail to the user that his account has been approved, and marks the records as
+#     email_sent
+#
+def send_approval(user_record):
+  toLine = userRecord.email
+  sender = "daemon@sundewcluster.appspotmail.com"
+  subjectLine = "Edge Net Account for user " + userRecord.email + " approved"
+  url = "https://sundewcluster.appspot.com"
+  body = "Your edge-net account has been approved with namespace " + user_record.namespace + ".\n"
+  body += "Go to " + url + " and log in as " + user_record.email +" and download your configuration file.\n"
+  body += "You can use this to manage namespace " + user_record.namespace + " at the head node dashboard or with kubectl."
+  mail.send_mail(sender = sender, subject = subjectLine, to=toLine, body=body)
+  
+
+
+#
 # A utility to add the current node list and timestamp to the values structure which 
 # gets passed to the templates...
 # 
@@ -294,20 +342,20 @@ def display_next_page(user_record, request, response):
     values["namespace"] = user_record.namespace
     values["kubernetes_head_node"] = kubernetes_head_node
     values["kubernetes_head_text"] = kubernetes_head_text
-    values["title"] = "Sundew Dashboard for " + user_record.email
+    values["title"] = "edgeNet Dashboard for " + user_record.email
     if user_record.administrator: 
       # add the admin dashboard code here: fetch all the user records from the database and let the administrator 
       # administer them
       pass
-    template = JINJA_ENVIRONMENT.get_template('dashboard.html')
+    template = JINJA_ENVIRONMENT.get_template('views/dashboard.html')
     response.write(template.render(values))
   elif user_record.agreed_to_AUP:
-    values["title"] = "Sundew Pending Approval"
-    template = JINJA_ENVIRONMENT.get_template('pending.html')
+    values["title"] = "edgeMet Pending Approval"
+    template = JINJA_ENVIRONMENT.get_template('views/pending.html')
     response.write(template.render(values))
   else:
-    values["title"] = "Sundew AUP"
-    template = JINJA_ENVIRONMENT.get_template('aup.html')
+    values["title"] = "edgeNet AUP"
+    template = JINJA_ENVIRONMENT.get_template('views/aup.html')
     response.write(template.render(values))
 
 # 
@@ -317,9 +365,10 @@ def display_next_page(user_record, request, response):
 class MainPage(webapp2.RequestHandler):
   def get(self):
     nickname, email = get_current_user_nickname_and_email()
-    values = {"email": email, "logout": users.create_logout_url(self.request.uri), "title": "Sundew Main Page", "bucket": bucket_name}
+    logged_in = True if email else False
+    values = {"logged_in": logged_in, "email": email, "logout": users.create_logout_url(self.request.uri), "title": "edgeNet Main Page", "bucket": bucket_name}
     add_node_record_to_values(values)
-    template = JINJA_ENVIRONMENT.get_template('index.html')
+    template = JINJA_ENVIRONMENT.get_template('views/index.html')
     self.response.write(template.render(values))
 
 #
@@ -330,6 +379,7 @@ class MainPage(webapp2.RequestHandler):
 class NextPage(webapp2.RequestHandler): 
   def get(self):
     nickname, email = get_current_user_nickname_and_email()
+    # login required for this page, so email is not None
     user_record = create_or_find_user(email)
     display_next_page(user_record, self.request, self.response)
 
@@ -345,6 +395,7 @@ class AUP_AGREE(webapp2.RequestHandler):
     record = create_or_find_user(email)
     record.agreed_to_AUP = True
     record.put()
+    send_approval_request(record)
     display_next_page(record, self.request, self.response)
 
 #
@@ -374,7 +425,7 @@ class DownloadConfig(webapp2.RequestHandler):
     nickname, email = get_current_user_nickname_and_email()
     user_record = create_or_find_user(email)
     values = {"email": email, "namespace": user_record.namespace, "logout": users.create_logout_url(self.request.uri), "no_response": False, "approved": user_record.approved, "aup": user_record.agreed_to_AUP}
-    template = JINJA_ENVIRONMENT.get_template('config_error.html')
+    template = JINJA_ENVIRONMENT.get_template('views/config_error.html')
     if user_record.has_config:
       write_config(self.response, user_record.config)
     elif user_record.namespace:
@@ -418,10 +469,10 @@ class UpdateConfigs(webapp2.RequestHandler):
     namespaces_created = configs_stored = []
     errors = []
     # first, find the users in the db who have been approved but for whom there is no namespace
-    newUsers = User.query(User.namespace_status == NO_NAMESPACE).fetch()
-    newUsers = [user for user in newUsers if user.approved]
+    new_users = User.query(User.namespace_status == NO_NAMESPACE).fetch()
+    new_users = [user for user in new_users if user.approved]
     # for each such user, tell the head node to create a namespace
-    for user in newUsers:
+    for user in new_users:
       # create the namespace
       namespace = make_new_namespace(user.email)
       result = make_namespace_on_head_node(namespace)
@@ -439,6 +490,7 @@ class UpdateConfigs(webapp2.RequestHandler):
           user.namespace_status = NAMESPACE_REQUESTED
           user.put()
           namespaces_created.append(namespace)
+          send_approval(user)
         else: 
           errors.append('Namespace creation failed for ' + namespace)
       else:
@@ -486,6 +538,7 @@ class ConfirmNamespace(webapp2.RequestHandler):
       else:
         result = {'outcome': 'Failure', 'reason': 'Multiple records for namespace ' + namespace_name + ' found!'}
       self.response.out.write(json.dumps(result))
+
 
 
     
