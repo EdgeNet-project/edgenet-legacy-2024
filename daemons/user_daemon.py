@@ -30,7 +30,7 @@ def hello():
     try:
         user = request.args.get('user')
         cmd = ['../user_files/scripts/make-config.sh','default','-n',user]
-	log(cmd)
+        log(cmd)
         log('request for user: ' + user)
         result = make_call(cmd)
         return result
