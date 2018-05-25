@@ -38,7 +38,7 @@ def make_call(cmd, cwd='.'):
         result = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE,
                 bufsize=1, cwd=cwd).communicate()
         f = StringIO()
-        f.write((unicode(result[0],"utf-8")))
+        f.write((unicode(result[0], "utf-8")))
         f.seek(0)
         return result
     except subprocess.CalledProcessError as e:
