@@ -1,5 +1,6 @@
 #!/usr/bin/python
 from flask import Flask, request, send_file, jsonify
+import werkzeug # for proper 400 Bad Request handling
 import subprocess
 from io import StringIO
 
@@ -7,6 +8,13 @@ key = '/etc/letsencrypt/live/head.sundewproject.org/privkey.pem'
 cert = '/etc/letsencrypt/live/head.sundewproject.org/cert.pem'
 
 app = Flask(__name__)
+
+
+
+class MissingRequestArgError(werkzeug.exceptions.BadRequest):
+    """Exception class for missing arguments in requests"""
+    pass
+
 
 
 
@@ -40,8 +48,11 @@ def make_call(cmd, cwd='.'):
 
 @app.route("/")
 def hello():
+    if not "user" in request.args:
+        raise MissingRequestArgError(description="No 'user' arg in request.")
+
+    user = request.args.get('user')
     try:
-        user = request.args.get('user')
         cmd = ['../user_files/scripts/make-config.sh', 'default', '-n', user]
         log(cmd)
         log('request for user: ' + user)
@@ -54,8 +65,11 @@ def hello():
 
 @app.route('/make-user')
 def make_user():
+    if not "user" in request.args:
+        raise MissingRequestArgError(description="No 'user' arg in request.")
+
+    user = request.args.get('user')
     try:
-        user = request.args.get('user')
         cmd = ['sudo', './make-user.sh', user]
         log('user creation request for: ' + user)
         result = noblock_call(cmd, r'../user_files/scripts')
