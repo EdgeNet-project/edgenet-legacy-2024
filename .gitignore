@@ -2,6 +2,7 @@ user_files/conf/**
 user_files/keys/**
 user_files/yml/*.yml
 supervisor/**
+daemons/*.json
 # Ignore OS X metadata files
 ._*
 
