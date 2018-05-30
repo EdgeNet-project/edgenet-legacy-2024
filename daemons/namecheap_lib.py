@@ -28,7 +28,7 @@ tld = 'io'
 #
 
 def main_records(hostRecords):
-  return filter(lambda x: x[2] != 'Type', hostRecords)
+    return filter(lambda x: x[2] != 'Type', hostRecords)
 
 #
 # Executes a GET request on a URL, and returns the data from the response.
@@ -38,13 +38,13 @@ def main_records(hostRecords):
 # Side Effect: executes the get request
 #
 def exec_get(anURL, fields):
-  # http = urllib3.PoolManager()
-  data = urllib.urlencode(fields)
-  # get_url = '%s?%s' % (anURL, build_get_string(fields))
-  get_url = '%s?%s' % (anURL, data)
-  req = urllib2.Request(get_url)
-  httpResponse = urllib2.urlopen(req)
-  return  httpResponse.read()
+    # http = urllib3.PoolManager()
+    data = urllib.urlencode(fields)
+    # get_url = '%s?%s' % (anURL, build_get_string(fields))
+    get_url = '%s?%s' % (anURL, data)
+    req = urllib2.Request(get_url)
+    httpResponse = urllib2.urlopen(req)
+    return  httpResponse.read()
 
 #
 # Executes a POST request on a URL, with arguments in the fields onject, and returns the data from the response.
@@ -55,24 +55,24 @@ def exec_get(anURL, fields):
 #
 
 def exec_post(anURL, fields):
-  # http = urllib3.PoolManager()
-  field_data = urllib.urlencode(fields)
-  req = urllib2.Request(anURL, field_data)
-  httpResponse = urllib2.urlopen(req)
-  return  httpResponse.read()
+    # http = urllib3.PoolManager()
+    field_data = urllib.urlencode(fields)
+    req = urllib2.Request(anURL, field_data)
+    httpResponse = urllib2.urlopen(req)
+    return  httpResponse.read()
 
 #
 # builds the authentication information for a namecheap API request.  
 #
 def build_authentication():
-  return {'ApiUser': ApiUser, 'UserName': ApiUser, 'ApiKey': authentication, 'clientIP': clientIP}
+    return {'ApiUser': ApiUser, 'UserName': ApiUser, 'ApiKey': authentication, 'clientIP': clientIP}
 
 #
 # Turns a record of fields into a string for a get request
 #
 def build_get_string(fields):
-  field_strings = ['%s=%s' % (key, fields[key]) for key in fields]
-  return '&'.join(field_strings)
+    field_strings = ['%s=%s' % (key, fields[key]) for key in fields]
+    return '&'.join(field_strings)
 
 # 
 # build a getHosts command for a domain
@@ -83,12 +83,12 @@ def build_get_string(fields):
 #    Command: the namecheam command, which is: 'namecheap.domains.dns.getHosts'
 #
 def build_get_hosts(domain):
-  parts = domain.split('.')
-  result = build_authentication()
-  result['tld'] = parts[1]
-  result['sld'] = parts[0]
-  result['Command'] = 'namecheap.domains.dns.getHosts'
-  return result
+    parts = domain.split('.')
+    result = build_authentication()
+    result['tld'] = parts[1]
+    result['sld'] = parts[0]
+    result['Command'] = 'namecheap.domains.dns.getHosts'
+    return result
 
 #
 # Build the set hosts command for a domain and a host list.  H
@@ -103,17 +103,17 @@ def build_get_hosts(domain):
 #    Command: the namecheam command, which is: 'namecheap.domains.dns.setHosts'
 #
 def build_set_hosts(domain, host_list):
-  parts = domain.split('.')
-  result = build_authentication()
-  result['tld'] = parts[1]
-  result['sld'] = parts[0]
-  for i in range(len(host_list)):
-    index = i + 1
-    result['HostName%d' % index] = host_list[i]["host"]
-    result['Address%d' % index] = host_list[i]["address"]
-    result['RecordType%d' % index] = 'A'
-  result['Command'] = 'namecheap.domains.dns.setHosts'
-  return result
+    parts = domain.split('.')
+    result = build_authentication()
+    result['tld'] = parts[1]
+    result['sld'] = parts[0]
+    for i in range(len(host_list)):
+        index = i + 1
+        result['HostName%d' % index] = host_list[i]["host"]
+        result['Address%d' % index] = host_list[i]["address"]
+        result['RecordType%d' % index] = 'A'
+    result['Command'] = 'namecheap.domains.dns.setHosts'
+    return result
 
 #
 # get the hosts for a domain
@@ -124,10 +124,10 @@ def build_set_hosts(domain, host_list):
 #
 
 def get_hosts(domain):
-  # xmlResult = parseString(execCommand(getHostsURL()))
-  xmlResult = parseString(exec_post(host, build_get_hosts(domain)))
-  hostRecords = xmlResult.getElementsByTagName('host')
-  return  [(aRecord.getAttribute('Name'), aRecord.getAttribute('Address'), aRecord.getAttribute('Type')) for aRecord in hostRecords]
+    # xmlResult = parseString(execCommand(getHostsURL()))
+    xmlResult = parseString(exec_post(host, build_get_hosts(domain)))
+    hostRecords = xmlResult.getElementsByTagName('host')
+    return  [(aRecord.getAttribute('Name'), aRecord.getAttribute('Address'), aRecord.getAttribute('Type')) for aRecord in hostRecords]
 
 #
 # set the hosts for a domain
@@ -138,5 +138,5 @@ def get_hosts(domain):
 # Todo: check for error return
 #
 def set_hosts(domain, host_list):
-  return parseString(exec_post(host, build_set_hosts(domain, host_list)))
+    return parseString(exec_post(host, build_set_hosts(domain, host_list)))
 

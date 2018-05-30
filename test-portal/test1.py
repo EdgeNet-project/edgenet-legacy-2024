@@ -42,9 +42,9 @@ import webapp2
 import logging
 
 JINJA_ENVIRONMENT = jinja2.Environment(
-  loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
-  extensions=['jinja2.ext.autoescape'],
-  autoescape=True)
+    loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
+    extensions=['jinja2.ext.autoescape'],
+    autoescape=True)
 # [END imports]
 
 #
@@ -68,25 +68,25 @@ NAMESPACE_ASSIGNED = 2
 # identifying information is the email address.
 #
 class User(ndb.Model):
-  """A model for representing a User of Sundew
-  Note that passwords are not stored here, and ATM the only identifying information is the email address.
-  We store:
-  The email
-  A namespace name; this is a modified form of the email which is 
-  A boolean which tells us whether the user has agreed to the AUP.  The user cannot use
-  Sundew until he has agreed to the AUP.
-  A boolean which tells us if the user has been approved
-  A boolean which tells us if the user is an administrator
-  the configuration file, a text blob which the user can use to access his namespace
-  """
-  email = ndb.StringProperty(indexed = True, required = True)
-  namespace = ndb.StringProperty(indexed = True, required = True, default = NULL_NAMESPACE_NAME)
-  namespace_status = ndb.IntegerProperty(indexed = True, required = True, default = NO_NAMESPACE)
-  agreed_to_AUP = ndb.BooleanProperty('ok', indexed=False, required = True, default = False)
-  approved = ndb.BooleanProperty('approved', indexed=False, required = True, default = False)
-  administrator = ndb.BooleanProperty(indexed=True, required = True, default = False) 
-  has_config = ndb.BooleanProperty(indexed = True, required = True, default = False)
-  config = ndb.TextProperty(indexed = False, required = False)
+    """A model for representing a User of Sundew
+    Note that passwords are not stored here, and ATM the only identifying information is the email address.
+    We store:
+    The email
+    A namespace name; this is a modified form of the email which is 
+    A boolean which tells us whether the user has agreed to the AUP.  The user cannot use
+    Sundew until he has agreed to the AUP.
+    A boolean which tells us if the user has been approved
+    A boolean which tells us if the user is an administrator
+    the configuration file, a text blob which the user can use to access his namespace
+    """
+    email = ndb.StringProperty(indexed = True, required = True)
+    namespace = ndb.StringProperty(indexed = True, required = True, default = NULL_NAMESPACE_NAME)
+    namespace_status = ndb.IntegerProperty(indexed = True, required = True, default = NO_NAMESPACE)
+    agreed_to_AUP = ndb.BooleanProperty('ok', indexed=False, required = True, default = False)
+    approved = ndb.BooleanProperty('approved', indexed=False, required = True, default = False)
+    administrator = ndb.BooleanProperty(indexed=True, required = True, default = False) 
+    has_config = ndb.BooleanProperty(indexed = True, required = True, default = False)
+    config = ndb.TextProperty(indexed = False, required = False)
 
 
 #
@@ -95,16 +95,16 @@ class User(ndb.Model):
 #
 
 class NodeList(ndb.Model):
-  """
-  A model for representing the node in the system. This is obtained from the head node, and is typically done
-  every few minutes as a CRON job.  Each entry has:
-  1. time: a DateTimeProperty which shows when this was taken
-  2. active: the last fetch.  This should only be true for one entry
-  3. nodes: an array of nodes represented as a JSON string
-  """
-  time = ndb.DateTimeProperty(indexed = True, required = True)
-  active = ndb.BooleanProperty(indexed = True, required = True, default = False)
-  nodes = ndb.JsonProperty(indexed = False, required = True)
+    """
+    A model for representing the node in the system. This is obtained from the head node, and is typically done
+    every few minutes as a CRON job.  Each entry has:
+    1. time: a DateTimeProperty which shows when this was taken
+    2. active: the last fetch.  This should only be true for one entry
+    3. nodes: an array of nodes represented as a JSON string
+    """
+    time = ndb.DateTimeProperty(indexed = True, required = True)
+    active = ndb.BooleanProperty(indexed = True, required = True, default = False)
+    nodes = ndb.JsonProperty(indexed = False, required = True)
 
 #
 # get the current nodelist record from the db.  This is used in a couple of places, so it's broken out
@@ -113,10 +113,10 @@ class NodeList(ndb.Model):
 # returns: the nodelist record if there is one that has active set to true, None otherwise
 #
 def get_current_nodelist_record():
-  active =  NodeList.query(NodeList.active == True).fetch()
-  if len(active) == 0:
-    return None
-  return active[0]
+    active =  NodeList.query(NodeList.active == True).fetch()
+    if len(active) == 0:
+        return None
+    return active[0]
 
 #
 # Store a list of nodes as the current nodelist, with a timestamp to show it's current
@@ -125,13 +125,13 @@ def get_current_nodelist_record():
 # side effects: stores the current nodelist
 #
 def store_new_nodelist(nodelist):
-  active = get_current_nodelist_record()
-  # Note that the current active record is no longer the active record
-  if (active): 
-    active.active = False
-    active.put()
-  record = NodeList(active = True, time = datetime.datetime.now(), nodes = json.dumps(nodelist))
-  record.put()
+    active = get_current_nodelist_record()
+    # Note that the current active record is no longer the active record
+    if (active): 
+        active.active = False
+        active.put()
+    record = NodeList(active = True, time = datetime.datetime.now(), nodes = json.dumps(nodelist))
+    record.put()
 
 # 
 # Tweak the user email so it's a valid Kubernetes namespace.  A namespace is a field in an FQDN, so it
@@ -146,16 +146,16 @@ def store_new_nodelist(nodelist):
 #
 
 def make_new_namespace(email):
-  email = email.lower()
-  candidate_namespace = email.replace('.','-').replace('@','-')
-  count = 0
-  namespace = candidate_namespace
-  namespaces = User.query(User.namespace == namespace).fetch()
-  while len(namespaces) > 0:
-    namespace = "%s%d" % (candidate_namespace, count)
+    email = email.lower()
+    candidate_namespace = email.replace('.','-').replace('@','-')
+    count = 0
+    namespace = candidate_namespace
     namespaces = User.query(User.namespace == namespace).fetch()
-    count = count + 1
-  return namespace
+    while len(namespaces) > 0:
+        namespace = "%s%d" % (candidate_namespace, count)
+        namespaces = User.query(User.namespace == namespace).fetch()
+        count = count + 1
+    return namespace
 
 # 
 # get a user record corresponding to email, returning None if there is no record
@@ -166,12 +166,12 @@ def make_new_namespace(email):
 # side effects: None
 #
 def find_user(user_email):
-  user_email = user_email.lower()
-  user_record = User.query(User.email == user_email).fetch()
-  if len(user_record) < 1:
-    return None
-  else:
-    return user_record[0]
+    user_email = user_email.lower()
+    user_record = User.query(User.email == user_email).fetch()
+    if len(user_record) < 1:
+        return None
+    else:
+        return user_record[0]
 
 #
 # Called after login.  If a user is in the DB, return his record.  Otherwise create a new user record in the 
@@ -185,13 +185,13 @@ def find_user(user_email):
 
 
 def create_or_find_user(user_email):
-  user_email = user_email.lower()
-  user_record = find_user(user_email)
-  if user_record: return user_record
-  # namespace = make_new_namespace(user_email)
-  user_record = User(email=user_email,  agreed_to_AUP = False, approved = False, administrator = False)
-  user_record.put()
-  return user_record
+    user_email = user_email.lower()
+    user_record = find_user(user_email)
+    if user_record: return user_record
+    # namespace = make_new_namespace(user_email)
+    user_record = User(email=user_email,  agreed_to_AUP = False, approved = False, administrator = False)
+    user_record.put()
+    return user_record
 
 
 #
@@ -205,14 +205,14 @@ def create_or_find_user(user_email):
 #
 
 def get_current_user_nickname_and_email():
-  user = users.get_current_user()
-  if not user:
-    return None, None
-  if (user.email()):
-    return user.nickname(), user.email()
-  return user.nickname(), user.nickname()
+    user = users.get_current_user()
+    if not user:
+        return None, None
+    if (user.email()):
+        return user.nickname(), user.email()
+    return user.nickname(), user.nickname()
 
-   
+     
 # head_node_url = 'http://head.sundew.ch-geni-net.instageni.washington.edu:8181/' 
 head_node_url = 'https://head.sundewproject.org:8181/'
 kubernetes_head_node = 'https://head.sundewproject.org/'
@@ -229,15 +229,15 @@ kubernetes_head_text = 'edgeNet Head Node'
 #
 
 def fetch_from_url(query_url, max_retries = 2):
-  retries = 0
-  while retries < max_retries:
-    try:
-      response = urllib.urlopen(query_url).read()
-      return response
-    except httplib.HTTPException:
-      retries = retries + 1
-  # didn't get it after max_retries, punting...
-  return None
+    retries = 0
+    while retries < max_retries:
+        try:
+            response = urllib.urlopen(query_url).read()
+            return response
+        except httplib.HTTPException:
+            retries = retries + 1
+    # didn't get it after max_retries, punting...
+    return None
 #
 # Fetch the config file for namespace namespace.  This is a thin wrapper over
 # fetch_from_url, broken out separately because it is called from a few places
@@ -246,8 +246,8 @@ def fetch_from_url(query_url, max_retries = 2):
 # returns: the config file or None if there was an error
 # 
 def fetch_config_file(namespace):
-  query_url = '%s?user=%s' % (head_node_url, namespace)
-  return fetch_from_url(query_url, 2)
+    query_url = '%s?user=%s' % (head_node_url, namespace)
+    return fetch_from_url(query_url, 2)
 
 #
 # Make a new namespace with namespace.  Return success or failure...
@@ -257,8 +257,8 @@ def fetch_config_file(namespace):
 # side effect: on success, creates the namespace on the head node
 #
 def make_namespace_on_head_node(namespace):
-  query_url = '%smake-user?user=%s' %(head_node_url, namespace)
-  return fetch_from_url(query_url, 2)
+    query_url = '%smake-user?user=%s' %(head_node_url, namespace)
+    return fetch_from_url(query_url, 2)
 
 #
 # Utilities to send mail.  There are two email notifications: an email to administrators
@@ -274,15 +274,15 @@ def make_namespace_on_head_node(namespace):
 #      records as having the email sent
 #
 def send_approval_request(user_record_for_approval):
-  admins = User.query(User.administrator == True).fetch()
-  url = "https://console.cloud.google.com/datastore/stats?project=sundewcluster"
-  admin_emails = [admin.email for admin in admins]
-  toLine = ",".join(admin_emails)
-  sender = "daemon@sundewcluster.appspotmail.com"
-  user_string = "User " + user_record_for_approval.email
-  subjectLine = "User Waiting for Approval"
-  body = user_string + " is waiting for approval.  Please go to " + url + " to handle this request."
-  mail.send_mail(sender = sender, subject = subjectLine, to=toLine, body=body)
+    admins = User.query(User.administrator == True).fetch()
+    url = "https://console.cloud.google.com/datastore/stats?project=sundewcluster"
+    admin_emails = [admin.email for admin in admins]
+    toLine = ",".join(admin_emails)
+    sender = "daemon@sundewcluster.appspotmail.com"
+    user_string = "User " + user_record_for_approval.email
+    subjectLine = "User Waiting for Approval"
+    body = user_string + " is waiting for approval.  Please go to " + url + " to handle this request."
+    mail.send_mail(sender = sender, subject = subjectLine, to=toLine, body=body)
 
 #
 # Send an email to a user that his account has been approved 
@@ -292,15 +292,15 @@ def send_approval_request(user_record_for_approval):
 #     email_sent
 #
 def send_approval(user_record):
-  toLine = userRecord.email
-  sender = "daemon@sundewcluster.appspotmail.com"
-  subjectLine = "Edge Net Account for user " + userRecord.email + " approved"
-  url = "https://sundewcluster.appspot.com"
-  body = "Your edge-net account has been approved with namespace " + user_record.namespace + ".\n"
-  body += "Go to " + url + " and log in as " + user_record.email +" and download your configuration file.\n"
-  body += "You can use this to manage namespace " + user_record.namespace + " at the head node dashboard or with kubectl."
-  mail.send_mail(sender = sender, subject = subjectLine, to=toLine, body=body)
-  
+    toLine = userRecord.email
+    sender = "daemon@sundewcluster.appspotmail.com"
+    subjectLine = "Edge Net Account for user " + userRecord.email + " approved"
+    url = "https://sundewcluster.appspot.com"
+    body = "Your edge-net account has been approved with namespace " + user_record.namespace + ".\n"
+    body += "Go to " + url + " and log in as " + user_record.email +" and download your configuration file.\n"
+    body += "You can use this to manage namespace " + user_record.namespace + " at the head node dashboard or with kubectl."
+    mail.send_mail(sender = sender, subject = subjectLine, to=toLine, body=body)
+    
 
 
 #
@@ -313,12 +313,12 @@ def send_approval(user_record):
 #
 
 def add_node_record_to_values(values):
-  current_nodelist = get_current_nodelist_record()
-  if current_nodelist:
-    values["nodes"] = json.loads(current_nodelist.nodes)
-    values["node_fetch_time"] = current_nodelist.time.strftime("%H:%M:%S %A, %B %d, %Y")
-  else:
-    values["nodes"] = None
+    current_nodelist = get_current_nodelist_record()
+    if current_nodelist:
+        values["nodes"] = json.loads(current_nodelist.nodes)
+        values["node_fetch_time"] = current_nodelist.time.strftime("%H:%M:%S %A, %B %d, %Y")
+    else:
+        values["nodes"] = None
 
 # 
 # display the next page: this is the main user page, and it is one of three:
@@ -334,42 +334,42 @@ def add_node_record_to_values(values):
 #
 
 def display_next_page(user_record, request, response):
-  logout_url = users.create_logout_url(request.uri)
-  values = {"email": user_record.email, "logout": logout_url, "admin": user_record.administrator}
-  add_node_record_to_values(values)
-  if user_record.approved:
+    logout_url = users.create_logout_url(request.uri)
+    values = {"email": user_record.email, "logout": logout_url, "admin": user_record.administrator}
+    add_node_record_to_values(values)
+    if user_record.approved:
 
-    values["namespace"] = user_record.namespace
-    values["kubernetes_head_node"] = kubernetes_head_node
-    values["kubernetes_head_text"] = kubernetes_head_text
-    values["title"] = "edgeNet Dashboard for " + user_record.email
-    if user_record.administrator: 
-      # add the admin dashboard code here: fetch all the user records from the database and let the administrator 
-      # administer them
-      pass
-    template = JINJA_ENVIRONMENT.get_template('views/dashboard.html')
-    response.write(template.render(values))
-  elif user_record.agreed_to_AUP:
-    values["title"] = "edgeMet Pending Approval"
-    template = JINJA_ENVIRONMENT.get_template('views/pending.html')
-    response.write(template.render(values))
-  else:
-    values["title"] = "edgeNet AUP"
-    template = JINJA_ENVIRONMENT.get_template('views/aup.html')
-    response.write(template.render(values))
+        values["namespace"] = user_record.namespace
+        values["kubernetes_head_node"] = kubernetes_head_node
+        values["kubernetes_head_text"] = kubernetes_head_text
+        values["title"] = "edgeNet Dashboard for " + user_record.email
+        if user_record.administrator: 
+            # add the admin dashboard code here: fetch all the user records from the database and let the administrator 
+            # administer them
+            pass
+        template = JINJA_ENVIRONMENT.get_template('views/dashboard.html')
+        response.write(template.render(values))
+    elif user_record.agreed_to_AUP:
+        values["title"] = "edgeMet Pending Approval"
+        template = JINJA_ENVIRONMENT.get_template('views/pending.html')
+        response.write(template.render(values))
+    else:
+        values["title"] = "edgeNet AUP"
+        template = JINJA_ENVIRONMENT.get_template('views/aup.html')
+        response.write(template.render(values))
 
 # 
 # [START main_page]
 # Displays the main page and gets information for the link.  Just displays the welcome page and a link to the next page, which will vary depending on the user
 #
 class MainPage(webapp2.RequestHandler):
-  def get(self):
-    nickname, email = get_current_user_nickname_and_email()
-    logged_in = True if email else False
-    values = {"logged_in": logged_in, "email": email, "logout": users.create_logout_url(self.request.uri), "title": "edgeNet Main Page", "bucket": bucket_name}
-    add_node_record_to_values(values)
-    template = JINJA_ENVIRONMENT.get_template('views/index.html')
-    self.response.write(template.render(values))
+    def get(self):
+        nickname, email = get_current_user_nickname_and_email()
+        logged_in = True if email else False
+        values = {"logged_in": logged_in, "email": email, "logout": users.create_logout_url(self.request.uri), "title": "edgeNet Main Page", "bucket": bucket_name}
+        add_node_record_to_values(values)
+        template = JINJA_ENVIRONMENT.get_template('views/index.html')
+        self.response.write(template.render(values))
 
 #
 # Handler for next_page.  All this does is get the user_record and then call display_next_page, above, to do the 
@@ -377,11 +377,11 @@ class MainPage(webapp2.RequestHandler):
 #
 
 class NextPage(webapp2.RequestHandler): 
-  def get(self):
-    nickname, email = get_current_user_nickname_and_email()
-    # login required for this page, so email is not None
-    user_record = create_or_find_user(email)
-    display_next_page(user_record, self.request, self.response)
+    def get(self):
+        nickname, email = get_current_user_nickname_and_email()
+        # login required for this page, so email is not None
+        user_record = create_or_find_user(email)
+        display_next_page(user_record, self.request, self.response)
 
 #
 # Handles and AUP agreement: catches the AUP agreement, updates the record in the database, then calls display_next_page 
@@ -390,13 +390,13 @@ class NextPage(webapp2.RequestHandler):
 
 
 class AUP_AGREE(webapp2.RequestHandler):
-  def post(self):
-    nickname, email = get_current_user_nickname_and_email()
-    record = create_or_find_user(email)
-    record.agreed_to_AUP = True
-    record.put()
-    send_approval_request(record)
-    display_next_page(record, self.request, self.response)
+    def post(self):
+        nickname, email = get_current_user_nickname_and_email()
+        record = create_or_find_user(email)
+        record.agreed_to_AUP = True
+        record.put()
+        send_approval_request(record)
+        display_next_page(record, self.request, self.response)
 
 #
 # Write a configuration file to the user. 
@@ -407,9 +407,9 @@ class AUP_AGREE(webapp2.RequestHandler):
 # 
 
 def write_config(response, config):
-  response.headers['Content-Type'] = 'text/csv'
-  response.headers['Content-Disposition'] = "attachment; filename=sundew.cfg"
-  response.out.write(config)
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = "attachment; filename=sundew.cfg"
+    response.out.write(config)
 
 
 #
@@ -421,134 +421,134 @@ def write_config(response, config):
 #
 
 class DownloadConfig(webapp2.RequestHandler):
-  def get(self):
-    nickname, email = get_current_user_nickname_and_email()
-    user_record = create_or_find_user(email)
-    values = {"email": email, "namespace": user_record.namespace, "logout": users.create_logout_url(self.request.uri), "no_response": False, "approved": user_record.approved, "aup": user_record.agreed_to_AUP}
-    template = JINJA_ENVIRONMENT.get_template('views/config_error.html')
-    if user_record.has_config:
-      write_config(self.response, user_record.config)
-    elif user_record.namespace:
-      head_node_response = fetch_config_file(user_record.namespace)
-      if head_node_response:
-        user_record.config = head_node_response
-        user_record.has_config = True
-        user_record.put()
-        write_config(self.response, user_record.config)
-      else:
-        values["no_response"] = True
-        self.response.write(template.render(values))
-    else:
-      self.response.write(template.render(values))
+    def get(self):
+        nickname, email = get_current_user_nickname_and_email()
+        user_record = create_or_find_user(email)
+        values = {"email": email, "namespace": user_record.namespace, "logout": users.create_logout_url(self.request.uri), "no_response": False, "approved": user_record.approved, "aup": user_record.agreed_to_AUP}
+        template = JINJA_ENVIRONMENT.get_template('views/config_error.html')
+        if user_record.has_config:
+            write_config(self.response, user_record.config)
+        elif user_record.namespace:
+            head_node_response = fetch_config_file(user_record.namespace)
+            if head_node_response:
+                user_record.config = head_node_response
+                user_record.has_config = True
+                user_record.put()
+                write_config(self.response, user_record.config)
+            else:
+                values["no_response"] = True
+                self.response.write(template.render(values))
+        else:
+            self.response.write(template.render(values))
 
 #
 # Update the nodes in the db
 #
 class UpdateNodes(webapp2.RequestHandler):
-  def get(self):
-    response = fetch_from_url(head_node_url + 'nodes')
-    if response:
-      nodes = response.split('\n')
-      if len(nodes) == 0: 
-        self.response.out.write('Node list fetch failed.  No nodes in list')
-      else:
-        if (len(nodes[-1]) == 0):
-          nodes = nodes[:-1]
-        store_new_nodelist(nodes)
-        self.response.out.write('%d nodes found' % len(nodes))
-    else:
-      self.response.out.write('Node list fetch failed')
+    def get(self):
+        response = fetch_from_url(head_node_url + 'nodes')
+        if response:
+            nodes = response.split('\n')
+            if len(nodes) == 0: 
+                self.response.out.write('Node list fetch failed.  No nodes in list')
+            else:
+                if (len(nodes[-1]) == 0):
+                    nodes = nodes[:-1]
+                store_new_nodelist(nodes)
+                self.response.out.write('%d nodes found' % len(nodes))
+        else:
+            self.response.out.write('Node list fetch failed')
 
 #
 # update the configuration files in the db
 # This is intended to be run as a cron job, though it does output stuff for testing.
 #
 class UpdateConfigs(webapp2.RequestHandler):
-  # Variables to hold the status and the errors
-  def get(self):
-    namespaces_created = configs_stored = []
-    errors = []
-    # first, find the users in the db who have been approved but for whom there is no namespace
-    new_users = User.query(User.namespace_status == NO_NAMESPACE).fetch()
-    new_users = [user for user in new_users if user.approved]
-    # for each such user, tell the head node to create a namespace
-    for user in new_users:
-      # create the namespace
-      namespace = make_new_namespace(user.email)
-      result = make_namespace_on_head_node(namespace)
-      # result is a json structure with one field: Success or Failure
-      # Three outcomes: 
-      # (1) No connectivity, in which case result = None
-      # (2) Failure in which case status["status"] = "Failure"
-      # (3) Success, in which case status["status"] = "Success".  In this case we
-      #     record the user's namespace in the DB
-      # If a failure, record the error
-      if result:
-        status = json.loads(result)
-        if (status["status"] == "Acknowledged"):
-          user.namespace = namespace
-          user.namespace_status = NAMESPACE_REQUESTED
-          user.put()
-          namespaces_created.append(namespace)
-          send_approval(user)
-        else: 
-          errors.append('Namespace creation failed for ' + namespace)
-      else:
-        errors.append('No response from server on attempt to create namespace ' + namespace)
+    # Variables to hold the status and the errors
+    def get(self):
+        namespaces_created = configs_stored = []
+        errors = []
+        # first, find the users in the db who have been approved but for whom there is no namespace
+        new_users = User.query(User.namespace_status == NO_NAMESPACE).fetch()
+        new_users = [user for user in new_users if user.approved]
+        # for each such user, tell the head node to create a namespace
+        for user in new_users:
+            # create the namespace
+            namespace = make_new_namespace(user.email)
+            result = make_namespace_on_head_node(namespace)
+            # result is a json structure with one field: Success or Failure
+            # Three outcomes: 
+            # (1) No connectivity, in which case result = None
+            # (2) Failure in which case status["status"] = "Failure"
+            # (3) Success, in which case status["status"] = "Success".  In this case we
+            #     record the user's namespace in the DB
+            # If a failure, record the error
+            if result:
+                status = json.loads(result)
+                if (status["status"] == "Acknowledged"):
+                    user.namespace = namespace
+                    user.namespace_status = NAMESPACE_REQUESTED
+                    user.put()
+                    namespaces_created.append(namespace)
+                    send_approval(user)
+                else: 
+                    errors.append('Namespace creation failed for ' + namespace)
+            else:
+                errors.append('No response from server on attempt to create namespace ' + namespace)
 
-    #
-    # Get and store configuration files for any user with a namespace but no config file
-    # Will either succeed or fail to connect.
-    #
+        #
+        # Get and store configuration files for any user with a namespace but no config file
+        # Will either succeed or fail to connect.
+        #
 
-    noConfigs = User.query(User.namespace_status == NAMESPACE_ASSIGNED and User.has_config == False)
-    
-    for user_record in noConfigs:
-      head_node_response = fetch_config_file(user_record.namespace)
-      if head_node_response:
-          user_record.config = head_node_response
-          user_record.has_config = True
-          user_record.put()
-          configs_stored.append(user_record.namespace)
-      else:
-        errors.append('No response from server on attempt to get config for  namespace ' + user_record.namespace)
+        noConfigs = User.query(User.namespace_status == NAMESPACE_ASSIGNED and User.has_config == False)
+        
+        for user_record in noConfigs:
+            head_node_response = fetch_config_file(user_record.namespace)
+            if head_node_response:
+                    user_record.config = head_node_response
+                    user_record.has_config = True
+                    user_record.put()
+                    configs_stored.append(user_record.namespace)
+            else:
+                errors.append('No response from server on attempt to get config for  namespace ' + user_record.namespace)
 
-    # Turn the arrays into strings and write the result for debugging
+        # Turn the arrays into strings and write the result for debugging
 
-    create_string = ", ".join(namespaces_created)
-    config_string = ", ".join(configs_stored)
-    error_string = "\n".join(errors)
+        create_string = ", ".join(namespaces_created)
+        config_string = ", ".join(configs_stored)
+        error_string = "\n".join(errors)
 
-    self.response.out.write('Namespaces created: %s\n Configurations stored for: %s\n Errors: %s\n' % (create_string, config_string, error_string))
+        self.response.out.write('Namespaces created: %s\n Configurations stored for: %s\n Errors: %s\n' % (create_string, config_string, error_string))
 
 
 class ConfirmNamespace(webapp2.RequestHandler):
-  def post(self):
-    namespace_name = self.request.get('namespace')
-    if not namespace_name:
-      self.response.out.write('No Namespace sent!')
-    else:
-      records = User.query(User.namespace == namespace_name).fetch()
-      if (len(records) == 0):
-        result = {'outcome': 'Failure', 'reason': 'No records for namespace ' + namespace_name + ' found!'}
-      elif len(records) == 1:
-        records[0].namespace_status = NAMESPACE_ASSIGNED
-        result = {'outcome': 'Success', 'reason': 'Namespace ' + namespace_name + ' confirmed!'}
-        records[0].put()
-      else:
-        result = {'outcome': 'Failure', 'reason': 'Multiple records for namespace ' + namespace_name + ' found!'}
-      self.response.out.write(json.dumps(result))
+    def post(self):
+        namespace_name = self.request.get('namespace')
+        if not namespace_name:
+            self.response.out.write('No Namespace sent!')
+        else:
+            records = User.query(User.namespace == namespace_name).fetch()
+            if (len(records) == 0):
+                result = {'outcome': 'Failure', 'reason': 'No records for namespace ' + namespace_name + ' found!'}
+            elif len(records) == 1:
+                records[0].namespace_status = NAMESPACE_ASSIGNED
+                result = {'outcome': 'Success', 'reason': 'Namespace ' + namespace_name + ' confirmed!'}
+                records[0].put()
+            else:
+                result = {'outcome': 'Failure', 'reason': 'Multiple records for namespace ' + namespace_name + ' found!'}
+            self.response.out.write(json.dumps(result))
 
 
 
-    
+        
 app = webapp2.WSGIApplication([
-  ('/', MainPage),
-  ('/next_page/', NextPage),
-  ('/next_page/aup_agree', AUP_AGREE),
-  ('/download_config', DownloadConfig),
-  ('/update_nodes', UpdateNodes),
-  ('/update_configs', UpdateConfigs),
-  ('/confirm_namespace', ConfirmNamespace)
-  ], debug=True)
+    ('/', MainPage),
+    ('/next_page/', NextPage),
+    ('/next_page/aup_agree', AUP_AGREE),
+    ('/download_config', DownloadConfig),
+    ('/update_nodes', UpdateNodes),
+    ('/update_configs', UpdateConfigs),
+    ('/confirm_namespace', ConfirmNamespace)
+    ], debug=True)
 # [END app]

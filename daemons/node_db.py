@@ -28,15 +28,15 @@ db_file_name = 'node_db.json'
 #
 
 def check_ip(an_IP_address):
-  IP_array = an_IP_address.split('.')
-  if (len(IP_array) != 4): return False
-  for i in range(4):
-    try:
-      val = int(IP_array[i])
-      if val < 0 or val > 255: return False
-    except ValueError:
-      return False
-  return True
+    IP_array = an_IP_address.split('.')
+    if (len(IP_array) != 4): return False
+    for i in range(4):
+        try:
+            val = int(IP_array[i])
+            if val < 0 or val > 255: return False
+        except ValueError:
+            return False
+    return True
 
 #
 # Check that a_name is a valid host name for a domain name.  Note that only the host
@@ -47,9 +47,9 @@ def check_ip(an_IP_address):
 #        and must be of length <= 63, and can't be empty
 #
 def ok_name(a_name):
-  if (len(a_name) > 63 or len(a_name) == 0): return False
-  result = reduce(lambda x, y: x and (y.isdigit() or y.isalpha() or (y == '-')), a_name, True)
-  return result and a_name[0] != '-' and a_name[-1] != '-'
+    if (len(a_name) > 63 or len(a_name) == 0): return False
+    result = reduce(lambda x, y: x and (y.isdigit() or y.isalpha() or (y == '-')), a_name, True)
+    return result and a_name[0] != '-' and a_name[-1] != '-'
 
 #
 # Print a usage message and exit.  This is called by check_args if there are
@@ -57,8 +57,8 @@ def ok_name(a_name):
 # Side effect: exits with an error
 # 
 def print_usage_and_exit():
-  print 'Usage: node_db.py add/delete host_name ip_address'
-  exit(1)
+    print 'Usage: node_db.py add/delete host_name ip_address'
+    exit(1)
 
 #
 # Check the command line arguments for validity -- that there are three arguments,
@@ -70,14 +70,14 @@ def print_usage_and_exit():
 # 
 
 def check_args():
-  if (len(sys.argv) != 4): print_usage_and_exit()
-  command = sys.argv[1]
-  host_name = sys.argv[2]
-  address = sys.argv[3]
-  if (command != 'add' and command != 'delete'): print_usage_and_exit()
-  if (not ok_name(host_name)): print_usage_and_exit()
-  if (not check_ip(address)): print_usage_and_exit()
-  return (command, host_name, address)
+    if (len(sys.argv) != 4): print_usage_and_exit()
+    command = sys.argv[1]
+    host_name = sys.argv[2]
+    address = sys.argv[3]
+    if (command != 'add' and command != 'delete'): print_usage_and_exit()
+    if (not ok_name(host_name)): print_usage_and_exit()
+    if (not check_ip(address)): print_usage_and_exit()
+    return (command, host_name, address)
 
 #
 # Main routine.
@@ -88,14 +88,14 @@ def check_args():
 #
 
 if __name__ == '__main__':
-  (command, host_name, address) = check_args()
-  host_list = read_db()
-  if (command == 'add'):
-    host_list = add_entry(host_list, host_name, address)
-  else:
-    host_list = delete_entry(host_list, host_name, address)
-  write_db(host_list)
+    (command, host_name, address) = check_args()
+    host_list = read_db()
+    if (command == 'add'):
+        host_list = add_entry(host_list, host_name, address)
+    else:
+        host_list = delete_entry(host_list, host_name, address)
+    write_db(host_list)
 
 
-    
+        
 
