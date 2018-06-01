@@ -23,7 +23,7 @@ db_file_name = '/home/ubuntu/sundew-one/etc/nodesdb.sqlite'
 #     a cursor after the query has been executed, which holds the results
 #
 def execute_query(query):
-    conn = sqlite3.connect(sqlite_file)
+    conn = sqlite3.connect(db_file_name)
     c = conn.cursor()
     c.execute(query)
     return c
