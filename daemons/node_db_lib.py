@@ -1,71 +1,99 @@
 # 
-# Utilities  called to update the (currently, in-file) database of nodes/ip addresses
-# This is kept in a JSON structure on the disk, which is just a list of records of the 
-# form {name: <name>, address: <routable IPv4 address>}
-#
-# This is very much an MVP piece of code -- it will need to be replaced with a SQL DB fairly soon.
+# Utilities  called to update the database of nodes and hostnames, in a sqlite3 database
 #
 
-import json
+# Schema of the database: table nodes, two columns, name and ip
+# both varchars
+
+import sqlite3
 
 #
-# The database file name
+# The database file name.  This should move to a config.py file which is not githubbed
 #
 
-db_file_name = 'node_db.json'
-
+db_file_name = '/home/ubuntu/sundew-one/etc/nodesdb.sqlite'
 
 #
-# Read the database from the db_file_name and parse it as JSON
-# Returns: the host list 
-# TODO: lots of error-checking!  Check for a bad parse, check for a bad open...
+# Execute a query on the database.  This is a utility used by the convenience routines here,
+# or it can be used directly.  Returns the cursor as a result.  NOTE: THIS CODE DOES NOT SANITIZE
+# ITS INPUT!  It assumes that it is being called from TRUSTED code.  DO NOT EXPOSE THIS METHOD
+# through, say, a web server field
+# query: the query to execute, as a valid SQL string
+# Returns:
+#     a cursor after the query has been executed, which holds the results
+#
+def execute_query(query):
+    conn = sqlite3.connect(sqlite_file)
+    c = conn.cursor()
+    c.execute(query)
+    return c
+
+#
+# Make a where clause for a db operation, using hostName, address, or both
+# name: host name for the clause, default None
+# address: ip address for the clause, default None
+# Returns:
+#     a string with a where clause ("" if neither name nor address specified) for use in a query
+#
+def make_where(name = None, address = None):
+    if name and address:
+        return " WHERE name='%s' and ip='%s'" % (name, address)
+    if name:
+        return  " WHERE name='%s'" % name
+    if address:
+        return  " WHERE ip='%s'" % address
+    return  ""
+        
+#
+# Fetch nodes from the database, by host name, ip address, or both.
+# if name == None, search on ip address only; if ip address == None, 
+# search on name only.  If both == None (default) return all hosts
+# name: name to search on, default None
+# address: address to search on, default None
+# Returns:
+#     a list of the form [{'name': name, 'address': address}]
+#
+def find_hosts(name = None, address = None):
+    query = 'SELECT * from nodes %s;' % make_where(name, address)
+    cursor = execute_query(query)
+    rows = cursor.fetchall()
+    return [{'name': record[0], 'address': record[1]} for record in rows]
+
+#
+# Read full host_list from the database
+# Returns: the host list in the form [{"name": name, "address":ip_address}...]
 #
 
 def read_db():
-    f = open(db_file_name, 'r')
-    json_string = f.read()
-    f.close()
-    return json.loads(json_string)
-#
-# Write  the database to the db_file_name and JSON
-# a_host_list: the host list to be dumped 
-# TODO: lots of error-checking!  Check for a null list, bad open...
-#
+    return find_hosts()
 
-def write_db(a_host_list):
-    f = open('node_db.json', 'w')
-    output = json.dumps(a_host_list)
-    f.write(output)
-    f.write('\n')
-    f.close() 
 
 #
-# Delete the entry {name: host_name, address: ip_address} from the host_list
-# a_host_list: host_list to do the deletion from
-# host_name: name to be deleted
-# ip_address: address to be deleted
-# Returns: the list with entries deleted.  
-# Note this returns a new copy of the list; the old list is unchanged
+# Delete the entry {name: host_name, address: ip_address} from the database
+# host_name: name to be deleted -- not used if None
+# ip_address: address to be deleted -- not used if None
+# Returns: None
 #
 
-def delete_entry(a_host_list, host_name, ip_address):
-    new_list = [entry for entry in a_host_list if entry['name'] != host_name or entry['address'] != ip_address]
-    return new_list
+def delete_entry(host_name = None, ip_address = None):
+    query = 'DELETE from nodes %s;' % make_where(name, address)
+    cursor = execute_query(query)
 
 #
-# Add  the entry {name: host_name, address: ip_address} to the host_list
-# a_host_list: host_list to add the new items to
+# Add  the entry {name: host_name, address: ip_address} to the database
 # host_name: name to be added
 # ip_address: address to be added
-# Returns: the list with entries added.  
-# Note this returns a new copy of the list; the old list is unchanged
-# No effect if there is an entry with name host_name already in the list
+# Returns: None 
+# No effect if there is an entry with name host_name or address ip_address already in the
+# database
 #
-def add_entry(a_host_list, host_name, ip_address):
-    new_list = a_host_list[:]
-    matches = [entry for entry in new_list if entry['name'] == host_name]
-    if len(matches) == 0:
-        new_list.append({'name': host_name, 'address': ip_address})
+def add_entry(host_name, ip_address):
+    if host_name == None or ip_address == None: return
+    rows = find_hosts(name = host_name)
+    if (len(rows) > 0): return
+    rows = find_hosts(address = ip_address)
+    if (len(rows) > 0): return
+    query = "INSERT INTO nodes (name, ip) values('%s', '%s');" % (host_name, ip_address)
 
 
 

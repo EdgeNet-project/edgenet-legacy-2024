@@ -10,14 +10,8 @@
 #
 
 import sys
-from node_db_lib import read_db, write_db, delete_entry, add_entry
+from node_db_lib import read_db,  delete_entry, add_entry
 from functools import reduce
-
-#
-# The database file name
-#
-
-db_file_name = 'node_db.json'
 
 
 #
@@ -82,19 +76,19 @@ def check_args():
 #
 # Main routine.
 # 1. Get the command, host_name, and address from the command line
-# 2. Read the DB
-# 3. Execute the add or delete command
-# 4. Write the DB
+# 2. Execute the add or delete command
+# 3. Print the DB
 #
 
 if __name__ == '__main__':
     (command, host_name, address) = check_args()
-    host_list = read_db()
     if (command == 'add'):
-        host_list = add_entry(host_list, host_name, address)
+        add_entry(host_list, host_name, address)
     else:
-        host_list = delete_entry(host_list, host_name, address)
-    write_db(host_list)
+        delete_entry(host_list, host_name, address)
+    host_list = read_db()
+    print host_list
+    
 
 
         
