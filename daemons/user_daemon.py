@@ -1,13 +1,14 @@
 #!/usr/bin/python
-from flask import Flask, request, send_file, jsonify
+from flask import Flask, request, send_file, jsonify, Response
 import werkzeug # for proper 400 Bad Request handling
 import subprocess
 from io import StringIO
+from node_db_lib import read_db, write_db, add_entry
 
 key = '/etc/letsencrypt/live/head.sundewproject.org/privkey.pem'
 cert = '/etc/letsencrypt/live/head.sundewproject.org/cert.pem'
 
-app = Flask(__name__)
+app = Flask(__name__,static_url_path='/home/ubuntu/sundew-one/daemons/')
 
 
 
@@ -99,10 +100,34 @@ def get_secret():
     result = make_call(cmd)
     return result
 
+@app.route("/add_node")
+def add_node():
+    ip = request.remote_addr
+    site = str(request.args.get('sitename'))
+    if not 'sitename' in request.args:
+      log('Empty request for site add')
+      return Response("Error: Site name not provided", status=500, mimetype='application/json')
+    # try this...
+    host_list = read_db()
+    current = [node for node in host_list if node['host'] == site]
+    # node = make_call(['kubectl','get', 'node',site + '.edge-net.io'])[0].split('/n')[0]    
+    if (len(current) > 0):
+    # if len(node) > 0:
+      return Response("Error: Site name already exists", status=500, mimetype='application/json')
+    else:
+     #  current = read_db()
+      new = add_entry(current, site, ip)
+      write_db(new)
+      return send_file('setup_node.sh')
 
+@app.route("/get_setup")
+def get_setup():
+    return send_file('join_cluster.sh')
 
 if __name__ == "__main__":
-    context = (cert, key)
-    app.run(host='0.0.0.0', port=8181, debug=True, threaded=True,
-            ssl_context=context)
+    #key = '/etc/letsencrypt/live/headnode.edge-net.org/privkey.pem'
+    #cert = '/etc/letsencrypt/live/headnode.edge-net.org/cert.pem'
+    #context = (cert, key)
+    app.run(host='0.0.0.0', port=8181, debug=True, threaded=True)
+            #ssl_context=context)
 
