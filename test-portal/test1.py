@@ -539,6 +539,10 @@ class ConfirmNamespace(webapp2.RequestHandler):
                 result = {'outcome': 'Failure', 'reason': 'Multiple records for namespace ' + namespace_name + ' found!'}
             self.response.out.write(json.dumps(result))
 
+class ShowIP(webapp2.RequestHandler):
+    def get(self):
+        self.response.write('Your IP is %s' % self.request.remote_addr)
+
 
 
         
@@ -549,6 +553,7 @@ app = webapp2.WSGIApplication([
     ('/download_config', DownloadConfig),
     ('/update_nodes', UpdateNodes),
     ('/update_configs', UpdateConfigs),
-    ('/confirm_namespace', ConfirmNamespace)
+    ('/confirm_namespace', ConfirmNamespace),
+    ('/show_ip', ShowIP)
     ], debug=True)
 # [END app]

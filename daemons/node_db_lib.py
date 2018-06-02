@@ -26,6 +26,7 @@ def execute_query(query):
     conn = sqlite3.connect(db_file_name)
     c = conn.cursor()
     c.execute(query)
+    conn.close()
     return c
 
 #
@@ -76,8 +77,13 @@ def read_db():
 #
 
 def delete_entry(host_name = None, ip_address = None):
-    query = 'DELETE from nodes %s;' % make_where(name, address)
-    cursor = execute_query(query)
+    if ((not host_name) and (not ip_address)): return
+    query = 'DELETE from nodes %s;' % make_where(host_name, ip_address)
+    conn = sqlite3.connect(db_file_name)
+    c = conn.cursor()
+    c.execute(query)
+    conn.commit()
+    conn.close()
 
 #
 # Add  the entry {name: host_name, address: ip_address} to the database
@@ -93,7 +99,12 @@ def add_entry(host_name, ip_address):
     if (len(rows) > 0): return
     rows = find_hosts(address = ip_address)
     if (len(rows) > 0): return
-    query = "INSERT INTO nodes (name, ip) values('%s', '%s');" % (host_name, ip_address)
+    query = "INSERT INTO nodes (name, ip) values(?, ?);"
+    conn = sqlite3.connect(db_file_name)
+    c = conn.cursor()
+    c.execute(query, (host_name, ip_address))
+    conn.commit()
+    conn.close()
 
 
 

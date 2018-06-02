@@ -38,6 +38,12 @@ handlers:
   secure: always
   redirect_http_response_code: 301
 
+- url: /show_ip
+  script: test1.app
+  login: optional
+  secure: always
+  redirect_http_response_code: 301
+
 - url: /.*
   script: test1.app
   login: required
