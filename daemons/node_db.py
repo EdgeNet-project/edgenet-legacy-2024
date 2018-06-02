@@ -10,7 +10,7 @@
 #
 
 import sys
-from node_db_lib import read_db,  delete_entry, add_entry
+from node_db_lib import Sqllite3DB
 from functools import reduce
 
 
@@ -81,12 +81,13 @@ def check_args():
 #
 
 if __name__ == '__main__':
+    db = Sqllite3DB()
     (command, host_name, address) = check_args()
     if (command == 'add'):
-        add_entry(host_list, host_name, address)
+        db.add_entry(host_list, host_name, address)
     else:
-        delete_entry(host_list, host_name, address)
-    host_list = read_db()
+        db.delete_entry(host_list, host_name, address)
+    host_list = db.read_db()
     print host_list
     
 
