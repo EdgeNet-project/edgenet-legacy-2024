@@ -9,3 +9,6 @@ daemons/*.json
 # Python bytecode
 *.pyc
 
+# namecheap_config
+test-portal/namecheap_config.py
+

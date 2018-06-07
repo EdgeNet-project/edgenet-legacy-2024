@@ -30,9 +30,11 @@ import sys
 # import cloudstorage
 import datetime
 import json
+import namecheap_lib
 
 from google.appengine.api import app_identity
 from google.appengine.api import users
+from google.appengine.api import search
 from google.appengine.ext import ndb
 from google.appengine.api import mail
 
@@ -88,6 +90,29 @@ class User(ndb.Model):
     has_config = ndb.BooleanProperty(indexed = True, required = True, default = False)
     config = ndb.TextProperty(indexed = False, required = False)
 
+#
+# A node in the system.  Note this obsoletes the previous node-list entry
+#
+class Node(ndb.Model):
+    """A model for a node in the system.  
+    We store:
+    The node name, a string
+    The IPv4 address, a string
+    The date when the node was added to the system, a DateTimeProperty
+    The location of the node, a lat long
+    4. city for the node, a string
+    5. region for the node, a string (possibly null)
+    6. country for the node, a string
+    """
+    name = ndb.StringProperty(indexed = True, required = True)
+    address = ndb.StringProperty(indexed = True, required = True)
+    date_added = ndb.DateTimeProperty(required = True)
+    location = ndb.GeoPtProperty(required = True)
+    city = ndb.StringProperty(required = True)
+    region = ndb.StringProperty(required = True)
+
+
+
 
 #
 # Node List snapshots.  These are taken every few minutes and stored in the DB.  The current node list 
@@ -101,6 +126,7 @@ class NodeList(ndb.Model):
     1. time: a DateTimeProperty which shows when this was taken
     2. active: the last fetch.  This should only be true for one entry
     3. nodes: an array of nodes represented as a JSON string
+
     """
     time = ndb.DateTimeProperty(indexed = True, required = True)
     active = ndb.BooleanProperty(indexed = True, required = True, default = False)
@@ -250,6 +276,19 @@ def fetch_config_file(namespace):
     return fetch_from_url(query_url, 2)
 
 #
+# Fetch the current secret from the headnode for node_join purposes.  The current
+# secret will last for 10 minutes.  This is a thin wrapper over fetch_from_url.  
+# It is called from two places, add_node and get_setup
+#
+# returns: the current secret
+# 
+def fetch_secret():
+    query_url = '%s/get_secret' % head_node_url
+    return fetch_from_url(query_url, 2)
+
+
+
+#
 # Make a new namespace with namespace.  Return success or failure...
 #
 # namespace: namespace to create
@@ -300,6 +339,82 @@ def send_approval(user_record):
     body += "Go to " + url + " and log in as " + user_record.email +" and download your configuration file.\n"
     body += "You can use this to manage namespace " + user_record.namespace + " at the head node dashboard or with kubectl."
     mail.send_mail(sender = sender, subject = subjectLine, to=toLine, body=body)
+
+
+#
+# an add-node exception, thrown if a request to add a node fails for some reason
+# Possible reasons are:
+# 1. This wasn't a valid node name.  See the comments above check_node_name for what constitutes a valid node name
+# 2. The IP address wasn't a valid IPv4 address or wasn't routable
+# 3. There is already a node in the database with that name, IP address, or both
+# The body of the Exception has an error message with the reason
+#
+class AddNodeException(Exception):
+    pass
+
+#
+# Check that an_IP_address is a valid IPv4 address. 
+# an_IP_address: a string to be checked for being a valid IPv4 address
+# Returns: True if it is, False otherwise
+# TODO: check to make sure it's routable.
+#
+
+def check_ip(an_IP_address):
+    IP_array = an_IP_address.split('.')
+    if (len(IP_array) != 4): return False
+    for i in range(4):
+        try:
+            val = int(IP_array[i])
+            if val < 0 or val > 255: return False
+        except ValueError:
+            return False
+    return True
+
+#
+# Check that a_name is a valid host name for a domain name.  Note that only the host
+# name should be given, not the FQDN: 'www' is valid, 'www.yahoo.com' is not. 
+# a_name: a string to be checked for being a valid host name
+# Returns: True if it is, False otherwise
+# Rules: valid characters are alphanumerics, hyphen, the name cannot begin or end with a hyphen,
+#        and must be of length <= 63, and can't be empty
+#
+def check_node_name(a_name):
+    if (len(a_name) > 63 or len(a_name) == 0): return False
+    result = reduce(lambda x, y: x and (y.isdigit() or y.isalpha() or (y == '-')), a_name, True)
+    return result and a_name[0] != '-' and a_name[-1] != '-'
+
+#
+# add a Node to the table.  Throws an add-node exception if the node fails to add
+# node_name: the node name
+# ip_address: the ip address
+# location: the location as a lat-long
+# Returns: no return
+# side effects: adds Node to the table
+# throws: an AddNodeException
+#
+def add_node(node_name, ip_address, location = None, city = None, region = None, country = None):
+    if not check_node_name(node_name):
+        raise AddNodeException("%s isn't a valid node name." % node_name)
+    if not check_ip(ip_address):
+        raise AddNodeException("%s isn't a valid IPv4 address" % ip_address )
+    current_nodes = Node.query(name == node_name or address == ip_address)
+    if len(current_nodes > 0):
+        raise AddNodeException('There is already a node with name %s or address %s or both in the node list' % (node_name, ip_address))
+    record = Node(name = node_name, address = ip_address, date_added = datetime.datetime.now(), location = location, city = city, region = region, country = country)
+    record.put()
+
+#
+# Convert a string with two floats to a GeoPoint.  Assumes the caller did the error-checking
+# geo_string: the string to be converted
+# returns: a GeoPt
+#
+def convert_string_to_GeoPt(geo_string):
+    coords = geo_string.split(',')
+    if len(coords == 1):
+        return search.GeoPoint(float(coords[0]))
+    return search.GeoPoint(float(coords[0], coords[1]))
+
+
     
 
 
@@ -313,12 +428,13 @@ def send_approval(user_record):
 #
 
 def add_node_record_to_values(values):
-    current_nodelist = get_current_nodelist_record()
-    if current_nodelist:
-        values["nodes"] = json.loads(current_nodelist.nodes)
-        values["node_fetch_time"] = current_nodelist.time.strftime("%H:%M:%S %A, %B %d, %Y")
-    else:
-        values["nodes"] = None
+    values["nodes"] = Node.query().fetch()
+    # current_nodelist = get_current_nodelist_record()
+    # if current_nodelist:
+    #     values["nodes"] = json.loads(current_nodelist.nodes)
+    #     values["node_fetch_time"] = current_nodelist.time.strftime("%H:%M:%S %A, %B %d, %Y")
+    # else:
+    #     values["nodes"] = None
 
 # 
 # display the next page: this is the main user page, and it is one of three:
@@ -522,6 +638,64 @@ class UpdateConfigs(webapp2.RequestHandler):
         self.response.out.write('Namespaces created: %s\n Configurations stored for: %s\n Errors: %s\n' % (create_string, config_string, error_string))
 
 
+#
+# A little utility to get a header from a request, returns None if there is no header for that request
+# request: the request to get the header from
+# header: the header to get the value for
+# returns: the value of the header, None if not present
+# 
+def get_header(request, header):
+    if header in request.headers:
+        return request.headers[header]
+    else:
+        return None
+
+#
+# Write the add_node_to_headnode_file to the client
+# 
+# response: an instance of webapp2.RequestHandler.response
+# secret: the secret to stick into the file
+# returns: no return value
+# side effects: writes the add_node_to_headnode_file
+# 
+
+def write_add_node(response, secret):
+    response.headers['Content-Type'] = 'text/csv'
+    response.out.write(secret)
+    # response.headers['Content-Disposition'] = "attachment; filename=add_node.sh"
+    # template = JINJA_ENVIRONMENT.get_template('views/add_node.sh')
+    # response.write(template.render({"secret": secret}))
+
+
+#
+# Add a node to the DB and the cluster.  This is called by the node that wants to be added, with a supplied name.
+# tasks:
+# 1. Get te current add-node token from the headnode.
+# 2. Add the node to the DB -- if this fails, return a 500 and why.
+# 3a. If successful in addition, send the setup script to the node
+# 3b. If note, send a 500 with the error message
+#
+class AddNode(webapp2.RequestHandler):
+    def get(self):
+        secret = fetch_secret()
+        if not secret:
+            self.response.set_status(500)
+            self.response.write('Unable to fetch secret from head node, try add_node again')
+        else:
+            name = self.request.get('node_name')
+            address = self.request.remote_addrself.request.remote_addr
+            location = get_header(self.request, 'X-Appengine-Citylatlong')
+            city = get_header(self.request, 'X-Appengine-City')
+            region = get_header(self.request, 'X-Appengine-Region')
+            country = get_header(self.request, 'X-Appengine-Country')
+            try:
+                add_node(name, address, location, city, region, country)
+                write_add_node(self.response, secret)
+            except AddNodeException as add_exception:
+                self.response.set_status(500)
+                self.response.write('/add_node failure: %s' % str(add_exception))
+
+
 class ConfirmNamespace(webapp2.RequestHandler):
     def post(self):
         namespace_name = self.request.get('namespace')
@@ -543,6 +717,11 @@ class ShowIP(webapp2.RequestHandler):
     def get(self):
         self.response.write('Your IP is %s' % self.request.remote_addr)
 
+class ShowHeaders(webapp2.RequestHandler):
+    def get(self):
+        result = ["%s: %s"  % (key, self.request.headers[key]) for key in self.request.headers]
+        self.response.write("\n".join(result))
+
 
 
         
@@ -553,7 +732,9 @@ app = webapp2.WSGIApplication([
     ('/download_config', DownloadConfig),
     ('/update_nodes', UpdateNodes),
     ('/update_configs', UpdateConfigs),
+    ('/add_node', AddNode),
     ('/confirm_namespace', ConfirmNamespace),
-    ('/show_ip', ShowIP)
+    ('/show_ip', ShowIP),
+    ('/show_headers', ShowHeaders)
     ], debug=True)
 # [END app]
