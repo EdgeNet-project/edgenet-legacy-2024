@@ -12,3 +12,6 @@ daemons/*.json
 # namecheap_config
 test-portal/namecheap_config.py
 
+# portal conf
+test-portal/config.py
+

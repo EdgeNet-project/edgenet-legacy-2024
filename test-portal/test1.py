@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+#
 # Copyright 2018 US Ignite
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -238,11 +238,12 @@ def get_current_user_nickname_and_email():
         return user.nickname(), user.email()
     return user.nickname(), user.nickname()
 
-     
+
+from config import head_node_url, kubernetes_head_node, kubernetes_head_text     
 # head_node_url = 'http://head.sundew.ch-geni-net.instageni.washington.edu:8181/' 
-head_node_url = 'https://head.sundewproject.org:8181/'
-kubernetes_head_node = 'https://head.sundewproject.org/'
-kubernetes_head_text = 'edgeNet Head Node'
+# head_node_url = 'https://head.sundewproject.org:8181/'
+# kubernetes_head_node = 'https://head.sundewproject.org/'
+# kubernetes_head_text = 'edgeNet Head Node'
 
 #
 # A little utility to pull data from an URL.  Robust against some failures, since one of the servers we talk to can be
@@ -397,7 +398,7 @@ def add_node(node_name, ip_address, location = None, city = None, region = None,
         raise AddNodeException("%s isn't a valid node name." % node_name)
     if not check_ip(ip_address):
         raise AddNodeException("%s isn't a valid IPv4 address" % ip_address )
-    current_nodes = Node.query(name == node_name or address == ip_address)
+    current_nodes = Node.query(name == node_name or address == ip_address).fetch()
     if len(current_nodes > 0):
         raise AddNodeException('There is already a node with name %s or address %s or both in the node list' % (node_name, ip_address))
     record = Node(name = node_name, address = ip_address, date_added = datetime.datetime.now(), location = location, city = city, region = region, country = country)
@@ -428,13 +429,13 @@ def convert_string_to_GeoPt(geo_string):
 #
 
 def add_node_record_to_values(values):
-    values["nodes"] = Node.query().fetch()
-    # current_nodelist = get_current_nodelist_record()
-    # if current_nodelist:
-    #     values["nodes"] = json.loads(current_nodelist.nodes)
-    #     values["node_fetch_time"] = current_nodelist.time.strftime("%H:%M:%S %A, %B %d, %Y")
-    # else:
-    #     values["nodes"] = None
+    # values["nodes"] = Node.query().fetch()
+    current_nodelist = get_current_nodelist_record()
+    if current_nodelist:
+        values["nodes"] = json.loads(current_nodelist.nodes)
+        values["node_fetch_time"] = current_nodelist.time.strftime("%H:%M:%S %A, %B %d, %Y")
+    else:
+        values["nodes"] = None
 
 # 
 # display the next page: this is the main user page, and it is one of three:
@@ -502,6 +503,7 @@ class NextPage(webapp2.RequestHandler):
 #
 # Handles and AUP agreement: catches the AUP agreement, updates the record in the database, then calls display_next_page 
 # to do the rendering.
+# URL: /aup_agree
 #
 
 
@@ -534,6 +536,9 @@ def write_config(response, config):
 # to save it as a file.
 # In the event that the user hasn't been approved, or hasn't signed the AUP, or there's a problem fetching the config file from the head node,
 # an error page is displayed
+# URL: /download_config
+# GET request
+# No arguments -- email is found from the login
 #
 
 class DownloadConfig(webapp2.RequestHandler):
@@ -559,6 +564,8 @@ class DownloadConfig(webapp2.RequestHandler):
 
 #
 # Update the nodes in the db
+# Intended to be run as a cron job
+# URL: /update_nodes
 #
 class UpdateNodes(webapp2.RequestHandler):
     def get(self):
@@ -578,6 +585,8 @@ class UpdateNodes(webapp2.RequestHandler):
 #
 # update the configuration files in the db
 # This is intended to be run as a cron job, though it does output stuff for testing.
+# URL: /update_configs
+# GET request
 #
 class UpdateConfigs(webapp2.RequestHandler):
     # Variables to hold the status and the errors
@@ -651,15 +660,15 @@ def get_header(request, header):
         return None
 
 #
-# Write the add_node_to_headnode_file to the client
+# Write the current headnode secret to the client
 # 
 # response: an instance of webapp2.RequestHandler.response
-# secret: the secret to stick into the file
+# secret: the secret to write
 # returns: no return value
-# side effects: writes the add_node_to_headnode_file
+# side effects: writes the secret
 # 
 
-def write_add_node(response, secret):
+def write_secret(response, secret):
     response.headers['Content-Type'] = 'text/csv'
     response.out.write(secret)
     # response.headers['Content-Disposition'] = "attachment; filename=add_node.sh"
@@ -670,10 +679,12 @@ def write_add_node(response, secret):
 #
 # Add a node to the DB and the cluster.  This is called by the node that wants to be added, with a supplied name.
 # tasks:
-# 1. Get te current add-node token from the headnode.
+# 1. Get the current add-node token from the headnode.
 # 2. Add the node to the DB -- if this fails, return a 500 and why.
 # 3a. If successful in addition, send the setup script to the node
 # 3b. If note, send a 500 with the error message
+# URL: /add_node?node_name=name
+# GET request
 #
 class AddNode(webapp2.RequestHandler):
     def get(self):
@@ -690,10 +701,50 @@ class AddNode(webapp2.RequestHandler):
             country = get_header(self.request, 'X-Appengine-Country')
             try:
                 add_node(name, address, location, city, region, country)
-                write_add_node(self.response, secret)
+                write_secret(self.response, secret)
             except AddNodeException as add_exception:
                 self.response.set_status(500)
                 self.response.write('/add_node failure: %s' % str(add_exception))
+#
+# Deliver the current secret to an existing node.  This is a backup in case we were able to add a node to the DB
+# but their subsequent call to add to the head node failed, or they lost contact with the headnode and aren't on the dashboard, etc.
+# Tasks:
+# 1. Check to see if the node and ip_address is in the DB
+# 2. If not, return with failure
+# 3. If true, fetch the secret from the headnode and send it to the node
+# sends a 500 if the node isn't in the DB or if we failed to fetch a secret
+#
+# URL: /get_secret?node_name=name
+# GET request
+# address fetched from header
+#
+class GetSecret(webapp2.RequestHandler):
+    def get(self):
+        name = self.request.get('node_name')
+        address = self.request.remote_addrself.request.remote_addr
+        node_records = Node.query(name == node_name or address == ip_address).fetch()
+        if (len(node_records) == 0):
+            self.response.set_status(500)
+            self.response.write('There is no node in the database with name %s and ip_address %s' % (node_name, ip_address))
+        else:
+            secret = fetch_secret()
+            if not secret:
+                self.response.set_status(500)
+                self.response.write('Unable to fetch secret from head node, try get_secret again')
+            else:
+                write_secret(self.response, secret)
+
+#
+# Confirm that namespace namespace has been created.  This should only be called by the head node
+# TODO: check the requesting IP!  This is a callback after a call to request the namespace, because
+# we didn't want to wait for the headnode to get done.
+# URL: /confirm_namespace
+# POST request
+# Arguments: {namespace: namespace_name}
+# Side effect: changes namespace state for the appropriate record to NAMESPACE_ASSIGNED (user sees this as his
+#              slice is ready to use)
+# TODO: Check the requesting IP to make sure that we are getting called by the headnode.
+#
 
 
 class ConfirmNamespace(webapp2.RequestHandler):
@@ -713,9 +764,23 @@ class ConfirmNamespace(webapp2.RequestHandler):
                 result = {'outcome': 'Failure', 'reason': 'Multiple records for namespace ' + namespace_name + ' found!'}
             self.response.out.write(json.dumps(result))
 
+#
+# show the requesting IP address.
+# URL: /show_ip
+# GET request
+# primarily for debugging/information
+#
+
 class ShowIP(webapp2.RequestHandler):
     def get(self):
         self.response.write('Your IP is %s' % self.request.remote_addr)
+
+#
+# show the requesting headers.
+# URL: /show_headers
+# GET request
+# primarily for debugging/information -- see what headers and values GAE puts on.
+#
 
 class ShowHeaders(webapp2.RequestHandler):
     def get(self):
