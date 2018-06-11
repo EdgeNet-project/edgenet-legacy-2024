@@ -34,7 +34,6 @@ import namecheap_lib
 
 from google.appengine.api import app_identity
 from google.appengine.api import users
-from google.appengine.api import search
 from google.appengine.ext import ndb
 from google.appengine.api import mail
 
@@ -110,6 +109,7 @@ class Node(ndb.Model):
     location = ndb.GeoPtProperty(required = True)
     city = ndb.StringProperty(required = True)
     region = ndb.StringProperty(required = True)
+    country = ndb.StringProperty(required = True)
 
 
 
@@ -284,10 +284,8 @@ def fetch_config_file(namespace):
 # returns: the current secret
 # 
 def fetch_secret():
-    query_url = '%s/get_secret' % head_node_url
+    query_url =  head_node_url + 'get_secret' 
     return fetch_from_url(query_url, 2)
-
-
 
 #
 # Make a new namespace with namespace.  Return success or failure...
@@ -385,6 +383,17 @@ def check_node_name(a_name):
     return result and a_name[0] != '-' and a_name[-1] != '-'
 
 #
+# Convert a string with two floats to a GeoPt.  Assumes the caller did the error-checking
+# geo_string: the string to be converted
+# returns: a GeoPt
+#
+def convert_string_to_GeoPt(geo_string):
+    coords = geo_string.split(',')
+    if len(coords) == 1:
+        return ndb.GeoPt(float(coords[0]))
+    return ndb.GeoPt(float(coords[0]), float(coords[1]))
+
+#
 # add a Node to the table.  Throws an add-node exception if the node fails to add
 # node_name: the node name
 # ip_address: the ip address
@@ -398,25 +407,13 @@ def add_node(node_name, ip_address, location = None, city = None, region = None,
         raise AddNodeException("%s isn't a valid node name." % node_name)
     if not check_ip(ip_address):
         raise AddNodeException("%s isn't a valid IPv4 address" % ip_address )
-    current_nodes = Node.query(name == node_name or address == ip_address).fetch()
-    if len(current_nodes > 0):
+    current_nodes = Node.query(Node.name == node_name or Node.address == ip_address).fetch()
+    if len(current_nodes) > 0:
         raise AddNodeException('There is already a node with name %s or address %s or both in the node list' % (node_name, ip_address))
-    record = Node(name = node_name, address = ip_address, date_added = datetime.datetime.now(), location = location, city = city, region = region, country = country)
+    record = Node(name = node_name, address = ip_address, date_added = datetime.datetime.now(), location = convert_string_to_GeoPt(location), city = city, region = region, country = country)
     record.put()
 
-#
-# Convert a string with two floats to a GeoPoint.  Assumes the caller did the error-checking
-# geo_string: the string to be converted
-# returns: a GeoPt
-#
-def convert_string_to_GeoPt(geo_string):
-    coords = geo_string.split(',')
-    if len(coords == 1):
-        return search.GeoPoint(float(coords[0]))
-    return search.GeoPoint(float(coords[0], coords[1]))
 
-
-    
 
 
 #
@@ -694,7 +691,7 @@ class AddNode(webapp2.RequestHandler):
             self.response.write('Unable to fetch secret from head node, try add_node again')
         else:
             name = self.request.get('node_name')
-            address = self.request.remote_addrself.request.remote_addr
+            address = self.request.remote_addr
             location = get_header(self.request, 'X-Appengine-Citylatlong')
             city = get_header(self.request, 'X-Appengine-City')
             region = get_header(self.request, 'X-Appengine-Region')
@@ -721,8 +718,8 @@ class AddNode(webapp2.RequestHandler):
 class GetSecret(webapp2.RequestHandler):
     def get(self):
         name = self.request.get('node_name')
-        address = self.request.remote_addrself.request.remote_addr
-        node_records = Node.query(name == node_name or address == ip_address).fetch()
+        address = self.request.remote_addr
+        node_records = Node.query(Node.name == name and Node.address == address).fetch()
         if (len(node_records) == 0):
             self.response.set_status(500)
             self.response.write('There is no node in the database with name %s and ip_address %s' % (node_name, ip_address))
@@ -787,8 +784,20 @@ class ShowHeaders(webapp2.RequestHandler):
         result = ["%s: %s"  % (key, self.request.headers[key]) for key in self.request.headers]
         self.response.write("\n".join(result))
 
+#
+# Show the configuration parameters.  Primarily for debugging
+# URL: /show_config
+# GET request
+#
+
+class ShowConfig(webapp2.RequestHandler):
+    def get(self):
+        self.response.write('head_node_url: %s\n, kubernetes_head_node: %s\n' % (head_node_url, kubernetes_head_node))
 
 
+#
+# Set up the routes.  Note that this must agree with the paths in app.yaml and cron.yaml
+#
         
 app = webapp2.WSGIApplication([
     ('/', MainPage),
@@ -798,8 +807,10 @@ app = webapp2.WSGIApplication([
     ('/update_nodes', UpdateNodes),
     ('/update_configs', UpdateConfigs),
     ('/add_node', AddNode),
+    ('/get_secret', GetSecret),
     ('/confirm_namespace', ConfirmNamespace),
     ('/show_ip', ShowIP),
-    ('/show_headers', ShowHeaders)
+    ('/show_headers', ShowHeaders),
+    ('/show_config', ShowConfig)
     ], debug=True)
 # [END app]
