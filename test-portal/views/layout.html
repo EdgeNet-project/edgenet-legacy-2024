@@ -46,14 +46,22 @@
 				height: 50px;
 				border: 1px solid black; 
 			}
+			th {
+				border: 1px solid black;
+			}
+			td {
+				border: 1px solid black;
+			}
 			tr.noderow:nth-child(even) {background-color: #f2f2f2;}
 			</style>
 			{% if nodes %}
 			  <center>
 			  	<table class="nodetable">
-			  		<tr><th class="nodehead"> Current edgeNet Node List Fetched at {{node_fetch_time}} UTC </th></tr>
+			  		<tr><th class="nodehead" colspan=8> Current edgeNet Node List </th></tr>
+			  		<tr><th>Name</th><th>Address</th><th>Location</th><th>City</th><th>Region</th><th>Country</th><th>Date Added</th><th>Ready</th></tr>
 			  		{% for node in nodes %}
-			  		<tr class="noderow"><td>{{ node }}</td></tr>
+			  		<tr class="noderow"><td>{{ node.name }}</td> <td>{{ node.address }}</td> <td>{{ node.location }}</td> <td>{{ node.city }}</td> <td>{{ node.region }}</td> <td>{{ node.country }}</td> <td>{{ node.date }}</td>
+<td>{{ node.ready }}</td></tr>
 			  		{% endfor %}
 			  	</table>
 			  </center>

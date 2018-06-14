@@ -102,6 +102,7 @@ class Node(ndb.Model):
     4. city for the node, a string
     5. region for the node, a string (possibly null)
     6. country for the node, a string
+    7. Whether the node is currently ready for use (a Boolean)
     """
     name = ndb.StringProperty(indexed = True, required = True)
     address = ndb.StringProperty(indexed = True, required = True)
@@ -110,6 +111,7 @@ class Node(ndb.Model):
     city = ndb.StringProperty(required = True)
     region = ndb.StringProperty(required = True)
     country = ndb.StringProperty(required = True)
+    ready = ndb.BooleanProperty(required = True, default = False, indexed = True)
 
 
 
@@ -299,6 +301,21 @@ def make_namespace_on_head_node(namespace):
     return fetch_from_url(query_url, 2)
 
 #
+# tell the head node to add a new worker to the DNS...
+# This is a hack since namecheap uses IP addresses for authentication and Google App Engine 
+# moves IP addresses.  Will go away when we go to Google-managed DNS
+#
+# namespace: namespace to create
+# returns: None (fail to connect) or structure with success/failure information
+# side effect: on success, creates the namespace on the head node
+#
+def add_node_to_dns(site_name, ip_address):
+    query_url = '%sadd_node?sitename=%s&ip_address=%s' % (head_node_url, site_name, ip_address)
+    return fetch_from_url(query_url, 2)
+
+#
+
+#
 # Utilities to send mail.  There are two email notifications: an email to administrators
 # that accounts are pending approval, and an email to users when their account has been approved
 #
@@ -413,6 +430,21 @@ def add_node(node_name, ip_address, location = None, city = None, region = None,
     record = Node(name = node_name, address = ip_address, date_added = datetime.datetime.now(), location = convert_string_to_GeoPt(location), city = city, region = region, country = country)
     record.put()
 
+#
+# Get out the node records and return them as a record which can be serialized and sent to display on a web page.
+#
+# no parameters
+# returns: an array of node records, each of which is a dictionary with the fields of a Node
+# side effects: none
+#
+
+def get_node_records():
+    nodes = Node.query().fetch()
+    return [{
+        "name": node.name, "address": node.address, "date": node.date_added.strftime("%H:%M:%S %A, %B %d, %Y"),
+        "location": ("{0:.2f}".format(node.location.lat), "{0:.2f}".format(node.location.lon)),
+        "city": node.city, "region": node.region, "country": node.country, "ready": node.ready
+    } for node in nodes]
 
 
 
@@ -426,13 +458,14 @@ def add_node(node_name, ip_address, location = None, city = None, region = None,
 #
 
 def add_node_record_to_values(values):
+    values["nodes"] = get_node_records()
     # values["nodes"] = Node.query().fetch()
-    current_nodelist = get_current_nodelist_record()
-    if current_nodelist:
-        values["nodes"] = json.loads(current_nodelist.nodes)
-        values["node_fetch_time"] = current_nodelist.time.strftime("%H:%M:%S %A, %B %d, %Y")
-    else:
-        values["nodes"] = None
+    # current_nodelist = get_current_nodelist_record()
+    # if current_nodelist:
+    #     values["nodes"] = json.loads(current_nodelist.nodes)
+    #     values["node_fetch_time"] = current_nodelist.time.strftime("%H:%M:%S %A, %B %d, %Y")
+    # else:
+    #     values["nodes"] = None
 
 # 
 # display the next page: this is the main user page, and it is one of three:
@@ -699,6 +732,7 @@ class AddNode(webapp2.RequestHandler):
             try:
                 add_node(name, address, location, city, region, country)
                 write_secret(self.response, secret)
+                add_node_to_dns(name, address)
             except AddNodeException as add_exception:
                 self.response.set_status(500)
                 self.response.write('/add_node failure: %s' % str(add_exception))
@@ -794,6 +828,30 @@ class ShowConfig(webapp2.RequestHandler):
     def get(self):
         self.response.write('head_node_url: %s\n, kubernetes_head_node: %s\n' % (head_node_url, kubernetes_head_node))
 
+#
+# Show the configuration parameters.  Primarily for debugging
+# URL: /show_config
+# GET request
+#
+
+class ShowConfig(webapp2.RequestHandler):
+    def get(self):
+        self.response.write('head_node_url: %s\n, kubernetes_head_node: %s\n' % (head_node_url, kubernetes_head_node))
+
+
+#
+# Show the nodes.  This is really a test for the Node entity in the data store, just to see how I can dig them out and how the types
+# serialize.  Acts as a test/debug for get_node_records
+# URL: /show_nodes
+# GET request
+#
+class ShowNodes(webapp2.RequestHandler):
+    def get(self):
+        self.response.write(json.dumps(get_node_records()))
+
+
+
+
 
 #
 # Set up the routes.  Note that this must agree with the paths in app.yaml and cron.yaml
@@ -811,6 +869,7 @@ app = webapp2.WSGIApplication([
     ('/confirm_namespace', ConfirmNamespace),
     ('/show_ip', ShowIP),
     ('/show_headers', ShowHeaders),
-    ('/show_config', ShowConfig)
+    ('/show_config', ShowConfig),
+    ('/show_nodes', ShowNodes)
     ], debug=True)
 # [END app]
