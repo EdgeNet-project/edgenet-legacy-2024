@@ -93,7 +93,7 @@ def build_get_hosts(domain):
 #
 # Build the set hosts command for a domain and a host list.  H
 # domain: a string of the form 'sld.td'
-# host_list: a list of records of the form {'host': <host name>, 'address': <ipv4 address>}
+# host_list: a list of records of the form (name, address, recordType)
 # Returns: a record with the fields for the namecheap API.  This is:
 #    tld: Top-level domain as a string
 #    sld: Second-level domain as a string
@@ -109,9 +109,9 @@ def build_set_hosts(domain, host_list):
     result['sld'] = parts[0]
     for i in range(len(host_list)):
         index = i + 1
-        result['HostName%d' % index] = host_list[i]["host"]
-        result['Address%d' % index] = host_list[i]["address"]
-        result['RecordType%d' % index] = 'A'
+        result['HostName%d' % index] = host_list[i][0]
+        result['Address%d' % index] = host_list[i][1]
+        result['RecordType%d' % index] = host_list[i][2]
     result['Command'] = 'namecheap.domains.dns.setHosts'
     return result
 
