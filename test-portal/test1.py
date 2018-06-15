@@ -593,6 +593,19 @@ class DownloadConfig(webapp2.RequestHandler):
             self.response.write(template.render(values))
 
 #
+# A little utility to trim the '.edge-net.io' off a name returned by the headnode
+# node: a node name 
+# returns: <foo> if node = <foo>.edge_net.io, or node otherwise
+# side effects: none
+# HACK and TODO: hardcoded '.edge-net.io' should be replaced with a config!
+#
+
+def trim_node_name(node):
+    index = node.find('.edge-net.io')
+    if (index == -1): return node
+    return node[:index]
+
+#
 # Update the nodes in the db
 # Intended to be run as a cron job
 # URL: /update_nodes
@@ -607,7 +620,12 @@ class UpdateNodes(webapp2.RequestHandler):
             else:
                 if (len(nodes[-1]) == 0):
                     nodes = nodes[:-1]
-                store_new_nodelist(nodes)
+                # store_new_nodelist(nodes)
+                node_names = [trim_node_name(node) for node in nodes]
+                stored_nodes = Node.query().fetch()
+                for node in stored_nodes:
+                    node.ready = node.name in node_names
+                    node.put()
                 self.response.out.write('%d nodes found' % len(nodes))
         else:
             self.response.out.write('Node list fetch failed')
@@ -848,9 +866,6 @@ class ShowConfig(webapp2.RequestHandler):
 class ShowNodes(webapp2.RequestHandler):
     def get(self):
         self.response.write(json.dumps(get_node_records()))
-
-
-
 
 
 #
