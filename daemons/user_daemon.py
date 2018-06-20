@@ -3,26 +3,19 @@ from flask import Flask, request, send_file, jsonify, Response
 import werkzeug # for proper 400 Bad Request handling
 import subprocess
 from io import StringIO
-from node_db_lib import read_db, write_db, add_entry
+import namecheap_lib
 
 key = '/etc/letsencrypt/live/head.sundewproject.org/privkey.pem'
 cert = '/etc/letsencrypt/live/head.sundewproject.org/cert.pem'
 
 app = Flask(__name__,static_url_path='/home/ubuntu/sundew-one/daemons/')
 
-
-
 class MissingRequestArgError(werkzeug.exceptions.BadRequest):
     """Exception class for missing arguments in requests"""
     pass
 
-
-
-
 def log(logString):
     print('[log]: ' + str(logString))
-
-
 
 def noblock_call(cmd, cwd="."):
     try:
@@ -31,8 +24,6 @@ def noblock_call(cmd, cwd="."):
       return jsonify(status="Acknowledged")
     except subprocess.CalledProcessError as e:
       return "Error: " + repr(e)
-
-
 
 def make_call(cmd, cwd='.'):
     try:
@@ -104,21 +95,14 @@ def get_secret():
 def add_node():
     ip = request.remote_addr
     site = str(request.args.get('sitename'))
-    if not 'sitename' in request.args:
-      log('Empty request for site add')
-      return Response("Error: Site name not provided", status=500, mimetype='application/json')
-    # try this...
-    host_list = read_db()
-    current = [node for node in host_list if node['host'] == site]
-    # node = make_call(['kubectl','get', 'node',site + '.edge-net.io'])[0].split('/n')[0]    
-    if (len(current) > 0):
-    # if len(node) > 0:
-      return Response("Error: Site name already exists", status=500, mimetype='application/json')
+    hosts = namecheap_lib.get_hosts('edge-net.io')
+    found = [host for host in hosts if host[0] == site or host[1] == ip]
+    if (len(found) > 0):
+        return Response("Error: Site name %s or address %s already exists" % (site, ip), status=500, mimetype='application/json')
     else:
-     #  current = read_db()
-      new = add_entry(current, site, ip)
-      write_db(new)
-      return send_file('setup_node.sh')
+        hosts.append((site, ip, 'A'))
+        namecheap_lib.set_hosts('edge-net.io', hosts)
+	return Response("Site %s.edge-net.io added at ip %s" % (site, ip))
 
 @app.route("/get_setup")
 def get_setup():
