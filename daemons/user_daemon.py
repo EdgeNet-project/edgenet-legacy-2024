@@ -36,6 +36,21 @@ def make_call(cmd, cwd='.'):
     except subprocess.CalledProcessError as e:
         return "Error: " + repr(e)
 
+#
+# A reliable method to get the remote ip of a client, if behind a reverse proxy
+# See: https://stackoverflow.com/questions/3759981/get-ip-address-of-visitors
+#
+
+def remote_ip(request):
+    if 'X-Forwarded-For' in request.headers:
+        request.headers.getlist("X-Forwarded-For")[0].rpartition(' ')[-1]
+    else:
+        return request.remote_addr
+    if request.environ.get('HTTP_X_FORWARDED_FOR') is None:
+        return request.environ['REMOTE_ADDR']
+    else:
+        return request.environ['HTTP_X_FORWARDED_FOR'] # if behind a proxy
+
 
 
 @app.route("/")
@@ -86,14 +101,22 @@ def get_nodes():
 
 @app.route("/get_secret")
 def get_secret():
-    cmd = ['sudo', 'kubeadm', 'token', 'create', '--ttl', '30s']
+    cmd = ['sudo', 'kubeadm', 'token', 'create', '--print-join-command','--ttl', '30s']
     log ('token request')
-    result = make_call(cmd)
+    result = make_call(cmd)[0]
+    log(result)
     return result
 
+@app.route("/show_ip")
+def show_ip():
+   return 'Your request is from %s' % remote_ip(request)
+#
+# /add_node?sitename=<node_name>&ip_address=address
+# called from portal, no error-checking
+#
 @app.route("/add_node")
 def add_node():
-    ip = request.remote_addr
+    ip = str(request.args.get('ip_address'))
     site = str(request.args.get('sitename'))
     hosts = namecheap_lib.get_hosts('edge-net.io')
     found = [host for host in hosts if host[0] == site or host[1] == ip]
