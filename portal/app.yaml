@@ -18,68 +18,68 @@ handlers:
   static_dir: downloads
 
 - url: /update_nodes
-  script: test1.app
+  script: portal.app
   login: optional
   secure: always
   redirect_http_response_code: 301
 
 - url: /update_configs
-  script: test1.app
+  script: portal.app
   login: optional
   secure: always
   redirect_http_response_code: 301
 
 - url: /add_node
-  script: test1.app
+  script: portal.app
   login: optional
   secure: always
   redirect_http_response_code: 301
 
 
 - url: /get_secret
-  script: test1.app
+  script: portal.app
   login: optional
   secure: always
   redirect_http_response_code: 301
 
 - url: /confirm_namespace
-  script: test1.app
+  script: portal.app
   login: optional
   secure: always
   redirect_http_response_code: 301
 
 - url: /
-  script: test1.app
+  script: portal.app
   login: optional
   secure: always
   redirect_http_response_code: 301
 
 - url: /show_ip
-  script: test1.app
+  script: portal.app
   login: optional
   secure: always
   redirect_http_response_code: 301
 
 - url: /show_headers
-  script: test1.app
+  script: portal.app
   login: optional
   secure: always
   redirect_http_response_code: 301
 
 - url: /show_config
-  script: test1.app
+  script: portal.app
   login: optional
   secure: always
   redirect_http_response_code: 301
 
 - url: /show_nodes
-  script: test1.app
+  script: portal.app
   login: optional
   secure: always
   redirect_http_response_code: 301
 
 - url: /.*
-  script: test1.app
+  script: portal.app
   login: required
   secure: always
   redirect_http_response_code: 301
