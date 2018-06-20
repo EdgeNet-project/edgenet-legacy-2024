@@ -11,8 +11,61 @@ table {
 <br>
 <br>
 <center>
+  <h1>Edge-net Acceptable Use Policy</h1>
+</center>
+  <p>
+    edgeNet is an overlay testbed designed to allow researchers to experiment with network applications and services that benefit from distribution across a wide geographic area. All uses of edgeNet should be consistent with this high-level goal.
+
+   </p>
+   <h2>Guidelines</h2>
+   <p>
+    As an overlay, edgeNet is not a "testbed" in the usual sense of a controlled environment for experiments. It consists of computational resources hosted by organizations (principally research organizations like Universities) that donate virtual machines and network connectivity for the good of the community. Running an experiment on edgeNet is fundamentally different from running it in a LAN-based lab or on an isolated wide-area testbed.
+  </p>
+  <p>
+A good litmus test when considering whether an experiment is appropriate for edgeNet is to ask what the network administrator at your organization would say about the experiment running on your local site. If the experiment disrupts local activity (e.g., uses more than its share of your site's Internet bandwidth) or triggers complaints from remote network administrators (e.g., performs systematic port scans), then it is not appropriate for edgeNet. It is your responsibility to ensure that your use of edgeNet falls within these constraints. This means you should debug your code in a controlled environment so you have confidence that you understand its behavior.
+edgeNet is also designed to allow experimental services to run continuously, thereby supporting an end-user community. As a consequence, edgeNet could indirectly support users that have not officially registered with edgeNet, and may even be unknown to you (the service provider). It is your responsibility to ensure that your users do not cause your service to violate the terms of this AUP.  In particular, service providers should ensure that their users are not able to hijack the service and use it to attack or spam other nodes or network users.
+</p>
+  <p>
+Among its many uses, edgeNet is designed to support network measurement experiments that purposely probe the Internet. However, we expect all users to adhere to widely-accepted standards of network etiquette in an effort to minimize complaints from network administrators. Activities that have been interpreted as worm and denial-of-service attacks in the past (and should be avoided) include sending SYN packets to port 80 on random machines, probing random IP addresses, repeatedly pinging routers, overloading bottleneck links with measurement traffic, and probing a single target machine from many edgeNet nodes.
+</p>
+  <p>
+It is likely that individual sites that host edgeNet nodes will have their own AUPs. Users should not knowingly violate such local AUPs. Conflicts between site AUPs and edgeNet's stated goal of supporting research into wide-area networks should be brought to the attention of edgeNet administrators. The expectations placed on sites that host edgeNet nodes are described in a companion document: Hosting a edgeNet Node.
+</p>
+  <p>
+While the central edgeNet authority is often the first point-of-contact for complaints about misbehaving services, it is our policy to put the complainant in direct contact with the researcher that is responsible for the service.
+edgeNet provides absolutely no privacy guarantees with regard to network. In fact, users should assume packets will be monitored and logged, for example, to allow other users and edgeNet administrators to investigate abuse (see previous paragraph).
+edgeNet also does not provide any guarantees with respect to the reliability of individual nodes, which may be rebooted or reinstalled any time. Reinstalling a node implies that the disk is wiped, meaning that users should not treat the local disk as a persistent form of storage.
+</p>
+<h2>Overall Rules</h2>
+<p> edgeNet should not be used for any illegal or commercial activities. Use for research and educational purposes is allowed.</p>
+<h2>Node Usage Rules</h2>
+<ul>
+  <li>Use existing security mechanisms. For example, all access to edgeNet nodes must be via SSH or the Kubernetes dashboard.</li>
+  <li> Do not circumvent accounting and auditing mechanisms. This means you must associate your identity with the edgeNet namespace (account) in which your service runs, and you must not do anything to obfuscate the audit trail.</li>
+  <li> No hacking attempts of the edgeNet nodes. This includes "red team" (hacker test) experiments. All access is non-root.</li>
+  <li>Avoid spin-wait for extended periods of time. If possible, do not spin-wait at all.</li>
+</ul>
+<h2>Network Usage Rules</h2>
+<ul>
+  <li> Do not use your edgeNet slice (account) to gain access to hosting site resources other than the edgeNet resources at the site.</li>
+  <li>Do not use one or more edgeNet nodes to flood a site with so much traffic as to interfere with its normal operation. Use congestion controlled flows for large transfers.</li>
+  <li>Do not do systematic or random port or address block scans. Do not spoof or sniff traffic.</li>
+</ul>
+<h2>Consequences</h2>
+<p>Violations of thsi AUP may result in any of the following:
+<ul><li>disabling the namespace (account);</li>
+  <li>removing the site from edgeNet;/li>
+  <li>informing the organization's administration</li>
+</ul>
+<p>To report a suspected violation of this policy, contact edgeNet Support</p>
+
+
+<center>
 <table>
+<!--
 <tr><td align="center">I, {{email}}, solemnly swear that I am up to no good.</td></tr>
+-->
+
 <tr><td align="center">
   <form action="/next_page/aup_agree" method="post">
     <input type="hidden" name="email" value={{email}}>

@@ -30,7 +30,6 @@ import sys
 # import cloudstorage
 import datetime
 import json
-import namecheap_lib
 
 from google.appengine.api import app_identity
 from google.appengine.api import users
@@ -459,6 +458,8 @@ def get_node_records():
 
 def add_node_record_to_values(values):
     values["nodes"] = get_node_records()
+    values["num_nodes"] = len(values["nodes"])
+    values["active_nodes"] = len([node for node in values["nodes"] if node["ready"]])
     # values["nodes"] = Node.query().fetch()
     # current_nodelist = get_current_nodelist_record()
     # if current_nodelist:
