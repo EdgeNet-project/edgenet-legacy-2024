@@ -129,7 +129,11 @@ def add_node():
 
 @app.route("/get_setup")
 def get_setup():
-    return send_file('join_cluster.sh')
+    return send_file('setup_node.sh')
+
+@app.route("/show_headers")
+def get_headers():
+    return jsonify(request.headers)
 
 if __name__ == "__main__":
     #key = '/etc/letsencrypt/live/headnode.edge-net.org/privkey.pem'
