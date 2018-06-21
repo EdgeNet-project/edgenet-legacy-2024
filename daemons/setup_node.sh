@@ -17,7 +17,7 @@ apt-get install docker.io kubelet kubeadm kubectl kubernetes-cni -y
 ##It will need to move to the portal.
 
 swapoff -a
-read -p 'Enter site name (site.edge-net.io): ', sitename
+read -p 'Enter site name (site.edge-net.io): ' sitename
 
 SECRET=$(curl https://sundewcluster.appspot.com/add_node?node_name=$sitename)
 
@@ -28,4 +28,4 @@ SECRET=$(curl https://sundewcluster.appspot.com/add_node?node_name=$sitename)
 OLDHOST=hostname
 hostname $sitename.edge-net.io
 $SECRET
-hostname $oldhost
+hostname $OLDHOST
