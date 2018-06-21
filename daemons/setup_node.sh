@@ -25,7 +25,7 @@ SECRET=$(curl https://sundewcluster.appspot.com/add_node?node_name=$sitename)
 ##please change it to whatever you need for your new API
 ##curl https://headnode.edge-net.org:8080/add_node?sitename=$sitename
 ##
-OLDHOST=hostname
+OLDHOST=`hostname`
 hostname $sitename.edge-net.io
 $SECRET
 hostname $OLDHOST
