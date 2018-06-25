@@ -1,7 +1,0 @@
-{% extends "views/layout_logged_in.html"  %}
-{% block pageHeader %}
-  <p> Dashboard for user {{email}} with namespace {{namespace}}.
-{% endblock %}
-{% block pageOptions %}
-<p>Get your configuration file  <a href="/download_config">here</a>.  Use it at <a href={{kubernetes_head_node}}> {{kubernetes_head_text}}</a> and choose namespace {{namespace}}
-{% endblock %}
