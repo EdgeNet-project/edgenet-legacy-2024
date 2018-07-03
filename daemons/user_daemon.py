@@ -135,6 +135,11 @@ def get_setup():
 def get_headers():
     return jsonify(request.headers)
 
+@app.route("/namespaces")
+def get_namespaces():
+  cmd = ['./get-namespaces.sh']
+  return make_call(cmd)
+
 if __name__ == "__main__":
     #key = '/etc/letsencrypt/live/headnode.edge-net.org/privkey.pem'
     #cert = '/etc/letsencrypt/live/headnode.edge-net.org/cert.pem'
