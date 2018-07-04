@@ -118,12 +118,13 @@ def show_ip():
 def add_node():
     ip = str(request.args.get('ip_address'))
     site = str(request.args.get('sitename'))
+    record_type = str(request.args.get('record_type'))
     hosts = namecheap_lib.get_hosts('edge-net.io')
     found = [host for host in hosts if host[0] == site or host[1] == ip]
     if (len(found) > 0):
         return Response("Error: Site name %s or address %s already exists" % (site, ip), status=500, mimetype='application/json')
     else:
-        hosts.append((site, ip, 'A'))
+        hosts.append((site, ip, record_type))
         namecheap_lib.set_hosts('edge-net.io', hosts)
 	return Response("Site %s.edge-net.io added at ip %s" % (site, ip))
 

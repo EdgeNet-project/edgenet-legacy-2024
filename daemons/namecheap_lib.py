@@ -100,7 +100,7 @@ def build_get_hosts(domain):
 #    HostName<n>: nth HostName
 #    Address<n>: nth Address
 #    RecordType<n>: Domain record type for the nth host.  Always 'A' for us
-#    Command: the namecheam command, which is: 'namecheap.domains.dns.setHosts'
+#    Command: the namecheap command, which is: 'namecheap.domains.dns.setHosts'
 #
 def build_set_hosts(domain, host_list):
     parts = domain.split('.')
