@@ -1,6 +1,9 @@
 user_files/conf/**
 user_files/keys/**
 user_files/yml/*.yml
+# Include yml files for cluster-level tasks
+!node-viewer*
+!namespace-viewer*
 supervisor/**
 daemons/*.json
 # Ignore OS X metadata files
