@@ -97,7 +97,9 @@ def get_nodes():
     except subprocess.CalledProcessError as e:
       return "Error in Get Nodes: " + repr(e)
 
-
+@app.route("/get_ips")
+def get_ips():
+    return "Stub here"
 
 @app.route("/get_secret")
 def get_secret():
