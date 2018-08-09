@@ -9,11 +9,11 @@ def get_node_record(a_node):
    ready = ready_list[0]['status'] if len(ready_list) > 0 else False
    return {"node": hostname, "ready": ready}
 
-def main():
+def node_status():
    nodes = subprocess.check_output(call, shell=True)
    node_struct = json.loads(nodes)
    result_list = [get_node_record(record) for record in node_struct["items"]]
    return json.dumps(result_list)
 
 if __name__ == "__main__":
-   print main()
+   print node_status()

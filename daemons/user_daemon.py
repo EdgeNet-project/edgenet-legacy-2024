@@ -4,6 +4,7 @@ import werkzeug # for proper 400 Bad Request handling
 import subprocess
 from io import StringIO
 import namecheap_lib
+from get_status import node_status
 
 key = '/etc/letsencrypt/live/head.sundewproject.org/privkey.pem'
 cert = '/etc/letsencrypt/live/head.sundewproject.org/cert.pem'
@@ -97,9 +98,9 @@ def get_nodes():
     except subprocess.CalledProcessError as e:
       return "Error in Get Nodes: " + repr(e)
 
-@app.route("/get_ips")
-def get_ips():
-    return "Stub here"
+@app.route("/get_status")
+def get_status():
+    return node_status()
 
 @app.route("/get_secret")
 def get_secret():
