@@ -26,7 +26,11 @@ apt-get install docker.io
 apt-get install kubelet kubeadm kubectl kubernetes-cni
 ```
 
-## Headnode: `kubeadm` and Dashboard
+## Headnode: `kubeadm`, Dashboard, `flannel`
+
+This installs the `kubeadm` cluster bootstrap tool, the web-based Kubernetes
+Dashboard, and the [configs to instantiate the `flannel`](https://github.com/coreos/flannel/blob/master/Documentation/kube-flannel.yml)
+container networking fabric on the headnode.
 
 ```
 sudo kubeadm init --pod-network-cidr=10.244.0.0/16
