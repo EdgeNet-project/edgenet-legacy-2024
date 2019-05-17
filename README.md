@@ -48,3 +48,10 @@ As of the May 2018 prototype,
 * New **user registrations are handled manually** on a per-case basis, and must go
   through some Google App Engine-specific processing. Later, other identity
   providers and user verification methods should be supported.
+
+## Implementation of The New Architecture
+
+As of May 2019,
+
+* Firstly, we will the port current headnode code to Go, to getting the benefit of **client-go** library.
+* Then, **CRDs** will substitute the current datastore and cronjobs by taking advantage of **custom controllers**.
