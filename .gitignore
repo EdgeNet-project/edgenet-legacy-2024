@@ -1,6 +1,12 @@
-user_files/conf/**
-user_files/keys/**
-user_files/yml/*.yml
+glide.*
+cmd/user_files/*
+cmd/daemons/*.sh
+cmd/daemons/*.py
+cmd/user_files/scripts/*.sh
+cmd/user_files/scripts/*.py
+cmd/user_files/conf/**
+cmd/user_files/keys/**
+cmd/user_files/yml/*.yml
 # Include yml files for cluster-level tasks
 !node-viewer*
 !namespace-viewer*
@@ -17,4 +23,3 @@ test-portal/namecheap_config.py
 
 # portal conf
 test-portal/config.py
-
