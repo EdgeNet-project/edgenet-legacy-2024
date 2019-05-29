@@ -18,7 +18,6 @@ package openapi
 
 import "github.com/go-openapi/spec"
 
-// PrintColumnsKey is the key that defines which columns should be printed
 const PrintColumnsKey = "x-kubernetes-print-columns"
 
 // GetPrintColumns looks for the open API extension for the display columns.

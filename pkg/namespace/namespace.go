@@ -5,9 +5,33 @@ import (
 
 	"headnode/pkg/authorization"
 
+	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func Create(kubeconfig *string, name string) (string, error) {
+	clientset, err := authorization.CreateClientSet(kubeconfig)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	exist, err := GetNamespaceByName(kubeconfig, name)
+	if (err == nil && exist == "true") || (err != nil && exist == "error") {
+		if err == nil {
+			err = errors.NewGone(exist)
+		}
+		return "", err
+	}
+
+	userNamespace := &apiv1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
+	result, err := clientset.CoreV1().Namespaces().Create(userNamespace)
+	if err != nil {
+		return "", err
+	}
+
+	return result.GetObjectMeta().GetName(), nil
+}
 
 func GetList(kubeconfig *string) []string {
 	clientset, err := authorization.CreateClientSet(kubeconfig)
@@ -28,7 +52,7 @@ func GetList(kubeconfig *string) []string {
 	return namespaces
 }
 
-func getNamespaceByName(kubeconfig *string, name string) (string, error) {
+func GetNamespaceByName(kubeconfig *string, name string) (string, error) {
 	clientset, err := authorization.CreateClientSet(kubeconfig)
 	if err != nil {
 		panic(err.Error())
@@ -39,14 +63,14 @@ func getNamespaceByName(kubeconfig *string, name string) (string, error) {
 	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
 	_, err = clientset.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
-		fmt.Println("Namespace %s not found\n", name)
-		return "Namespace not found", err
+		fmt.Printf("Namespace %s not found\n", name)
+		return "false", err
 	} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
-		fmt.Println("Error getting namespace %s: %v\n", name, statusError.ErrStatus)
-		return "Error getting namespace", err
+		fmt.Printf("Error getting namespace %s: %v\n", name, statusError.ErrStatus)
+		return "error", err
 	} else if err != nil {
 		panic(err.Error())
 	} else {
-		return "", nil
+		return "true", nil
 	}
 }

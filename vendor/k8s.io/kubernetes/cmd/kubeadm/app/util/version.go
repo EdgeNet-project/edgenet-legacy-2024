@@ -29,7 +29,6 @@ import (
 	netutil "k8s.io/apimachinery/pkg/util/net"
 	versionutil "k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/klog"
-	"k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	pkgversion "k8s.io/kubernetes/pkg/version"
 )
 
@@ -93,20 +92,13 @@ func KubernetesReleaseVersion(version string) (string, error) {
 			if body != "" {
 				return "", err
 			}
-			if clientVersionErr == nil {
-				// Handle air-gapped environments by falling back to the client version.
-				klog.Warningf("could not fetch a Kubernetes version from the internet: %v", err)
-				klog.Warningf("falling back to the local client version: %s", clientVersion)
-				return KubernetesReleaseVersion(clientVersion)
-			}
+			// Handle air-gapped environments by falling back to the client version.
+			klog.Infof("could not fetch a Kubernetes version from the internet: %v", err)
+			klog.Infof("falling back to the local client version: %s", clientVersion)
+			return KubernetesReleaseVersion(clientVersion)
 		}
 
 		if clientVersionErr != nil {
-			if err != nil {
-				klog.Warningf("could not obtain neither client nor remote version; fall back to: %s", constants.CurrentKubernetesVersion)
-				return KubernetesReleaseVersion(constants.CurrentKubernetesVersion.String())
-			}
-
 			klog.Warningf("could not obtain client version; using remote version: %s", body)
 			return KubernetesReleaseVersion(body)
 		}

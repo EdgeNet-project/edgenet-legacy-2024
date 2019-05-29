@@ -45,7 +45,7 @@ var (
 	renameContextLong = templates.LongDesc(`
 		Renames a context from the kubeconfig file.
 
-		CONTEXT_NAME is the context name that you wish to change.
+		CONTEXT_NAME is the context name that you wish change.
 
 		NEW_NAME is the new name you wish to set.
 

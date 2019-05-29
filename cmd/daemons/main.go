@@ -14,6 +14,7 @@ import (
 
 	"headnode/pkg/namespace"
 	"headnode/pkg/node"
+	"headnode/pkg/registration"
 	"headnode/pkg/remoteip"
 
 	"github.com/gorilla/mux"
@@ -55,10 +56,12 @@ func hello(w http.ResponseWriter, r *http.Request) {
 //@app.route('/make-user')
 //def make_user():
 func makeUser(w http.ResponseWriter, r *http.Request) {
-	if user := r.URL.Query().Get("user"); user == "" {
+	user := r.URL.Query().Get("user")
+	if user == "" {
 		err := errors.New("No 'user' arg in request")
 		fmt.Fprintf(w, "%s", err)
 	}
+	status := registration.MakeUser(&kubeconfig, user)
 	// !!!!! WILL BE FURTHER DEVELOPED
 	return
 }

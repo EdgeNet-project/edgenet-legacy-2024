@@ -2,11 +2,13 @@ glide.*
 cmd/user_files/*
 cmd/daemons/*.sh
 cmd/daemons/*.py
+cmd/daemons/*.md
 cmd/user_files/scripts/*.sh
 cmd/user_files/scripts/*.py
 cmd/user_files/conf/**
 cmd/user_files/keys/**
 cmd/user_files/yml/*.yml
+pkg/user
 # Include yml files for cluster-level tasks
 !node-viewer*
 !namespace-viewer*

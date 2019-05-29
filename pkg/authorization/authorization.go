@@ -40,5 +40,6 @@ func CreateClientSet(kubeconfig *string) (*kubernetes.Clientset, error) {
 	if err != nil {
 		panic(err.Error())
 	}
+
 	return clientset, err
 }
