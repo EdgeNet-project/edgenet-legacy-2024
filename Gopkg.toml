@@ -70,6 +70,10 @@
   version = "kubernetes-1.14.2"
 
 [[override]]
+  name = "k8s.io/kops"
+  version = "1.14.0-alpha.2"
+
+[[override]]
   name = "github.com/russross/blackfriday"
   revision = "05f3235734ad95d0016f6a23902f06461fcf567a"
 

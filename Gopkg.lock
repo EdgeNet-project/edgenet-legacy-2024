@@ -393,14 +393,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:107a534dfc1cd42e4f9fc48f335a9af498c99dd43118f925be74c153d1c9a7e2"
+  digest = "1:820be5471f9063bf539a8e4acfcf71151c832932c6ae6aab5aa0e8957e5af173"
   name = "golang.org/x/sys"
   packages = [
     "unix",
     "windows",
   ]
   pruneopts = "UT"
-  revision = "3626398d77499f570be2e36a6ad4fc91963a02c5"
+  revision = "5219a1e1c5f8dfaadf9d314b1289417a73674973"
 
 [[projects]]
   digest = "1:dfcb3d446a3c6a6c71b74cf7baf366cd630a8cb43c3fcb741f34e49727da168d"
@@ -793,7 +793,7 @@
   revision = "a01b7d5d6c2258c80a4a10070f3dee9cd575d9c7"
 
 [[projects]]
-  digest = "1:9c60236347c7dbe50a97ffabb3f0e96d4f2e9c2eafd90a8c8a178220809e7f95"
+  digest = "1:fd2446639581629139ad8758953bf938c07691e929d28c6d7415d50ffe447b85"
   name = "k8s.io/kubernetes"
   packages = [
     "cmd/kubeadm/app/apis/kubeadm",
@@ -801,6 +801,7 @@
     "cmd/kubeadm/app/phases/bootstraptoken/node",
     "cmd/kubeadm/app/util",
     "cmd/kubeadm/app/util/apiclient",
+    "cmd/kubeadm/app/util/kubeconfig",
     "pkg/apis/core",
     "pkg/apis/scheduling",
     "pkg/features",
@@ -884,14 +885,17 @@
     "github.com/billputer/go-namecheap",
     "github.com/gorilla/mux",
     "k8s.io/api/core/v1",
+    "k8s.io/api/rbac/v1",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/client-go/kubernetes",
+    "k8s.io/client-go/kubernetes/typed/rbac/v1",
     "k8s.io/client-go/tools/clientcmd",
     "k8s.io/client-go/util/cert",
     "k8s.io/cluster-bootstrap/token/util",
     "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm",
     "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/node",
+    "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig",
     "k8s.io/kubernetes/pkg/kubectl/cmd/config",
   ]
   solver-name = "gps-cdcl"

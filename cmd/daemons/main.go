@@ -44,11 +44,13 @@ func contains(a []string, x string) bool {
 //@app.route("/")
 //def hello():
 func hello(w http.ResponseWriter, r *http.Request) {
-	if user := r.URL.Query().Get("user"); user == "" {
+	user := r.URL.Query().Get("user")
+	if user == "" {
 		err := errors.New("No 'user' arg in request")
 		fmt.Fprintf(w, "%s", err)
 	}
-	// !!!!! WILL BE FURTHER DEVELOPED
+	result := registration.MakeConfig(&kubeconfig, user)
+	fmt.Fprintf(w, "%s", result)
 	return
 }
 
@@ -61,8 +63,8 @@ func makeUser(w http.ResponseWriter, r *http.Request) {
 		err := errors.New("No 'user' arg in request")
 		fmt.Fprintf(w, "%s", err)
 	}
-	status := registration.MakeUser(&kubeconfig, user)
-	// !!!!! WILL BE FURTHER DEVELOPED
+	result := registration.MakeUser(&kubeconfig, user)
+	fmt.Fprintf(w, "%s", result)
 	return
 }
 
@@ -203,11 +205,9 @@ func getSetup(writer http.ResponseWriter, request *http.Request) {
 //def get_headers():
 func getHeaders(w http.ResponseWriter, r *http.Request) {
 	headers, err := json.Marshal(r.Header)
-
 	if err != nil {
 		return
 	}
-
 	fmt.Fprintf(w, "%s", headers)
 }
 
