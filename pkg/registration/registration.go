@@ -5,38 +5,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
 
 	"headnode/pkg/authorization"
+	custconfig "headnode/pkg/config"
 	"headnode/pkg/namespace"
 
 	apiv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
-	rbacv1 "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/cert"
 	kubeconfigutil "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig"
 	cmdconfig "k8s.io/kubernetes/pkg/kubectl/cmd/config"
-	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 )
 
-func homeDir() string {
-	if h := os.Getenv("HOME"); h != "" {
-		return h
-	}
-	return os.Getenv("USERPROFILE")
-}
-
-// MakeUser to make user
-func MakeUser(kubeconfig *string, user string) string {
-	userNamespace, err := namespace.Create(kubeconfig, user)
+// MakeUser generates key and certificate and then set credentials into the config file. As the next step,
+// this function creates user role and role bindings for the namespace. Lastly, this checks the namespace
+// created successfully or not.
+func MakeUser(user string) string {
+	userNamespace, err := namespace.Create(user)
 	if err != nil {
-		fmt.Printf("Namespace %s couldn't be created.\n", user)
+		//fmt.Printf("Namespace %s couldn't be created.\n", user)
 		return fmt.Sprintf("Namespace %s couldn't be created.\n", user)
 	}
-	fmt.Printf("Created namespace %q.\n", userNamespace)
+	//fmt.Printf("Created namespace %q.\n", userNamespace)
 	cert.GenerateSelfSignedCertKeyWithFixtures(userNamespace, nil, nil, "../../cmd/user_files/keys")
 	pathOptions := clientcmd.NewDefaultPathOptions()
 	buf := bytes.NewBuffer([]byte{})
@@ -52,20 +44,16 @@ func MakeUser(kubeconfig *string, user string) string {
 		return fmt.Sprintf("unexpected error executing command: %v,kubectl config set-credentials  args: %v", err, user)
 	}
 
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	clientset, err := authorization.CreateClientSet()
 	if err != nil {
-		return fmt.Sprintf("unexpected error executing command: %v,kubectl config set-credentials  args: %v", err, user)
-	}
-	clientset, err := rbacv1.NewForConfig(config)
-	if err != nil {
-		return fmt.Sprintf("Err: %s", err)
+		panic(err.Error())
 	}
 
 	policyRule := []apiv1.PolicyRule{{APIGroups: []string{"*"}, Resources: []string{"*"}, Verbs: []string{"*"}}}
 	var userRole *apiv1.Role
 	userRole = &apiv1.Role{ObjectMeta: metav1.ObjectMeta{Namespace: user, Name: fmt.Sprintf("%s-admin", user)},
 		Rules: policyRule}
-	_, err = clientset.Roles(user).Create(userRole)
+	_, err = clientset.RbacV1().Roles(user).Create(userRole)
 	if err != nil {
 		return fmt.Sprintf("Err: %s", err)
 	}
@@ -75,7 +63,7 @@ func MakeUser(kubeconfig *string, user string) string {
 	var roleBinding *apiv1.RoleBinding
 	roleBinding = &apiv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: user, Name: fmt.Sprintf("%s-binding", user)},
 		Subjects: subjects, RoleRef: roleRef}
-	_, err = clientset.RoleBindings(user).Create(roleBinding)
+	_, err = clientset.RbacV1().RoleBindings(user).Create(roleBinding)
 	if err != nil {
 		return fmt.Sprintf("Err: %s", err)
 	}
@@ -85,12 +73,12 @@ func MakeUser(kubeconfig *string, user string) string {
 	var roleBind *apiv1.RoleBinding
 	roleBind = &apiv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: user, Name: fmt.Sprintf("%s-rolebind", user)},
 		Subjects: rbSubjects, RoleRef: roleBindRef}
-	_, err = clientset.RoleBindings(user).Create(roleBind)
+	_, err = clientset.RbacV1().RoleBindings(user).Create(roleBind)
 	if err != nil {
 		return fmt.Sprintf("Err: %s", err)
 	}
 
-	exist, err := namespace.GetNamespaceByName(kubeconfig, user)
+	exist, err := namespace.GetNamespaceByName(user)
 	if err == nil && exist == "true" {
 		resultMap := map[string]string{"status": "Acknowledged"}
 		result, _ := json.Marshal(resultMap)
@@ -99,9 +87,11 @@ func MakeUser(kubeconfig *string, user string) string {
 	return fmt.Sprintf("Err: %s", err)
 }
 
-// MakeConfig to make config
-func MakeConfig(kubeconfig *string, user string) string {
-	clientset, err := authorization.CreateClientSet(kubeconfig)
+// MakeConfig checks/gets serviceaccount of the user (actually, the namespace), and if the serviceaccount exists
+// this function checks/gets its secret, and then CA and token info of the secret. Subsequently, this reads cluster
+// and server info of the current context from the config file to use them on the creation of kubeconfig.
+func MakeConfig(user string) string {
+	clientset, err := authorization.CreateClientSet()
 	if err != nil {
 		panic(err.Error())
 	}
@@ -133,71 +123,10 @@ func MakeConfig(kubeconfig *string, user string) string {
 		panic(err.Error())
 	}
 
-	pathOptions := clientcmd.NewDefaultPathOptions()
-	buf := bytes.NewBuffer([]byte{})
-	currentContextCmd := cmdconfig.NewCmdConfigCurrentContext(buf, pathOptions)
-	if err := currentContextCmd.Execute(); err != nil {
-		fmt.Printf("unexpected error executing command: %v", err)
-		return fmt.Sprintf("unexpected error executing command: %v", err)
-	}
-
-	streamsIn := &bytes.Buffer{}
-	streamsOut := &bytes.Buffer{}
-	streamsErrOut := &bytes.Buffer{}
-	streams := genericclioptions.IOStreams{
-		In:     streamsIn,
-		Out:    streamsOut,
-		ErrOut: streamsErrOut,
-	}
-	configCmd := cmdconfig.NewCmdConfigView(cmdutil.NewFactory(genericclioptions.NewConfigFlags(false)), streams, pathOptions)
-	// "context" is a global flag, inherited from base kubectl command in the real world
-	configCmd.Flags().String("context", "", "The name of the kubeconfig context to use")
-	configCmd.Flags().Parse([]string{"--output=json"})
-	if err := configCmd.Execute(); err != nil {
-		fmt.Printf("unexpected error executing command: %v", err)
-		return fmt.Sprintf("unexpected error executing command: %v", err)
-	}
-
-	type ClusterDetails struct {
-		Server string `json:"server"`
-	}
-	type Clusters struct {
-		Cluster ClusterDetails `json:"cluster"`
-		Name    string         `json:"name"`
-	}
-	type ContextDetails struct {
-		Cluster string `json:"cluster"`
-		User    string `json:"user"`
-	}
-	type Contexts struct {
-		Context ContextDetails `json:"context"`
-		Name    string         `json:"name"`
-	}
-	type ConfigView struct {
-		Clusters       []Clusters `json:"clusters"`
-		Contexts       []Contexts `json:"contexts"`
-		CurrentContext string     `json:"current-context"`
-	}
-
-	output := fmt.Sprint(streams.Out)
-	var configViewDet ConfigView
-	err = json.Unmarshal([]byte(output), &configViewDet)
+	cluster, server, err := custconfig.GetClusterServerOfCurrentContext()
 	if err != nil {
 		fmt.Printf("Err: %s", err)
 		return fmt.Sprintf("Err: %s", err)
-	}
-	currentContext := configViewDet.CurrentContext
-	var cluster string
-	for _, contextRaw := range configViewDet.Contexts {
-		if contextRaw.Name == currentContext {
-			cluster = contextRaw.Context.Cluster
-		}
-	}
-	var server string
-	for _, clusterRaw := range configViewDet.Clusters {
-		if clusterRaw.Name == cluster {
-			server = clusterRaw.Cluster.Server
-		}
 	}
 
 	newKubeConfig := kubeconfigutil.CreateWithToken(server, cluster, "default", secret.Data["ca.crt"], string(secret.Data["token"]))

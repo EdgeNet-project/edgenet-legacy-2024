@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"headnode/pkg/authorization"
 	"headnode/pkg/node/infrastructure"
@@ -11,12 +12,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func CreateJoinToken(kubeconfig *string, duration int, hostname string) string {
-	clientset, err := authorization.CreateClientSet(kubeconfig)
+// CreateJoinToken generates token to be used on adding a node onto the cluster
+func CreateJoinToken(ttl string, hostname string) string {
+	clientset, err := authorization.CreateClientSet()
 	if err != nil {
 		panic(err.Error())
 	}
-
+	duration, _ := time.ParseDuration(ttl)
 	token, err := infrastructure.CreateToken(clientset, duration, hostname)
 	if err != nil {
 		return "error"
@@ -24,8 +26,9 @@ func CreateJoinToken(kubeconfig *string, duration int, hostname string) string {
 	return token
 }
 
-func GetList(kubeconfig *string) []string {
-	clientset, err := authorization.CreateClientSet(kubeconfig)
+// GetList uses clientset to get node list of the cluster
+func GetList() []string {
+	clientset, err := authorization.CreateClientSet()
 	if err != nil {
 		panic(err.Error())
 	}
@@ -42,12 +45,13 @@ func GetList(kubeconfig *string) []string {
 	return nodes
 }
 
-func GetStatusList(kubeconfig *string) []byte {
+// GetList uses clientset to get node list of the cluster that contains Ready State info
+func GetStatusList() []byte {
 	type nodeStatus struct {
 		Node  string `json:"node"`
 		Ready string `json:"ready"`
 	}
-	clientset, err := authorization.CreateClientSet(kubeconfig)
+	clientset, err := authorization.CreateClientSet()
 	if err != nil {
 		panic(err.Error())
 	}
@@ -70,8 +74,9 @@ func GetStatusList(kubeconfig *string) []byte {
 	return nodesJSON
 }
 
-func getNodeByHostname(kubeconfig *string, hostname string) (string, error) {
-	clientset, err := authorization.CreateClientSet(kubeconfig)
+// getNodeByHostname uses clientset to get namespace requested
+func getNodeByHostname(hostname string) (string, error) {
+	clientset, err := authorization.CreateClientSet()
 	if err != nil {
 		panic(err.Error())
 	}

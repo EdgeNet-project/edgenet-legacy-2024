@@ -9,6 +9,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+var kubeconfig string
+
 func homeDir() string {
 	if h := os.Getenv("HOME"); h != "" {
 		return h
@@ -16,30 +18,28 @@ func homeDir() string {
 	return os.Getenv("USERPROFILE")
 }
 
-func setKubeConfig() string {
-	var kubeconfig *string
+// SetKubeConfig declares the options and calls parse before using them to set kubeconfig variable 
+func SetKubeConfig() {
 	if home := homeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "")
+		flag.StringVar(&kubeconfig, "kubeconfig", filepath.Join(home, ".kube", "config"), "")
 	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+		flag.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
 	}
 	flag.Parse()
-
-	return *kubeconfig
 }
 
-func CreateClientSet(kubeconfig *string) (*kubernetes.Clientset, error) {
-	// use the current context in kubeconfig
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+// CreateClientSet generates the clientset to interact with Kubernetes 
+func CreateClientSet() (*kubernetes.Clientset, error) {
+	// Use the current context in kubeconfig
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	// create the clientset
+	// Create the clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		panic(err.Error())
 	}
-
 	return clientset, err
 }

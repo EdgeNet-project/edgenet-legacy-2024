@@ -1,96 +1,75 @@
+// Package main stands as the interface between the EdgeNet portal and headnode.
+// This uses gorilla/mux to handle requests from the EdgeNet and make use of the
+// functions of packages according to the requests. All authoritative state for
+// the EdgeNet system is kept by the portal, which issues http requests through
+// this server to ensure that the headnode is maintaining this state.
+
+// This server also acts as an intermediary for DNS entries, currently kept by
+// namecheap.com.  Namecheap uses IP whitelisting as its major security tool,
+// and since the portal currently runs on the Google App Engine and this doesn't
+// offer fixed IP addresses, we use this as the DNS intermediary. Once we either
+// switch away from namecheap and/or switch to the Google App Engine Flex, we'll
+// move that to the portal.
 package main
 
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
 
+	"headnode/pkg/authorization"
 	"headnode/pkg/namespace"
 	"headnode/pkg/node"
 	"headnode/pkg/registration"
-	"headnode/pkg/remoteip"
-
-	"github.com/gorilla/mux"
 
 	namecheap "github.com/billputer/go-namecheap"
+	"github.com/gorilla/mux"
 )
 
-var kubeconfig string
-
-func homeDir() string {
-	if h := os.Getenv("HOME"); h != "" {
-		return h
-	}
-	return os.Getenv("USERPROFILE")
-}
-
-func contains(a []string, x string) bool {
-	for _, n := range a {
-		if x == n {
-			return true
-		}
-	}
-	return false
-}
-
-// Old reference below
-//@app.route("/")
-//def hello():
+// This creates a kubeconfig file based on the namespace in which the user is
+// represented at the Kubernetes level. Call is ?user=<username>
 func hello(w http.ResponseWriter, r *http.Request) {
 	user := r.URL.Query().Get("user")
 	if user == "" {
 		err := errors.New("No 'user' arg in request")
 		fmt.Fprintf(w, "%s", err)
 	}
-	result := registration.MakeConfig(&kubeconfig, user)
+	// Create a kubeconfig file for the user
+	result := registration.MakeConfig(user)
 	fmt.Fprintf(w, "%s", result)
 	return
 }
 
-// Old reference below
-//@app.route('/make-user')
-//def make_user():
+// Add a user to the headnode (actually, a namespace, which generates a
+// configuration file). Call is /make-user?user=<username>
 func makeUser(w http.ResponseWriter, r *http.Request) {
 	user := r.URL.Query().Get("user")
 	if user == "" {
 		err := errors.New("No 'user' arg in request")
 		fmt.Fprintf(w, "%s", err)
 	}
-	result := registration.MakeUser(&kubeconfig, user)
+	// Add the user
+	result := registration.MakeUser(user)
 	fmt.Fprintf(w, "%s", result)
 	return
 }
 
-// Old reference below
-//@app.route("/nodes")
-//def get_nodes():
-func getNodes(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "%s", node.GetList(&kubeconfig))
-}
-
-// Old reference below
-//@app.route("/get_status")
-//def get_status():
+// Get the status of nodes currently known by the headnode. Call is /get_status
 func getNodeStatus(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "%s", node.GetStatusList(&kubeconfig))
+	// Get the node list
+	result := node.GetStatusList()
+	fmt.Fprintf(w, "%s", result)
 }
 
+// Get a shared secret that the add_node script can run on the client and pass
+// to this node to ensure that the add_node is legitimate. Call is /get_secret
 func getSecret(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "%s", node.CreateJoinToken(&kubeconfig, 100000000000, "edge-net.io"))
-}
-
-// Old reference below
-//@app.route("/show_ip")
-//def show_ip():
-func showIP(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Your request is from %s", remoteip.GetIPAdress(r))
+	// Returns same result with the result of the command
+	// $ sudo kubeadm token create --print-join-command --ttl 3600s
+	result := node.CreateJoinToken("3600s", "edge-net.io")
+	fmt.Fprintf(w, "%s", result)
 }
 
 // Old reference below
@@ -151,92 +130,27 @@ func addNode(w http.ResponseWriter, r *http.Request) {
 	// !!!!! WILL BE FURTHER DEVELOPED
 }
 
-// Old reference below
-//@app.route("/get_setup")
-//def get_setup():
-func getSetup(writer http.ResponseWriter, request *http.Request) {
-	//First of check if Get is set in the URL
-	Filename := request.URL.Query().Get("file")
-	if Filename == "" {
-		//Get not set, send a 400 bad request
-		http.Error(writer, "Get 'file' not specified in url.", 400)
-		return
-	}
-	fmt.Println("Client requests: " + Filename)
-
-	//Check if file exists and open
-	Openfile, err := os.Open("setup_node.sh")
-	defer Openfile.Close() //Close after function return
-	if err != nil {
-		//File not found, send 404
-		http.Error(writer, "File not found.", 404)
-		return
-	}
-
-	//File is found, create and send the correct headers
-
-	//Get the Content-Type of the file
-	//Create a buffer to store the header of the file in
-	FileHeader := make([]byte, 512)
-	//Copy the headers into the FileHeader buffer
-	Openfile.Read(FileHeader)
-	//Get content type of file
-	FileContentType := http.DetectContentType(FileHeader)
-
-	//Get the file size
-	FileStat, _ := Openfile.Stat()                     //Get info from file
-	FileSize := strconv.FormatInt(FileStat.Size(), 10) //Get file size as a string
-
-	//Send the headers
-	writer.Header().Set("Content-Disposition", "attachment; filename=setup_node.sh")
-	writer.Header().Set("Content-Type", FileContentType)
-	writer.Header().Set("Content-Length", FileSize)
-
-	//Send the file
-	//We read 512 bytes from the file already, so we reset the offset back to 0
-	Openfile.Seek(0, 0)
-	io.Copy(writer, Openfile) //'Copy' the file to the client
-	return
-	// !!!!! WILL BE FURTHER DEVELOPED
-}
-
-// Old reference below
-//@app.route("/show_headers")
-//def get_headers():
-func getHeaders(w http.ResponseWriter, r *http.Request) {
-	headers, err := json.Marshal(r.Header)
-	if err != nil {
-		return
-	}
-	fmt.Fprintf(w, "%s", headers)
-}
-
-// Old reference below
-//@app.route("/namespaces")
-//def get_namespaces():
+// Get the set of namespaces. Call: /get_namespaces
 func getNamespaces(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "%s", namespace.GetList(&kubeconfig))
+	// Get the namespaces currently exist on the headnode except "default",
+	// "kube-system", and "kube-public"
+	result := namespace.GetList()
+	fmt.Fprintf(w, "%s", result)
 }
 
 func main() {
-	if home := homeDir(); home != "" {
-		flag.StringVar(&kubeconfig, "kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		flag.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
-	}
-	flag.Parse()
+	// Set kubeconfig to be used to create clientsets
+	authorization.SetKubeConfig()
 
+	// URL paths and handlers. Deprecated URL paths and handlers below
+	// ("/nodes", getNodes), ("/show_ip", showIP), ("/get_setup", getSetup), ("/show_headers", getHeaders)
 	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/", hello)
-	router.HandleFunc("/make-user", makeUser)
-	router.HandleFunc("/nodes", getNodes)
-	router.HandleFunc("/get_status", getNodeStatus)
-	router.HandleFunc("/get_secret", getSecret)
-	router.HandleFunc("/show_ip", showIP)
-	router.HandleFunc("/add_node", addNode)
-	router.HandleFunc("/get_setup", getSetup)
-	router.HandleFunc("/show_headers", getHeaders)
-	router.HandleFunc("/namespaces", getNamespaces)
+	router.HandleFunc("/", hello)                   // In use
+	router.HandleFunc("/make-user", makeUser)       // In use
+	router.HandleFunc("/get_status", getNodeStatus) // In use
+	router.HandleFunc("/get_secret", getSecret)     // In use
+	router.HandleFunc("/add_node", addNode)         // In use
+	router.HandleFunc("/namespaces", getNamespaces) // In use
 
 	log.Fatal(http.ListenAndServe(":8181", router))
 }
