@@ -1,27 +1,29 @@
-glide.*
-cmd/user_files/*
-cmd/daemons/*.sh
-cmd/daemons/*.py
-cmd/daemons/*.md
-cmd/user_files/scripts/*.sh
-cmd/user_files/scripts/*.py
-cmd/user_files/conf/**
-cmd/user_files/keys/**
-cmd/user_files/yml/*.yml
+### Go ###
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# config files
+config/**
+!config/*_template.yaml
+!config/user-files
+!config/user-files/**
+
+assets/certs/**
+assets/kubeconfigs/**
+!assets/certs/*.md
+!assets/kubeconfigs/*.md
+
 pkg/user
-# Include yml files for cluster-level tasks
-!node-viewer*
-!namespace-viewer*
-supervisor/**
-daemons/*.json
+
 # Ignore OS X metadata files
 ._*
-
-# Python bytecode
-*.pyc
-
-# namecheap_config
-test-portal/namecheap_config.py
-
-# portal conf
-test-portal/config.py

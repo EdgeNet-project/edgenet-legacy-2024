@@ -8,9 +8,20 @@ import (
 	"headnode/pkg/authorization"
 	"headnode/pkg/node/infrastructure"
 
+	namecheap "github.com/billputer/go-namecheap"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// SetHostname generates token to be used on adding a node onto the cluster
+func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
+	client, err := authorization.CreateNamecheapClient()
+	if err != nil {
+		return false, "Unknown"
+	}
+	result, state := infrastructure.SetHostname(client, hostRecord)
+	return result, state
+}
 
 // CreateJoinToken generates token to be used on adding a node onto the cluster
 func CreateJoinToken(ttl string, hostname string) string {

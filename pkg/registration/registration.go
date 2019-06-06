@@ -29,14 +29,14 @@ func MakeUser(user string) string {
 		return fmt.Sprintf("Namespace %s couldn't be created.\n", user)
 	}
 	//fmt.Printf("Created namespace %q.\n", userNamespace)
-	cert.GenerateSelfSignedCertKeyWithFixtures(userNamespace, nil, nil, "../../cmd/user_files/keys")
+	cert.GenerateSelfSignedCertKeyWithFixtures(userNamespace, nil, nil, "../../assets/certs")
 	pathOptions := clientcmd.NewDefaultPathOptions()
 	buf := bytes.NewBuffer([]byte{})
 	kcmd := cmdconfig.NewCmdConfigSetAuthInfo(buf, pathOptions)
 	kcmd.SetArgs([]string{user})
 	kcmd.Flags().Parse([]string{
-		fmt.Sprintf("--client-certificate=../../cmd/user_files/keys/%s__.crt", user),
-		fmt.Sprintf("--client-key=../../cmd/user_files/keys/%s__.key", user),
+		fmt.Sprintf("--client-certificate=../../assets/certs/%s__.crt", user),
+		fmt.Sprintf("--client-key=../../assets/certs/%s__.key", user),
 	})
 
 	if err := kcmd.Execute(); err != nil {
@@ -134,9 +134,9 @@ func MakeConfig(user string) string {
 	newKubeConfig.Contexts["kubernetes-admin@kubernetes"] = newKubeConfig.Contexts[newKubeConfig.CurrentContext]
 	delete(newKubeConfig.Contexts, newKubeConfig.CurrentContext)
 	newKubeConfig.CurrentContext = "kubernetes-admin@kubernetes"
-	kubeconfigutil.WriteToDisk(fmt.Sprintf("../../cmd/user_files/keys/edgenet_%s.cfg", user), newKubeConfig)
+	kubeconfigutil.WriteToDisk(fmt.Sprintf("../../assets/kubeconfigs/edgenet_%s.cfg", user), newKubeConfig)
 
-	dat, err := ioutil.ReadFile(fmt.Sprintf("../../cmd/user_files/keys/edgenet_%s.cfg", user))
+	dat, err := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet_%s.cfg", user))
 	if err != nil {
 		fmt.Printf("Err: %s", err)
 		return fmt.Sprintf("Err: %s", err)

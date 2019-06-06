@@ -2,12 +2,14 @@ package infrastructure
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	s "strings"
 	"time"
 
 	custconfig "headnode/pkg/config"
 
+	namecheap "github.com/billputer/go-namecheap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/cert"
@@ -65,4 +67,43 @@ func CreateToken(clientset clientset.Interface, duration time.Duration, hostname
 
 	joinCommand := fmt.Sprintf("kubeadm join %s --token %s --discovery-token-ca-cert-hash %s", server, tokens[0].Token.String(), CA)
 	return joinCommand, nil
+}
+
+func getHosts(client *namecheap.Client) namecheap.DomainDNSGetHostsResult {
+	hostsResponse, err := client.DomainsDNSGetHosts("edge-net", "io")
+	if err != nil {
+		panic(err.Error())
+	}
+	responseJSON, err := json.Marshal(hostsResponse)
+	if err != nil {
+		panic(err.Error())
+	}
+	hostList := namecheap.DomainDNSGetHostsResult{}
+	json.Unmarshal([]byte(responseJSON), &hostList)
+	return hostList
+}
+
+// SetHostname allows comparing the current hosts with requested hostname by DNS check
+func SetHostname(client *namecheap.Client, hostRecord namecheap.DomainDNSHost) (bool, string) {
+	hostList := getHosts(client)
+	exist := false
+	for _, host := range hostList.Hosts {
+		if host.Name == hostRecord.Name || host.Address == hostRecord.Address {
+			exist = true
+			break
+		}
+	}
+
+	if exist {
+		return false, "exist"
+	}
+
+	hostList.Hosts = append(hostList.Hosts, hostRecord)
+	setResponse, err := client.DomainDNSSetHosts("edge-net", "io", hostList.Hosts)
+	if err != nil {
+		panic(err.Error())
+	} else if setResponse.IsSuccess == false {
+		return false, "unknown"
+	}
+	return true, ""
 }

@@ -13,7 +13,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -61,6 +60,7 @@ func getNodeStatus(w http.ResponseWriter, r *http.Request) {
 	// Get the node list
 	result := node.GetStatusList()
 	fmt.Fprintf(w, "%s", result)
+	return
 }
 
 // Get a shared secret that the add_node script can run on the client and pass
@@ -70,64 +70,47 @@ func getSecret(w http.ResponseWriter, r *http.Request) {
 	// $ sudo kubeadm token create --print-join-command --ttl 3600s
 	result := node.CreateJoinToken("3600s", "edge-net.io")
 	fmt.Fprintf(w, "%s", result)
+	return
 }
 
-// Old reference below
-// /add_node?sitename=<node_name>&ip_address=address
-// called from portal, no error-checking
-//@app.route("/add_node")
+// Add a node to the DNS records for edge-net.io.
+// Call: /add_node?ip_address=<ip_address>&sitename=<sitename>&record_type=<A or AAA>
 func addNode(w http.ResponseWriter, r *http.Request) {
-	// Config needed
-	apiUser := "."
-	apiToken := "."
-	userName := "."
-
-	type hostDetails struct {
-		ID      int    `json:"ID"`
-		Name    string `json:"Name"`
-		Type    string `json:"Type"`
-		Address string `json:"Address"`
-		MXPref  int    `json:"MXPref"`
-		TTL     int    `json:"TTL"`
-	}
-
-	type hostResponse struct {
-		Domain        string        `json:"Domain"`
-		IsUsingOurDNS bool          `json:"IsUsingOurDNS"`
-		Hosts         []hostDetails `json:"Hosts"`
-	}
-
-	client := namecheap.NewClient(apiUser, apiToken, userName)
-
 	ip := r.URL.Query().Get("ip_address")
 	site := r.URL.Query().Get("sitename")
-	//recordType := r.URL.Query().Get("record_type")
-	hostsResponse, err := client.DomainsDNSGetHosts("edge-net", "io")
-	if err != nil {
-		panic(err.Error())
+	recordType := r.URL.Query().Get("record_type")
+	if ip == "" {
+		err := errors.New("No 'ip_address' arg in request")
+		fmt.Fprintf(w, "%s", err)
+		return
+	} else if site == "" {
+		err := errors.New("No 'sitename' arg in request")
+		fmt.Fprintf(w, "%s", err)
+		return
+	} else if recordType == "" {
+		err := errors.New("No 'record_type' arg in request")
+		fmt.Fprintf(w, "%s", err)
+		return
 	}
-	responseJSON, err := json.Marshal(hostsResponse)
-	if err != nil {
-		panic(err.Error())
+
+	hostRecord := namecheap.DomainDNSHost{
+		Name:    site,
+		Type:    recordType,
+		Address: ip,
 	}
-	hostList := hostResponse{}
-	json.Unmarshal([]byte(responseJSON), &hostList)
-	exist := false
-	for _, host := range hostList.Hosts {
-		if host.Name == site || host.Address == ip {
-			exist = true
-			break
-		}
+	result, state := node.SetHostname(hostRecord)
+	if result {
+		fmt.Fprintf(w, "Site %s.edge-net.io added at ip %s", hostRecord.Name, hostRecord.Address)
+		return
 	}
-	// Should return as JSON
-	if exist {
-		fmt.Fprintf(w, "Error: Site name %s or address %s already exists", site, ip)
+	if state == "exist" {
+		w.WriteHeader(500)
+		w.Header().Add("Content-Type", "application/json")
+		fmt.Fprintf(w, "Error: Site name %s or address %s already exists", hostRecord.Name, hostRecord.Address)
+		return
 	}
+	fmt.Fprintf(w, "Error: Site name %s or address %s couldn't added", hostRecord.Name, hostRecord.Address)
 	return
-	//hosts.append((site, ip, record_type))
-	//namecheap_lib.set_hosts('edge-net.io', hosts)
-	//return Response("Site %s.edge-net.io added at ip %s" % (site, ip))
-	// !!!!! WILL BE FURTHER DEVELOPED
 }
 
 // Get the set of namespaces. Call: /get_namespaces
@@ -136,6 +119,7 @@ func getNamespaces(w http.ResponseWriter, r *http.Request) {
 	// "kube-system", and "kube-public"
 	result := namespace.GetList()
 	fmt.Fprintf(w, "%s", result)
+	return
 }
 
 func main() {

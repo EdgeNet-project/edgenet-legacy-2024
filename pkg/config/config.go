@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 
+	yaml "gopkg.in/yaml.v2"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/tools/clientcmd"
 	cmdconfig "k8s.io/kubernetes/pkg/kubectl/cmd/config"
@@ -33,6 +35,14 @@ type configView struct {
 	CurrentContext string     `json:"current-context"`
 }
 
+// Structure of Namecheap access credentials
+type namecheap struct {
+	App      string `yaml:"app"`
+	APIUser  string `yaml:"apiUser"`
+	APIToken string `yaml:"apiToken"`
+	Username string `yaml:"username"`
+}
+
 // This reads the kubeconfig file by admin context and returns it in json format.
 func getConfigView() (string, error) {
 	pathOptions := clientcmd.NewDefaultPathOptions()
@@ -44,7 +54,7 @@ func getConfigView() (string, error) {
 		Out:    streamsOut,
 		ErrOut: streamsErrOut,
 	}
-	
+
 	configCmd := cmdconfig.NewCmdConfigView(cmdutil.NewFactory(genericclioptions.NewConfigFlags(false)), streams, pathOptions)
 	// "context" is a global flag, inherited from base kubectl command in the real world
 	configCmd.Flags().String("context", "kubernetes-admin@kubernetes", "The name of the kubeconfig context to use")
@@ -69,7 +79,7 @@ func GetClusterServerOfCurrentContext() (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	
+
 	currentContext := configViewDet.CurrentContext
 	var cluster string
 	for _, contextRaw := range configViewDet.Contexts {
@@ -97,7 +107,7 @@ func GetServerOfCurrentContext() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	currentContext := configViewDet.CurrentContext
 	var cluster string
 	for _, contextRaw := range configViewDet.Contexts {
@@ -112,4 +122,20 @@ func GetServerOfCurrentContext() (string, error) {
 		}
 	}
 	return server, nil
+}
+
+// GetNamecheapCredentials provides authentication info to have API Access
+func GetNamecheapCredentials() (string, string, string, error) {
+	// The path of the yaml config file of namecheap
+	file, err := os.Open("../../config/namecheap.yaml")
+	if err != nil {
+		return "", "", "", err
+	}
+	decoder := yaml.NewDecoder(file)
+	var namecheap namecheap
+	err = decoder.Decode(&namecheap)
+	if err != nil {
+		return "", "", "", err
+	}
+	return namecheap.APIUser, namecheap.APIToken, namecheap.Username, nil
 }
