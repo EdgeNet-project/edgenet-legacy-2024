@@ -2,8 +2,8 @@ package node
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
+	"log"
 
 	"headnode/pkg/authorization"
 	"headnode/pkg/node/infrastructure"
@@ -17,6 +17,7 @@ import (
 func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
 	client, err := authorization.CreateNamecheapClient()
 	if err != nil {
+		log.Println(err.Error())
 		return false, "Unknown"
 	}
 	result, state := infrastructure.SetHostname(client, hostRecord)
@@ -27,11 +28,13 @@ func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
 func CreateJoinToken(ttl string, hostname string) string {
 	clientset, err := authorization.CreateClientSet()
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 	duration, _ := time.ParseDuration(ttl)
 	token, err := infrastructure.CreateToken(clientset, duration, hostname)
 	if err != nil {
+		log.Println(err.Error())
 		return "error"
 	}
 	return token
@@ -41,11 +44,13 @@ func CreateJoinToken(ttl string, hostname string) string {
 func GetList() []string {
 	clientset, err := authorization.CreateClientSet()
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 
 	nodesRaw, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 	nodes := make([]string, len(nodesRaw.Items))
@@ -64,11 +69,13 @@ func GetStatusList() []byte {
 	}
 	clientset, err := authorization.CreateClientSet()
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 
 	nodesRaw, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 	nodesArr := make([]nodeStatus, len(nodesRaw.Items))
@@ -89,6 +96,7 @@ func GetStatusList() []byte {
 func getNodeByHostname(hostname string) (string, error) {
 	clientset, err := authorization.CreateClientSet()
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 
@@ -97,15 +105,15 @@ func getNodeByHostname(hostname string) (string, error) {
 	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
 	_, err = clientset.CoreV1().Nodes().Get(hostname, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
-		fmt.Printf("Node %s not found\n", hostname)
-		return "Node not found", err
+		log.Printf("Node %s not found", hostname)
+		return "false", err
 	} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
-		fmt.Printf("Error getting node %s: %v\n",
-			hostname, statusError.ErrStatus)
-		return "Error getting node", err
+		log.Printf("Error getting node %s: %v", hostname, statusError.ErrStatus)
+		return "error", err
 	} else if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	} else {
-		return "", nil
+		return "true", nil
 	}
 }

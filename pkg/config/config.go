@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"log"
 
 	yaml "gopkg.in/yaml.v2"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -58,9 +59,9 @@ func getConfigView() (string, error) {
 	configCmd := cmdconfig.NewCmdConfigView(cmdutil.NewFactory(genericclioptions.NewConfigFlags(false)), streams, pathOptions)
 	// "context" is a global flag, inherited from base kubectl command in the real world
 	configCmd.Flags().String("context", "kubernetes-admin@kubernetes", "The name of the kubeconfig context to use")
-	configCmd.Flags().Parse([]string{"--output=json"})
+	configCmd.Flags().Parse([]string{"--minify", "--output=json"})
 	if err := configCmd.Execute(); err != nil {
-		fmt.Printf("unexpected error executing command: %v", err)
+		log.Printf("unexpected error executing command: %v", err)
 		return "", err
 	}
 
@@ -72,11 +73,13 @@ func getConfigView() (string, error) {
 func GetClusterServerOfCurrentContext() (string, string, error) {
 	configStr, err := getConfigView()
 	if err != nil {
+		log.Printf("unexpected error executing command: %v", err)
 		return "", "", err
 	}
 	var configViewDet configView
 	err = json.Unmarshal([]byte(configStr), &configViewDet)
 	if err != nil {
+		log.Printf("unexpected error executing command: %v", err)
 		return "", "", err
 	}
 
@@ -100,11 +103,13 @@ func GetClusterServerOfCurrentContext() (string, string, error) {
 func GetServerOfCurrentContext() (string, error) {
 	configStr, err := getConfigView()
 	if err != nil {
+		log.Printf("unexpected error executing command: %v", err)
 		return "", err
 	}
 	var configViewDet configView
 	err = json.Unmarshal([]byte(configStr), &configViewDet)
 	if err != nil {
+		log.Printf("unexpected error executing command: %v", err)
 		return "", err
 	}
 
@@ -129,12 +134,14 @@ func GetNamecheapCredentials() (string, string, string, error) {
 	// The path of the yaml config file of namecheap
 	file, err := os.Open("../../config/namecheap.yaml")
 	if err != nil {
+		log.Printf("unexpected error executing command: %v", err)
 		return "", "", "", err
 	}
 	decoder := yaml.NewDecoder(file)
 	var namecheap namecheap
 	err = decoder.Decode(&namecheap)
 	if err != nil {
+		log.Printf("unexpected error executing command: %v", err)
 		return "", "", "", err
 	}
 	return namecheap.APIUser, namecheap.APIToken, namecheap.Username, nil

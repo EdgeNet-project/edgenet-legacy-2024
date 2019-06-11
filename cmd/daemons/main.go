@@ -33,7 +33,9 @@ func hello(w http.ResponseWriter, r *http.Request) {
 	user := r.URL.Query().Get("user")
 	if user == "" {
 		err := errors.New("No 'user' arg in request")
+		log.Printf("%s: %s", r.URL.RequestURI(), err)
 		fmt.Fprintf(w, "%s", err)
+		return
 	}
 	// Create a kubeconfig file for the user
 	result := registration.MakeConfig(user)
@@ -47,10 +49,13 @@ func makeUser(w http.ResponseWriter, r *http.Request) {
 	user := r.URL.Query().Get("user")
 	if user == "" {
 		err := errors.New("No 'user' arg in request")
+		log.Printf("%s: %s", r.URL.RequestURI(), err)
 		fmt.Fprintf(w, "%s", err)
+		return
 	}
 	// Add the user
-	result := registration.MakeUser(user)
+	result, status := registration.MakeUser(user)
+	w.WriteHeader(status)
 	fmt.Fprintf(w, "%s", result)
 	return
 }
@@ -81,14 +86,17 @@ func addNode(w http.ResponseWriter, r *http.Request) {
 	recordType := r.URL.Query().Get("record_type")
 	if ip == "" {
 		err := errors.New("No 'ip_address' arg in request")
+		log.Printf("%s: %s", r.URL.RequestURI(), err)
 		fmt.Fprintf(w, "%s", err)
 		return
 	} else if site == "" {
 		err := errors.New("No 'sitename' arg in request")
+		log.Printf("%s: %s", r.URL.RequestURI(), err)
 		fmt.Fprintf(w, "%s", err)
 		return
 	} else if recordType == "" {
 		err := errors.New("No 'record_type' arg in request")
+		log.Printf("%s: %s", r.URL.RequestURI(), err)
 		fmt.Fprintf(w, "%s", err)
 		return
 	}
@@ -106,10 +114,14 @@ func addNode(w http.ResponseWriter, r *http.Request) {
 	if state == "exist" {
 		w.WriteHeader(500)
 		w.Header().Add("Content-Type", "application/json")
-		fmt.Fprintf(w, "Error: Site name %s or address %s already exists", hostRecord.Name, hostRecord.Address)
+		err := fmt.Errorf("Error: Site name %s or address %s already exists", hostRecord.Name, hostRecord.Address)
+		log.Printf("%s: %s", r.URL.RequestURI(), err)
+		fmt.Fprintf(w, "%s", err)
 		return
 	}
-	fmt.Fprintf(w, "Error: Site name %s or address %s couldn't added", hostRecord.Name, hostRecord.Address)
+	err := fmt.Errorf("Error: Site name %s or address %s couldn't added", hostRecord.Name, hostRecord.Address)
+	log.Printf("%s: %s", r.URL.RequestURI(), err)
+	fmt.Fprintf(w, "%s", err)
 	return
 }
 

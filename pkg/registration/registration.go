@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 
 	"headnode/pkg/authorization"
 	custconfig "headnode/pkg/config"
@@ -22,13 +23,14 @@ import (
 // MakeUser generates key and certificate and then set credentials into the config file. As the next step,
 // this function creates user role and role bindings for the namespace. Lastly, this checks the namespace
 // created successfully or not.
-func MakeUser(user string) string {
+func MakeUser(user string) ([]byte, int) {
 	userNamespace, err := namespace.Create(user)
 	if err != nil {
-		//fmt.Printf("Namespace %s couldn't be created.\n", user)
-		return fmt.Sprintf("Namespace %s couldn't be created.\n", user)
+		log.Printf("Namespace %s couldn't be created.", user)
+		resultMap := map[string]string{"status": "Failure"}
+		result, _ := json.Marshal(resultMap)
+		return result, 500
 	}
-	//fmt.Printf("Created namespace %q.\n", userNamespace)
 	cert.GenerateSelfSignedCertKeyWithFixtures(userNamespace, nil, nil, "../../assets/certs")
 	pathOptions := clientcmd.NewDefaultPathOptions()
 	buf := bytes.NewBuffer([]byte{})
@@ -40,12 +42,15 @@ func MakeUser(user string) string {
 	})
 
 	if err := kcmd.Execute(); err != nil {
-		fmt.Printf("unexpected error executing command: %v,kubectl config set-credentials  args: %v", err, user)
-		return fmt.Sprintf("unexpected error executing command: %v,kubectl config set-credentials  args: %v", err, user)
+		log.Printf("Couldn't set auth info on the kubeconfig file: %s", user)
+		resultMap := map[string]string{"status": "Failure"}
+		result, _ := json.Marshal(resultMap)
+		return result, 500
 	}
 
 	clientset, err := authorization.CreateClientSet()
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 
@@ -55,7 +60,10 @@ func MakeUser(user string) string {
 		Rules: policyRule}
 	_, err = clientset.RbacV1().Roles(user).Create(userRole)
 	if err != nil {
-		return fmt.Sprintf("Err: %s", err)
+		log.Printf("Couldn't create user role: %s", user)
+		resultMap := map[string]string{"status": "Failure"}
+		result, _ := json.Marshal(resultMap)
+		return result, 500
 	}
 
 	subjects := []apiv1.Subject{{Kind: "User", Name: user, APIGroup: ""}}
@@ -65,7 +73,10 @@ func MakeUser(user string) string {
 		Subjects: subjects, RoleRef: roleRef}
 	_, err = clientset.RbacV1().RoleBindings(user).Create(roleBinding)
 	if err != nil {
-		return fmt.Sprintf("Err: %s", err)
+		log.Printf("Couldn't create user role binding: %s", user)
+		resultMap := map[string]string{"status": "Failure"}
+		result, _ := json.Marshal(resultMap)
+		return result, 500
 	}
 
 	rbSubjects := []apiv1.Subject{{Kind: "ServiceAccount", Name: "default", Namespace: user}}
@@ -75,16 +86,23 @@ func MakeUser(user string) string {
 		Subjects: rbSubjects, RoleRef: roleBindRef}
 	_, err = clientset.RbacV1().RoleBindings(user).Create(roleBind)
 	if err != nil {
-		return fmt.Sprintf("Err: %s", err)
+		log.Printf("Couldn't create user admin role binding: %s", user)
+		resultMap := map[string]string{"status": "Failure"}
+		result, _ := json.Marshal(resultMap)
+		return result, 500
 	}
 
 	exist, err := namespace.GetNamespaceByName(user)
 	if err == nil && exist == "true" {
 		resultMap := map[string]string{"status": "Acknowledged"}
 		result, _ := json.Marshal(resultMap)
-		return string(result)
+		return result, 200
 	}
-	return fmt.Sprintf("Err: %s", err)
+	
+	log.Printf("Namespace couldn't be created: %s", user)
+	resultMap := map[string]string{"status": "Failure"}
+	result, _ := json.Marshal(resultMap)
+	return result, 500
 }
 
 // MakeConfig checks/gets serviceaccount of the user (actually, the namespace), and if the serviceaccount exists
@@ -93,39 +111,42 @@ func MakeUser(user string) string {
 func MakeConfig(user string) string {
 	clientset, err := authorization.CreateClientSet()
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 
 	serviceAccount, err := clientset.CoreV1().ServiceAccounts(user).Get("default", metav1.GetOptions{})
 	if errors.IsNotFound(err) {
-		fmt.Printf("Serviceaccount %s not found\n", user)
+		log.Printf("Serviceaccount %s not found", user)
 		return fmt.Sprintf("Serviceaccount %s not found\n", user)
 	} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
-		fmt.Printf("Error getting serviceaccount %s: %v\n", user, statusError.ErrStatus)
+		log.Printf("Error getting serviceaccount %s: %v", user, statusError.ErrStatus)
 		return fmt.Sprintf("Error getting serviceaccount %s: %v\n", user, statusError.ErrStatus)
 	} else if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 	accountSecret := serviceAccount.Secrets[0].Name
 	if accountSecret == "" {
-		fmt.Printf("Serviceaccount %s doesn't have a serviceaccount token\n", user)
+		log.Printf("Serviceaccount %s doesn't have a serviceaccount token", user)
 		return fmt.Sprintf("Serviceaccount %s doesn't have a serviceaccount token\n", user)
 	}
 
 	secret, err := clientset.CoreV1().Secrets(user).Get(accountSecret, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
-		fmt.Printf("Secret %s not found\n", user)
+		log.Printf("Secret %s not found", user)
 		return fmt.Sprintf("Secret %s not found\n", user)
 	} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
-		fmt.Printf("Error getting secret %s: %v\n", user, statusError.ErrStatus)
+		log.Printf("Error getting secret %s: %v", user, statusError.ErrStatus)
 		return fmt.Sprintf("Error getting secret %s: %v\n", user, statusError.ErrStatus)
 	} else if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 
 	cluster, server, err := custconfig.GetClusterServerOfCurrentContext()
 	if err != nil {
-		fmt.Printf("Err: %s", err)
+		log.Println(err)
 		return fmt.Sprintf("Err: %s", err)
 	}
 
@@ -138,7 +159,7 @@ func MakeConfig(user string) string {
 
 	dat, err := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet_%s.cfg", user))
 	if err != nil {
-		fmt.Printf("Err: %s", err)
+		log.Println(err)
 		return fmt.Sprintf("Err: %s", err)
 	}
 	return string(dat)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	s "strings"
 	"time"
+	"log"
 
 	custconfig "headnode/pkg/config"
 
@@ -23,13 +24,13 @@ import (
 func CreateToken(clientset clientset.Interface, duration time.Duration, hostname string) (string, error) {
 	tokenStr, err := bootstraputil.GenerateBootstrapToken()
 	if err != nil {
+		log.Printf("Error generating token to upload certs: %s", err)
 		return "", err
-		// "error generating token to upload certs"
 	}
 	token, err := kubeadmapi.NewBootstrapTokenString(tokenStr)
 	if err != nil {
+		log.Printf("Error creating upload certs token: %s", err)
 		return "", err
-		// "error creating upload certs token"
 	}
 	tokens := []kubeadmapi.BootstrapToken{{
 		Token:       token,
@@ -42,20 +43,22 @@ func CreateToken(clientset clientset.Interface, duration time.Duration, hostname
 	}}
 
 	if err := nodebootstraptokenphase.CreateNewTokens(clientset, tokens); err != nil {
+		log.Printf("Error creating token: %s", err)
 		return "", err
-		// "error creating token"
 	}
 	// This reads server info of the current context from the config file
 	server, err := custconfig.GetServerOfCurrentContext()
 	if err != nil {
-		fmt.Printf("Err: %s", err)
+		log.Println(err)
+		return "", err
 	}
 	server = s.Trim(server, "https://")
 	server = s.Trim(server, "http://")
 	// This reads CA cert to be hashed
 	certs, err := cert.CertsFromFile("/etc/kubernetes/pki/ca.crt")
 	if err != nil {
-		fmt.Printf("Err: %s", err)
+		log.Println(err)
+		return "", err
 	}
 	var CA string
 	for i, cert := range certs {
@@ -72,10 +75,12 @@ func CreateToken(clientset clientset.Interface, duration time.Duration, hostname
 func getHosts(client *namecheap.Client) namecheap.DomainDNSGetHostsResult {
 	hostsResponse, err := client.DomainsDNSGetHosts("edge-net", "io")
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 	responseJSON, err := json.Marshal(hostsResponse)
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 	hostList := namecheap.DomainDNSGetHostsResult{}
@@ -95,14 +100,17 @@ func SetHostname(client *namecheap.Client, hostRecord namecheap.DomainDNSHost) (
 	}
 
 	if exist {
+		log.Printf("Hostname or ip address already exists: %s - %s", hostRecord.Name, hostRecord.Address)
 		return false, "exist"
 	}
 
 	hostList.Hosts = append(hostList.Hosts, hostRecord)
 	setResponse, err := client.DomainDNSSetHosts("edge-net", "io", hostList.Hosts)
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	} else if setResponse.IsSuccess == false {
+		log.Printf("Set host unknown problem: %s - %s", hostRecord.Name, hostRecord.Address)
 		return false, "unknown"
 	}
 	return true, ""

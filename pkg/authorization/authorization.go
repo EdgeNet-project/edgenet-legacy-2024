@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"log"
 
 	"headnode/pkg/config"
 
@@ -36,12 +37,14 @@ func CreateClientSet() (*kubernetes.Clientset, error) {
 	// Use the current context in kubeconfig
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 
 	// Create the clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 	return clientset, err
@@ -51,6 +54,7 @@ func CreateClientSet() (*kubernetes.Clientset, error) {
 func CreateNamecheapClient() (*namecheap.Client, error) {
 	apiuser, apitoken, username, err := config.GetNamecheapCredentials()
 	if err != nil {
+		log.Println(err.Error())
 		panic(err.Error())
 	}
 	client := namecheap.NewClient(apiuser, apitoken, username)
