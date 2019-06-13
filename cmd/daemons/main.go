@@ -148,5 +148,5 @@ func main() {
 	router.HandleFunc("/add_node", addNode)         // In use
 	router.HandleFunc("/namespaces", getNamespaces) // In use
 
-	log.Fatal(http.ListenAndServe(":8181", router))
+	log.Fatal(http.ListenAndServe("127.0.0.1:8181", router))
 }
