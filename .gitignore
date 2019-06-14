@@ -24,7 +24,6 @@ assets/kubeconfigs/**
 !assets/kubeconfigs/*.md
 
 pkg/user
-build
 
 # Ignore OS X metadata files
 ._*
