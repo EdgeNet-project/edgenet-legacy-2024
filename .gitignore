@@ -17,7 +17,10 @@ config/**
 !config/*_template.yaml
 !config/user-files
 !config/user-files/**
+!config/nginx
+!config/nginx/*_template.conf
 
+# assets
 assets/certs/**
 assets/kubeconfigs/**
 !assets/certs/*.md
