@@ -32,8 +32,8 @@ front end. For various routes in its app, it gets the benefit of [client-go](htt
 As of the May 2018 prototype,
 
 * There is only a **single Kubernetes head node** for all users in the cluster.
-  We will later on think about scaling up, distributing and federating head nodes, etc.
-* New **user registrations are handled manually** on a per-case basis, and must go
+  We will later on think about scaling up, distributing, and federating head nodes, etc.
+* New **user registrations are handled manually** on a case-by-case basis, and must go
   through some Google App Engine-specific processing. Later, other identity
   providers and user verification methods should be supported.
 
@@ -41,5 +41,5 @@ As of the May 2018 prototype,
 
 As of May 2019,
 
-* Firstly, we will the port current head node code to Go, to getting the benefit of **client-go** library.
-* Then, **CRDs** will substitute the current datastore and cronjobs by taking advantage of **custom controllers**.
+* Firstly, we port the existing head node code to Go, so as to benefit from the **client-go** library.
+* Then, **CRDs** will be used to substitute for the current datastore and cronjobs, thereby taking advantage of **custom controllers**.
