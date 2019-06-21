@@ -2,16 +2,56 @@ package node
 
 import (
 	"encoding/json"
-	"time"
 	"log"
+	"time"
 
 	"headnode/pkg/authorization"
 	"headnode/pkg/node/infrastructure"
 
 	namecheap "github.com/billputer/go-namecheap"
+	api_v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// CompareIPAddresses makes a comparison between old and new objects of the node
+// to return the information of the match
+func CompareIPAddresses(oldObj *api_v1.Node, newObj *api_v1.Node) bool {
+	updated := true
+	oldInternalIP, oldExternalIP := GetNodeIPAddresses(oldObj)
+	newInternalIP, newExternalIP := GetNodeIPAddresses(newObj)
+	if oldInternalIP != "" && newInternalIP != "" {
+		if oldExternalIP != "" && newExternalIP != "" {
+			if oldInternalIP == newInternalIP && oldExternalIP == newExternalIP {
+				updated = false
+			}
+		} else {
+			if oldInternalIP == newInternalIP {
+				updated = false
+			}
+		}
+	} else {
+		if oldExternalIP == newExternalIP {
+			updated = false
+		}
+	}
+	return updated
+}
+
+// GetNodeIPAddresses picks up the internal and external IP addresses of the Node
+func GetNodeIPAddresses(obj *api_v1.Node) (string, string) {
+	internalIP := ""
+	externalIP := ""
+	for _, addressesRow := range obj.Status.Addresses {
+		if addressType := addressesRow.Type; addressType == "InternalIP" {
+			internalIP = addressesRow.Address
+		}
+		if addressType := addressesRow.Type; addressType == "ExternalIP" {
+			externalIP = addressesRow.Address
+		}
+	}
+	return internalIP, externalIP
+}
 
 // SetHostname generates token to be used on adding a node onto the cluster
 func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
@@ -61,7 +101,7 @@ func GetList() []string {
 	return nodes
 }
 
-// GetList uses clientset to get node list of the cluster that contains Ready State info
+// GetStatusList uses clientset to get node list of the cluster that contains Ready State info
 func GetStatusList() []byte {
 	type nodeStatus struct {
 		Node  string `json:"node"`

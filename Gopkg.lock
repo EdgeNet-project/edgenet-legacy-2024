@@ -235,6 +235,17 @@
   revision = "3befbb6ad0cc97d4c25d851e9528915809e1a22f"
 
 [[projects]]
+  digest = "1:d15ee511aa0f56baacc1eb4c6b922fa1c03b38413b6be18166b996d82a0156ea"
+  name = "github.com/hashicorp/golang-lru"
+  packages = [
+    ".",
+    "simplelru",
+  ]
+  pruneopts = "UT"
+  revision = "7087cb70de9f7a8bc0a10c375cb0d2280a8edf9c"
+  version = "v0.5.1"
+
+[[projects]]
   digest = "1:a0cefd27d12712af4b5018dc7046f245e1e3b5760e2e848c30b171b570708f9b"
   name = "github.com/imdario/mergo"
   packages = ["."]
@@ -530,7 +541,7 @@
   version = "kubernetes-1.14.2"
 
 [[projects]]
-  digest = "1:9564a6bef57f84fcbe5b7921235bb0c55a92dac6adb5a38c577efd142b6a44f1"
+  digest = "1:708585d194fca4e01aac2eed0d1300ed2d3fb48d92a9d7efe49dbac535ab0de3"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/equality",
@@ -558,7 +569,9 @@
     "pkg/runtime/serializer/versioning",
     "pkg/selection",
     "pkg/types",
+    "pkg/util/cache",
     "pkg/util/clock",
+    "pkg/util/diff",
     "pkg/util/errors",
     "pkg/util/framer",
     "pkg/util/httpstream",
@@ -620,7 +633,7 @@
   version = "kubernetes-1.14.2"
 
 [[projects]]
-  digest = "1:05099ad7f79b69b38363a8d9a1a0776e9ae82af5a6e0246baf4c74319ff18097"
+  digest = "1:619171b2e73ce34423708677ac4761f961e95bdc72a8411f9879f7a499daf987"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -721,11 +734,13 @@
     "testing",
     "third_party/forked/golang/template",
     "tools/auth",
+    "tools/cache",
     "tools/clientcmd",
     "tools/clientcmd/api",
     "tools/clientcmd/api/latest",
     "tools/clientcmd/api/v1",
     "tools/metrics",
+    "tools/pager",
     "tools/reference",
     "tools/remotecommand",
     "transport",
@@ -737,6 +752,8 @@
     "util/homedir",
     "util/jsonpath",
     "util/keyutil",
+    "util/retry",
+    "util/workqueue",
   ]
   pruneopts = "UT"
   revision = "6ee68ca5fd8355d024d02f9db0b3b667e8357a0f"
@@ -830,11 +847,13 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:624e74a381dffdda0d3da78e8ac6256a650bf175b67aa4e058fdd8993d003c47"
+  digest = "1:5ee9c526e03ef1866066e7b76a863b462427fb1236fc44c059abb8133af7de2f"
   name = "k8s.io/utils"
   packages = [
+    "buffer",
     "exec",
     "integer",
+    "trace",
   ]
   pruneopts = "UT"
   revision = "6999998975a717e7f5fc2a7476497044cb111854"
@@ -882,21 +901,30 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/Sirupsen/logrus",
     "github.com/billputer/go-namecheap",
     "github.com/gorilla/mux",
+    "gopkg.in/yaml.v2",
     "k8s.io/api/core/v1",
     "k8s.io/api/rbac/v1",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
+    "k8s.io/apimachinery/pkg/runtime",
+    "k8s.io/apimachinery/pkg/util/runtime",
+    "k8s.io/apimachinery/pkg/util/wait",
+    "k8s.io/apimachinery/pkg/watch",
+    "k8s.io/cli-runtime/pkg/genericclioptions",
     "k8s.io/client-go/kubernetes",
-    "k8s.io/client-go/kubernetes/typed/rbac/v1",
+    "k8s.io/client-go/tools/cache",
     "k8s.io/client-go/tools/clientcmd",
     "k8s.io/client-go/util/cert",
+    "k8s.io/client-go/util/workqueue",
     "k8s.io/cluster-bootstrap/token/util",
     "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm",
     "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/node",
     "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig",
     "k8s.io/kubernetes/pkg/kubectl/cmd/config",
+    "k8s.io/kubernetes/pkg/kubectl/cmd/util",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
