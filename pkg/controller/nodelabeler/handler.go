@@ -2,7 +2,7 @@ package nodelabeler
 
 import (
 	"headnode/pkg/node"
-
+	
 	log "github.com/Sirupsen/logrus"
 	api_v1 "k8s.io/api/core/v1"
 )
@@ -25,11 +25,18 @@ func (t *Handler) Init() error {
 // SetNodeGeolocation is called when an object is created or updated
 func (t *Handler) SetNodeGeolocation(obj interface{}) {
 	log.Info("Handler.ObjectCreated")
-	internalIP, externalIP := node.GetNodeIPAddresses(obj.(*api_v1.Node))
-	if internalIP != "" {
-		log.Infof("Internal IP: %s", internalIP)
-	}
+	// Get internal and external IP addresses of the node
+	internalIP, externalIP := node.GetNodeIPAddresses(obj.(*api_v1.Node))	
+	result := false
+	// Check if the external IP exists to use it in the first place
 	if externalIP != "" {
 		log.Infof("External IP: %s", externalIP)
+		result = node.GetGeolocationByIP(obj.(*api_v1.Node).Name, externalIP)
+	}
+	// Check if the internal IP exists and 
+	// the result of detecting geolocation by external IP is false
+	if internalIP != "" && result == false {
+		log.Infof("Internal IP: %s", internalIP)
+		node.GetGeolocationByIP(obj.(*api_v1.Node).Name, internalIP)
 	}
 }

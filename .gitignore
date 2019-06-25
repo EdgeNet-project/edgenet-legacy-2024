@@ -23,8 +23,10 @@ config/**
 # assets
 assets/certs/**
 assets/kubeconfigs/**
+assets/database/**
 !assets/certs/*.md
 !assets/kubeconfigs/*.md
+!assets/database/*.md
 
 pkg/user
 

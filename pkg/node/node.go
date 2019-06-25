@@ -2,17 +2,95 @@ package node
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"net"
 	"time"
 
 	"headnode/pkg/authorization"
 	"headnode/pkg/node/infrastructure"
 
 	namecheap "github.com/billputer/go-namecheap"
+	geoip2 "github.com/oschwald/geoip2-golang"
 	api_v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
+
+// JSON structure of patch operation
+type patchStringValue struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value string `json:"value"`
+}
+
+// setNodeLabels uses client-go to patch nodes by processing a labels map
+func setNodeLabels(hostname string, labels map[string]string) bool {
+	clientset, err := authorization.CreateClientSet()
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	// Create a patch slice and initialize it to the label size
+	nodePatchArr := make([]patchStringValue, len(labels))
+	nodePatch := patchStringValue{}
+	row := 0
+	// Append the data existing in the label map to the slice
+	for label, value := range labels {
+		nodePatch.Op = "add"
+		nodePatch.Path = fmt.Sprintf("/metadata/labels/%s", label)
+		nodePatch.Value = value
+		nodePatchArr[row] = nodePatch
+		row++
+	}
+	nodesJSON, _ := json.Marshal(nodePatchArr)
+
+	// Patch the nodes with the arguments:
+	// hostname, patch type, and patch data
+	_, err = clientset.CoreV1().Nodes().Patch(hostname, types.JSONPatchType, nodesJSON)
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	return true
+}
+
+// GetGeolocationByIP return geolabels by taking advantage of GeoLite database
+func GetGeolocationByIP(hostname string, ipStr string) bool {
+	// Parse IP address
+	ip := net.ParseIP(ipStr)
+	// Open GeoLite database
+	db, err := geoip2.Open("../../assets/database/GeoLite2-City_20190618/GeoLite2-City.mmdb")
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Close the database as a final job
+	defer db.Close()
+	// Get the geolocation information by IP
+	record, err := db.City(ip)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Create label map to attach to the node
+	geoLabels := map[string]string{
+		"edge-net.io~1city":        record.City.Names["en"],
+		"edge-net.io~1country-iso": record.Country.IsoCode,
+		"edge-net.io~1continent":   record.Continent.Names["en"],
+		"edge-net.io~1lon":         fmt.Sprintf("%f", record.Location.Longitude),
+		"edge-net.io~1lat":         fmt.Sprintf("%f", record.Location.Latitude),
+	}
+	// Attach geolabels to the node
+	result := setNodeLabels(hostname, geoLabels)
+	// If the result is different than the expected, return false
+	// The expected result is having a different longitude and latitude than zero
+	// Zero value typically means there isn't any result meaningful
+	if record.Location.Longitude == 0 && record.Location.Latitude == 0 {
+		return false
+	}
+	return result
+}
 
 // CompareIPAddresses makes a comparison between old and new objects of the node
 // to return the information of the match
