@@ -6,11 +6,22 @@ services:
     restart: always
     build:
       context: ../
-      dockerfile: ./build/Dockerfile
+      dockerfile: ./build/daemons/Dockerfile
     image: edgenet-headnode:v1.0.0
     volumes:
       - /etc/kubernetes/:/etc/kubernetes/
       - ~/.kube/:/root/.kube/
+      - ../config/:/root/config/
     ports:
       - 8181
     network_mode: host
+  edgenet-nodelabeler:
+    container_name: edgenet-nodelabeler
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/nodelabeler/Dockerfile
+    image: edgenet-nodelabeler:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+      - ../assets/database/:/root/assets/database/

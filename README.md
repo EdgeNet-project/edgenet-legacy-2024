@@ -23,7 +23,7 @@ dashboard for further interactions with their resources on the Sundew cluster.
 
 The [back end](https://github.com/EdgeNet-project/headnode)
 is an app written in [Go](https://golang.org/) that is only accessible via the
-front end. For various routes in its app, it gets the benefit of [client-go](https://github.com/kubernetes/client-go) and [Go packages](https://godoc.org/k8s.io/kubernetes) for talking to the Kubernetes cluster of EdgeNet and makes use of the Namecheap API. The [API documentation](https://documenter.getpostman.com/view/7656709/S1ZxapRG?version=latest) which describes the main functionallities of the head node is created by [Postman](https://www.getpostman.com/).
+front end. For various routes in its app, it gets the benefit of [client-go](https://github.com/kubernetes/client-go) and [Go packages](https://godoc.org/k8s.io/kubernetes) for talking to the Kubernetes cluster of EdgeNet and makes use of the Namecheap API. Addition to these, Kubernetes [custom controller](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) called *nodelabeler* lists and watches the nodes of the cluster to detect **add & edit node** operations, and then attaches geolabels on them by using [GeoLite2](https://dev.maxmind.com/geoip/geoip2/geolite2/). The [API documentation](https://documenter.getpostman.com/view/7656709/S1ZxapRG?version=latest) which describes the main functionallities of the head node is created by [Postman](https://www.getpostman.com/).
 
 
 

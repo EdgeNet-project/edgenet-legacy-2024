@@ -61,7 +61,7 @@ func GetGeolocationByIP(hostname string, ipStr string) bool {
 	// Parse IP address
 	ip := net.ParseIP(ipStr)
 	// Open GeoLite database
-	db, err := geoip2.Open("../../assets/database/GeoLite2-City_20190618/GeoLite2-City.mmdb")
+	db, err := geoip2.Open("../../assets/database/GeoLite2-City/GeoLite2-City.mmdb")
 	if err != nil {
 		log.Fatal(err)
 	}
