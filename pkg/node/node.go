@@ -64,6 +64,7 @@ func GetGeolocationByIP(hostname string, ipStr string) bool {
 	db, err := geoip2.Open("../../assets/database/GeoLite2-City/GeoLite2-City.mmdb")
 	if err != nil {
 		log.Fatal(err)
+		return false
 	}
 	// Close the database as a final job
 	defer db.Close()
@@ -71,16 +72,40 @@ func GetGeolocationByIP(hostname string, ipStr string) bool {
 	record, err := db.City(ip)
 	if err != nil {
 		log.Fatal(err)
+		return false
+	}
+
+	// Patch for being compatible with Kubernetes alphanumeric characters limitations
+	continent := strings.Replace(record.Continent.Names["en"], " ", "_", -1)
+	country := record.Country.IsoCode
+	state := record.Country.IsoCode
+	city := strings.Replace(record.City.Names["en"], " ", "_", -1)
+	var lon string
+	var lat string
+	if record.Location.Longitude >= 0 {
+		lon = fmt.Sprintf("e%.6f", record.Location.Longitude)
+	} else {
+		lon = fmt.Sprintf("w%.6f", record.Location.Longitude)
+	}
+	if record.Location.Latitude >= 0 {
+		lat = fmt.Sprintf("n%.6f", record.Location.Latitude)
+	} else {
+		lat = fmt.Sprintf("s%.6f", record.Location.Latitude)
+	}
+	if len(record.Subdivisions) > 0 {
+		state = record.Subdivisions[0].IsoCode
 	}
 
 	// Create label map to attach to the node
 	geoLabels := map[string]string{
-		"edge-net.io~1city":        record.City.Names["en"],
-		"edge-net.io~1country-iso": record.Country.IsoCode,
-		"edge-net.io~1continent":   record.Continent.Names["en"],
-		"edge-net.io~1lon":         fmt.Sprintf("%f", record.Location.Longitude),
-		"edge-net.io~1lat":         fmt.Sprintf("%f", record.Location.Latitude),
+		"edge-net.io~1continent":   continent,
+		"edge-net.io~1country-iso": country,
+		"edge-net.io~1state-iso":   state,
+		"edge-net.io~1city":        city,
+		"edge-net.io~1lon":         lon,
+		"edge-net.io~1lat":         lat,
 	}
+
 	// Attach geolabels to the node
 	result := setNodeLabels(hostname, geoLabels)
 	// If the result is different than the expected, return false
