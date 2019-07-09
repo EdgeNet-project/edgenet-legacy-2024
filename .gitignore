@@ -19,6 +19,8 @@ config/**
 !config/user-files/**
 !config/nginx
 !config/nginx/*_template.conf
+!config/crd
+!config/crd/**
 
 # assets
 assets/certs/**
@@ -29,6 +31,7 @@ assets/database/**
 !assets/database/*.md
 
 pkg/user
+code-generation
 
 # Ignore OS X metadata files
 ._*

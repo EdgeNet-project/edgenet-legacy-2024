@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"headnode/pkg/config"
+	geolocationclientset "headnode/pkg/client/clientset/versioned"
 
 	namecheap "github.com/billputer/go-namecheap"
 	"k8s.io/client-go/kubernetes"
@@ -30,6 +31,24 @@ func SetKubeConfig() {
 		flag.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
 	}
 	flag.Parse()
+}
+
+// CreateGeoLocationClientSet generates the clientset to interact with geolocation custom resource
+func CreateGeoLocationClientSet() (*geolocationclientset.Clientset, error) {
+	// Use the current context in kubeconfig
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+
+	// Create the clientset
+	clientset, err := geolocationclientset.NewForConfig(config)
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	return clientset, err
 }
 
 // CreateClientSet generates the clientset to interact with Kubernetes

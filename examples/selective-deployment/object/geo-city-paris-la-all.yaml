@@ -1,0 +1,12 @@
+apiVersion: edgenet.io/v1alpha
+kind: GeoLocation
+metadata:
+  name: geo-city-all
+spec:
+  deployment:
+    - test1
+    - test2
+  type: city
+  value: 
+    - Paris
+    - Los_Angeles

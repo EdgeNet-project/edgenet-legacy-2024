@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net"
+	"strings"
 	"time"
 
 	"headnode/pkg/authorization"
@@ -23,6 +25,48 @@ type patchStringValue struct {
 	Op    string `json:"op"`
 	Path  string `json:"path"`
 	Value string `json:"value"`
+}
+
+// GeoFence function determines whether the point is inside a polygon by using the crossing number method.
+// This method counts the number of times a ray starting at a point crosses a polygon boundary edge.
+// The even numbers mean the point is outside and the odd ones mean the point is inside.
+func GeoFence(boundbox []float64, polygon [][]float64, y float64, x float64) bool {
+	vertices := len(polygon)
+	lastIndex := vertices - 1
+	oddNodes := false
+
+	if boundbox[0] <= x && boundbox[1] >= x && boundbox[2] <= y && boundbox[3] >= y {
+		for index := range polygon {
+			if (polygon[index][0] < y && polygon[lastIndex][0] >= y || polygon[lastIndex][0] < y &&
+				polygon[index][0] >= y) && (polygon[index][1] <= x || polygon[lastIndex][1] <= x) {
+				if polygon[index][1]+(y-polygon[index][0])/(polygon[lastIndex][0]-polygon[index][0])*
+					(polygon[lastIndex][1]-polygon[index][1]) < x {
+					oddNodes = !oddNodes
+				}
+			}
+			lastIndex = index
+		}
+	}
+
+	return oddNodes
+}
+
+// Boundbox returns a rectangle which created according to the points of the polygon given
+func Boundbox(points [][]float64) []float64 {
+	var minX float64 = -math.MaxFloat64
+	var maxX float64 = math.MaxFloat64
+	var minY float64 = -math.MaxFloat64
+	var maxY float64 = math.MaxFloat64
+
+	for _, coordinates := range points {
+		minX = math.Min(minX, coordinates[0])
+		maxX = math.Max(maxX, coordinates[0])
+		minY = math.Min(minY, coordinates[1])
+		maxY = math.Max(maxY, coordinates[1])
+	}
+
+	bounding := []float64{minX, maxX, minY, maxY}
+	return bounding
 }
 
 // setNodeLabels uses client-go to patch nodes by processing a labels map
@@ -64,6 +108,7 @@ func GetGeolocationByIP(hostname string, ipStr string) bool {
 	db, err := geoip2.Open("../../assets/database/GeoLite2-City/GeoLite2-City.mmdb")
 	if err != nil {
 		log.Fatal(err)
+		return false
 	}
 	// Close the database as a final job
 	defer db.Close()
@@ -71,16 +116,40 @@ func GetGeolocationByIP(hostname string, ipStr string) bool {
 	record, err := db.City(ip)
 	if err != nil {
 		log.Fatal(err)
+		return false
+	}
+
+	// Patch for being compatible with Kubernetes alphanumeric characters limitations
+	continent := strings.Replace(record.Continent.Names["en"], " ", "_", -1)
+	country := record.Country.IsoCode
+	state := record.Country.IsoCode
+	city := strings.Replace(record.City.Names["en"], " ", "_", -1)
+	var lon string
+	var lat string
+	if record.Location.Longitude >= 0 {
+		lon = fmt.Sprintf("e%.6f", record.Location.Longitude)
+	} else {
+		lon = fmt.Sprintf("w%.6f", record.Location.Longitude)
+	}
+	if record.Location.Latitude >= 0 {
+		lat = fmt.Sprintf("n%.6f", record.Location.Latitude)
+	} else {
+		lat = fmt.Sprintf("s%.6f", record.Location.Latitude)
+	}
+	if len(record.Subdivisions) > 0 {
+		state = record.Subdivisions[0].IsoCode
 	}
 
 	// Create label map to attach to the node
 	geoLabels := map[string]string{
-		"edge-net.io~1city":        record.City.Names["en"],
-		"edge-net.io~1country-iso": record.Country.IsoCode,
-		"edge-net.io~1continent":   record.Continent.Names["en"],
-		"edge-net.io~1lon":         fmt.Sprintf("%f", record.Location.Longitude),
-		"edge-net.io~1lat":         fmt.Sprintf("%f", record.Location.Latitude),
+		"edge-net.io~1continent":   continent,
+		"edge-net.io~1country-iso": country,
+		"edge-net.io~1state-iso":   state,
+		"edge-net.io~1city":        city,
+		"edge-net.io~1lon":         lon,
+		"edge-net.io~1lat":         lat,
 	}
+
 	// Attach geolabels to the node
 	result := setNodeLabels(hostname, geoLabels)
 	// If the result is different than the expected, return false
