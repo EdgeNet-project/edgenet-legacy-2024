@@ -12,6 +12,8 @@ services:
       - /etc/kubernetes/:/etc/kubernetes/
       - ~/.kube/:/root/.kube/
       - ../config/:/root/config/
+      - ../assets/certs:/root/assets/certs
+      - ../assets/kubeconfigs:/root/assets/kubeconfigs
     ports:
       - 8181
     network_mode: host

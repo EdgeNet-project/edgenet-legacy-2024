@@ -101,6 +101,18 @@ func (c *FakeGeoLocations) Update(geoLocation *v1alpha.GeoLocation) (result *v1a
 	return obj.(*v1alpha.GeoLocation), err
 }
 
+// UpdateStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+func (c *FakeGeoLocations) UpdateStatus(geoLocation *v1alpha.GeoLocation) (*v1alpha.GeoLocation, error) {
+	obj, err := c.Fake.
+		Invokes(testing.NewUpdateSubresourceAction(geolocationsResource, "status", c.ns, geoLocation), &v1alpha.GeoLocation{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha.GeoLocation), err
+}
+
 // Delete takes name of the geoLocation and deletes it. Returns an error if one occurs.
 func (c *FakeGeoLocations) Delete(name string, options *v1.DeleteOptions) error {
 	_, err := c.Fake.

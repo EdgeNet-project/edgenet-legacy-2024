@@ -5,7 +5,6 @@ import (
 )
 
 // +genclient
-// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // GeoLocation describes a GeoLocation resource
@@ -17,6 +16,8 @@ type GeoLocation struct {
 
 	// Spec is the geolocation resource spec
 	Spec GeoLocationSpec `json:"spec"`
+	// Status is the geolocation resource status
+	Status GeoLocationStatus `json:"status,omitempty"`
 }
 
 // GeoLocationSpec is the spec for a GeoLocation resource
@@ -28,6 +29,14 @@ type GeoLocationSpec struct {
 	Deployment []string `json:"deployment"`
 	Type       string   `json:"type"`
 	Value      []string `json:"value"`
+}
+
+// GeoLocationStatus is the status for a GeoLocation resource
+type GeoLocationStatus struct {
+	Ready   string     `json:"ready"`
+	State   string     `json:"state"`
+	Message string     `json:"message"`
+	Reason  [][]string `json:"reason"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

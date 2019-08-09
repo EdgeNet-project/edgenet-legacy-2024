@@ -1,12 +1,12 @@
 apiVersion: edgenet.io/v1alpha
 kind: GeoLocation
 metadata:
-  name: geo-polygon
+  name: polygon
 spec:
   deployment:
     - test1
   type: polygon
-  value: 
+  value:
     - "[
     [
       -129.4628906,
@@ -25,6 +25,3 @@ spec:
       21.4530686
     ]
   ]"
-  
-  
-      

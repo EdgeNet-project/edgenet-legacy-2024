@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -16,18 +18,17 @@ import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
 
 // The main structure of controller
 type controller struct {
-	logger    *log.Entry
-	clientset kubernetes.Interface
-	queue     workqueue.RateLimitingInterface
-	informer  cache.SharedIndexInformer
-	handler   HandlerInterface
+	logger   *log.Entry
+	queue    workqueue.RateLimitingInterface
+	informer cache.SharedIndexInformer
+	handler  HandlerInterface
+	wg       map[string]*sync.WaitGroup
 }
 
 // The main structure of informerEvent
@@ -37,13 +38,18 @@ type informerevent struct {
 	delta    string
 }
 
+// String literals
+const create = "create"
+const update = "update"
+const delete = "delete"
+
 // Start function is entry point of the controller
 func Start() {
-	clientset, err := authorization.CreateClientSet()
+	/*clientset, err := authorization.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
-	}
+	}*/
 	geolocationClientset, err := authorization.CreateGeoLocationClientSet()
 	if err != nil {
 		log.Println(err.Error())
@@ -65,7 +71,7 @@ func Start() {
 		AddFunc: func(obj interface{}) {
 			// Put the resource object into a key
 			event.key, err = cache.MetaNamespaceKeyFunc(obj)
-			event.function = "create"
+			event.function = create
 			log.Infof("Add geolocation: %s", event.key)
 			if err == nil {
 				// Add the key to the queue
@@ -73,35 +79,38 @@ func Start() {
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
-			event.function = "update"
-			// The variable of event.delta contains the different values of the old object from the new one
-			event.delta = strings.Join(dry(oldObj.(*geolocation_v1.GeoLocation).Spec.Value, newObj.(*geolocation_v1.GeoLocation).Spec.Value), "- ")
-			log.Infof("Update geolocation: %s", event.key)
-			if err == nil {
-				queue.Add(event)
+			if reflect.DeepEqual(oldObj.(*geolocation_v1.GeoLocation).Status, newObj.(*geolocation_v1.GeoLocation).Status) {
+				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
+				event.function = update
+				// The variable of event.delta contains the different values of the old object from the new one
+				event.delta = fmt.Sprintf("%s", strings.Join(dry(oldObj.(*geolocation_v1.GeoLocation).Spec.Deployment, newObj.(*geolocation_v1.GeoLocation).Spec.Deployment), "/ "))
+				log.Infof("Update geolocation: %s", event.key)
+				if err == nil {
+					queue.Add(event)
+				}
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			// DeletionHandlingMetaNamsespaceKeyFunc helps to check the existence of the object while it is still contained in the index.
 			// Put the resource object into a key
 			event.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			event.function = "delete"
+			event.function = delete
 			// The variable of event.delta contains the different values in the same way as UpdateFunc.
-			// In addition to that, this variable includes the type values and the namespace of the deleted object.
-			event.delta = fmt.Sprintf("%s- %s- %s", obj.(*geolocation_v1.GeoLocation).GetNamespace(), obj.(*geolocation_v1.GeoLocation).Spec.Type, strings.Join(obj.(*geolocation_v1.GeoLocation).Spec.Deployment, "/ "))
+			// In addition to that, this variable includes the name, namespace, type, deployments of the deleted object.
+			event.delta = fmt.Sprintf("%s- %s- %s- %s", obj.(*geolocation_v1.GeoLocation).GetName(), obj.(*geolocation_v1.GeoLocation).GetNamespace(), obj.(*geolocation_v1.GeoLocation).Spec.Type, strings.Join(obj.(*geolocation_v1.GeoLocation).Spec.Deployment, "/ "))
 			log.Infof("Delete geolocation: %s", event.key)
 			if err == nil {
 				queue.Add(event)
 			}
 		},
 	})
+	wg := make(map[string]*sync.WaitGroup)
 	controller := controller{
-		logger:    log.NewEntry(log.New()),
-		clientset: clientset,
-		informer:  informer,
-		queue:     queue,
-		handler:   &GeoHandler{},
+		logger:   log.NewEntry(log.New()),
+		informer: informer,
+		queue:    queue,
+		handler:  &GeoHandler{},
+		wg:       wg,
 	}
 
 	// A channel to terminate elegantly
@@ -123,7 +132,7 @@ func (c *controller) run(stopCh <-chan struct{}) {
 	// Shutdown after all goroutines have done
 	defer c.queue.ShutDown()
 	c.logger.Info("run: initiating")
-
+	c.handler.Init()
 	// Run the informer to list and watch resources
 	go c.informer.Run(stopCh)
 
@@ -178,29 +187,29 @@ func (c *controller) processNextItem() bool {
 	}
 
 	if !exists {
-		c.logger.Infof("Controller.processNextItem: object deleted detected: %s", keyRaw)
-		c.handler.ObjectDeleted(item, event.(informerevent).delta)
-		c.queue.Forget(event.(informerevent).key)
+		if event.(informerevent).function == delete {
+			c.logger.Infof("Controller.processNextItem: object deleted detected: %s", keyRaw)
+			c.handler.ObjectDeleted(item, event.(informerevent).delta)
+		}
 	} else {
-		switch event.(informerevent).function {
-		case "create":
+		if event.(informerevent).function == create {
 			c.logger.Infof("Controller.processNextItem: object created detected: %s", keyRaw)
 			c.handler.ObjectCreated(item)
-			c.queue.Forget(event.(informerevent).key)
-		case "update":
+		} else if event.(informerevent).function == update {
 			c.logger.Infof("Controller.processNextItem: object updated detected: %s", keyRaw)
 			c.handler.ObjectUpdated(item, event.(informerevent).delta)
-			c.queue.Forget(event.(informerevent).key)
-		default:
-			c.logger.Infof("Controller.processNextItem: object created detected: %s", keyRaw)
-			c.handler.ObjectCreated(item)
-			c.queue.Forget(event.(informerevent).key)
 		}
 	}
+	c.queue.Forget(event.(informerevent).key)
+
+	if c.queue.Len() == 0 {
+		go c.handler.ConfigureDeployments()
+	}
+
 	return true
 }
 
-// Dry function remove the same values of the old and new objects from the old object to have
+// dry function remove the same values of the old and new objects from the old object to have
 // the slice of different values.
 func dry(mainSlice []string, deleteSlice []string) []string {
 	var uniqueSlice []string

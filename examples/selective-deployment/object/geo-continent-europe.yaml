@@ -1,10 +1,10 @@
 apiVersion: edgenet.io/v1alpha
 kind: GeoLocation
 metadata:
-  name: geo-continent
+  name: continent
 spec:
   deployment:
     - test1
   type: continent
-  value: 
+  value:
     - Europe

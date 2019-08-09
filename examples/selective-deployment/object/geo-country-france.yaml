@@ -1,10 +1,10 @@
 apiVersion: edgenet.io/v1alpha
 kind: GeoLocation
 metadata:
-  name: geo-country
+  name: country
 spec:
   deployment:
     - test1
   type: country
-  value: 
+  value:
     - FR

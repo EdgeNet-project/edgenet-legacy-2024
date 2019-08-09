@@ -6,12 +6,28 @@ spec:
   group: edgenet.io
   version: v1alpha
   scope: Namespaced
+  subresources:
+    status: {}
   names:
     plural: geolocations
     singular: geolocation
     kind: GeoLocation
     shortNames:
     - geo
+  additionalPrinterColumns:
+    - name: Ready
+      type: string
+      JSONPath: .status.ready
+    - name: Status
+      type: string
+      JSONPath: .status.state
+    - name: Type
+      type: string
+      description: The type of geolocation filter
+      JSONPath: .spec.type
+    - name: Age
+      type: date
+      JSONPath: .metadata.creationTimestamp
   validation:
     openAPIV3Schema:
       required: [spec]

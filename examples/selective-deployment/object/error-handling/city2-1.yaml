@@ -1,11 +1,12 @@
 apiVersion: edgenet.io/v1alpha
 kind: GeoLocation
 metadata:
-  name: city
+  name: city2
 spec:
   deployment:
     - test1
+    - test2
   type: city
   value:
     - Paris
-    - Los_Angeles
+    - Nice

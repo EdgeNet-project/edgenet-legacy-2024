@@ -1,11 +1,13 @@
 apiVersion: edgenet.io/v1alpha
 kind: GeoLocation
 metadata:
-  name: city
+  name: city5
 spec:
   deployment:
     - test1
   type: city
   value:
-    - Paris
-    - Los_Angeles
+    - Monaco
+    - Izmir
+    - Bordeaux
+    - London

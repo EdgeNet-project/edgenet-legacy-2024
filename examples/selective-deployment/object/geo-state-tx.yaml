@@ -1,11 +1,10 @@
 apiVersion: edgenet.io/v1alpha
 kind: GeoLocation
 metadata:
-  name: city
+  name: state
 spec:
   deployment:
     - test1
-  type: city
+  type: state
   value:
-    - Paris
-    - Los_Angeles
+    - TX

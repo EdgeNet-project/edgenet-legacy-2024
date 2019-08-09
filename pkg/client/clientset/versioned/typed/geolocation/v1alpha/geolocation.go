@@ -39,6 +39,7 @@ type GeoLocationsGetter interface {
 type GeoLocationInterface interface {
 	Create(*v1alpha.GeoLocation) (*v1alpha.GeoLocation, error)
 	Update(*v1alpha.GeoLocation) (*v1alpha.GeoLocation, error)
+	UpdateStatus(*v1alpha.GeoLocation) (*v1alpha.GeoLocation, error)
 	Delete(name string, options *v1.DeleteOptions) error
 	DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error
 	Get(name string, options v1.GetOptions) (*v1alpha.GeoLocation, error)
@@ -126,6 +127,22 @@ func (c *geoLocations) Update(geoLocation *v1alpha.GeoLocation) (result *v1alpha
 		Namespace(c.ns).
 		Resource("geolocations").
 		Name(geoLocation.Name).
+		Body(geoLocation).
+		Do().
+		Into(result)
+	return
+}
+
+// UpdateStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+
+func (c *geoLocations) UpdateStatus(geoLocation *v1alpha.GeoLocation) (result *v1alpha.GeoLocation, err error) {
+	result = &v1alpha.GeoLocation{}
+	err = c.client.Put().
+		Namespace(c.ns).
+		Resource("geolocations").
+		Name(geoLocation.Name).
+		SubResource("status").
 		Body(geoLocation).
 		Do().
 		Into(result)
