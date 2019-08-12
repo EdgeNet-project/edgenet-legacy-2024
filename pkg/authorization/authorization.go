@@ -2,12 +2,12 @@ package authorization
 
 import (
 	"flag"
+	"log"
 	"os"
 	"path/filepath"
-	"log"
 
+	selectivedeploymentclientset "headnode/pkg/client/clientset/versioned"
 	"headnode/pkg/config"
-	geolocationclientset "headnode/pkg/client/clientset/versioned"
 
 	namecheap "github.com/billputer/go-namecheap"
 	"k8s.io/client-go/kubernetes"
@@ -33,8 +33,8 @@ func SetKubeConfig() {
 	flag.Parse()
 }
 
-// CreateGeoLocationClientSet generates the clientset to interact with geolocation custom resource
-func CreateGeoLocationClientSet() (*geolocationclientset.Clientset, error) {
+// CreateSelectiveDeploymentClientSet generates the clientset to interact with selectivedeployment custom resource
+func CreateSelectiveDeploymentClientSet() (*selectivedeploymentclientset.Clientset, error) {
 	// Use the current context in kubeconfig
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
@@ -43,7 +43,7 @@ func CreateGeoLocationClientSet() (*geolocationclientset.Clientset, error) {
 	}
 
 	// Create the clientset
-	clientset, err := geolocationclientset.NewForConfig(config)
+	clientset, err := selectivedeploymentclientset.NewForConfig(config)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

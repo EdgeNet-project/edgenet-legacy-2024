@@ -20,8 +20,8 @@ package fake
 
 import (
 	clientset "headnode/pkg/client/clientset/versioned"
-	edgenetv1alpha "headnode/pkg/client/clientset/versioned/typed/geolocation/v1alpha"
-	fakeedgenetv1alpha "headnode/pkg/client/clientset/versioned/typed/geolocation/v1alpha/fake"
+	edgenetv1alpha "headnode/pkg/client/clientset/versioned/typed/selectivedeployment/v1alpha"
+	fakeedgenetv1alpha "headnode/pkg/client/clientset/versioned/typed/selectivedeployment/v1alpha/fake"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"

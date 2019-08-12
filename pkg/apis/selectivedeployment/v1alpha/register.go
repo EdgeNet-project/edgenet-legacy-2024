@@ -5,13 +5,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"headnode/pkg/apis/geolocation"
+	"headnode/pkg/apis/selectivedeployment"
 )
 
 // SchemeGroupVersion is the identifier for the API which includes
 // the name of the group and the version of the API
 var SchemeGroupVersion = schema.GroupVersion{
-	Group:   geolocation.GroupName,
+	Group:   selectivedeployment.GroupName,
 	Version: "v1alpha",
 }
 
@@ -27,12 +27,12 @@ func Resource(resource string) schema.GroupResource {
 }
 
 // addKnownTypes adds our types to the API scheme by registering
-// GeoLocation and GeoLocationList
+// SelectiveDeployment and SelectiveDeploymentList
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(
 		SchemeGroupVersion,
-		&GeoLocation{},
-		&GeoLocationList{},
+		&SelectiveDeployment{},
+		&SelectiveDeploymentList{},
 	)
 
 	// Register the type in the scheme

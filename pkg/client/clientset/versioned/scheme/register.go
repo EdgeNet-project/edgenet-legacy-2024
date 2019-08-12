@@ -19,7 +19,7 @@ limitations under the License.
 package scheme
 
 import (
-	edgenetv1alpha "headnode/pkg/apis/geolocation/v1alpha"
+	edgenetv1alpha "headnode/pkg/apis/selectivedeployment/v1alpha"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"

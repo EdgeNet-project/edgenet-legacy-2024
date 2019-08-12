@@ -4,5 +4,5 @@ metadata:
   name: edgenet-admin
 rules:
 - apiGroups: ["edgenet.io"]
-  resources: ["geolocations"]
+  resources: ["selectivedeployments"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

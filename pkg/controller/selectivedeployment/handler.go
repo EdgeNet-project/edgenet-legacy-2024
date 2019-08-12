@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	geolocation_v1 "headnode/pkg/apis/geolocation/v1alpha"
+	selectivedeployment_v1 "headnode/pkg/apis/selectivedeployment/v1alpha"
 	"headnode/pkg/authorization"
 	"headnode/pkg/client/clientset/versioned"
 	"headnode/pkg/node"
@@ -30,16 +30,16 @@ type HandlerInterface interface {
 	ConfigureDeployments()
 }
 
-// GeoHandler is a implementation of Handler
-type GeoHandler struct {
-	clientset            *kubernetes.Clientset
-	geolocationClientset *versioned.Clientset
-	inProcess            bool
-	desiredFilter        desiredFilter
-	geolocationDet       geolocationDet
-	wgHandler            map[string]*sync.WaitGroup
-	wgRecovery           map[string]*sync.WaitGroup
-	namespaceList        []string
+// SDHandler is a implementation of Handler
+type SDHandler struct {
+	clientset     *kubernetes.Clientset
+	sdClientset   *versioned.Clientset
+	inProcess     bool
+	desiredFilter desiredFilter
+	sdDet         sdDet
+	wgHandler     map[string]*sync.WaitGroup
+	wgRecovery    map[string]*sync.WaitGroup
+	namespaceList []string
 }
 
 // The data defined by the user to be used for node selection
@@ -50,23 +50,23 @@ type desiredFilter struct {
 }
 
 // The data of deleted/updated object to handle operations based on the deleted/updated object
-type geolocationDet struct {
+type sdDet struct {
 	name            string
 	namespace       string
-	geoType         string
+	sdType          string
 	deploymentDelta []string
 }
 
-// Definitions of the state of the geolocation resource (failure, partial, success)
+// Definitions of the state of the selectivedeployment resource (failure, partial, success)
 const failure = "Failure"
 const partial = "Running Partially"
 const success = "Running"
 
 // Init handles any handler initialization
-func (t *GeoHandler) Init() error {
-	log.Info("GeoHandler.Init")
+func (t *SDHandler) Init() error {
+	log.Info("SDHandler.Init")
 	t.desiredFilter = desiredFilter{}
-	t.geolocationDet = geolocationDet{}
+	t.sdDet = sdDet{}
 	t.inProcess = false
 	t.wgHandler = make(map[string]*sync.WaitGroup)
 	t.wgRecovery = make(map[string]*sync.WaitGroup)
@@ -76,7 +76,7 @@ func (t *GeoHandler) Init() error {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	t.geolocationClientset, err = authorization.CreateGeoLocationClientSet()
+	t.sdClientset, err = authorization.CreateSelectiveDeploymentClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -85,7 +85,7 @@ func (t *GeoHandler) Init() error {
 }
 
 // namespaceInit does initialization of the namespace
-func (t *GeoHandler) namespaceInit(namespace string) {
+func (t *SDHandler) namespaceInit(namespace string) {
 	if t.wgHandler[namespace] == nil || t.wgRecovery[namespace] == nil {
 		var wgHandler sync.WaitGroup
 		var wgRecovery sync.WaitGroup
@@ -104,102 +104,102 @@ func (t *GeoHandler) namespaceInit(namespace string) {
 }
 
 // ObjectCreated is called when an object is created
-func (t *GeoHandler) ObjectCreated(obj interface{}) {
-	log.Info("GeoHandler.ObjectCreated")
-	// Create a copy of the geolocation object to make changes on it
-	geolocationCopy := obj.(*geolocation_v1.GeoLocation).DeepCopy()
-	t.namespaceInit(geolocationCopy.GetNamespace())
-	t.wgHandler[geolocationCopy.GetNamespace()].Add(1)
+func (t *SDHandler) ObjectCreated(obj interface{}) {
+	log.Info("SDHandler.ObjectCreated")
+	// Create a copy of the selectivedeployment object to make changes on it
+	sdCopy := obj.(*selectivedeployment_v1.SelectiveDeployment).DeepCopy()
+	t.namespaceInit(sdCopy.GetNamespace())
+	t.wgHandler[sdCopy.GetNamespace()].Add(1)
 	defer func() {
 		// Sleep to prevent extra resource consumption by running ConfigureDeployments
 		time.Sleep(50 * time.Millisecond)
-		t.wgHandler[geolocationCopy.GetNamespace()].Done()
+		t.wgHandler[sdCopy.GetNamespace()].Done()
 	}()
-	t.setDeploymentFilter(geolocationCopy, "", "create")
+	t.setDeploymentFilter(sdCopy, "", "create")
 }
 
 // ObjectUpdated is called when an object is updated
-func (t *GeoHandler) ObjectUpdated(obj interface{}, delta string) {
-	log.Info("GeoHandler.ObjectUpdated")
-	// Create a copy of the geolocation object to make changes on it
-	geolocationCopy := obj.(*geolocation_v1.GeoLocation).DeepCopy()
-	t.namespaceInit(geolocationCopy.GetNamespace())
-	t.wgHandler[geolocationCopy.GetNamespace()].Add(1)
+func (t *SDHandler) ObjectUpdated(obj interface{}, delta string) {
+	log.Info("SDHandler.ObjectUpdated")
+	// Create a copy of the selectivedeployment object to make changes on it
+	sdCopy := obj.(*selectivedeployment_v1.SelectiveDeployment).DeepCopy()
+	t.namespaceInit(sdCopy.GetNamespace())
+	t.wgHandler[sdCopy.GetNamespace()].Add(1)
 	defer func() {
 		time.Sleep(50 * time.Millisecond)
-		t.wgHandler[geolocationCopy.GetNamespace()].Done()
+		t.wgHandler[sdCopy.GetNamespace()].Done()
 	}()
-	t.setDeploymentFilter(geolocationCopy, delta, "update")
+	t.setDeploymentFilter(sdCopy, delta, "update")
 }
 
 // ObjectDeleted is called when an object is deleted
-func (t *GeoHandler) ObjectDeleted(obj interface{}, delta string) {
-	log.Info("GeoHandler.ObjectDeleted")
+func (t *SDHandler) ObjectDeleted(obj interface{}, delta string) {
+	log.Info("SDHandler.ObjectDeleted")
 	// Put the required data of the deleted object into variables
 	objectDelta := strings.Split(delta, "- ")
-	t.geolocationDet = geolocationDet{
+	t.sdDet = sdDet{
 		name:            objectDelta[0],
 		namespace:       objectDelta[1],
-		geoType:         objectDelta[2],
+		sdType:          objectDelta[2],
 		deploymentDelta: strings.Split(objectDelta[3], "/ "),
 	}
 
-	t.namespaceInit(t.geolocationDet.namespace)
-	t.wgHandler[t.geolocationDet.namespace].Add(1)
+	t.namespaceInit(t.sdDet.namespace)
+	t.wgHandler[t.sdDet.namespace].Add(1)
 	defer func() {
 		time.Sleep(50 * time.Millisecond)
-		t.wgHandler[t.geolocationDet.namespace].Done()
+		t.wgHandler[t.sdDet.namespace].Done()
 	}()
-	// Detect and recover the geolocation resource objects which are prevented by the this object from taking control of the deployments
-	t.recoverGeolocations(t.geolocationDet)
+	// Detect and recover the selectivedeployment resource objects which are prevented by the this object from taking control of the deployments
+	t.recoverSelectivedeployments(t.sdDet)
 }
 
-// setDeploymentFilter used by ObjectCreated, ObjectUpdated, and recoverGeolocations functions
-func (t *GeoHandler) setDeploymentFilter(geolocationCopy *geolocation_v1.GeoLocation, delta string, eventType string) {
+// setDeploymentFilter used by ObjectCreated, ObjectUpdated, and recoverSelectivedeployments functions
+func (t *SDHandler) setDeploymentFilter(sdCopy *selectivedeployment_v1.SelectiveDeployment, delta string, eventType string) {
 	// Flush the status
-	geolocationCopy.Status = geolocation_v1.GeoLocationStatus{}
+	sdCopy.Status = selectivedeployment_v1.SelectiveDeploymentStatus{}
 	// Put the differences between the old and the new objects into variables
-	t.geolocationDet = geolocationDet{
-		name:      geolocationCopy.GetName(),
-		namespace: geolocationCopy.GetNamespace(),
-		geoType:   geolocationCopy.Spec.Type,
+	t.sdDet = sdDet{
+		name:      sdCopy.GetName(),
+		namespace: sdCopy.GetNamespace(),
+		sdType:    sdCopy.Spec.Type,
 	}
 	if delta != "" {
-		t.geolocationDet.deploymentDelta = strings.Split(delta, "/ ")
+		t.sdDet.deploymentDelta = strings.Split(delta, "/ ")
 	}
 
 	if eventType != "recover" && eventType != "create" {
-		defer t.recoverGeolocations(t.geolocationDet)
+		defer t.recoverSelectivedeployments(t.sdDet)
 	} else if eventType == "recover" {
-		t.wgRecovery[t.geolocationDet.namespace].Add(1)
+		t.wgRecovery[t.sdDet.namespace].Add(1)
 		defer func() {
 			time.Sleep(50 * time.Millisecond)
-			t.wgRecovery[t.geolocationDet.namespace].Done()
+			t.wgRecovery[t.sdDet.namespace].Done()
 		}()
 	}
-	defer t.geolocationClientset.EdgenetV1alpha().GeoLocations(geolocationCopy.GetNamespace()).UpdateStatus(geolocationCopy)
+	defer t.sdClientset.EdgenetV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
 
-	geolocationsRaw, err := t.geolocationClientset.EdgenetV1alpha().GeoLocations(geolocationCopy.GetNamespace()).List(metav1.ListOptions{})
+	sdRaw, err := t.sdClientset.EdgenetV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).List(metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	// Reveal conflicts by comparing geolocation resource objects with the object in process
-	geolocationCopy = setReasonListOfConflicts(geolocationCopy, geolocationsRaw)
+	// Reveal conflicts by comparing selectivedeployment resource objects with the object in process
+	sdCopy = setReasonListOfConflicts(sdCopy, sdRaw)
 	counter := 0
-	for _, deploymentName := range geolocationCopy.Spec.Deployment {
-		// Get the deployment defined at the geolocation object
-		_, err := t.clientset.AppsV1().Deployments(geolocationCopy.GetNamespace()).Get(deploymentName, metav1.GetOptions{})
+	for _, deploymentName := range sdCopy.Spec.Deployment {
+		// Get the deployment defined at the selectivedeployment object
+		_, err := t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Get(deploymentName, metav1.GetOptions{})
 		if err != nil {
-			// In here, the errors caused by non-existent of the deployment are added to reason list of the geolocation object
-			geolocationCopy = setReasonListOfNonExistents(geolocationCopy, deploymentName)
+			// In here, the errors caused by non-existent of the deployment are added to reason list of the selectivedeployment object
+			sdCopy = setReasonListOfNonExistents(sdCopy, deploymentName)
 			counter++
 		}
 	}
 
 	// Deployment list without duplicate values
 	deploymentList := []string{}
-	for _, reason := range geolocationCopy.Status.Reason {
+	for _, reason := range sdCopy.Status.Reason {
 		exists := false
 		for _, deployment := range deploymentList {
 			if reason[0] == deployment {
@@ -211,41 +211,41 @@ func (t *GeoHandler) setDeploymentFilter(geolocationCopy *geolocation_v1.GeoLoca
 		}
 	}
 
-	// The problems and details of the desired new geolocation object are described herein, and this step is the last of the error processing
-	if len(deploymentList) == len(geolocationCopy.Spec.Deployment) {
-		geolocationCopy.Status.State = failure
-		geolocationCopy.Status.Message = "All deployments are already under the control of any different resource object(s) with the same type"
-	} else if len(geolocationCopy.Status.Reason) == 0 {
-		geolocationCopy.Status.State = success
-		geolocationCopy.Status.Message = "GeoLocation runs precisely to ensure that the actual state of the cluster matches the desired state"
+	// The problems and details of the desired new selectivedeployment object are described herein, and this step is the last of the error processing
+	if len(deploymentList) == len(sdCopy.Spec.Deployment) {
+		sdCopy.Status.State = failure
+		sdCopy.Status.Message = "All deployments are already under the control of any different resource object(s) with the same type"
+	} else if len(sdCopy.Status.Reason) == 0 {
+		sdCopy.Status.State = success
+		sdCopy.Status.Message = "SelectiveDeployment runs precisely to ensure that the actual state of the cluster matches the desired state"
 	} else {
-		geolocationCopy.Status.State = partial
-		geolocationCopy.Status.Message = "Some deployments are already under the control of any different resource object(s) with the same type"
+		sdCopy.Status.State = partial
+		sdCopy.Status.Message = "Some deployments are already under the control of any different resource object(s) with the same type"
 	}
-	// Counter indicates the number of non-existent deployment already defined in the desired geolocation object
+	// Counter indicates the number of non-existent deployment already defined in the desired selectivedeployment object
 	if counter != 0 {
-		geolocationCopy.Status.Message = fmt.Sprintf("%s, %d deployment(s) couldn't be found", geolocationCopy.Status.Message, counter)
+		sdCopy.Status.Message = fmt.Sprintf("%s, %d deployment(s) couldn't be found", sdCopy.Status.Message, counter)
 	}
-	// The number of deployments that the geolocation resource successfully controls
-	geolocationCopy.Status.Ready = fmt.Sprintf("%d/%d", len(geolocationCopy.Spec.Deployment)-len(deploymentList), len(geolocationCopy.Spec.Deployment))
+	// The number of deployments that the selectivedeployment resource successfully controls
+	sdCopy.Status.Ready = fmt.Sprintf("%d/%d", len(sdCopy.Spec.Deployment)-len(deploymentList), len(sdCopy.Spec.Deployment))
 }
 
-// recoverGeolocations compares the reason list with the deployment list and the name of geolocation to recover objects affected by the geolocation
-// object. The deployment delta list contains the name of deployments removed from the geolocation object by updating or deleting it
-func (t *GeoHandler) recoverGeolocations(geolocationDet geolocationDet) {
-	geolocationsRaw, err := t.geolocationClientset.EdgenetV1alpha().GeoLocations(geolocationDet.namespace).List(metav1.ListOptions{})
+// recoverSelectivedeployments compares the reason list with the deployment list and the name of selectivedeployment to recover objects affected by the selectivedeployment
+// object. The deployment delta list contains the name of deployments removed from the selectivedeployment object by updating or deleting it
+func (t *SDHandler) recoverSelectivedeployments(sdDet sdDet) {
+	sdRaw, err := t.sdClientset.EdgenetV1alpha().SelectiveDeployments(sdDet.namespace).List(metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	for _, geolocationRow := range geolocationsRaw.Items {
-		if geolocationRow.GetName() != geolocationDet.name && geolocationRow.Spec.Type == geolocationDet.geoType && geolocationRow.Status.State != "" {
-			for _, deployment := range geolocationDet.deploymentDelta {
-				if reasonMatch, _ := checkReasonList(geolocationRow.Status.Reason, deployment, geolocationDet.name, "all"); reasonMatch {
-					geolocation, err := t.geolocationClientset.EdgenetV1alpha().GeoLocations(geolocationRow.GetNamespace()).Get(geolocationRow.GetName(), metav1.GetOptions{})
+	for _, sdRow := range sdRaw.Items {
+		if sdRow.GetName() != sdDet.name && sdRow.Spec.Type == sdDet.sdType && sdRow.Status.State != "" {
+			for _, deployment := range sdDet.deploymentDelta {
+				if reasonMatch, _ := checkReasonList(sdRow.Status.Reason, deployment, sdDet.name, "all"); reasonMatch {
+					selectivedeployment, err := t.sdClientset.EdgenetV1alpha().SelectiveDeployments(sdRow.GetNamespace()).Get(sdRow.GetName(), metav1.GetOptions{})
 					if err == nil {
-						t.setDeploymentFilter(geolocation, "", "recover")
-						t.wgRecovery[geolocationDet.namespace].Wait()
+						t.setDeploymentFilter(selectivedeployment, "", "recover")
+						t.wgRecovery[sdDet.namespace].Wait()
 						time.Sleep(50 * time.Millisecond)
 					}
 				}
@@ -254,8 +254,8 @@ func (t *GeoHandler) recoverGeolocations(geolocationDet geolocationDet) {
 	}
 }
 
-// ConfigureDeployments configures the deployments by geolocations to match the desired state users supplied
-func (t *GeoHandler) ConfigureDeployments() {
+// ConfigureDeployments configures the deployments by selectivedeployments to match the desired state users supplied
+func (t *SDHandler) ConfigureDeployments() {
 	log.Info("ConfigureDeployments: start")
 	configurationList := t.namespaceList
 	t.namespaceList = []string{}
@@ -264,7 +264,7 @@ func (t *GeoHandler) ConfigureDeployments() {
 		t.wgRecovery[namespace].Wait()
 		time.Sleep(1200 * time.Millisecond)
 
-		geolocationsRaw, err := t.geolocationClientset.EdgenetV1alpha().GeoLocations(namespace).List(metav1.ListOptions{})
+		sdRaw, err := t.sdClientset.EdgenetV1alpha().SelectiveDeployments(namespace).List(metav1.ListOptions{})
 		if err != nil {
 			log.Println(err.Error())
 			panic(err.Error())
@@ -280,13 +280,13 @@ func (t *GeoHandler) ConfigureDeployments() {
 		for _, deploymentRow := range deploymentRaw.Items {
 			// Clear the variables involved with node selection
 			t.desiredFilter.nodeSelectorTerms = []corev1.NodeSelectorTerm{}
-			for _, geolocationRow := range geolocationsRaw.Items {
-				if geolocationRow.Status.State == success || geolocationRow.Status.State == partial {
+			for _, sdRow := range sdRaw.Items {
+				if sdRow.Status.State == success || sdRow.Status.State == partial {
 					t.desiredFilter.nodeSelectorTerm = corev1.NodeSelectorTerm{}
 					t.desiredFilter.matchExpression.Operator = "In"
-					t.desiredFilter.matchExpression = t.setFilter(geolocationRow.Spec.Type, geolocationRow.Spec.Value, t.desiredFilter.matchExpression, "addOrUpdate")
-					for _, deployment := range geolocationRow.Spec.Deployment {
-						if reasonMatch, _ := checkReasonList(geolocationRow.Status.Reason, deployment, geolocationRow.GetNamespace(), "deployment"); !reasonMatch && deploymentRow.GetName() == deployment {
+					t.desiredFilter.matchExpression = t.setFilter(sdRow.Spec.Type, sdRow.Spec.Value, t.desiredFilter.matchExpression, "addOrUpdate")
+					for _, deployment := range sdRow.Spec.Deployment {
+						if reasonMatch, _ := checkReasonList(sdRow.Status.Reason, deployment, sdRow.GetNamespace(), "deployment"); !reasonMatch && deploymentRow.GetName() == deployment {
 							t.desiredFilter.nodeSelectorTerm.MatchExpressions = append(t.desiredFilter.nodeSelectorTerm.MatchExpressions, t.desiredFilter.matchExpression)
 							t.desiredFilter.nodeSelectorTerms = append(t.desiredFilter.nodeSelectorTerms, t.desiredFilter.nodeSelectorTerm)
 						}
@@ -327,12 +327,12 @@ func (t *GeoHandler) ConfigureDeployments() {
 	}
 }
 
-// setFilter generates the values in the predefined form and puts those into the node selection fields of the geolocation object
-func (t *GeoHandler) setFilter(geoType string, geoValue []string,
+// setFilter generates the values in the predefined form and puts those into the node selection fields of the selectivedeployment object
+func (t *SDHandler) setFilter(sdType string, sdValue []string,
 	matchExpression corev1.NodeSelectorRequirement, event string) corev1.NodeSelectorRequirement {
-	// Turn the key into the predefined form which is determined at the custom resource definition of geolocation
-	matchExpression.Values = geoValue
-	switch geoType {
+	// Turn the key into the predefined form which is determined at the custom resource definition of selectivedeployment
+	matchExpression.Values = sdValue
+	switch sdType {
 	case "city":
 		matchExpression.Key = "edge-net.io/city"
 	case "state":
@@ -344,7 +344,7 @@ func (t *GeoHandler) setFilter(geoType string, geoValue []string,
 	case "polygon":
 		// If the event type is delete then we don't need to run the GeoFence functions
 		if event != "delete" {
-			// If the geolocation key is polygon then certain calculations like geofence need to be done
+			// If the selectivedeployment key is polygon then certain calculations like geofence need to be done
 			// for being had the list of nodes that the pods will be deployed on according to the desired state.
 			// This gets the node list which includes the EdgeNet geolabels
 			nodesRaw, err := t.clientset.CoreV1().Nodes().List(metav1.ListOptions{})
@@ -365,8 +365,8 @@ func (t *GeoHandler) setFilter(geoType string, geoValue []string,
 				latStr = string(latStr[1:])
 				if lon, err := strconv.ParseFloat(lonStr, 64); err == nil {
 					if lat, err := strconv.ParseFloat(latStr, 64); err == nil {
-						// This loop allows us to process each polygon defined at the object of geolocation resource
-						for _, polygonRow := range geoValue {
+						// This loop allows us to process each polygon defined at the object of selectivedeployment resource
+						for _, polygonRow := range sdValue {
 							err = json.Unmarshal([]byte(polygonRow), &polygon)
 							if err != nil {
 								panic(err)
@@ -391,20 +391,20 @@ func (t *GeoHandler) setFilter(geoType string, geoValue []string,
 	return matchExpression
 }
 
-// setReasonListOfConflicts compares the deployments of the geolocation resource objects with those of the object in the process
+// setReasonListOfConflicts compares the deployments of the selectivedeployment resource objects with those of the object in the process
 // to make a list of the conflicts which guides the user to understand its faults
-func setReasonListOfConflicts(geolocationCopy *geolocation_v1.GeoLocation, geolocationsRaw *geolocation_v1.GeoLocationList) *geolocation_v1.GeoLocation {
-	// The loop to process each geolocation object separately
-	for _, geolocationRow := range geolocationsRaw.Items {
-		if geolocationRow.GetName() != geolocationCopy.GetName() && geolocationRow.Spec.Type == geolocationCopy.Spec.Type && geolocationRow.Status.State != "" {
-			for _, newDeployment := range geolocationCopy.Spec.Deployment {
-				for _, otherObjDeployment := range geolocationRow.Spec.Deployment {
+func setReasonListOfConflicts(sdCopy *selectivedeployment_v1.SelectiveDeployment, sdRaw *selectivedeployment_v1.SelectiveDeploymentList) *selectivedeployment_v1.SelectiveDeployment {
+	// The loop to process each selectivedeployment object separately
+	for _, sdRow := range sdRaw.Items {
+		if sdRow.GetName() != sdCopy.GetName() && sdRow.Spec.Type == sdCopy.Spec.Type && sdRow.Status.State != "" {
+			for _, newDeployment := range sdCopy.Spec.Deployment {
+				for _, otherObjDeployment := range sdRow.Spec.Deployment {
 					if otherObjDeployment == newDeployment {
-						// Checks whether the reason list is empty and this reason exists in the reason list of the geolocation object
-						if reasonMatch, _ := checkReasonList(geolocationRow.Status.Reason, newDeployment, geolocationCopy.GetName(), "all"); !reasonMatch {
-							if reasonMatch, _ := checkReasonList(geolocationCopy.Status.Reason, otherObjDeployment, geolocationRow.GetName(), "all"); !reasonMatch || len(geolocationCopy.Status.Reason) == 0 {
-								conflictReason := []string{otherObjDeployment, geolocationRow.GetName()}
-								geolocationCopy.Status.Reason = append(geolocationCopy.Status.Reason, conflictReason)
+						// Checks whether the reason list is empty and this reason exists in the reason list of the selectivedeployment object
+						if reasonMatch, _ := checkReasonList(sdRow.Status.Reason, newDeployment, sdCopy.GetName(), "all"); !reasonMatch {
+							if reasonMatch, _ := checkReasonList(sdCopy.Status.Reason, otherObjDeployment, sdRow.GetName(), "all"); !reasonMatch || len(sdCopy.Status.Reason) == 0 {
+								conflictReason := []string{otherObjDeployment, sdRow.GetName()}
+								sdCopy.Status.Reason = append(sdCopy.Status.Reason, conflictReason)
 							}
 						}
 					}
@@ -412,31 +412,31 @@ func setReasonListOfConflicts(geolocationCopy *geolocation_v1.GeoLocation, geolo
 			}
 		}
 	}
-	return geolocationCopy
+	return sdCopy
 }
 
 // setReasonListOfNonExistents checks whether the deployment exists to put it into the list and it will be listed in case of non-existent
-func setReasonListOfNonExistents(geolocationCopy *geolocation_v1.GeoLocation, deploymentName string) *geolocation_v1.GeoLocation {
-	if reasonMatch, _ := checkReasonList(geolocationCopy.Status.Reason, deploymentName, "nonexistent", "all"); !reasonMatch {
+func setReasonListOfNonExistents(sdCopy *selectivedeployment_v1.SelectiveDeployment, deploymentName string) *selectivedeployment_v1.SelectiveDeployment {
+	if reasonMatch, _ := checkReasonList(sdCopy.Status.Reason, deploymentName, "nonexistent", "all"); !reasonMatch {
 		conflictReason := []string{deploymentName, "nonexistent"}
-		geolocationCopy.Status.Reason = append(geolocationCopy.Status.Reason, conflictReason)
+		sdCopy.Status.Reason = append(sdCopy.Status.Reason, conflictReason)
 	}
-	return geolocationCopy
+	return sdCopy
 }
 
-// checkReasonList compares the reason list with the given names of deployment and geolocation
-func checkReasonList(reasonList [][]string, deployment string, geolocation string, compareType string) (bool, int) {
+// checkReasonList compares the reason list with the given names of deployment and selectivedeployment
+func checkReasonList(reasonList [][]string, deployment string, selectivedeployment string, compareType string) (bool, int) {
 	exists := false
 	index := -1
 	for i, reason := range reasonList {
 		reasonDeployment := reason[0]
-		reasonGeolocation := reason[1]
+		reasonSelectivedeployment := reason[1]
 		if compareType == "deployment" {
-			reasonGeolocation = geolocation
-		} else if compareType == "geolocation" {
+			reasonSelectivedeployment = selectivedeployment
+		} else if compareType == "selectivedeployment" {
 			reasonDeployment = deployment
 		}
-		if deployment == reasonDeployment && geolocation == reasonGeolocation {
+		if deployment == reasonDeployment && selectivedeployment == reasonSelectivedeployment {
 			exists = true
 			index = i
 		}

@@ -1,3 +1,3 @@
-package geolocation
+package selectivedeployment
 
 const GroupName = "edgenet.io"

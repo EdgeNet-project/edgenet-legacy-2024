@@ -1,5 +1,5 @@
 apiVersion: edgenet.io/v1alpha
-kind: GeoLocation
+kind: SelectiveDeployment
 metadata:
   name: city2
 spec:

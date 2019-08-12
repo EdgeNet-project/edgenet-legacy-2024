@@ -19,7 +19,7 @@ limitations under the License.
 package v1alpha
 
 import (
-	v1alpha "headnode/pkg/apis/geolocation/v1alpha"
+	v1alpha "headnode/pkg/apis/selectivedeployment/v1alpha"
 	"headnode/pkg/client/clientset/versioned/scheme"
 
 	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
@@ -28,7 +28,7 @@ import (
 
 type EdgenetV1alphaInterface interface {
 	RESTClient() rest.Interface
-	GeoLocationsGetter
+	SelectiveDeploymentsGetter
 }
 
 // EdgenetV1alphaClient is used to interact with features provided by the edgenet.io group.
@@ -36,8 +36,8 @@ type EdgenetV1alphaClient struct {
 	restClient rest.Interface
 }
 
-func (c *EdgenetV1alphaClient) GeoLocations(namespace string) GeoLocationInterface {
-	return newGeoLocations(c, namespace)
+func (c *EdgenetV1alphaClient) SelectiveDeployments(namespace string) SelectiveDeploymentInterface {
+	return newSelectiveDeployments(c, namespace)
 }
 
 // NewForConfig creates a new EdgenetV1alphaClient for the given config.

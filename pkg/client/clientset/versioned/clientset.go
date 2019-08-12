@@ -19,7 +19,7 @@ limitations under the License.
 package versioned
 
 import (
-	edgenetv1alpha "headnode/pkg/client/clientset/versioned/typed/geolocation/v1alpha"
+	edgenetv1alpha "headnode/pkg/client/clientset/versioned/typed/selectivedeployment/v1alpha"
 
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"

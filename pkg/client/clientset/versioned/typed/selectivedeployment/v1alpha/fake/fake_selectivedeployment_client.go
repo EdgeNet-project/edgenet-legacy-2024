@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	v1alpha "headnode/pkg/client/clientset/versioned/typed/geolocation/v1alpha"
+	v1alpha "headnode/pkg/client/clientset/versioned/typed/selectivedeployment/v1alpha"
 
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
@@ -29,8 +29,8 @@ type FakeEdgenetV1alpha struct {
 	*testing.Fake
 }
 
-func (c *FakeEdgenetV1alpha) GeoLocations(namespace string) v1alpha.GeoLocationInterface {
-	return &FakeGeoLocations{c, namespace}
+func (c *FakeEdgenetV1alpha) SelectiveDeployments(namespace string) v1alpha.SelectiveDeploymentInterface {
+	return &FakeSelectiveDeployments{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
