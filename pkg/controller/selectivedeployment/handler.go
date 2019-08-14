@@ -27,7 +27,7 @@ type HandlerInterface interface {
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj interface{}, delta string)
 	ObjectDeleted(obj interface{}, delta string)
-	ConfigureDeployments()
+	ConfigureControllers()
 }
 
 // SDHandler is a implementation of Handler
@@ -54,7 +54,7 @@ type sdDet struct {
 	name            string
 	namespace       string
 	sdType          string
-	deploymentDelta []string
+	controllerDelta []string
 }
 
 // Definitions of the state of the selectivedeployment resource (failure, partial, success)
@@ -111,11 +111,11 @@ func (t *SDHandler) ObjectCreated(obj interface{}) {
 	t.namespaceInit(sdCopy.GetNamespace())
 	t.wgHandler[sdCopy.GetNamespace()].Add(1)
 	defer func() {
-		// Sleep to prevent extra resource consumption by running ConfigureDeployments
-		time.Sleep(50 * time.Millisecond)
+		// Sleep to prevent extra resource consumption by running ConfigureControllers
+		time.Sleep(100 * time.Millisecond)
 		t.wgHandler[sdCopy.GetNamespace()].Done()
 	}()
-	t.setDeploymentFilter(sdCopy, "", "create")
+	t.setControllerFilter(sdCopy, "", "create")
 }
 
 // ObjectUpdated is called when an object is updated
@@ -126,36 +126,36 @@ func (t *SDHandler) ObjectUpdated(obj interface{}, delta string) {
 	t.namespaceInit(sdCopy.GetNamespace())
 	t.wgHandler[sdCopy.GetNamespace()].Add(1)
 	defer func() {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		t.wgHandler[sdCopy.GetNamespace()].Done()
 	}()
-	t.setDeploymentFilter(sdCopy, delta, "update")
+	t.setControllerFilter(sdCopy, delta, "update")
 }
 
 // ObjectDeleted is called when an object is deleted
 func (t *SDHandler) ObjectDeleted(obj interface{}, delta string) {
 	log.Info("SDHandler.ObjectDeleted")
 	// Put the required data of the deleted object into variables
-	objectDelta := strings.Split(delta, "- ")
+	objectDelta := strings.Split(delta, "-?delta?- ")
 	t.sdDet = sdDet{
 		name:            objectDelta[0],
 		namespace:       objectDelta[1],
 		sdType:          objectDelta[2],
-		deploymentDelta: strings.Split(objectDelta[3], "/ "),
+		controllerDelta: strings.Split(objectDelta[3], "/?delta?/ "),
 	}
 
 	t.namespaceInit(t.sdDet.namespace)
 	t.wgHandler[t.sdDet.namespace].Add(1)
 	defer func() {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		t.wgHandler[t.sdDet.namespace].Done()
 	}()
-	// Detect and recover the selectivedeployment resource objects which are prevented by the this object from taking control of the deployments
-	t.recoverSelectivedeployments(t.sdDet)
+	// Detect and recover the selectivedeployment resource objects which are prevented by the this object from taking control of the controller(s)
+	t.recoverSelectiveDeployments(t.sdDet)
 }
 
-// setDeploymentFilter used by ObjectCreated, ObjectUpdated, and recoverSelectivedeployments functions
-func (t *SDHandler) setDeploymentFilter(sdCopy *selectivedeployment_v1.SelectiveDeployment, delta string, eventType string) {
+// setControllerFilter used by ObjectCreated, ObjectUpdated, and recoverSelectiveDeployments functions
+func (t *SDHandler) setControllerFilter(sdCopy *selectivedeployment_v1.SelectiveDeployment, delta string, eventType string) {
 	// Flush the status
 	sdCopy.Status = selectivedeployment_v1.SelectiveDeploymentStatus{}
 	// Put the differences between the old and the new objects into variables
@@ -165,15 +165,15 @@ func (t *SDHandler) setDeploymentFilter(sdCopy *selectivedeployment_v1.Selective
 		sdType:    sdCopy.Spec.Type,
 	}
 	if delta != "" {
-		t.sdDet.deploymentDelta = strings.Split(delta, "/ ")
+		t.sdDet.controllerDelta = strings.Split(delta, "/?delta?/ ")
 	}
 
 	if eventType != "recover" && eventType != "create" {
-		defer t.recoverSelectivedeployments(t.sdDet)
+		defer t.recoverSelectiveDeployments(t.sdDet)
 	} else if eventType == "recover" {
 		t.wgRecovery[t.sdDet.namespace].Add(1)
 		defer func() {
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			t.wgRecovery[t.sdDet.namespace].Done()
 		}()
 	}
@@ -187,52 +187,62 @@ func (t *SDHandler) setDeploymentFilter(sdCopy *selectivedeployment_v1.Selective
 	// Reveal conflicts by comparing selectivedeployment resource objects with the object in process
 	sdCopy = setReasonListOfConflicts(sdCopy, sdRaw)
 	counter := 0
-	for _, deploymentName := range sdCopy.Spec.Deployment {
-		// Get the deployment defined at the selectivedeployment object
-		_, err := t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Get(deploymentName, metav1.GetOptions{})
+	for _, controllerDet := range sdCopy.Spec.Controller {
+		err = nil
+		// Get the controller defined at the selectivedeployment object
+		switch controllerDet[0] {
+		case "deployment", "deployments":
+			_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Get(controllerDet[1], metav1.GetOptions{})
+		case "daemonset", "daemonsets":
+			_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Get(controllerDet[1], metav1.GetOptions{})
+		case "statefulset", "statefulsets":
+			_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Get(controllerDet[1], metav1.GetOptions{})
+		default:
+			err = nil
+		}
 		if err != nil {
-			// In here, the errors caused by non-existent of the deployment are added to reason list of the selectivedeployment object
-			sdCopy = setReasonListOfNonExistents(sdCopy, deploymentName)
+			// In here, the errors caused by non-existent of the controller are added to reason list of the selectivedeployment object
+			sdCopy = setReasonListOfNonExistents(sdCopy, controllerDet)
 			counter++
 		}
 	}
 
-	// Deployment list without duplicate values
-	deploymentList := []string{}
+	// Controller list without duplicate values
+	controllerList := [][]string{}
 	for _, reason := range sdCopy.Status.Reason {
 		exists := false
-		for _, deployment := range deploymentList {
-			if reason[0] == deployment {
+		for _, controllerDet := range controllerList {
+			if reason[0] == controllerDet[0] && reason[1] == controllerDet[1] {
 				exists = true
 			}
 		}
 		if !exists {
-			deploymentList = append(deploymentList, reason[0])
+			controllerList = append(controllerList, []string{reason[0], reason[1]})
 		}
 	}
 
 	// The problems and details of the desired new selectivedeployment object are described herein, and this step is the last of the error processing
-	if len(deploymentList) == len(sdCopy.Spec.Deployment) {
+	if len(controllerList) == len(sdCopy.Spec.Controller) {
 		sdCopy.Status.State = failure
-		sdCopy.Status.Message = "All deployments are already under the control of any different resource object(s) with the same type"
+		sdCopy.Status.Message = "All controllers are already under the control of any different resource object(s) with the same type"
 	} else if len(sdCopy.Status.Reason) == 0 {
 		sdCopy.Status.State = success
 		sdCopy.Status.Message = "SelectiveDeployment runs precisely to ensure that the actual state of the cluster matches the desired state"
 	} else {
 		sdCopy.Status.State = partial
-		sdCopy.Status.Message = "Some deployments are already under the control of any different resource object(s) with the same type"
+		sdCopy.Status.Message = "Some controllers are already under the control of any different resource object(s) with the same type"
 	}
-	// Counter indicates the number of non-existent deployment already defined in the desired selectivedeployment object
+	// Counter indicates the number of non-existent controller(s) already defined in the desired selectivedeployment object
 	if counter != 0 {
-		sdCopy.Status.Message = fmt.Sprintf("%s, %d deployment(s) couldn't be found", sdCopy.Status.Message, counter)
+		sdCopy.Status.Message = fmt.Sprintf("%s, %d controller(s) couldn't be found", sdCopy.Status.Message, counter)
 	}
-	// The number of deployments that the selectivedeployment resource successfully controls
-	sdCopy.Status.Ready = fmt.Sprintf("%d/%d", len(sdCopy.Spec.Deployment)-len(deploymentList), len(sdCopy.Spec.Deployment))
+	// The number of controller(s) that the selectivedeployment resource successfully controls
+	sdCopy.Status.Ready = fmt.Sprintf("%d/%d", len(sdCopy.Spec.Controller)-len(controllerList), len(sdCopy.Spec.Controller))
 }
 
-// recoverSelectivedeployments compares the reason list with the deployment list and the name of selectivedeployment to recover objects affected by the selectivedeployment
-// object. The deployment delta list contains the name of deployments removed from the selectivedeployment object by updating or deleting it
-func (t *SDHandler) recoverSelectivedeployments(sdDet sdDet) {
+// recoverSelectiveDeployments compares the reason list with the controller list and the name of selectivedeployment to recover objects affected by the selectivedeployment
+// object. The controller delta list contains the name of controllers removed from the selectivedeployment object by updating or deleting it
+func (t *SDHandler) recoverSelectiveDeployments(sdDet sdDet) {
 	sdRaw, err := t.sdClientset.EdgenetV1alpha().SelectiveDeployments(sdDet.namespace).List(metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
@@ -240,13 +250,14 @@ func (t *SDHandler) recoverSelectivedeployments(sdDet sdDet) {
 	}
 	for _, sdRow := range sdRaw.Items {
 		if sdRow.GetName() != sdDet.name && sdRow.Spec.Type == sdDet.sdType && sdRow.Status.State != "" {
-			for _, deployment := range sdDet.deploymentDelta {
-				if reasonMatch, _ := checkReasonList(sdRow.Status.Reason, deployment, sdDet.name, "all"); reasonMatch {
+			for _, controllerDetStr := range sdDet.controllerDelta {
+				controllerDet := strings.Split(controllerDetStr, "?/delta/? ")
+				if reasonMatch, _ := checkReasonList(sdRow.Status.Reason, controllerDet, sdDet.name, "all"); reasonMatch {
 					selectivedeployment, err := t.sdClientset.EdgenetV1alpha().SelectiveDeployments(sdRow.GetNamespace()).Get(sdRow.GetName(), metav1.GetOptions{})
 					if err == nil {
-						t.setDeploymentFilter(selectivedeployment, "", "recover")
+						t.setControllerFilter(selectivedeployment, "", "recover")
 						t.wgRecovery[sdDet.namespace].Wait()
-						time.Sleep(50 * time.Millisecond)
+						time.Sleep(100 * time.Millisecond)
 					}
 				}
 			}
@@ -254,9 +265,10 @@ func (t *SDHandler) recoverSelectivedeployments(sdDet sdDet) {
 	}
 }
 
-// ConfigureDeployments configures the deployments by selectivedeployments to match the desired state users supplied
-func (t *SDHandler) ConfigureDeployments() {
-	log.Info("ConfigureDeployments: start")
+// ConfigureControllers configures the controllers by selectivedeployments to match the desired state users supplied
+func (t *SDHandler) ConfigureControllers() {
+	log.Info("ConfigureControllers: start")
+
 	configurationList := t.namespaceList
 	t.namespaceList = []string{}
 	for _, namespace := range configurationList {
@@ -269,15 +281,8 @@ func (t *SDHandler) ConfigureDeployments() {
 			log.Println(err.Error())
 			panic(err.Error())
 		}
-		deploymentRaw, err := t.clientset.AppsV1().Deployments(namespace).List(metav1.ListOptions{})
-		if err != nil {
-			log.Println(err.Error())
-			panic(err.Error())
-		}
 
-		// Sync the desired filter fields according to the object
-		t.desiredFilter = desiredFilter{}
-		for _, deploymentRow := range deploymentRaw.Items {
+		setFilterOfController := func(controllerName string, controllerType string, podSpec corev1.PodSpec) bool {
 			// Clear the variables involved with node selection
 			t.desiredFilter.nodeSelectorTerms = []corev1.NodeSelectorTerm{}
 			for _, sdRow := range sdRaw.Items {
@@ -285,45 +290,105 @@ func (t *SDHandler) ConfigureDeployments() {
 					t.desiredFilter.nodeSelectorTerm = corev1.NodeSelectorTerm{}
 					t.desiredFilter.matchExpression.Operator = "In"
 					t.desiredFilter.matchExpression = t.setFilter(sdRow.Spec.Type, sdRow.Spec.Value, t.desiredFilter.matchExpression, "addOrUpdate")
-					for _, deployment := range sdRow.Spec.Deployment {
-						if reasonMatch, _ := checkReasonList(sdRow.Status.Reason, deployment, sdRow.GetNamespace(), "deployment"); !reasonMatch && deploymentRow.GetName() == deployment {
-							t.desiredFilter.nodeSelectorTerm.MatchExpressions = append(t.desiredFilter.nodeSelectorTerm.MatchExpressions, t.desiredFilter.matchExpression)
-							t.desiredFilter.nodeSelectorTerms = append(t.desiredFilter.nodeSelectorTerms, t.desiredFilter.nodeSelectorTerm)
+					if len(t.desiredFilter.matchExpression.Values) > 0 {
+						for _, controllerDet := range sdRow.Spec.Controller {
+							if reasonMatch, _ := checkReasonList(sdRow.Status.Reason, controllerDet, sdRow.GetNamespace(), "controller"); !reasonMatch && controllerType == controllerDet[0] && controllerName == controllerDet[1] {
+								t.desiredFilter.nodeSelectorTerm.MatchExpressions = append(t.desiredFilter.nodeSelectorTerm.MatchExpressions, t.desiredFilter.matchExpression)
+								t.desiredFilter.nodeSelectorTerms = append(t.desiredFilter.nodeSelectorTerms, t.desiredFilter.nodeSelectorTerm)
+							}
 						}
 					}
 				}
 			}
-
-			updateDeployment := func(deploymentRow appsv1.Deployment) {
-				deploymentCopy := deploymentRow.DeepCopy()
-				if len(t.desiredFilter.nodeSelectorTerms) > 0 {
-					// Set the new affinity configuration in the deployment and update the deployment
-					deploymentCopy.Spec.Template.Spec.Affinity = &corev1.Affinity{
-						NodeAffinity: &corev1.NodeAffinity{
-							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-								NodeSelectorTerms: t.desiredFilter.nodeSelectorTerms,
-							},
-						},
-					}
-					log.Printf("%s/%s: %s", deploymentCopy.GetNamespace(), deploymentCopy.GetName(), deploymentCopy.Spec.Template.Spec.Affinity.NodeAffinity.
-						RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms)
-				} else {
-					log.Printf("%s/%s: No Expressions", deploymentCopy.GetNamespace(), deploymentCopy.GetName())
-					deploymentCopy.Spec.Template.Spec.Affinity.Reset()
-				}
-				t.clientset.AppsV1().Deployments(namespace).Update(deploymentCopy)
-			}
-
-			if deploymentRow.Spec.Template.Spec.Affinity != nil &&
-				deploymentRow.Spec.Template.Spec.Affinity.NodeAffinity != nil &&
-				deploymentRow.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-				if !reflect.DeepEqual(deploymentRow.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms, t.desiredFilter.nodeSelectorTerms) {
-					updateDeployment(deploymentRow)
+			status := false
+			if podSpec.Affinity != nil && podSpec.Affinity.NodeAffinity != nil && podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+				if !reflect.DeepEqual(podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms, t.desiredFilter.nodeSelectorTerms) {
+					status = true
 				}
 			} else if len(t.desiredFilter.nodeSelectorTerms) > 0 {
-				updateDeployment(deploymentRow)
+				status = true
+			}
+			return status
+		}
+		updateController := func(controllerRow interface{}) {
+			// Set the new affinity configuration in the controller and update that
+			nodeAffinity := &corev1.Affinity{
+				NodeAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: t.desiredFilter.nodeSelectorTerms,
+					},
+				},
+			}
+			if len(t.desiredFilter.nodeSelectorTerms) <= 0 {
+				nodeAffinity.Reset()
+			}
+			switch controllerObj := controllerRow.(type) {
+			case appsv1.Deployment:
+				controllerCopy := controllerObj.DeepCopy()
+				controllerCopy.Spec.Template.Spec.Affinity = nodeAffinity
+				log.Printf("%s/Deployment/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
+				t.clientset.AppsV1().Deployments(namespace).Update(controllerCopy)
+			case appsv1.DaemonSet:
+				controllerCopy := controllerObj.DeepCopy()
+				controllerCopy.Spec.Template.Spec.Affinity = nodeAffinity
+				log.Printf("%s/DaemonSet/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
+				t.clientset.AppsV1().DaemonSets(namespace).Update(controllerCopy)
+			case appsv1.StatefulSet:
+				controllerCopy := controllerObj.DeepCopy()
+				controllerCopy.Spec.Template.Spec.Affinity = nodeAffinity
+				log.Printf("%s/StatefulSet/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
+				t.clientset.AppsV1().StatefulSets(namespace).Update(controllerCopy)
 			}
 		}
+		configureController := func(controllerList interface{}) {
+			switch controllerRaw := controllerList.(type) {
+			case *appsv1.DeploymentList:
+				// Sync the desired filter fields according to the object
+				t.desiredFilter = desiredFilter{}
+				for _, controllerRow := range controllerRaw.Items {
+					if changeStatus := setFilterOfController(controllerRow.GetName(), "deployment", controllerRow.Spec.Template.Spec); changeStatus {
+						updateController(controllerRow)
+					}
+				}
+			case *appsv1.DaemonSetList:
+				// Sync the desired filter fields according to the object
+				t.desiredFilter = desiredFilter{}
+				for _, controllerRow := range controllerRaw.Items {
+					if changeStatus := setFilterOfController(controllerRow.GetName(), "daemonset", controllerRow.Spec.Template.Spec); changeStatus {
+						updateController(controllerRow)
+					}
+				}
+			case *appsv1.StatefulSetList:
+				// Sync the desired filter fields according to the object
+				t.desiredFilter = desiredFilter{}
+				for _, controllerRow := range controllerRaw.Items {
+					if changeStatus := setFilterOfController(controllerRow.GetName(), "statefulset", controllerRow.Spec.Template.Spec); changeStatus {
+						updateController(controllerRow)
+					}
+				}
+			}
+		}
+
+		deploymentRaw, err := t.clientset.AppsV1().Deployments(namespace).List(metav1.ListOptions{})
+		if err != nil {
+			log.Println(err.Error())
+			panic(err.Error())
+		}
+		configureController(deploymentRaw)
+		time.Sleep(100 * time.Millisecond)
+		daemonsetRaw, err := t.clientset.AppsV1().DaemonSets(namespace).List(metav1.ListOptions{})
+		if err != nil {
+			log.Println(err.Error())
+			panic(err.Error())
+		}
+		configureController(daemonsetRaw)
+		time.Sleep(100 * time.Millisecond)
+		statefulsetRaw, err := t.clientset.AppsV1().StatefulSets(namespace).List(metav1.ListOptions{})
+		if err != nil {
+			log.Println(err.Error())
+			panic(err.Error())
+		}
+		configureController(statefulsetRaw)
 	}
 }
 
@@ -357,26 +422,28 @@ func (t *SDHandler) setFilter(sdType string, sdValue []string,
 			matchExpression.Values = []string{}
 			// The loop to process each node separately
 			for _, nodeRow := range nodesRaw.Items {
-				// Because of alphanumeric limitations of Kubernetes on the labels we use "w", "e", "n", and "s" prefixes
-				// at the labels of latitude and longitude. Here is the place those prefixes are dropped away.
-				lonStr := nodeRow.Labels["edge-net.io/lon"]
-				lonStr = string(lonStr[1:])
-				latStr := nodeRow.Labels["edge-net.io/lat"]
-				latStr = string(latStr[1:])
-				if lon, err := strconv.ParseFloat(lonStr, 64); err == nil {
-					if lat, err := strconv.ParseFloat(latStr, 64); err == nil {
-						// This loop allows us to process each polygon defined at the object of selectivedeployment resource
-						for _, polygonRow := range sdValue {
-							err = json.Unmarshal([]byte(polygonRow), &polygon)
-							if err != nil {
-								panic(err)
-							}
-							// boundbox is a rectangle which provides to check whether the point is inside polygon
-							// without taking all point of the polygon into consideration
-							boundbox := node.Boundbox(polygon)
-							status := node.GeoFence(boundbox, polygon, lon, lat)
-							if status {
-								matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
+				if nodeRow.Labels["edge-net.io/lon"] != "" && nodeRow.Labels["edge-net.io/lat"] != "" {
+					// Because of alphanumeric limitations of Kubernetes on the labels we use "w", "e", "n", and "s" prefixes
+					// at the labels of latitude and longitude. Here is the place those prefixes are dropped away.
+					lonStr := nodeRow.Labels["edge-net.io/lon"]
+					lonStr = string(lonStr[1:])
+					latStr := nodeRow.Labels["edge-net.io/lat"]
+					latStr = string(latStr[1:])
+					if lon, err := strconv.ParseFloat(lonStr, 64); err == nil {
+						if lat, err := strconv.ParseFloat(latStr, 64); err == nil {
+							// This loop allows us to process each polygon defined at the object of selectivedeployment resource
+							for _, polygonRow := range sdValue {
+								err = json.Unmarshal([]byte(polygonRow), &polygon)
+								if err != nil {
+									panic(err)
+								}
+								// boundbox is a rectangle which provides to check whether the point is inside polygon
+								// without taking all point of the polygon into consideration
+								boundbox := node.Boundbox(polygon)
+								status := node.GeoFence(boundbox, polygon, lon, lat)
+								if status {
+									matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
+								}
 							}
 						}
 					}
@@ -391,19 +458,19 @@ func (t *SDHandler) setFilter(sdType string, sdValue []string,
 	return matchExpression
 }
 
-// setReasonListOfConflicts compares the deployments of the selectivedeployment resource objects with those of the object in the process
+// setReasonListOfConflicts compares the controllers of the selectivedeployment resource objects with those of the object in the process
 // to make a list of the conflicts which guides the user to understand its faults
 func setReasonListOfConflicts(sdCopy *selectivedeployment_v1.SelectiveDeployment, sdRaw *selectivedeployment_v1.SelectiveDeploymentList) *selectivedeployment_v1.SelectiveDeployment {
 	// The loop to process each selectivedeployment object separately
 	for _, sdRow := range sdRaw.Items {
 		if sdRow.GetName() != sdCopy.GetName() && sdRow.Spec.Type == sdCopy.Spec.Type && sdRow.Status.State != "" {
-			for _, newDeployment := range sdCopy.Spec.Deployment {
-				for _, otherObjDeployment := range sdRow.Spec.Deployment {
-					if otherObjDeployment == newDeployment {
+			for _, newController := range sdCopy.Spec.Controller {
+				for _, otherObjController := range sdRow.Spec.Controller {
+					if otherObjController[0] == newController[0] && otherObjController[1] == newController[1] {
 						// Checks whether the reason list is empty and this reason exists in the reason list of the selectivedeployment object
-						if reasonMatch, _ := checkReasonList(sdRow.Status.Reason, newDeployment, sdCopy.GetName(), "all"); !reasonMatch {
-							if reasonMatch, _ := checkReasonList(sdCopy.Status.Reason, otherObjDeployment, sdRow.GetName(), "all"); !reasonMatch || len(sdCopy.Status.Reason) == 0 {
-								conflictReason := []string{otherObjDeployment, sdRow.GetName()}
+						if reasonMatch, _ := checkReasonList(sdRow.Status.Reason, newController, sdCopy.GetName(), "all"); !reasonMatch {
+							if reasonMatch, _ := checkReasonList(sdCopy.Status.Reason, otherObjController, sdRow.GetName(), "all"); !reasonMatch || len(sdCopy.Status.Reason) == 0 {
+								conflictReason := []string{otherObjController[0], otherObjController[1], sdRow.GetName()}
 								sdCopy.Status.Reason = append(sdCopy.Status.Reason, conflictReason)
 							}
 						}
@@ -415,28 +482,30 @@ func setReasonListOfConflicts(sdCopy *selectivedeployment_v1.SelectiveDeployment
 	return sdCopy
 }
 
-// setReasonListOfNonExistents checks whether the deployment exists to put it into the list and it will be listed in case of non-existent
-func setReasonListOfNonExistents(sdCopy *selectivedeployment_v1.SelectiveDeployment, deploymentName string) *selectivedeployment_v1.SelectiveDeployment {
-	if reasonMatch, _ := checkReasonList(sdCopy.Status.Reason, deploymentName, "nonexistent", "all"); !reasonMatch {
-		conflictReason := []string{deploymentName, "nonexistent"}
+// setReasonListOfNonExistents checks whether the controller exists to put it into the list and it will be listed in case of non-existent
+func setReasonListOfNonExistents(sdCopy *selectivedeployment_v1.SelectiveDeployment, controllerDet []string) *selectivedeployment_v1.SelectiveDeployment {
+	if reasonMatch, _ := checkReasonList(sdCopy.Status.Reason, controllerDet, "nonexistent", "all"); !reasonMatch {
+		conflictReason := []string{controllerDet[0], controllerDet[1], "nonexistent"}
 		sdCopy.Status.Reason = append(sdCopy.Status.Reason, conflictReason)
 	}
 	return sdCopy
 }
 
-// checkReasonList compares the reason list with the given names of deployment and selectivedeployment
-func checkReasonList(reasonList [][]string, deployment string, selectivedeployment string, compareType string) (bool, int) {
+// checkReasonList compares the reason list with the given names of controller and selectivedeployment
+func checkReasonList(reasonList [][]string, controllerDet []string, sdName string, compareType string) (bool, int) {
 	exists := false
 	index := -1
 	for i, reason := range reasonList {
-		reasonDeployment := reason[0]
-		reasonSelectivedeployment := reason[1]
-		if compareType == "deployment" {
-			reasonSelectivedeployment = selectivedeployment
+		reasonControllerType := reason[0]
+		reasonControllerName := reason[1]
+		reasonsdName := reason[2]
+		if compareType == "controller" {
+			reasonsdName = sdName
 		} else if compareType == "selectivedeployment" {
-			reasonDeployment = deployment
+			reasonControllerType = controllerDet[0]
+			reasonControllerName = controllerDet[1]
 		}
-		if deployment == reasonDeployment && selectivedeployment == reasonSelectivedeployment {
+		if controllerDet[0] == reasonControllerType && controllerDet[1] == reasonControllerName && sdName == reasonsdName {
 			exists = true
 			index = i
 		}

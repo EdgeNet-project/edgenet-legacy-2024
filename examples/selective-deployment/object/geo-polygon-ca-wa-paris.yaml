@@ -3,8 +3,8 @@ kind: SelectiveDeployment
 metadata:
   name: polygon
 spec:
-  deployment:
-    - test1
+  controller:
+    - [daemonset, daemonset]
   type: polygon
   value:
     - "[

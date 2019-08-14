@@ -83,7 +83,7 @@ func Start() {
 				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 				event.function = update
 				// The variable of event.delta contains the different values of the old object from the new one
-				event.delta = fmt.Sprintf("%s", strings.Join(dry(oldObj.(*selectivedeployment_v1.SelectiveDeployment).Spec.Deployment, newObj.(*selectivedeployment_v1.SelectiveDeployment).Spec.Deployment), "/ "))
+				event.delta = fmt.Sprintf("%s", strings.Join(dry(oldObj.(*selectivedeployment_v1.SelectiveDeployment).Spec.Controller, newObj.(*selectivedeployment_v1.SelectiveDeployment).Spec.Controller), "/?delta?/ "))
 				log.Infof("Update selectivedeployment: %s", event.key)
 				if err == nil {
 					queue.Add(event)
@@ -96,8 +96,9 @@ func Start() {
 			event.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			event.function = delete
 			// The variable of event.delta contains the different values in the same way as UpdateFunc.
-			// In addition to that, this variable includes the name, namespace, type, deployments of the deleted object.
-			event.delta = fmt.Sprintf("%s- %s- %s- %s", obj.(*selectivedeployment_v1.SelectiveDeployment).GetName(), obj.(*selectivedeployment_v1.SelectiveDeployment).GetNamespace(), obj.(*selectivedeployment_v1.SelectiveDeployment).Spec.Type, strings.Join(obj.(*selectivedeployment_v1.SelectiveDeployment).Spec.Deployment, "/ "))
+			// In addition to that, this variable includes the name, namespace, type, controller of the deleted object.
+			event.delta = fmt.Sprintf("%s-?delta?- %s-?delta?- %s-?delta?- %s", obj.(*selectivedeployment_v1.SelectiveDeployment).GetName(), obj.(*selectivedeployment_v1.SelectiveDeployment).GetNamespace(), obj.(*selectivedeployment_v1.SelectiveDeployment).Spec.Type,
+				strings.Join(dry(obj.(*selectivedeployment_v1.SelectiveDeployment).Spec.Controller, [][]string{}), "/?delta?/ "))
 			log.Infof("Delete selectivedeployment: %s", event.key)
 			if err == nil {
 				queue.Add(event)
@@ -203,25 +204,25 @@ func (c *controller) processNextItem() bool {
 	c.queue.Forget(event.(informerevent).key)
 
 	if c.queue.Len() == 0 {
-		go c.handler.ConfigureDeployments()
+		go c.handler.ConfigureControllers()
 	}
 
 	return true
 }
 
 // dry function remove the same values of the old and new objects from the old object to have
-// the slice of different values.
-func dry(mainSlice []string, deleteSlice []string) []string {
+// the slice of deleted values.
+func dry(oldSlice [][]string, newSlice [][]string) []string {
 	var uniqueSlice []string
-	for _, mainValue := range mainSlice {
+	for _, oldValue := range oldSlice {
 		exists := false
-		for _, deleteValue := range deleteSlice {
-			if mainValue == deleteValue {
+		for _, newValue := range newSlice {
+			if oldValue[0] == newValue[0] && oldValue[1] == newValue[1] {
 				exists = true
 			}
 		}
 		if !exists {
-			uniqueSlice = append(uniqueSlice, mainValue)
+			uniqueSlice = append(uniqueSlice, strings.Join(oldValue, "?/delta/? "))
 		}
 	}
 	return uniqueSlice

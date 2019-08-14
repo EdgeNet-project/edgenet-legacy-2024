@@ -33,9 +33,9 @@ spec:
       required: [spec]
       properties:
         spec:
-          required: [deployment,type,value]
+          required: [controller,type,value]
           properties:
-            deployment:
+            controller:
               type: array
               minimum: 1
             type:

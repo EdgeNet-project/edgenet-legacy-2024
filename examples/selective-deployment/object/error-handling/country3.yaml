@@ -3,10 +3,10 @@ kind: SelectiveDeployment
 metadata:
   name: country3
 spec:
-  deployment:
-    - test1
-    - test2
-    - test4
+  controller:
+    - [deployment, deployment1]
+    - [deployment, deployment2]
+    - [deployment, deployment4]
   type: country
   value:
     - CH

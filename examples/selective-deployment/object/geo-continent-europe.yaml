@@ -3,8 +3,8 @@ kind: SelectiveDeployment
 metadata:
   name: continent
 spec:
-  deployment:
-    - test1
+  controller:
+    - [deployment, deployment1]
   type: continent
   value:
     - Europe

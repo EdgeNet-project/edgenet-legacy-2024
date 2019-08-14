@@ -3,8 +3,8 @@ kind: SelectiveDeployment
 metadata:
   name: country
 spec:
-  deployment:
-    - test1
+  controller:
+    - [daemonset, daemonset]
   type: country
   value:
     - US

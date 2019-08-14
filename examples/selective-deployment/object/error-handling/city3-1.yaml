@@ -3,9 +3,9 @@ kind: SelectiveDeployment
 metadata:
   name: city3
 spec:
-  deployment:
-    - test3
-    - test4
+  controller:
+    - [deployment, deployment3]
+    - [deployment, deployment4]
   type: city
   value:
     - Seattle

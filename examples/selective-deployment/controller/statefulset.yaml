@@ -1,14 +1,28 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Service
 metadata:
-  name: test1
+  name: nginx
   labels:
     app: nginx
 spec:
-  replicas: 6
+  ports:
+  - port: 80
+    name: web
+  clusterIP: None
+  selector:
+    app: nginx
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: statefulset
+  labels:
+    app: nginx
+spec:
   selector:
     matchLabels:
       app: nginx
+  serviceName: "nginx"
   template:
     metadata:
       labels:
