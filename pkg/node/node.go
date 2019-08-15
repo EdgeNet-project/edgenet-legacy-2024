@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	"headnode/pkg/authorization"
@@ -207,8 +208,14 @@ func GetList() []string {
 // GetStatusList uses clientset to get node list of the cluster that contains Ready State info
 func GetStatusList() []byte {
 	type nodeStatus struct {
-		Node  string `json:"node"`
-		Ready string `json:"ready"`
+		Node      string `json:"node"`
+		Ready     string `json:"ready"`
+		City      string `json:"city"`
+		State     string `json:"state-iso"`
+		Country   string `json:"country-iso"`
+		Continent string `json:"continent"`
+		Lon       string `json:"lon"`
+		Lat       string `json:"lat"`
 	}
 	clientset, err := authorization.CreateClientSet()
 	if err != nil {
@@ -224,6 +231,18 @@ func GetStatusList() []byte {
 	nodesArr := make([]nodeStatus, len(nodesRaw.Items))
 	for i, nodeRow := range nodesRaw.Items {
 		nodesArr[i].Node = nodeRow.Name
+		nodesArr[i].City = nodeRow.Labels["edge-net.io/city"]
+		nodesArr[i].State = nodeRow.Labels["edge-net.io/state-iso"]
+		nodesArr[i].Country = nodeRow.Labels["edge-net.io/country-iso"]
+		nodesArr[i].Continent = nodeRow.Labels["edge-net.io/continent"]
+		lonStr := nodeRow.Labels["edge-net.io/lon"]
+		latStr := nodeRow.Labels["edge-net.io/lat"]
+		if nodeRow.Labels["edge-net.io/lon"] != "" && nodeRow.Labels["edge-net.io/lat"] != "" {
+			lonStr = string(lonStr[1:])
+			latStr = string(latStr[1:])
+		}
+		nodesArr[i].Lon = lonStr
+		nodesArr[i].Lat = latStr
 		for _, conditionRow := range nodeRow.Status.Conditions {
 			if conditionType := conditionRow.Type; conditionType == "Ready" {
 				nodesArr[i].Ready = string(conditionRow.Status)
