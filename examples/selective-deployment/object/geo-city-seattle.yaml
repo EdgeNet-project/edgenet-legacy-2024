@@ -7,4 +7,4 @@ spec:
     - [deployment, deployment1]
   type: city
   value:
-    - Seattle
+    - [Seattle, "0"]

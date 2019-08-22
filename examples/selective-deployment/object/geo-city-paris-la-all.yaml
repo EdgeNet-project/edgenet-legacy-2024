@@ -8,5 +8,5 @@ spec:
     - [deployment, deployment2]
   type: city
   value:
-    - Paris
-    - Los_Angeles
+    - [Paris, "0"]
+    - [Los_Angeles, "0"]

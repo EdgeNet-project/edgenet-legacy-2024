@@ -29,7 +29,7 @@ type SelectiveDeploymentSpec struct {
 	// The value represents the desired filter and it must be compatible with the type of selectivedeployment
 	Controller [][]string `json:"controller"`
 	Type       string     `json:"type"`
-	Value      []string   `json:"value"`
+	Value      [][]string `json:"value"`
 }
 
 // SelectiveDeploymentStatus is the status for a SelectiveDeployment resource

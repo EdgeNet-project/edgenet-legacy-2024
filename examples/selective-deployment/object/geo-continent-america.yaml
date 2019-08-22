@@ -7,4 +7,4 @@ spec:
     - [deployment, deployment1]
   type: continent
   value:
-    - North_America
+    - [North_America, "3"]

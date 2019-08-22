@@ -101,8 +101,14 @@ func (in *SelectiveDeploymentSpec) DeepCopyInto(out *SelectiveDeploymentSpec) {
 	}
 	if in.Value != nil {
 		in, out := &in.Value, &out.Value
-		*out = make([]string, len(*in))
-		copy(*out, *in)
+		*out = make([][]string, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = make([]string, len(*in))
+				copy(*out, *in)
+			}
+		}
 	}
 	return
 }

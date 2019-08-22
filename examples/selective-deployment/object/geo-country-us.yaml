@@ -7,4 +7,4 @@ spec:
     - [daemonset, daemonset]
   type: country
   value:
-    - US
+    - [US, "0"]

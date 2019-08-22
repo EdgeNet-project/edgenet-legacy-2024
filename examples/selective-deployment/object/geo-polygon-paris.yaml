@@ -7,7 +7,7 @@ spec:
     - [daemonset, daemonset]
   type: polygon
   value:
-    - "[
+    - ["[
     [
       2.2150567,
       48.8947616
@@ -28,4 +28,4 @@ spec:
       2.3932412,
       48.9171024
     ]
-  ]"
+  ]", "0"]

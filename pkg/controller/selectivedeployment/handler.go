@@ -34,8 +34,6 @@ type HandlerInterface interface {
 type SDHandler struct {
 	clientset     *kubernetes.Clientset
 	sdClientset   *versioned.Clientset
-	inProcess     bool
-	desiredFilter desiredFilter
 	sdDet         sdDet
 	wgHandler     map[string]*sync.WaitGroup
 	wgRecovery    map[string]*sync.WaitGroup
@@ -65,9 +63,7 @@ const success = "Running"
 // Init handles any handler initialization
 func (t *SDHandler) Init() error {
 	log.Info("SDHandler.Init")
-	t.desiredFilter = desiredFilter{}
 	t.sdDet = sdDet{}
-	t.inProcess = false
 	t.wgHandler = make(map[string]*sync.WaitGroup)
 	t.wgRecovery = make(map[string]*sync.WaitGroup)
 	var err error
@@ -276,6 +272,8 @@ func (t *SDHandler) ConfigureControllers() {
 		t.wgRecovery[namespace].Wait()
 		time.Sleep(1200 * time.Millisecond)
 
+		controllerSelector := desiredFilter{}
+
 		sdRaw, err := t.sdClientset.EdgenetV1alpha().SelectiveDeployments(namespace).List(metav1.ListOptions{})
 		if err != nil {
 			log.Println(err.Error())
@@ -284,17 +282,17 @@ func (t *SDHandler) ConfigureControllers() {
 
 		setFilterOfController := func(controllerName string, controllerType string, podSpec corev1.PodSpec) bool {
 			// Clear the variables involved with node selection
-			t.desiredFilter.nodeSelectorTerms = []corev1.NodeSelectorTerm{}
+			controllerSelector.nodeSelectorTerms = []corev1.NodeSelectorTerm{}
 			for _, sdRow := range sdRaw.Items {
 				if sdRow.Status.State == success || sdRow.Status.State == partial {
-					t.desiredFilter.nodeSelectorTerm = corev1.NodeSelectorTerm{}
-					t.desiredFilter.matchExpression.Operator = "In"
-					t.desiredFilter.matchExpression = t.setFilter(sdRow.Spec.Type, sdRow.Spec.Value, t.desiredFilter.matchExpression, "addOrUpdate")
-					if len(t.desiredFilter.matchExpression.Values) > 0 {
+					controllerSelector.nodeSelectorTerm = corev1.NodeSelectorTerm{}
+					controllerSelector.matchExpression.Operator = "In"
+					controllerSelector.matchExpression = t.setFilter(sdRow.Spec.Type, sdRow.Spec.Value, controllerSelector.matchExpression, "addOrUpdate")
+					if len(controllerSelector.matchExpression.Values) > 0 {
 						for _, controllerDet := range sdRow.Spec.Controller {
 							if reasonMatch, _ := checkReasonList(sdRow.Status.Reason, controllerDet, sdRow.GetNamespace(), "controller"); !reasonMatch && controllerType == controllerDet[0] && controllerName == controllerDet[1] {
-								t.desiredFilter.nodeSelectorTerm.MatchExpressions = append(t.desiredFilter.nodeSelectorTerm.MatchExpressions, t.desiredFilter.matchExpression)
-								t.desiredFilter.nodeSelectorTerms = append(t.desiredFilter.nodeSelectorTerms, t.desiredFilter.nodeSelectorTerm)
+								controllerSelector.nodeSelectorTerm.MatchExpressions = append(controllerSelector.nodeSelectorTerm.MatchExpressions, controllerSelector.matchExpression)
+								controllerSelector.nodeSelectorTerms = append(controllerSelector.nodeSelectorTerms, controllerSelector.nodeSelectorTerm)
 							}
 						}
 					}
@@ -302,10 +300,10 @@ func (t *SDHandler) ConfigureControllers() {
 			}
 			status := false
 			if podSpec.Affinity != nil && podSpec.Affinity.NodeAffinity != nil && podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-				if !reflect.DeepEqual(podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms, t.desiredFilter.nodeSelectorTerms) {
+				if !reflect.DeepEqual(podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms, controllerSelector.nodeSelectorTerms) {
 					status = true
 				}
-			} else if len(t.desiredFilter.nodeSelectorTerms) > 0 {
+			} else if len(controllerSelector.nodeSelectorTerms) > 0 {
 				status = true
 			}
 			return status
@@ -315,11 +313,11 @@ func (t *SDHandler) ConfigureControllers() {
 			nodeAffinity := &corev1.Affinity{
 				NodeAffinity: &corev1.NodeAffinity{
 					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-						NodeSelectorTerms: t.desiredFilter.nodeSelectorTerms,
+						NodeSelectorTerms: controllerSelector.nodeSelectorTerms,
 					},
 				},
 			}
-			if len(t.desiredFilter.nodeSelectorTerms) <= 0 {
+			if len(controllerSelector.nodeSelectorTerms) <= 0 {
 				nodeAffinity.Reset()
 			}
 			switch controllerObj := controllerRow.(type) {
@@ -344,7 +342,7 @@ func (t *SDHandler) ConfigureControllers() {
 			switch controllerRaw := controllerList.(type) {
 			case *appsv1.DeploymentList:
 				// Sync the desired filter fields according to the object
-				t.desiredFilter = desiredFilter{}
+				controllerSelector = desiredFilter{}
 				for _, controllerRow := range controllerRaw.Items {
 					if changeStatus := setFilterOfController(controllerRow.GetName(), "deployment", controllerRow.Spec.Template.Spec); changeStatus {
 						updateController(controllerRow)
@@ -352,7 +350,7 @@ func (t *SDHandler) ConfigureControllers() {
 				}
 			case *appsv1.DaemonSetList:
 				// Sync the desired filter fields according to the object
-				t.desiredFilter = desiredFilter{}
+				controllerSelector = desiredFilter{}
 				for _, controllerRow := range controllerRaw.Items {
 					if changeStatus := setFilterOfController(controllerRow.GetName(), "daemonset", controllerRow.Spec.Template.Spec); changeStatus {
 						updateController(controllerRow)
@@ -360,7 +358,7 @@ func (t *SDHandler) ConfigureControllers() {
 				}
 			case *appsv1.StatefulSetList:
 				// Sync the desired filter fields according to the object
-				t.desiredFilter = desiredFilter{}
+				controllerSelector = desiredFilter{}
 				for _, controllerRow := range controllerRaw.Items {
 					if changeStatus := setFilterOfController(controllerRow.GetName(), "statefulset", controllerRow.Spec.Template.Spec); changeStatus {
 						updateController(controllerRow)
@@ -393,19 +391,59 @@ func (t *SDHandler) ConfigureControllers() {
 }
 
 // setFilter generates the values in the predefined form and puts those into the node selection fields of the selectivedeployment object
-func (t *SDHandler) setFilter(sdType string, sdValue []string,
+func (t *SDHandler) setFilter(sdType string, sdValue [][]string,
 	matchExpression corev1.NodeSelectorRequirement, event string) corev1.NodeSelectorRequirement {
+	matchExpression.Values = []string{}
+	matchExpression.Key = "kubernetes.io/hostname"
 	// Turn the key into the predefined form which is determined at the custom resource definition of selectivedeployment
-	matchExpression.Values = sdValue
 	switch sdType {
-	case "city":
-		matchExpression.Key = "edge-net.io/city"
-	case "state":
-		matchExpression.Key = "edge-net.io/state-iso"
-	case "country":
-		matchExpression.Key = "edge-net.io/country-iso"
-	case "continent":
-		matchExpression.Key = "edge-net.io/continent"
+	case "city", "state", "country", "continent":
+		// If the event type is delete then we don't need to run the part below
+		if event != "delete" {
+			labelKeySuffix := ""
+			if sdType == "state" || sdType == "country" {
+				labelKeySuffix = "-iso"
+			}
+			labelKey := fmt.Sprintf("edge-net.io/%s%s", sdType, labelKeySuffix)
+			// This gets the node list which includes the EdgeNet geolabels
+			nodesRaw, err := t.clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+			if err != nil {
+				log.Println(err.Error())
+				panic(err.Error())
+			}
+			// This loop allows us to process each value defined at the object of selectivedeployment resource
+			for _, valueRow := range sdValue {
+				count := 0
+				limit, err := strconv.Atoi(valueRow[1])
+				if err != nil {
+					continue
+				}
+
+				// The loop to process each node separately
+			cityNodeLoop:
+				for _, nodeRow := range nodesRaw.Items {
+					taintBlock := false
+					for _, taint := range nodeRow.Spec.Taints {
+						if (taint.Key == "node-role.kubernetes.io/master" && taint.Effect == "NoSchedule") ||
+							(taint.Key == "node.kubernetes.io/unschedulable" && taint.Effect == "NoSchedule") {
+							taintBlock = true
+						}
+					}
+					if !nodeRow.Spec.Unschedulable && !taintBlock {
+						if contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
+							continue
+						}
+						if valueRow[0] == nodeRow.Labels[labelKey] {
+							matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
+							count++
+						}
+						if limit != 0 && limit == count {
+							break cityNodeLoop
+						}
+					}
+				}
+			}
+		}
 	case "polygon":
 		// If the event type is delete then we don't need to run the GeoFence functions
 		if event != "delete" {
@@ -419,38 +457,59 @@ func (t *SDHandler) setFilter(sdType string, sdValue []string,
 			}
 
 			var polygon [][]float64
-			matchExpression.Values = []string{}
-			// The loop to process each node separately
-			for _, nodeRow := range nodesRaw.Items {
-				if nodeRow.Labels["edge-net.io/lon"] != "" && nodeRow.Labels["edge-net.io/lat"] != "" {
-					// Because of alphanumeric limitations of Kubernetes on the labels we use "w", "e", "n", and "s" prefixes
-					// at the labels of latitude and longitude. Here is the place those prefixes are dropped away.
-					lonStr := nodeRow.Labels["edge-net.io/lon"]
-					lonStr = string(lonStr[1:])
-					latStr := nodeRow.Labels["edge-net.io/lat"]
-					latStr = string(latStr[1:])
-					if lon, err := strconv.ParseFloat(lonStr, 64); err == nil {
-						if lat, err := strconv.ParseFloat(latStr, 64); err == nil {
-							// This loop allows us to process each polygon defined at the object of selectivedeployment resource
-							for _, polygonRow := range sdValue {
-								err = json.Unmarshal([]byte(polygonRow), &polygon)
-								if err != nil {
-									panic(err)
-								}
-								// boundbox is a rectangle which provides to check whether the point is inside polygon
-								// without taking all point of the polygon into consideration
-								boundbox := node.Boundbox(polygon)
-								status := node.GeoFence(boundbox, polygon, lon, lat)
-								if status {
-									matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
+			// This loop allows us to process each polygon defined at the object of selectivedeployment resource
+			for _, valueRow := range sdValue {
+				count := 0
+				limit, err := strconv.Atoi(valueRow[1])
+				if err != nil {
+					continue
+				}
+
+				err = json.Unmarshal([]byte(valueRow[0]), &polygon)
+				if err != nil {
+					panic(err)
+				}
+				// The loop to process each node separately
+			polyNodeLoop:
+				for _, nodeRow := range nodesRaw.Items {
+					taintBlock := false
+					for _, taint := range nodeRow.Spec.Taints {
+						if (taint.Key == "node-role.kubernetes.io/master" && taint.Effect == "NoSchedule") ||
+							(taint.Key == "node.kubernetes.io/unschedulable" && taint.Effect == "NoSchedule") {
+							taintBlock = true
+						}
+					}
+					if !nodeRow.Spec.Unschedulable && !taintBlock {
+						if nodeRow.Labels["edge-net.io/lon"] != "" && nodeRow.Labels["edge-net.io/lat"] != "" {
+							if contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
+								continue
+							}
+							// Because of alphanumeric limitations of Kubernetes on the labels we use "w", "e", "n", and "s" prefixes
+							// at the labels of latitude and longitude. Here is the place those prefixes are dropped away.
+							lonStr := nodeRow.Labels["edge-net.io/lon"]
+							lonStr = string(lonStr[1:])
+							latStr := nodeRow.Labels["edge-net.io/lat"]
+							latStr = string(latStr[1:])
+							if lon, err := strconv.ParseFloat(lonStr, 64); err == nil {
+								if lat, err := strconv.ParseFloat(latStr, 64); err == nil {
+									// boundbox is a rectangle which provides to check whether the point is inside polygon
+									// without taking all point of the polygon into consideration
+									boundbox := node.Boundbox(polygon)
+									status := node.GeoFence(boundbox, polygon, lon, lat)
+									if status {
+										matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
+										count++
+									}
 								}
 							}
+						}
+						if limit != 0 && limit == count {
+							break polyNodeLoop
 						}
 					}
 				}
 			}
 		}
-		matchExpression.Key = "kubernetes.io/hostname"
 	default:
 		matchExpression.Key = ""
 	}
@@ -511,4 +570,14 @@ func checkReasonList(reasonList [][]string, controllerDet []string, sdName strin
 		}
 	}
 	return exists, index
+}
+
+// Return whether slice contains value
+func contains(slice []string, value string) bool {
+	for _, ele := range slice {
+		if value == ele {
+			return true
+		}
+	}
+	return false
 }
