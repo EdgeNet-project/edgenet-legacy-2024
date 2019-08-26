@@ -27,17 +27,36 @@ type SelectiveDeploymentSpec struct {
 	// The type is for defining which kind of selectivedeployment it is, you could find the list of active types below.
 	// Types: city, state, country, continent, and polygon
 	// The value represents the desired filter and it must be compatible with the type of selectivedeployment
-	Controller [][]string `json:"controller"`
-	Type       string     `json:"type"`
-	Value      [][]string `json:"value"`
+	Controller []Controller `json:"controller"`
+	Type       string       `json:"type"`
+	Selector   []Selector   `json:"selector"`
+}
+
+// Controller indicates deployment, daemonset or statefulsets and their names
+type Controller struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+}
+
+// Selector to define desired node filtering parameters
+type Selector struct {
+	Value    string `json:"value"`
+	Operator string `json:"operator"`
+	Count    int    `json:"count"`
 }
 
 // SelectiveDeploymentStatus is the status for a SelectiveDeployment resource
 type SelectiveDeploymentStatus struct {
-	Ready   string     `json:"ready"`
-	State   string     `json:"state"`
-	Message string     `json:"message"`
-	Reason  [][]string `json:"reason"`
+	Ready   string  `json:"ready"`
+	State   string  `json:"state"`
+	Message string  `json:"message"`
+	Crash   []Crash `json:"crash"`
+}
+
+// Crash is the list of controllers that the object cannot take them under control
+type Crash struct {
+	Controller Controller `json:"controller"`
+	Reason     string     `json:"reason"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

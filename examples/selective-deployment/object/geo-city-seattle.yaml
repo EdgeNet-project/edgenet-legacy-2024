@@ -4,7 +4,10 @@ metadata:
   name: city
 spec:
   controller:
-    - [deployment, deployment1]
-  type: city
-  value:
-    - [Seattle, "0"]
+    - type: Deployment
+      name: deployment1
+  type: City
+  selector:
+    - value: Seattle
+      operator: In
+      count: 0

@@ -4,7 +4,10 @@ metadata:
   name: country
 spec:
   controller:
-    - [daemonset, daemonset]
-  type: country
-  value:
-    - [FR, "0"]
+    - type: DaemonSet
+      name: daemonset
+  type: Country
+  selector:
+    - value: FR
+      operator: In
+      count: 0

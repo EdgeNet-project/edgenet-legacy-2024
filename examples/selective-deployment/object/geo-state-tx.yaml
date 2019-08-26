@@ -4,7 +4,10 @@ metadata:
   name: state
 spec:
   controller:
-    - [statefulset, statefulset]
-  type: state
-  value:
-    - [TX, "0"]
+    - type: StatefulSet
+      name: statefulset
+  type: State
+  selector:
+    - value: TX
+      operator: In
+      count: 0

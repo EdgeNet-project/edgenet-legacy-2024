@@ -98,7 +98,7 @@ func Start() {
 			// The variable of event.delta contains the different values in the same way as UpdateFunc.
 			// In addition to that, this variable includes the name, namespace, type, controller of the deleted object.
 			event.delta = fmt.Sprintf("%s-?delta?- %s-?delta?- %s-?delta?- %s", obj.(*selectivedeployment_v1.SelectiveDeployment).GetName(), obj.(*selectivedeployment_v1.SelectiveDeployment).GetNamespace(), obj.(*selectivedeployment_v1.SelectiveDeployment).Spec.Type,
-				strings.Join(dry(obj.(*selectivedeployment_v1.SelectiveDeployment).Spec.Controller, [][]string{}), "/?delta?/ "))
+				strings.Join(dry(obj.(*selectivedeployment_v1.SelectiveDeployment).Spec.Controller, []selectivedeployment_v1.Controller{}), "/?delta?/ "))
 			log.Infof("Delete selectivedeployment: %s", event.key)
 			if err == nil {
 				queue.Add(event)
@@ -212,17 +212,17 @@ func (c *controller) processNextItem() bool {
 
 // dry function remove the same values of the old and new objects from the old object to have
 // the slice of deleted values.
-func dry(oldSlice [][]string, newSlice [][]string) []string {
+func dry(oldSlice []selectivedeployment_v1.Controller, newSlice []selectivedeployment_v1.Controller) []string {
 	var uniqueSlice []string
 	for _, oldValue := range oldSlice {
 		exists := false
 		for _, newValue := range newSlice {
-			if oldValue[0] == newValue[0] && oldValue[1] == newValue[1] {
+			if oldValue.Type == newValue.Type && oldValue.Name == newValue.Name {
 				exists = true
 			}
 		}
 		if !exists {
-			uniqueSlice = append(uniqueSlice, strings.Join(oldValue, "?/delta/? "))
+			uniqueSlice = append(uniqueSlice, fmt.Sprintf("%s?/delta/? %s", oldValue.Type, oldValue.Name))
 		}
 	}
 	return uniqueSlice

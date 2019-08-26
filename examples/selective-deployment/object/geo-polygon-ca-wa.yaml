@@ -4,24 +4,10 @@ metadata:
   name: polygon
 spec:
   controller:
-    - [daemonset, daemonset]
-  type: polygon
-  value:
-    - ["[
-    [
-      -129.4628906,
-      49.325122
-    ],
-    [
-      -116.1914063,
-      51.2344074
-    ],
-    [
-      -97.3828125,
-      26.1159859
-    ],
-    [
-      -109.5996094,
-      21.4530686
-    ]
-  ]", "0"]
+    - type: DaemonSet
+      name: daemonset
+  type: Polygon
+  selector:
+    - value: "[ [ -129.4628906, 49.325122 ], [ -116.1914063, 51.2344074 ], [ -97.3828125, 26.1159859 ], [ -109.5996094, 21.4530686 ] ]"
+      operator: In
+      count: 0

@@ -4,7 +4,10 @@ metadata:
   name: continent
 spec:
   controller:
-    - [deployment, deployment1]
-  type: continent
-  value:
-    - [Europe, "1"]
+    - type: Deployment
+      name: deployment1
+  type: Continent
+  selector:
+    - value: Europe
+      operator: In
+      count: 1
