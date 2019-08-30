@@ -28,6 +28,8 @@ type HandlerInterface interface {
 	ObjectUpdated(obj interface{}, delta string)
 	ObjectDeleted(obj interface{}, delta string)
 	ConfigureControllers()
+	CheckControllerStatus(old, new interface{}, eventType string) ([]selectivedeployment_v1.SelectiveDeployment, bool)
+	GetSelectiveDeployments(node string) ([][]string, bool)
 }
 
 // SDHandler is a implementation of Handler
@@ -54,12 +56,6 @@ type sdDet struct {
 	sdType          string
 	controllerDelta []string
 }
-
-// Definitions of the state of the selectivedeployment resource (failure, partial, success)
-const failure = "Failure"
-const partial = "Running Partially"
-const success = "Running"
-const noSchedule = "NoSchedule"
 
 // Init handles any handler initialization
 func (t *SDHandler) Init() error {
@@ -149,6 +145,178 @@ func (t *SDHandler) ObjectDeleted(obj interface{}, delta string) {
 	}()
 	// Detect and recover the selectivedeployment resource objects which are prevented by the this object from taking control of the controller(s)
 	t.recoverSelectiveDeployments(t.sdDet)
+}
+
+// GetSelectiveDeployments generates selectivedeployment list from the owner references of controllers which contains the node that has an event (add/update/delete)
+func (t *SDHandler) GetSelectiveDeployments(nodeName string) ([][]string, bool) {
+	ownerList := [][]string{}
+	status := false
+
+	setList := func(ctlPodSpec corev1.PodSpec, ownerReferences []metav1.OwnerReference, namespace string) {
+		podSpec := ctlPodSpec
+		if podSpec.Affinity != nil {
+		nodeSelectorLoop:
+			for _, nodeSelectorTerm := range podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
+				for _, matchExpression := range nodeSelectorTerm.MatchExpressions {
+					if matchExpression.Key == "kubernetes.io/hostname" {
+						for _, expressionNodeName := range matchExpression.Values {
+							if nodeName == expressionNodeName {
+								for _, owner := range ownerReferences {
+									if owner.Kind == "SelectiveDeployment" {
+										ownerDet := []string{namespace, owner.Name}
+										ownerList = append(ownerList, ownerDet)
+										status = true
+									}
+								}
+								break nodeSelectorLoop
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	deploymentRaw, err := t.clientset.AppsV1().Deployments("").List(metav1.ListOptions{})
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	for _, deploymentRow := range deploymentRaw.Items {
+		setList(deploymentRow.Spec.Template.Spec, deploymentRow.GetOwnerReferences(), deploymentRow.GetNamespace())
+	}
+	daemonsetRaw, err := t.clientset.AppsV1().DaemonSets("").List(metav1.ListOptions{})
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	for _, daemonsetRow := range daemonsetRaw.Items {
+		setList(daemonsetRow.Spec.Template.Spec, daemonsetRow.GetOwnerReferences(), daemonsetRow.GetNamespace())
+	}
+	statefulsetRaw, err := t.clientset.AppsV1().StatefulSets("").List(metav1.ListOptions{})
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	for _, statefulsetRow := range statefulsetRaw.Items {
+		setList(statefulsetRow.Spec.Template.Spec, statefulsetRow.GetOwnerReferences(), statefulsetRow.GetNamespace())
+	}
+	return ownerList, status
+}
+
+// CheckControllerStatus runs in case of any controller event
+func (t *SDHandler) CheckControllerStatus(oldObj interface{}, newObj interface{}, eventType string) ([]selectivedeployment_v1.SelectiveDeployment, bool) {
+	log.Info("SDHandler.CheckControllerStatus")
+	sdSlice := []selectivedeployment_v1.SelectiveDeployment{}
+	status := false
+
+	switch newObj.(type) {
+	case *appsv1.Deployment:
+		if eventType == update {
+			newCtl := newObj.(*appsv1.Deployment).DeepCopy()
+			oldCtl := oldObj.(*appsv1.Deployment).DeepCopy()
+			newPodSpec := newCtl.Spec.Template.Spec
+			oldPodSpec := oldCtl.Spec.Template.Spec
+			if (newPodSpec.Affinity != nil && oldPodSpec.Affinity != nil) || (newPodSpec.Affinity == nil && oldPodSpec.Affinity != nil) {
+				if !reflect.DeepEqual(newPodSpec.Affinity, oldPodSpec.Affinity) && reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
+					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
+					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
+					status = true
+				}
+			}
+		} else {
+			ctlObj := newObj.(*appsv1.Deployment).DeepCopy()
+			sdRaw, _ := t.sdClientset.EdgenetV1alpha().SelectiveDeployments(ctlObj.GetNamespace()).List(metav1.ListOptions{})
+			for _, sdRow := range sdRaw.Items {
+				for _, controllerDet := range sdRow.Spec.Controller {
+					if ctlObj.GetName() == controllerDet.Name && strings.ToLower(controllerDet.Type) == "deployment" {
+						status = true
+						if eventType == create {
+							crashNonExistMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, "nonexistent", "all")
+							crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller")
+							if crashNonExistMatch || !crashMatch {
+								sdSlice = append(sdSlice, sdRow)
+							}
+						} else if eventType == delete {
+							if crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller"); !crashMatch {
+								sdSlice = append(sdSlice, sdRow)
+							}
+						}
+					}
+				}
+			}
+		}
+	case *appsv1.DaemonSet:
+		if eventType == update {
+			newCtl := newObj.(*appsv1.DaemonSet).DeepCopy()
+			oldCtl := oldObj.(*appsv1.DaemonSet).DeepCopy()
+			newPodSpec := newCtl.Spec.Template.Spec
+			oldPodSpec := oldCtl.Spec.Template.Spec
+			if (newPodSpec.Affinity != nil && oldPodSpec.Affinity != nil) || (newPodSpec.Affinity == nil && oldPodSpec.Affinity != nil) {
+				if !reflect.DeepEqual(newPodSpec.Affinity, oldPodSpec.Affinity) && reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
+					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
+					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
+					status = true
+				}
+			}
+		} else {
+			ctlObj := newObj.(*appsv1.DaemonSet).DeepCopy()
+			sdRaw, _ := t.sdClientset.EdgenetV1alpha().SelectiveDeployments(ctlObj.GetNamespace()).List(metav1.ListOptions{})
+			for _, sdRow := range sdRaw.Items {
+				for _, controllerDet := range sdRow.Spec.Controller {
+					if ctlObj.GetName() == controllerDet.Name && strings.ToLower(controllerDet.Type) == "daemonset" {
+						status = true
+						if eventType == create {
+							crashNonExistMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, "nonexistent", "all")
+							crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller")
+							if crashNonExistMatch || !crashMatch {
+								sdSlice = append(sdSlice, sdRow)
+							}
+						} else if eventType == delete {
+							if crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller"); !crashMatch {
+								sdSlice = append(sdSlice, sdRow)
+							}
+						}
+					}
+				}
+			}
+		}
+	case *appsv1.StatefulSet:
+		if eventType == update {
+			newCtl := newObj.(*appsv1.StatefulSet).DeepCopy()
+			oldCtl := oldObj.(*appsv1.StatefulSet).DeepCopy()
+			newPodSpec := newCtl.Spec.Template.Spec
+			oldPodSpec := oldCtl.Spec.Template.Spec
+			if (newPodSpec.Affinity != nil && oldPodSpec.Affinity != nil) || (newPodSpec.Affinity == nil && oldPodSpec.Affinity != nil) {
+				if !reflect.DeepEqual(newPodSpec.Affinity, oldPodSpec.Affinity) && reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
+					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
+					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
+					status = true
+				}
+			}
+		} else {
+			ctlObj := newObj.(*appsv1.StatefulSet).DeepCopy()
+			sdRaw, _ := t.sdClientset.EdgenetV1alpha().SelectiveDeployments(ctlObj.GetNamespace()).List(metav1.ListOptions{})
+			for _, sdRow := range sdRaw.Items {
+				for _, controllerDet := range sdRow.Spec.Controller {
+					if ctlObj.GetName() == controllerDet.Name && strings.ToLower(controllerDet.Type) == "statefulset" {
+						status = true
+						if eventType == create {
+							crashNonExistMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, "nonexistent", "all")
+							crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller")
+							if crashNonExistMatch || !crashMatch {
+								sdSlice = append(sdSlice, sdRow)
+							}
+						} else if eventType == delete {
+							if crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller"); !crashMatch {
+								sdSlice = append(sdSlice, sdRow)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return sdSlice, status
 }
 
 // setControllerFilter used by ObjectCreated, ObjectUpdated, and recoverSelectiveDeployments functions
@@ -286,6 +454,7 @@ func (t *SDHandler) ConfigureControllers() {
 		time.Sleep(1200 * time.Millisecond)
 
 		controllerSelector := desiredFilter{}
+		ownerList := []metav1.OwnerReference{}
 
 		sdRaw, err := t.sdClientset.EdgenetV1alpha().SelectiveDeployments(namespace).List(metav1.ListOptions{})
 		if err != nil {
@@ -293,27 +462,33 @@ func (t *SDHandler) ConfigureControllers() {
 			panic(err.Error())
 		}
 
-		setFilterOfController := func(controllerName string, controllerType string, podSpec corev1.PodSpec) bool {
+		setFilterOfController := func(controllerName string, controllerType string, podSpec corev1.PodSpec, oldOwnerList []metav1.OwnerReference) bool {
 			// Clear the variables involved with node selection
 			controllerSelector.nodeSelectorTerms = []corev1.NodeSelectorTerm{}
+			ownerList = []metav1.OwnerReference{}
 			for _, sdRow := range sdRaw.Items {
 				if sdRow.Status.State == success || sdRow.Status.State == partial {
 					controllerSelector.nodeSelectorTerm = corev1.NodeSelectorTerm{}
 					controllerSelector.matchExpression.Operator = "In"
 					controllerSelector.matchExpression = t.setFilter(sdRow.Spec.Type, sdRow.Spec.Selector, controllerSelector.matchExpression, "addOrUpdate")
-					if len(controllerSelector.matchExpression.Values) > 0 {
-						for _, controllerDet := range sdRow.Spec.Controller {
-							if crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller"); !crashMatch && controllerType == strings.ToLower(controllerDet.Type) && controllerName == controllerDet.Name {
+					for _, controllerDet := range sdRow.Spec.Controller {
+						if crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller"); !crashMatch && controllerType == strings.ToLower(controllerDet.Type) && controllerName == controllerDet.Name {
+							if len(controllerSelector.matchExpression.Values) > 0 {
 								controllerSelector.nodeSelectorTerm.MatchExpressions = append(controllerSelector.nodeSelectorTerm.MatchExpressions, controllerSelector.matchExpression)
 								controllerSelector.nodeSelectorTerms = append(controllerSelector.nodeSelectorTerms, controllerSelector.nodeSelectorTerm)
 							}
+							newControllerRef := *metav1.NewControllerRef(sdRow.DeepCopy(), selectivedeployment_v1.SchemeGroupVersion.WithKind("SelectiveDeployment"))
+							takeControl := false
+							newControllerRef.Controller = &takeControl
+							ownerList = append(ownerList, newControllerRef)
 						}
 					}
 				}
 			}
 			status := false
 			if podSpec.Affinity != nil && podSpec.Affinity.NodeAffinity != nil && podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-				if !reflect.DeepEqual(podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms, controllerSelector.nodeSelectorTerms) {
+				if !reflect.DeepEqual(podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms, controllerSelector.nodeSelectorTerms) ||
+					!reflect.DeepEqual(oldOwnerList, ownerList) {
 					status = true
 				}
 			} else if len(controllerSelector.nodeSelectorTerms) > 0 {
@@ -338,16 +513,19 @@ func (t *SDHandler) ConfigureControllers() {
 				controllerCopy := controllerObj.DeepCopy()
 				controllerCopy.Spec.Template.Spec.Affinity = nodeAffinity
 				log.Printf("%s/Deployment/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
+				controllerCopy.ObjectMeta.OwnerReferences = ownerList
 				t.clientset.AppsV1().Deployments(namespace).Update(controllerCopy)
 			case appsv1.DaemonSet:
 				controllerCopy := controllerObj.DeepCopy()
 				controllerCopy.Spec.Template.Spec.Affinity = nodeAffinity
 				log.Printf("%s/DaemonSet/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
+				controllerCopy.ObjectMeta.OwnerReferences = ownerList
 				t.clientset.AppsV1().DaemonSets(namespace).Update(controllerCopy)
 			case appsv1.StatefulSet:
 				controllerCopy := controllerObj.DeepCopy()
 				controllerCopy.Spec.Template.Spec.Affinity = nodeAffinity
 				log.Printf("%s/StatefulSet/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
+				controllerCopy.ObjectMeta.OwnerReferences = ownerList
 				t.clientset.AppsV1().StatefulSets(namespace).Update(controllerCopy)
 			}
 		}
@@ -357,23 +535,21 @@ func (t *SDHandler) ConfigureControllers() {
 				// Sync the desired filter fields according to the object
 				controllerSelector = desiredFilter{}
 				for _, controllerRow := range controllerRaw.Items {
-					if changeStatus := setFilterOfController(controllerRow.GetName(), "deployment", controllerRow.Spec.Template.Spec); changeStatus {
+					if changeStatus := setFilterOfController(controllerRow.GetName(), "deployment", controllerRow.Spec.Template.Spec, controllerRow.ObjectMeta.OwnerReferences); changeStatus {
 						updateController(controllerRow)
 					}
 				}
 			case *appsv1.DaemonSetList:
-				// Sync the desired filter fields according to the object
 				controllerSelector = desiredFilter{}
 				for _, controllerRow := range controllerRaw.Items {
-					if changeStatus := setFilterOfController(controllerRow.GetName(), "daemonset", controllerRow.Spec.Template.Spec); changeStatus {
+					if changeStatus := setFilterOfController(controllerRow.GetName(), "daemonset", controllerRow.Spec.Template.Spec, controllerRow.ObjectMeta.OwnerReferences); changeStatus {
 						updateController(controllerRow)
 					}
 				}
 			case *appsv1.StatefulSetList:
-				// Sync the desired filter fields according to the object
 				controllerSelector = desiredFilter{}
 				for _, controllerRow := range controllerRaw.Items {
-					if changeStatus := setFilterOfController(controllerRow.GetName(), "statefulset", controllerRow.Spec.Template.Spec); changeStatus {
+					if changeStatus := setFilterOfController(controllerRow.GetName(), "statefulset", controllerRow.Spec.Template.Spec, controllerRow.ObjectMeta.OwnerReferences); changeStatus {
 						updateController(controllerRow)
 					}
 				}
@@ -420,7 +596,7 @@ func (t *SDHandler) setFilter(sdType string, sdValue []selectivedeployment_v1.Se
 			}
 			labelKey := strings.ToLower(fmt.Sprintf("edge-net.io/%s%s", sdType, labelKeySuffix))
 			// This gets the node list which includes the EdgeNet geolabels
-			nodesRaw, err := t.clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+			nodesRaw, err := t.clientset.CoreV1().Nodes().List(metav1.ListOptions{FieldSelector: "spec.unschedulable!=true"})
 			if err != nil {
 				log.Println(err.Error())
 				panic(err.Error())
@@ -438,7 +614,12 @@ func (t *SDHandler) setFilter(sdType string, sdValue []selectivedeployment_v1.Se
 							taintBlock = true
 						}
 					}
-					if !nodeRow.Spec.Unschedulable && !taintBlock {
+					conditionBlock := false
+					if node.GetConditionReadyStatus(nodeRow.DeepCopy()) != trueStr {
+						conditionBlock = true
+					}
+
+					if !conditionBlock && !taintBlock {
 						if contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
 							continue
 						}
@@ -459,7 +640,7 @@ func (t *SDHandler) setFilter(sdType string, sdValue []selectivedeployment_v1.Se
 			// If the selectivedeployment key is polygon then certain calculations like geofence need to be done
 			// for being had the list of nodes that the pods will be deployed on according to the desired state.
 			// This gets the node list which includes the EdgeNet geolabels
-			nodesRaw, err := t.clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+			nodesRaw, err := t.clientset.CoreV1().Nodes().List(metav1.ListOptions{FieldSelector: "spec.unschedulable!=true"})
 			if err != nil {
 				log.Println(err.Error())
 				panic(err.Error())
@@ -484,7 +665,15 @@ func (t *SDHandler) setFilter(sdType string, sdValue []selectivedeployment_v1.Se
 							taintBlock = true
 						}
 					}
-					if !nodeRow.Spec.Unschedulable && !taintBlock {
+					conditionBlock := false
+					for _, conditionRow := range nodeRow.Status.Conditions {
+						if conditionType := conditionRow.Type; conditionType == "Ready" {
+							if conditionRow.Status != trueStr {
+								conditionBlock = true
+							}
+						}
+					}
+					if !conditionBlock && !taintBlock {
 						if nodeRow.Labels["edge-net.io/lon"] != "" && nodeRow.Labels["edge-net.io/lat"] != "" {
 							if contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
 								continue
@@ -585,6 +774,16 @@ func checkCrashList(crashList []selectivedeployment_v1.Crash, controllerDet sele
 
 // Return whether slice contains value
 func contains(slice []string, value string) bool {
+	for _, ele := range slice {
+		if value == ele {
+			return true
+		}
+	}
+	return false
+}
+
+// Return whether slice contains the reference
+func containsOwnerRef(slice []metav1.OwnerReference, value metav1.OwnerReference) bool {
 	for _, ele := range slice {
 		if value == ele {
 			return true

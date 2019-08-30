@@ -14,7 +14,7 @@ import (
 
 	namecheap "github.com/billputer/go-namecheap"
 	geoip2 "github.com/oschwald/geoip2-golang"
-	api_v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -163,7 +163,7 @@ func GetGeolocationByIP(hostname string, ipStr string) bool {
 
 // CompareIPAddresses makes a comparison between old and new objects of the node
 // to return the information of the match
-func CompareIPAddresses(oldObj *api_v1.Node, newObj *api_v1.Node) bool {
+func CompareIPAddresses(oldObj *corev1.Node, newObj *corev1.Node) bool {
 	updated := true
 	oldInternalIP, oldExternalIP := GetNodeIPAddresses(oldObj)
 	newInternalIP, newExternalIP := GetNodeIPAddresses(newObj)
@@ -186,7 +186,7 @@ func CompareIPAddresses(oldObj *api_v1.Node, newObj *api_v1.Node) bool {
 }
 
 // GetNodeIPAddresses picks up the internal and external IP addresses of the Node
-func GetNodeIPAddresses(obj *api_v1.Node) (string, string) {
+func GetNodeIPAddresses(obj *corev1.Node) (string, string) {
 	internalIP := ""
 	externalIP := ""
 	for _, addressesRow := range obj.Status.Addresses {
@@ -267,16 +267,23 @@ func GetStatusList() []byte {
 	}
 	nodesArr := make([]nodeStatus, len(nodesRaw.Items))
 	for i, nodeRow := range nodesRaw.Items {
-		nodesArr[i].Node = nodeRow.Name
-		for _, conditionRow := range nodeRow.Status.Conditions {
-			if conditionType := conditionRow.Type; conditionType == "Ready" {
-				nodesArr[i].Ready = string(conditionRow.Status)
-			}
-		}
+		nodeCopy := nodeRow.DeepCopy()
+		nodesArr[i].Node = nodeCopy.Name
+		nodesArr[i].Ready = GetConditionReadyStatus(nodeCopy)
 	}
 	nodesJSON, _ := json.Marshal(nodesArr)
 
 	return nodesJSON
+}
+
+// getConditionReadyStatus picks the ready status of node
+func GetConditionReadyStatus(node *corev1.Node) string {
+	for _, conditionRow := range node.Status.Conditions {
+		if conditionType := conditionRow.Type; conditionType == "Ready" {
+			return string(conditionRow.Status)
+		}
+	}
+	return ""
 }
 
 // getNodeByHostname uses clientset to get namespace requested

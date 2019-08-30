@@ -17,7 +17,7 @@ func Create(name string) (string, error) {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-  // Check namespace occupied or not 
+	// Check namespace occupied or not
 	exist, err := GetNamespaceByName(name)
 	if (err == nil && exist == "true") || (err != nil && exist == "error") {
 		if err == nil {
@@ -44,15 +44,15 @@ func GetList() []string {
 		panic(err.Error())
 	}
 	// FieldSelector allows getting filtered results
-	namespacesRaw, err := clientset.CoreV1().Namespaces().List(
+	namespaceRaw, err := clientset.CoreV1().Namespaces().List(
 		metav1.ListOptions{FieldSelector: "metadata.name!=default,metadata.name!=kube-system,metadata.name!=kube-public"})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	namespaces := make([]string, len(namespacesRaw.Items))
-	for i, namespacesRaw := range namespacesRaw.Items {
-		namespaces[i] = namespacesRaw.Name
+	namespaces := make([]string, len(namespaceRaw.Items))
+	for i, namespaceRow := range namespaceRaw.Items {
+		namespaces[i] = namespaceRow.Name
 	}
 	return namespaces
 }
