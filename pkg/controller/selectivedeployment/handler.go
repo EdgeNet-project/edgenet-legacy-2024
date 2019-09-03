@@ -623,7 +623,10 @@ func (t *SDHandler) setFilter(sdType string, sdValue []selectivedeployment_v1.Se
 						if contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
 							continue
 						}
-						if valueRow.Value == nodeRow.Labels[labelKey] {
+						if valueRow.Value == nodeRow.Labels[labelKey] && valueRow.Operator == "In" {
+							matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
+							counter++
+						} else if valueRow.Value != nodeRow.Labels[labelKey] && valueRow.Operator == "NotIn" {
 							matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
 							counter++
 						}
@@ -690,7 +693,10 @@ func (t *SDHandler) setFilter(sdType string, sdValue []selectivedeployment_v1.Se
 									// without taking all point of the polygon into consideration
 									boundbox := node.Boundbox(polygon)
 									status := node.GeoFence(boundbox, polygon, lon, lat)
-									if status {
+									if status && valueRow.Operator == "In" {
+										matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
+										counter++
+									} else if !status && valueRow.Operator == "NotIn" {
 										matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
 										counter++
 									}
