@@ -154,12 +154,12 @@ func Start() {
 							log.Println(err.Error())
 							panic(err.Error())
 						}
-						sdRaw, _ := sdClientset.EdgenetV1alpha().SelectiveDeployments(nodeObj.GetNamespace()).List(metav1.ListOptions{})
+						sdRaw, _ := sdClientset.EdgenetV1alpha().SelectiveDeployments("").List(metav1.ListOptions{})
 						for _, sdRow := range sdRaw.Items {
 							if sdRow.Status.State == partial || sdRow.Status.State == success {
 							selectorLoop:
 								for _, selectorDet := range sdRow.Spec.Selector {
-									if selectorDet.Count == 0 {
+									if selectorDet.Count == 0 || (selectorDet.Count != 0 && (strings.Contains(sdRow.Status.Message, "Fewer nodes issue") || strings.Contains(sdRow.Status.Message, "fewer nodes issue"))) {
 										event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
 										event.function = create
 										log.Infof("SD node added: %s, recovery started for: %s", key, event.key)
@@ -181,21 +181,22 @@ func Start() {
 			oldReady := node.GetConditionReadyStatus(oldObj)
 			newReady := node.GetConditionReadyStatus(newObj)
 			if (oldReady == falseStr && newReady == trueStr) ||
-				(oldReady == unknownStr && newReady == trueStr) {
+				(oldReady == unknownStr && newReady == trueStr) ||
+				(oldObj.Spec.Unschedulable == true && newObj.Spec.Unschedulable == false) {
 				key, err := cache.MetaNamespaceKeyFunc(newObj)
 				if err != nil {
 					log.Println(err.Error())
 					panic(err.Error())
 				}
-				sdRaw, _ := sdClientset.EdgenetV1alpha().SelectiveDeployments(newObj.GetNamespace()).List(metav1.ListOptions{})
+				sdRaw, _ := sdClientset.EdgenetV1alpha().SelectiveDeployments("").List(metav1.ListOptions{})
 				for _, sdRow := range sdRaw.Items {
 					if sdRow.Status.State == partial || sdRow.Status.State == success {
 					selectorLoop:
 						for _, selectorDet := range sdRow.Spec.Selector {
-							if selectorDet.Count == 0 {
+							if selectorDet.Count == 0 || (selectorDet.Count != 0 && (strings.Contains(sdRow.Status.Message, "Fewer nodes issue") || strings.Contains(sdRow.Status.Message, "fewer nodes issue"))) {
 								event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
 								event.function = create
-								log.Infof("SD node added: %s, recovery started for: %s", key, event.key)
+								log.Infof("SD node updated: %s, recovery started for: %s", key, event.key)
 								if err == nil {
 									queue.Add(event)
 								}
@@ -205,7 +206,9 @@ func Start() {
 					}
 				}
 			} else if updated := node.CompareIPAddresses(oldObj, newObj); (oldReady == trueStr && newReady == falseStr) ||
-				(oldReady == trueStr && newReady == trueStr && updated) {
+				(oldReady == trueStr && newReady == unknownStr) ||
+				(oldObj.Spec.Unschedulable == false && newObj.Spec.Unschedulable == true) ||
+				(newObj.Spec.Unschedulable == false && newReady == trueStr && updated) {
 				key, err := cache.MetaNamespaceKeyFunc(newObj.DeepCopyObject())
 				if err != nil {
 					log.Println(err.Error())
@@ -220,7 +223,7 @@ func Start() {
 						}
 						event.key, err = cache.MetaNamespaceKeyFunc(sdObj.DeepCopyObject())
 						event.function = create
-						log.Infof("SD node deleted: %s, recovery started for: %s", key, event.key)
+						log.Infof("SD node updated: %s, recovery started for: %s", key, event.key)
 						if err == nil {
 							queue.Add(event)
 						}

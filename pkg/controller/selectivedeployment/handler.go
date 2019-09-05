@@ -154,7 +154,7 @@ func (t *SDHandler) GetSelectiveDeployments(nodeName string) ([][]string, bool) 
 
 	setList := func(ctlPodSpec corev1.PodSpec, ownerReferences []metav1.OwnerReference, namespace string) {
 		podSpec := ctlPodSpec
-		if podSpec.Affinity != nil {
+		if podSpec.Affinity != nil && podSpec.Affinity.NodeAffinity != nil && podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
 		nodeSelectorLoop:
 			for _, nodeSelectorTerm := range podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
 				for _, matchExpression := range nodeSelectorTerm.MatchExpressions {
@@ -216,8 +216,14 @@ func (t *SDHandler) CheckControllerStatus(oldObj interface{}, newObj interface{}
 			oldCtl := oldObj.(*appsv1.Deployment).DeepCopy()
 			newPodSpec := newCtl.Spec.Template.Spec
 			oldPodSpec := oldCtl.Spec.Template.Spec
-			if (newPodSpec.Affinity != nil && oldPodSpec.Affinity != nil) || (newPodSpec.Affinity == nil && oldPodSpec.Affinity != nil) {
+			if newPodSpec.Affinity != nil && newPodSpec.Affinity.NodeAffinity != nil && newPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil && oldPodSpec.Affinity != nil && oldPodSpec.Affinity.NodeAffinity != nil && oldPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
 				if !reflect.DeepEqual(newPodSpec.Affinity, oldPodSpec.Affinity) && reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
+					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
+					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
+					status = true
+				}
+			} else if newPodSpec.Affinity == nil && oldPodSpec.Affinity != nil && oldPodSpec.Affinity.NodeAffinity != nil && oldPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+				if reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
 					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
 					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
 					status = true
@@ -251,8 +257,14 @@ func (t *SDHandler) CheckControllerStatus(oldObj interface{}, newObj interface{}
 			oldCtl := oldObj.(*appsv1.DaemonSet).DeepCopy()
 			newPodSpec := newCtl.Spec.Template.Spec
 			oldPodSpec := oldCtl.Spec.Template.Spec
-			if (newPodSpec.Affinity != nil && oldPodSpec.Affinity != nil) || (newPodSpec.Affinity == nil && oldPodSpec.Affinity != nil) {
+			if newPodSpec.Affinity != nil && newPodSpec.Affinity.NodeAffinity != nil && newPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil && oldPodSpec.Affinity != nil && oldPodSpec.Affinity.NodeAffinity != nil && oldPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
 				if !reflect.DeepEqual(newPodSpec.Affinity, oldPodSpec.Affinity) && reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
+					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
+					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
+					status = true
+				}
+			} else if newPodSpec.Affinity == nil && oldPodSpec.Affinity != nil && oldPodSpec.Affinity.NodeAffinity != nil && oldPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+				if reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
 					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
 					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
 					status = true
@@ -286,8 +298,14 @@ func (t *SDHandler) CheckControllerStatus(oldObj interface{}, newObj interface{}
 			oldCtl := oldObj.(*appsv1.StatefulSet).DeepCopy()
 			newPodSpec := newCtl.Spec.Template.Spec
 			oldPodSpec := oldCtl.Spec.Template.Spec
-			if (newPodSpec.Affinity != nil && oldPodSpec.Affinity != nil) || (newPodSpec.Affinity == nil && oldPodSpec.Affinity != nil) {
+			if newPodSpec.Affinity != nil && newPodSpec.Affinity.NodeAffinity != nil && newPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil && oldPodSpec.Affinity != nil && oldPodSpec.Affinity.NodeAffinity != nil && oldPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
 				if !reflect.DeepEqual(newPodSpec.Affinity, oldPodSpec.Affinity) && reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
+					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
+					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
+					status = true
+				}
+			} else if newPodSpec.Affinity == nil && oldPodSpec.Affinity != nil && oldPodSpec.Affinity.NodeAffinity != nil && oldPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+				if reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
 					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
 					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
 					status = true
@@ -391,9 +409,9 @@ func (t *SDHandler) setControllerFilter(sdCopy *selectivedeployment_v1.Selective
 		sdCopy.Status.State = failure
 		// nonExistentCounter indicates the number of non-existent controller(s) already defined in the desired selectivedeployment object
 		if nonExistentCounter != 0 && len(sdCopy.Status.Crash) != nonExistentCounter {
-			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) are already under the control of any different resource object(s) with the same type, %d controller(s) couldn't be found", (len(sdCopy.Status.Crash) - nonExistentCounter), nonExistentCounter)
+			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) are already under the control of any different resource object(s) with the same type, %d controller(s) couldn't be found", (len(uniqueCrashList) - nonExistentCounter), nonExistentCounter)
 		} else if nonExistentCounter != 0 && len(sdCopy.Status.Crash) == nonExistentCounter {
-			sdCopy.Status.Message = "All controllers couldn't be found"
+			sdCopy.Status.Message = "No controllers found"
 		} else {
 			sdCopy.Status.Message = "All controllers are already under the control of any different resource object(s) with the same type"
 		}
@@ -403,7 +421,7 @@ func (t *SDHandler) setControllerFilter(sdCopy *selectivedeployment_v1.Selective
 	} else {
 		sdCopy.Status.State = partial
 		if len(sdCopy.Status.Crash) != nonExistentCounter {
-			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) are already under the control of any different resource object(s) with the same type", (len(sdCopy.Status.Crash) - nonExistentCounter))
+			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) are already under the control of any different resource object(s) with the same type", (len(uniqueCrashList) - nonExistentCounter))
 		}
 		if nonExistentCounter != 0 {
 			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) couldn't be found", nonExistentCounter)
@@ -470,7 +488,7 @@ func (t *SDHandler) ConfigureControllers() {
 				if sdRow.Status.State == success || sdRow.Status.State == partial {
 					controllerSelector.nodeSelectorTerm = corev1.NodeSelectorTerm{}
 					controllerSelector.matchExpression.Operator = "In"
-					controllerSelector.matchExpression = t.setFilter(sdRow.Spec.Type, sdRow.Spec.Selector, controllerSelector.matchExpression, "addOrUpdate")
+					controllerSelector.matchExpression = t.setFilter(sdRow, controllerSelector.matchExpression, "addOrUpdate")
 					for _, controllerDet := range sdRow.Spec.Controller {
 						if crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller"); !crashMatch && controllerType == strings.ToLower(controllerDet.Type) && controllerName == controllerDet.Name {
 							if len(controllerSelector.matchExpression.Values) > 0 {
@@ -580,11 +598,12 @@ func (t *SDHandler) ConfigureControllers() {
 }
 
 // setFilter generates the values in the predefined form and puts those into the node selection fields of the selectivedeployment object
-func (t *SDHandler) setFilter(sdType string, sdValue []selectivedeployment_v1.Selector,
+func (t *SDHandler) setFilter(sdRow selectivedeployment_v1.SelectiveDeployment,
 	matchExpression corev1.NodeSelectorRequirement, event string) corev1.NodeSelectorRequirement {
 	matchExpression.Values = []string{}
 	matchExpression.Key = "kubernetes.io/hostname"
-	sdType = strings.ToLower(sdType)
+	sdType := strings.ToLower(sdRow.Spec.Type)
+	selectorFailure := false
 	// Turn the key into the predefined form which is determined at the custom resource definition of selectivedeployment
 	switch sdType {
 	case "city", "state", "country", "continent":
@@ -601,8 +620,9 @@ func (t *SDHandler) setFilter(sdType string, sdValue []selectivedeployment_v1.Se
 				log.Println(err.Error())
 				panic(err.Error())
 			}
+			sdCopy := sdRow.DeepCopy()
 			// This loop allows us to process each value defined at the object of selectivedeployment resource
-			for _, valueRow := range sdValue {
+			for _, selectorRow := range sdRow.Spec.Selector {
 				counter := 0
 				// The loop to process each node separately
 			cityNodeLoop:
@@ -623,16 +643,55 @@ func (t *SDHandler) setFilter(sdType string, sdValue []selectivedeployment_v1.Se
 						if contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
 							continue
 						}
-						if valueRow.Value == nodeRow.Labels[labelKey] && valueRow.Operator == "In" {
+						if selectorRow.Value == nodeRow.Labels[labelKey] && selectorRow.Operator == "In" {
 							matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
 							counter++
-						} else if valueRow.Value != nodeRow.Labels[labelKey] && valueRow.Operator == "NotIn" {
+						} else if selectorRow.Value != nodeRow.Labels[labelKey] && selectorRow.Operator == "NotIn" {
 							matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
 							counter++
 						}
-						if valueRow.Count != 0 && valueRow.Count == counter {
+						if selectorRow.Count != 0 && selectorRow.Count == counter {
 							break cityNodeLoop
 						}
+					}
+				}
+
+				if selectorRow.Count != 0 && selectorRow.Count > counter {
+					updateSDStatus := func(sdCopy *selectivedeployment_v1.SelectiveDeployment) {
+						strLen := 16
+						strSuffix := "..."
+						if len(selectorRow.Value) <= strLen {
+							strLen = len(selectorRow.Value)
+							strSuffix = ""
+						}
+						if sdCopy.Status.State == success {
+							sdCopy.Status.State = partial
+							sdCopy.Status.Message = fmt.Sprintf("Fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+						} else {
+							errorMsg := fmt.Sprintf("fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+							if !strings.Contains(strings.ToLower(sdCopy.Status.Message), strings.ToLower(errorMsg)) {
+								sdCopy.Status.Message = fmt.Sprintf("%s, fewer nodes issue, %d node(s) found instead of %d for %s%s", sdCopy.Status.Message, counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+							}
+						}
+					}
+					if selectorFailure == false {
+						selectorFailure = true
+						defer t.sdClientset.EdgenetV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
+						updateSDStatus(sdCopy)
+					} else {
+						updateSDStatus(sdCopy)
+					}
+				} else if strings.Contains(sdRow.Status.Message, "Fewer nodes issue") || strings.Contains(sdRow.Status.Message, "fewer nodes issue") {
+					defer t.sdClientset.EdgenetV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
+					index := strings.Index(sdRow.Status.Message, "Fewer nodes issue")
+					if index != -1 {
+						sdRow.Status.Message = sdRow.Status.Message[0:index]
+						if sdCopy.Status.State == partial {
+							sdCopy.Status.State = success
+						}
+					} else {
+						index := strings.Index(sdRow.Status.Message, ", fewer nodes issue")
+						sdRow.Status.Message = sdRow.Status.Message[0:index]
 					}
 				}
 			}
@@ -650,12 +709,36 @@ func (t *SDHandler) setFilter(sdType string, sdValue []selectivedeployment_v1.Se
 			}
 
 			var polygon [][]float64
+			sdCopy := sdRow.DeepCopy()
 			// This loop allows us to process each polygon defined at the object of selectivedeployment resource
-			for _, valueRow := range sdValue {
+			for _, selectorRow := range sdRow.Spec.Selector {
 				counter := 0
-				err = json.Unmarshal([]byte(valueRow.Value), &polygon)
+				err = json.Unmarshal([]byte(selectorRow.Value), &polygon)
 				if err != nil {
-					// Will be developed further
+					updateSDStatus := func(sdCopy *selectivedeployment_v1.SelectiveDeployment) {
+						strLen := 16
+						strSuffix := "..."
+						if len(selectorRow.Value) <= strLen {
+							strLen = len(selectorRow.Value)
+							strSuffix = ""
+						}
+						if sdCopy.Status.State == success {
+							sdCopy.Status.State = partial
+							sdCopy.Status.Message = fmt.Sprintf("%s%s has a GeoJSON format error", selectorRow.Value[0:strLen], strSuffix)
+						} else {
+							errorMsg := fmt.Sprintf("%s%s has a GeoJSON format error", selectorRow.Value[0:strLen], strSuffix)
+							if !strings.Contains(strings.ToLower(sdCopy.Status.Message), strings.ToLower(errorMsg)) {
+								sdCopy.Status.Message = fmt.Sprintf("%s, %s%s has a GeoJSON format error", sdCopy.Status.Message, selectorRow.Value[0:strLen], strSuffix)
+							}
+						}
+					}
+					if selectorFailure == false {
+						selectorFailure = true
+						defer t.sdClientset.EdgenetV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
+						updateSDStatus(sdCopy)
+					} else {
+						updateSDStatus(sdCopy)
+					}
 					continue
 				}
 				// The loop to process each node separately
@@ -693,19 +776,58 @@ func (t *SDHandler) setFilter(sdType string, sdValue []selectivedeployment_v1.Se
 									// without taking all point of the polygon into consideration
 									boundbox := node.Boundbox(polygon)
 									status := node.GeoFence(boundbox, polygon, lon, lat)
-									if status && valueRow.Operator == "In" {
+									if status && selectorRow.Operator == "In" {
 										matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
 										counter++
-									} else if !status && valueRow.Operator == "NotIn" {
+									} else if !status && selectorRow.Operator == "NotIn" {
 										matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
 										counter++
 									}
 								}
 							}
 						}
-						if valueRow.Count != 0 && valueRow.Count == counter {
+						if selectorRow.Count != 0 && selectorRow.Count == counter {
 							break polyNodeLoop
 						}
+					}
+				}
+
+				if selectorRow.Count != 0 && selectorRow.Count > counter {
+					updateSDStatus := func(sdCopy *selectivedeployment_v1.SelectiveDeployment) {
+						strLen := 16
+						strSuffix := "..."
+						if len(selectorRow.Value) <= strLen {
+							strLen = len(selectorRow.Value)
+							strSuffix = ""
+						}
+						if sdCopy.Status.State == success {
+							sdCopy.Status.State = partial
+							sdCopy.Status.Message = fmt.Sprintf("Fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+						} else {
+							errorMsg := fmt.Sprintf("fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+							if !strings.Contains(strings.ToLower(sdCopy.Status.Message), strings.ToLower(errorMsg)) {
+								sdCopy.Status.Message = fmt.Sprintf("%s, fewer nodes issue, %d node(s) found instead of %d for %s%s", sdCopy.Status.Message, counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+							}
+						}
+					}
+					if selectorFailure == false {
+						selectorFailure = true
+						defer t.sdClientset.EdgenetV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
+						updateSDStatus(sdCopy)
+					} else {
+						updateSDStatus(sdCopy)
+					}
+				} else if strings.Contains(sdRow.Status.Message, "Fewer nodes issue") || strings.Contains(sdRow.Status.Message, "fewer nodes issue") {
+					defer t.sdClientset.EdgenetV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
+					index := strings.Index(sdRow.Status.Message, "Fewer nodes issue")
+					if index != -1 {
+						sdRow.Status.Message = sdRow.Status.Message[0:index]
+						if sdCopy.Status.State == partial {
+							sdCopy.Status.State = success
+						}
+					} else {
+						index := strings.Index(sdRow.Status.Message, ", fewer nodes issue")
+						sdRow.Status.Message = sdRow.Status.Message[0:index]
 					}
 				}
 			}
