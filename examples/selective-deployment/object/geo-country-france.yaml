@@ -1,0 +1,13 @@
+apiVersion: edgenet.io/v1alpha
+kind: SelectiveDeployment
+metadata:
+  name: country
+spec:
+  controller:
+    - type: DaemonSet
+      name: daemonset
+  type: Country
+  selector:
+    - value: FR
+      operator: In
+      count: 0

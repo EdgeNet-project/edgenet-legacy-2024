@@ -91,6 +91,19 @@ func MakeUser(user string) ([]byte, int) {
 		result, _ := json.Marshal(resultMap)
 		return result, 500
 	}
+	
+	rbSubjectsEdgenet := []apiv1.Subject{{Kind: "ServiceAccount", Name: "default", Namespace: user}}
+	roleBindRefEdgenet := apiv1.RoleRef{Kind: "ClusterRole", Name: "edgenet-admin"}
+	var roleBindEdgenet *apiv1.RoleBinding
+	roleBindEdgenet = &apiv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: user, Name: fmt.Sprintf("%s-rolebind-edgenet", user)},
+		Subjects: rbSubjectsEdgenet, RoleRef: roleBindRefEdgenet}
+	_, err = clientset.RbacV1().RoleBindings(user).Create(roleBindEdgenet)
+	if err != nil {
+		log.Printf("Couldn't create user admin role binding: %s", user)
+		resultMap := map[string]string{"status": "Failure"}
+		result, _ := json.Marshal(resultMap)
+		return result, 500
+	}
 
 	exist, err := namespace.GetNamespaceByName(user)
 	if err == nil && exist == "true" {

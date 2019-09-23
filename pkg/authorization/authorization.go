@@ -2,10 +2,11 @@ package authorization
 
 import (
 	"flag"
+	"log"
 	"os"
 	"path/filepath"
-	"log"
 
+	selectivedeploymentclientset "headnode/pkg/client/clientset/versioned"
 	"headnode/pkg/config"
 
 	namecheap "github.com/billputer/go-namecheap"
@@ -30,6 +31,24 @@ func SetKubeConfig() {
 		flag.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
 	}
 	flag.Parse()
+}
+
+// CreateSelectiveDeploymentClientSet generates the clientset to interact with selectivedeployment custom resource
+func CreateSelectiveDeploymentClientSet() (*selectivedeploymentclientset.Clientset, error) {
+	// Use the current context in kubeconfig
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+
+	// Create the clientset
+	clientset, err := selectivedeploymentclientset.NewForConfig(config)
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	return clientset, err
 }
 
 // CreateClientSet generates the clientset to interact with Kubernetes

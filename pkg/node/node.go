@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"strings"
 	"time"
@@ -13,7 +14,7 @@ import (
 
 	namecheap "github.com/billputer/go-namecheap"
 	geoip2 "github.com/oschwald/geoip2-golang"
-	api_v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -24,6 +25,48 @@ type patchStringValue struct {
 	Op    string `json:"op"`
 	Path  string `json:"path"`
 	Value string `json:"value"`
+}
+
+// GeoFence function determines whether the point is inside a polygon by using the crossing number method.
+// This method counts the number of times a ray starting at a point crosses a polygon boundary edge.
+// The even numbers mean the point is outside and the odd ones mean the point is inside.
+func GeoFence(boundbox []float64, polygon [][]float64, y float64, x float64) bool {
+	vertices := len(polygon)
+	lastIndex := vertices - 1
+	oddNodes := false
+
+	if boundbox[0] <= x && boundbox[1] >= x && boundbox[2] <= y && boundbox[3] >= y {
+		for index := range polygon {
+			if (polygon[index][0] < y && polygon[lastIndex][0] >= y || polygon[lastIndex][0] < y &&
+				polygon[index][0] >= y) && (polygon[index][1] <= x || polygon[lastIndex][1] <= x) {
+				if polygon[index][1]+(y-polygon[index][0])/(polygon[lastIndex][0]-polygon[index][0])*
+					(polygon[lastIndex][1]-polygon[index][1]) < x {
+					oddNodes = !oddNodes
+				}
+			}
+			lastIndex = index
+		}
+	}
+
+	return oddNodes
+}
+
+// Boundbox returns a rectangle which created according to the points of the polygon given
+func Boundbox(points [][]float64) []float64 {
+	var minX float64 = -math.MaxFloat64
+	var maxX float64 = math.MaxFloat64
+	var minY float64 = -math.MaxFloat64
+	var maxY float64 = math.MaxFloat64
+
+	for _, coordinates := range points {
+		minX = math.Min(minX, coordinates[0])
+		maxX = math.Max(maxX, coordinates[0])
+		minY = math.Min(minY, coordinates[1])
+		maxY = math.Max(maxY, coordinates[1])
+	}
+
+	bounding := []float64{minX, maxX, minY, maxY}
+	return bounding
 }
 
 // setNodeLabels uses client-go to patch nodes by processing a labels map
@@ -120,7 +163,7 @@ func GetGeolocationByIP(hostname string, ipStr string) bool {
 
 // CompareIPAddresses makes a comparison between old and new objects of the node
 // to return the information of the match
-func CompareIPAddresses(oldObj *api_v1.Node, newObj *api_v1.Node) bool {
+func CompareIPAddresses(oldObj *corev1.Node, newObj *corev1.Node) bool {
 	updated := true
 	oldInternalIP, oldExternalIP := GetNodeIPAddresses(oldObj)
 	newInternalIP, newExternalIP := GetNodeIPAddresses(newObj)
@@ -143,7 +186,7 @@ func CompareIPAddresses(oldObj *api_v1.Node, newObj *api_v1.Node) bool {
 }
 
 // GetNodeIPAddresses picks up the internal and external IP addresses of the Node
-func GetNodeIPAddresses(obj *api_v1.Node) (string, string) {
+func GetNodeIPAddresses(obj *corev1.Node) (string, string) {
 	internalIP := ""
 	externalIP := ""
 	for _, addressesRow := range obj.Status.Addresses {
@@ -252,6 +295,16 @@ func GetStatusList() []byte {
 	nodesJSON, _ := json.Marshal(nodesArr)
 
 	return nodesJSON
+}
+
+// GetConditionReadyStatus picks the ready status of node
+func GetConditionReadyStatus(node *corev1.Node) string {
+	for _, conditionRow := range node.Status.Conditions {
+		if conditionType := conditionRow.Type; conditionType == "Ready" {
+			return string(conditionRow.Status)
+		}
+	}
+	return ""
 }
 
 // getNodeByHostname uses clientset to get namespace requested

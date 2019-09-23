@@ -1,0 +1,16 @@
+apiVersion: edgenet.io/v1alpha
+kind: SelectiveDeployment
+metadata:
+  name: city
+spec:
+  controller:
+    - type: Deployment
+      name: deployment1
+  type: City
+  selector:
+    - value: Paris
+      operator: In
+      count: 0
+    - value: Los_Angeles
+      operator: In
+      count: 0

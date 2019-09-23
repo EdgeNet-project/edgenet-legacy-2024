@@ -12,6 +12,8 @@ services:
       - /etc/kubernetes/:/etc/kubernetes/
       - ~/.kube/:/root/.kube/
       - ../config/:/root/config/
+      - ../assets/certs:/root/assets/certs
+      - ../assets/kubeconfigs:/root/assets/kubeconfigs
     ports:
       - 8181
     network_mode: host
@@ -25,3 +27,12 @@ services:
     volumes:
       - ~/.kube/:/root/.kube/
       - ../assets/database/:/root/assets/database/
+  edgenet-selectivedeployment:
+    container_name: edgenet-selectivedeployment
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/selectivedeployment/Dockerfile
+    image: edgenet-selectivedeployment:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/

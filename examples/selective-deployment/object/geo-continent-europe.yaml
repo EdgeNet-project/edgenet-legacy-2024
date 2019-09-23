@@ -1,0 +1,13 @@
+apiVersion: edgenet.io/v1alpha
+kind: SelectiveDeployment
+metadata:
+  name: continent
+spec:
+  controller:
+    - type: Deployment
+      name: deployment1
+  type: Continent
+  selector:
+    - value: Europe
+      operator: In
+      count: 1

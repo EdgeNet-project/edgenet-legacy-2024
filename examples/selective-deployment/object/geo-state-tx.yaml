@@ -1,0 +1,13 @@
+apiVersion: edgenet.io/v1alpha
+kind: SelectiveDeployment
+metadata:
+  name: state
+spec:
+  controller:
+    - type: StatefulSet
+      name: statefulset
+  type: State
+  selector:
+    - value: TX
+      operator: In
+      count: 0

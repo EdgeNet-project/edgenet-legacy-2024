@@ -19,6 +19,8 @@ config/**
 !config/user-files/**
 !config/nginx
 !config/nginx/*_template.conf
+!config/crd
+!config/crd/**
 
 # assets
 assets/certs/**
@@ -28,7 +30,13 @@ assets/database/**
 !assets/kubeconfigs/*.md
 !assets/database/*.md
 
+# examples
+examples/selective-deployment/object/error-handling/**
+examples/selective-deployment/object/error-handling
+
 pkg/user
+examples/selective-deployment/*.txt
+code-generation
 
 # Ignore OS X metadata files
 ._*

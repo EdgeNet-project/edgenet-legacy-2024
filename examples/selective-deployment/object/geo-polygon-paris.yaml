@@ -1,0 +1,13 @@
+apiVersion: edgenet.io/v1alpha
+kind: SelectiveDeployment
+metadata:
+  name: polygon
+spec:
+  controller:
+    - type: DaemonSet
+      name: daemonset
+  type: Polygon
+  selector:
+    - value: "[ [ 2.2150567, 48.8947616], [ 2.2040704, 48.8084639 ], [ 2.3393396, 48.7835862 ], [ 2.4519494, 48.8416903 ], [ 2.3932412, 48.9171024 ] ]"
+      operator: In
+      count: 0

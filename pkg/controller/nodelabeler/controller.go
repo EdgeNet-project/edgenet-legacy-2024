@@ -11,7 +11,7 @@ import (
 	"headnode/pkg/node"
 
 	log "github.com/Sirupsen/logrus"
-	api_v1 "k8s.io/api/core/v1"
+	core_v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -51,7 +51,7 @@ func Start() {
 				return clientset.CoreV1().Nodes().Watch(options)
 			},
 		},
-		&api_v1.Node{},
+		&core_v1.Node{},
 		0,
 		cache.Indexers{},
 	)
@@ -69,7 +69,7 @@ func Start() {
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			updated := node.CompareIPAddresses(oldObj.(*api_v1.Node), newObj.(*api_v1.Node))
+			updated := node.CompareIPAddresses(oldObj.(*core_v1.Node), newObj.(*core_v1.Node))
 			if updated {
 				key, err := cache.MetaNamespaceKeyFunc(newObj)
 				log.Infof("Update node detected: %s", key)
