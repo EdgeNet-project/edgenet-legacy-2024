@@ -270,14 +270,18 @@ func GetList() []string {
 // GetStatusList uses clientset to get node list of the cluster that contains Ready State info
 func GetStatusList() []byte {
 	type nodeStatus struct {
-		Node      string `json:"node"`
-		Ready     string `json:"ready"`
-		City      string `json:"city"`
-		State     string `json:"state-iso"`
-		Country   string `json:"country-iso"`
-		Continent string `json:"continent"`
-		Lon       string `json:"lon"`
-		Lat       string `json:"lat"`
+		Node       string   `json:"node"`
+		Ready      string   `json:"ready"`
+		IP         string   `json:"ip"`
+		Age        int      `json:"age"`
+		Hardware   string   `json:"hardware"`
+		Namespaces []string `json:"namespaces"`
+		City       string   `json:"city"`
+		State      string   `json:"state-iso"`
+		Country    string   `json:"country-iso"`
+		Continent  string   `json:"continent"`
+		Lon        string   `json:"lon"`
+		Lat        string   `json:"lat"`
 	}
 	clientset, err := authorization.CreateClientSet()
 	if err != nil {
@@ -286,6 +290,11 @@ func GetStatusList() []byte {
 	}
 
 	nodesRaw, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	podsRaw, err := clientset.CoreV1().Pods("").List(metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -310,6 +319,26 @@ func GetStatusList() []byte {
 				nodesArr[i].Ready = string(conditionRow.Status)
 			}
 		}
+
+		internalIP, externalIP := GetNodeIPAddresses(nodeRow.DeepCopy())
+		if internalIP != "" {
+			nodesArr[i].IP = internalIP
+		} else if externalIP != "" {
+			nodesArr[i].IP = externalIP
+		}
+
+		nodesArr[i].Age = nodeRow.GetCreationTimestamp().Day()
+		nodesArr[i].Hardware = fmt.Sprintf("%s %d CPU %dMiB, %s", nodeRow.Status.NodeInfo.Architecture,
+			nodeRow.Status.Capacity.Cpu().Value(), nodeRow.Status.Capacity.Memory().Value()/1048576,
+			nodeRow.Status.NodeInfo.OSImage)
+
+		namespaces := []string{}
+		for _, podRow := range podsRaw.Items {
+			if nodeRow.Name == podRow.Spec.NodeName {
+				namespaces = append(namespaces, podRow.GetNamespace())
+			}
+		}
+		nodesArr[i].Namespaces = unique(namespaces)
 	}
 	nodesJSON, _ := json.Marshal(nodesArr)
 
@@ -350,4 +379,19 @@ func getNodeByHostname(hostname string) (string, error) {
 	} else {
 		return "true", nil
 	}
+}
+
+// unique function remove duplicate values from slice.
+func unique(slice []string) []string {
+	duplicateList := map[string]bool{}
+	uniqueSlice := []string{}
+
+	for _, ele := range slice {
+		if _, exist := duplicateList[ele]; exist != true &&
+			ele != "default" && ele != "kube-system" && ele != "kube-public" {
+			duplicateList[ele] = true
+			uniqueSlice = append(uniqueSlice, ele)
+		}
+	}
+	return uniqueSlice
 }
