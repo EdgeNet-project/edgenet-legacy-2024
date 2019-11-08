@@ -52,6 +52,30 @@ func Create(name string) (string, error) {
 	return result.GetObjectMeta().GetName(), nil
 }
 
+// Delete function checks whether namespace exists, and uses clientset to delete the namespace
+func Delete(namespace string) (string, error) {
+	clientset, err := authorization.CreateClientSet()
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	// Check namespace exists or not
+	exist, err := GetNamespaceByName(namespace)
+	if err == nil && exist == "true" {
+		err := clientset.CoreV1().Namespaces().Delete(namespace, &metav1.DeleteOptions{})
+		if err != nil {
+			log.Println(err)
+			return "", err
+		}
+		return "deleted", nil
+	}
+	if err == nil {
+		err = errors.NewGone(exist)
+		log.Println(err)
+	}
+	return "", err
+}
+
 // GetList uses clientset, this function gets list of namespaces by eliminating "default", "kube-system", and "kube-public"
 func GetList() []string {
 	clientset, err := authorization.CreateClientSet()

@@ -37,6 +37,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 
 	"headnode/pkg/authorization"
 	"headnode/pkg/namespace"
@@ -145,12 +146,34 @@ func addNode(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-// Get the set of namespaces. Call: /get_namespaces
+// Get the set of namespaces. Call: /namespaces
 func getNamespaces(w http.ResponseWriter, r *http.Request) {
 	// Get the namespaces currently exist on the headnode except "default",
 	// "kube-system", and "kube-public"
 	result := namespace.GetList()
 	fmt.Fprintf(w, "%s", result)
+	return
+}
+
+// Delete a namespace. Call: /delete_namespace?namespace=<namespace>
+func deleteNamespace(w http.ResponseWriter, r *http.Request) {
+	// Delete the namespace created by the PLE Portal currently exist on the headnode.
+	userNamespace := r.URL.Query().Get("namespace")
+
+	match, _ := regexp.MatchString("ple-([a-z0-9]+)-([a-z0-9]+)-([a-z0-9]+)", userNamespace)
+	if match {
+		result, err := namespace.Delete(userNamespace)
+		if result == "deleted" {
+			fmt.Fprintf(w, "%s", result)
+			return
+		}
+		w.WriteHeader(500)
+		fmt.Fprintf(w, "%s", err)
+		return
+	}
+	w.WriteHeader(500)
+	err := fmt.Errorf("Error: The %s namespace doesn't belong to PLE", userNamespace)
+	fmt.Fprintf(w, "%s", err)
 	return
 }
 
@@ -161,12 +184,13 @@ func main() {
 	// URL paths and handlers. Deprecated URL paths and handlers below
 	// ("/nodes", getNodes), ("/show_ip", showIP), ("/get_setup", getSetup), ("/show_headers", getHeaders)
 	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/", hello)                   // In use
-	router.HandleFunc("/make-user", makeUser)       // In use
-	router.HandleFunc("/get_status", getNodeStatus) // In use
-	router.HandleFunc("/get_secret", getSecret)     // In use
-	router.HandleFunc("/add_node", addNode)         // In use
-	router.HandleFunc("/namespaces", getNamespaces) // In use
+	router.HandleFunc("/", hello)                           // In use
+	router.HandleFunc("/make-user", makeUser)               // In use
+	router.HandleFunc("/get_status", getNodeStatus)         // In use
+	router.HandleFunc("/get_secret", getSecret)             // In use
+	router.HandleFunc("/add_node", addNode)                 // In use
+	router.HandleFunc("/namespaces", getNamespaces)         // In use
+	router.HandleFunc("/delete_namespace", deleteNamespace) // In use
 
 	log.Fatal(http.ListenAndServe("127.0.0.1:8181", router))
 }
