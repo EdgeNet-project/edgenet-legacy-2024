@@ -25,7 +25,7 @@ import (
 	"os"
 	"path/filepath"
 
-	selectivedeploymentclientset "headnode/pkg/client/clientset/versioned"
+	edgenetclientset "headnode/pkg/client/clientset/versioned"
 	"headnode/pkg/config"
 
 	namecheap "github.com/billputer/go-namecheap"
@@ -52,8 +52,8 @@ func SetKubeConfig() {
 	flag.Parse()
 }
 
-// CreateSelectiveDeploymentClientSet generates the clientset to interact with selectivedeployment custom resource
-func CreateSelectiveDeploymentClientSet() (*selectivedeploymentclientset.Clientset, error) {
+// CreateEdgeNetClientSet generates the clientset to interact with custom resources of selective deployment, site, user, and slice
+func CreateEdgeNetClientSet() (*edgenetclientset.Clientset, error) {
 	// Use the current context in kubeconfig
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
@@ -62,7 +62,7 @@ func CreateSelectiveDeploymentClientSet() (*selectivedeploymentclientset.Clients
 	}
 
 	// Create the clientset
-	clientset, err := selectivedeploymentclientset.NewForConfig(config)
+	clientset, err := edgenetclientset.NewForConfig(config)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

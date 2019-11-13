@@ -20,8 +20,8 @@ package fake
 
 import (
 	clientset "headnode/pkg/client/clientset/versioned"
-	edgenetv1alpha "headnode/pkg/client/clientset/versioned/typed/selectivedeployment/v1alpha"
-	fakeedgenetv1alpha "headnode/pkg/client/clientset/versioned/typed/selectivedeployment/v1alpha/fake"
+	appsv1alpha "headnode/pkg/client/clientset/versioned/typed/apps/v1alpha"
+	fakeappsv1alpha "headnode/pkg/client/clientset/versioned/typed/apps/v1alpha/fake"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -72,7 +72,7 @@ func (c *Clientset) Discovery() discovery.DiscoveryInterface {
 
 var _ clientset.Interface = &Clientset{}
 
-// EdgenetV1alpha retrieves the EdgenetV1alphaClient
-func (c *Clientset) EdgenetV1alpha() edgenetv1alpha.EdgenetV1alphaInterface {
-	return &fakeedgenetv1alpha.FakeEdgenetV1alpha{Fake: &c.Fake}
+// AppsV1alpha retrieves the AppsV1alphaClient
+func (c *Clientset) AppsV1alpha() appsv1alpha.AppsV1alphaInterface {
+	return &fakeappsv1alpha.FakeAppsV1alpha{Fake: &c.Fake}
 }

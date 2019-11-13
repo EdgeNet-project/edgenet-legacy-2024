@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	edgenetv1alpha "headnode/pkg/apis/selectivedeployment/v1alpha"
+	appsv1alpha "headnode/pkg/apis/apps/v1alpha"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -32,7 +32,7 @@ var scheme = runtime.NewScheme()
 var codecs = serializer.NewCodecFactory(scheme)
 var parameterCodec = runtime.NewParameterCodec(scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
-	edgenetv1alpha.AddToScheme,
+	appsv1alpha.AddToScheme,
 }
 
 // AddToScheme adds all types of this clientset into the given scheme. This allows composition

@@ -1,4 +1,4 @@
-apiVersion: edgenet.io/v1alpha
+apiVersion: apps.edgenet.io/v1alpha
 kind: SelectiveDeployment
 metadata:
   name: city

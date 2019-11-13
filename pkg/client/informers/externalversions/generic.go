@@ -20,7 +20,7 @@ package externalversions
 
 import (
 	"fmt"
-	v1alpha "headnode/pkg/apis/selectivedeployment/v1alpha"
+	v1alpha "headnode/pkg/apis/apps/v1alpha"
 
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
@@ -52,9 +52,15 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=edgenet.io, Version=v1alpha
+	// Group=apps.edgenet.io, Version=v1alpha
 	case v1alpha.SchemeGroupVersion.WithResource("selectivedeployments"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Edgenet().V1alpha().SelectiveDeployments().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().SelectiveDeployments().Informer()}, nil
+	case v1alpha.SchemeGroupVersion.WithResource("sites"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Sites().Informer()}, nil
+	case v1alpha.SchemeGroupVersion.WithResource("slices"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Slices().Informer()}, nil
+	case v1alpha.SchemeGroupVersion.WithResource("users"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Users().Informer()}, nil
 
 	}
 

@@ -18,7 +18,7 @@ package main
 
 import (
 	"headnode/pkg/authorization"
-	"headnode/pkg/controller/selectivedeployment"
+	"headnode/pkg/controller/v1alpha/selectivedeployment"
 )
 
 func main() {
