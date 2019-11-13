@@ -19,7 +19,7 @@ limitations under the License.
 package versioned
 
 import (
-	edgenetv1alpha "headnode/pkg/client/clientset/versioned/typed/selectivedeployment/v1alpha"
+	appsv1alpha "headnode/pkg/client/clientset/versioned/typed/apps/v1alpha"
 
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
@@ -28,19 +28,19 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
-	EdgenetV1alpha() edgenetv1alpha.EdgenetV1alphaInterface
+	AppsV1alpha() appsv1alpha.AppsV1alphaInterface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	edgenetV1alpha *edgenetv1alpha.EdgenetV1alphaClient
+	appsV1alpha *appsv1alpha.AppsV1alphaClient
 }
 
-// EdgenetV1alpha retrieves the EdgenetV1alphaClient
-func (c *Clientset) EdgenetV1alpha() edgenetv1alpha.EdgenetV1alphaInterface {
-	return c.edgenetV1alpha
+// AppsV1alpha retrieves the AppsV1alphaClient
+func (c *Clientset) AppsV1alpha() appsv1alpha.AppsV1alphaInterface {
+	return c.appsV1alpha
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -59,7 +59,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	}
 	var cs Clientset
 	var err error
-	cs.edgenetV1alpha, err = edgenetv1alpha.NewForConfig(&configShallowCopy)
+	cs.appsV1alpha, err = appsv1alpha.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
-	cs.edgenetV1alpha = edgenetv1alpha.NewForConfigOrDie(c)
+	cs.appsV1alpha = appsv1alpha.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -84,7 +84,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
-	cs.edgenetV1alpha = edgenetv1alpha.New(c)
+	cs.appsV1alpha = appsv1alpha.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs

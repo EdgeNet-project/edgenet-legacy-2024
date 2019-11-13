@@ -21,13 +21,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"headnode/pkg/apis/selectivedeployment"
+	"headnode/pkg/apis/apps"
 )
 
 // SchemeGroupVersion is the identifier for the API which includes
 // the name of the group and the version of the API
 var SchemeGroupVersion = schema.GroupVersion{
-	Group:   selectivedeployment.GroupName,
+	Group:   apps.GroupName,
 	Version: "v1alpha",
 }
 
@@ -49,6 +49,12 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		SchemeGroupVersion,
 		&SelectiveDeployment{},
 		&SelectiveDeploymentList{},
+		&Site{},
+		&SiteList{},
+		&User{},
+		&UserList{},
+		&Slice{},
+		&SliceList{},
 	)
 
 	// Register the type in the scheme

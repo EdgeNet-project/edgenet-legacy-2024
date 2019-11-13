@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	v1alpha "headnode/pkg/apis/selectivedeployment/v1alpha"
+	v1alpha "headnode/pkg/apis/apps/v1alpha"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -31,13 +31,13 @@ import (
 
 // FakeSelectiveDeployments implements SelectiveDeploymentInterface
 type FakeSelectiveDeployments struct {
-	Fake *FakeEdgenetV1alpha
+	Fake *FakeAppsV1alpha
 	ns   string
 }
 
-var selectivedeploymentsResource = schema.GroupVersionResource{Group: "edgenet.io", Version: "v1alpha", Resource: "selectivedeployments"}
+var selectivedeploymentsResource = schema.GroupVersionResource{Group: "apps.edgenet.io", Version: "v1alpha", Resource: "selectivedeployments"}
 
-var selectivedeploymentsKind = schema.GroupVersionKind{Group: "edgenet.io", Version: "v1alpha", Kind: "SelectiveDeployment"}
+var selectivedeploymentsKind = schema.GroupVersionKind{Group: "apps.edgenet.io", Version: "v1alpha", Kind: "SelectiveDeployment"}
 
 // Get takes name of the selectiveDeployment, and returns the corresponding selectiveDeployment object, and an error if there is any.
 func (c *FakeSelectiveDeployments) Get(name string, options v1.GetOptions) (result *v1alpha.SelectiveDeployment, err error) {

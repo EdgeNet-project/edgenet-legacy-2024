@@ -14,9 +14,9 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
-  name: selectivedeployments.edgenet.io
+  name: selectivedeployments.apps.edgenet.io
 spec:
-  group: edgenet.io
+  group: apps.edgenet.io
   version: v1alpha
   scope: Namespaced
   subresources:

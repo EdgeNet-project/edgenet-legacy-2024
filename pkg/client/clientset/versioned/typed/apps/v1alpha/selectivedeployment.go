@@ -19,7 +19,7 @@ limitations under the License.
 package v1alpha
 
 import (
-	v1alpha "headnode/pkg/apis/selectivedeployment/v1alpha"
+	v1alpha "headnode/pkg/apis/apps/v1alpha"
 	scheme "headnode/pkg/client/clientset/versioned/scheme"
 	"time"
 
@@ -56,7 +56,7 @@ type selectiveDeployments struct {
 }
 
 // newSelectiveDeployments returns a SelectiveDeployments
-func newSelectiveDeployments(c *EdgenetV1alphaClient, namespace string) *selectiveDeployments {
+func newSelectiveDeployments(c *AppsV1alphaClient, namespace string) *selectiveDeployments {
 	return &selectiveDeployments{
 		client: c.RESTClient(),
 		ns:     namespace,

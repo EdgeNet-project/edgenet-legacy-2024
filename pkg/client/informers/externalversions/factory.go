@@ -20,8 +20,8 @@ package externalversions
 
 import (
 	versioned "headnode/pkg/client/clientset/versioned"
+	apps "headnode/pkg/client/informers/externalversions/apps"
 	internalinterfaces "headnode/pkg/client/informers/externalversions/internalinterfaces"
-	selectivedeployment "headnode/pkg/client/informers/externalversions/selectivedeployment"
 	reflect "reflect"
 	sync "sync"
 	time "time"
@@ -172,9 +172,9 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Edgenet() selectivedeployment.Interface
+	Apps() apps.Interface
 }
 
-func (f *sharedInformerFactory) Edgenet() selectivedeployment.Interface {
-	return selectivedeployment.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Apps() apps.Interface {
+	return apps.New(f, f.namespace, f.tweakListOptions)
 }

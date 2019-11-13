@@ -82,7 +82,7 @@ func MakeUser(user string) ([]byte, int) {
 		return result, 500
 	}
 
-	subjects := []apiv1.Subject{{Kind: "User", Name: user, APIGroup: ""}}
+	/*subjects := []apiv1.Subject{{Kind: "User", Name: user, APIGroup: ""}}
 	roleRef := apiv1.RoleRef{Kind: "Role", Name: "deployment-manager", APIGroup: ""}
 	var roleBinding *apiv1.RoleBinding
 	roleBinding = &apiv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: user, Name: fmt.Sprintf("%s-binding", user)},
@@ -93,7 +93,7 @@ func MakeUser(user string) ([]byte, int) {
 		resultMap := map[string]string{"status": "Failure"}
 		result, _ := json.Marshal(resultMap)
 		return result, 500
-	}
+	}*/
 
 	rbSubjects := []apiv1.Subject{{Kind: "ServiceAccount", Name: "default", Namespace: user}}
 	roleBindRef := apiv1.RoleRef{Kind: "ClusterRole", Name: "admin"}
