@@ -18,7 +18,7 @@ metadata:
 spec:
   group: apps.edgenet.io
   version: v1alpha
-  scope: Namespaced
+  scope: Cluster
   subresources:
     status: {}
   names:
@@ -78,14 +78,3 @@ spec:
                       type: string
                     phone:
                       type: string
-            nodes:
-              type: array
-              items:
-                type: object
-                properties:
-                  name:
-                    type: string
-                  add:
-                    type: boolean
-                  disabled:
-                    type: boolean
