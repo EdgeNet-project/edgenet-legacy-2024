@@ -32,7 +32,7 @@ import (
 // SitesGetter has a method to return a SiteInterface.
 // A group's client should implement this interface.
 type SitesGetter interface {
-	Sites(namespace string) SiteInterface
+	Sites() SiteInterface
 }
 
 // SiteInterface has methods to work with Site resources.
@@ -52,14 +52,12 @@ type SiteInterface interface {
 // sites implements SiteInterface
 type sites struct {
 	client rest.Interface
-	ns     string
 }
 
 // newSites returns a Sites
-func newSites(c *AppsV1alphaClient, namespace string) *sites {
+func newSites(c *AppsV1alphaClient) *sites {
 	return &sites{
 		client: c.RESTClient(),
-		ns:     namespace,
 	}
 }
 
@@ -67,7 +65,6 @@ func newSites(c *AppsV1alphaClient, namespace string) *sites {
 func (c *sites) Get(name string, options v1.GetOptions) (result *v1alpha.Site, err error) {
 	result = &v1alpha.Site{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("sites").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -84,7 +81,6 @@ func (c *sites) List(opts v1.ListOptions) (result *v1alpha.SiteList, err error) 
 	}
 	result = &v1alpha.SiteList{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("sites").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -101,7 +97,6 @@ func (c *sites) Watch(opts v1.ListOptions) (watch.Interface, error) {
 	}
 	opts.Watch = true
 	return c.client.Get().
-		Namespace(c.ns).
 		Resource("sites").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -112,7 +107,6 @@ func (c *sites) Watch(opts v1.ListOptions) (watch.Interface, error) {
 func (c *sites) Create(site *v1alpha.Site) (result *v1alpha.Site, err error) {
 	result = &v1alpha.Site{}
 	err = c.client.Post().
-		Namespace(c.ns).
 		Resource("sites").
 		Body(site).
 		Do().
@@ -124,7 +118,6 @@ func (c *sites) Create(site *v1alpha.Site) (result *v1alpha.Site, err error) {
 func (c *sites) Update(site *v1alpha.Site) (result *v1alpha.Site, err error) {
 	result = &v1alpha.Site{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("sites").
 		Name(site.Name).
 		Body(site).
@@ -139,7 +132,6 @@ func (c *sites) Update(site *v1alpha.Site) (result *v1alpha.Site, err error) {
 func (c *sites) UpdateStatus(site *v1alpha.Site) (result *v1alpha.Site, err error) {
 	result = &v1alpha.Site{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("sites").
 		Name(site.Name).
 		SubResource("status").
@@ -152,7 +144,6 @@ func (c *sites) UpdateStatus(site *v1alpha.Site) (result *v1alpha.Site, err erro
 // Delete takes name of the site and deletes it. Returns an error if one occurs.
 func (c *sites) Delete(name string, options *v1.DeleteOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("sites").
 		Name(name).
 		Body(options).
@@ -167,7 +158,6 @@ func (c *sites) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListO
 		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("sites").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -180,7 +170,6 @@ func (c *sites) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListO
 func (c *sites) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha.Site, err error) {
 	result = &v1alpha.Site{}
 	err = c.client.Patch(pt).
-		Namespace(c.ns).
 		Resource("sites").
 		SubResource(subresources...).
 		Name(name).

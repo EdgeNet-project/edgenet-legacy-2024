@@ -24,6 +24,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// Projects returns a ProjectInformer.
+	Projects() ProjectInformer
 	// SelectiveDeployments returns a SelectiveDeploymentInformer.
 	SelectiveDeployments() SelectiveDeploymentInformer
 	// Sites returns a SiteInformer.
@@ -45,6 +47,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
+// Projects returns a ProjectInformer.
+func (v *version) Projects() ProjectInformer {
+	return &projectInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
 // SelectiveDeployments returns a SelectiveDeploymentInformer.
 func (v *version) SelectiveDeployments() SelectiveDeploymentInformer {
 	return &selectiveDeploymentInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
@@ -52,7 +59,7 @@ func (v *version) SelectiveDeployments() SelectiveDeploymentInformer {
 
 // Sites returns a SiteInformer.
 func (v *version) Sites() SiteInformer {
-	return &siteInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &siteInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // Slices returns a SliceInformer.

@@ -30,8 +30,8 @@ import (
 type SiteLister interface {
 	// List lists all Sites in the indexer.
 	List(selector labels.Selector) (ret []*v1alpha.Site, err error)
-	// Sites returns an object that can list and get Sites.
-	Sites(namespace string) SiteNamespaceLister
+	// Get retrieves the Site from the index for a given name.
+	Get(name string) (*v1alpha.Site, error)
 	SiteListerExpansion
 }
 
@@ -53,38 +53,9 @@ func (s *siteLister) List(selector labels.Selector) (ret []*v1alpha.Site, err er
 	return ret, err
 }
 
-// Sites returns an object that can list and get Sites.
-func (s *siteLister) Sites(namespace string) SiteNamespaceLister {
-	return siteNamespaceLister{indexer: s.indexer, namespace: namespace}
-}
-
-// SiteNamespaceLister helps list and get Sites.
-type SiteNamespaceLister interface {
-	// List lists all Sites in the indexer for a given namespace.
-	List(selector labels.Selector) (ret []*v1alpha.Site, err error)
-	// Get retrieves the Site from the indexer for a given namespace and name.
-	Get(name string) (*v1alpha.Site, error)
-	SiteNamespaceListerExpansion
-}
-
-// siteNamespaceLister implements the SiteNamespaceLister
-// interface.
-type siteNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all Sites in the indexer for a given namespace.
-func (s siteNamespaceLister) List(selector labels.Selector) (ret []*v1alpha.Site, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha.Site))
-	})
-	return ret, err
-}
-
-// Get retrieves the Site from the indexer for a given namespace and name.
-func (s siteNamespaceLister) Get(name string) (*v1alpha.Site, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+// Get retrieves the Site from the index for a given name.
+func (s *siteLister) Get(name string) (*v1alpha.Site, error) {
+	obj, exists, err := s.indexer.GetByKey(name)
 	if err != nil {
 		return nil, err
 	}

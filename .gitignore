@@ -36,6 +36,7 @@ examples/selective-deployment/object/error-handling
 
 pkg/user
 examples/selective-deployment/*.txt
+examples/site/*.txt
 code-generation
 
 # Ignore OS X metadata files

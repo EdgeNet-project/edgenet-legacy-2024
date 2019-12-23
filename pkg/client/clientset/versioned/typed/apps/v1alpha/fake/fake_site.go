@@ -32,7 +32,6 @@ import (
 // FakeSites implements SiteInterface
 type FakeSites struct {
 	Fake *FakeAppsV1alpha
-	ns   string
 }
 
 var sitesResource = schema.GroupVersionResource{Group: "apps.edgenet.io", Version: "v1alpha", Resource: "sites"}
@@ -42,8 +41,7 @@ var sitesKind = schema.GroupVersionKind{Group: "apps.edgenet.io", Version: "v1al
 // Get takes name of the site, and returns the corresponding site object, and an error if there is any.
 func (c *FakeSites) Get(name string, options v1.GetOptions) (result *v1alpha.Site, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(sitesResource, c.ns, name), &v1alpha.Site{})
-
+		Invokes(testing.NewRootGetAction(sitesResource, name), &v1alpha.Site{})
 	if obj == nil {
 		return nil, err
 	}
@@ -53,8 +51,7 @@ func (c *FakeSites) Get(name string, options v1.GetOptions) (result *v1alpha.Sit
 // List takes label and field selectors, and returns the list of Sites that match those selectors.
 func (c *FakeSites) List(opts v1.ListOptions) (result *v1alpha.SiteList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(sitesResource, sitesKind, c.ns, opts), &v1alpha.SiteList{})
-
+		Invokes(testing.NewRootListAction(sitesResource, sitesKind, opts), &v1alpha.SiteList{})
 	if obj == nil {
 		return nil, err
 	}
@@ -75,15 +72,13 @@ func (c *FakeSites) List(opts v1.ListOptions) (result *v1alpha.SiteList, err err
 // Watch returns a watch.Interface that watches the requested sites.
 func (c *FakeSites) Watch(opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(sitesResource, c.ns, opts))
-
+		InvokesWatch(testing.NewRootWatchAction(sitesResource, opts))
 }
 
 // Create takes the representation of a site and creates it.  Returns the server's representation of the site, and an error, if there is any.
 func (c *FakeSites) Create(site *v1alpha.Site) (result *v1alpha.Site, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(sitesResource, c.ns, site), &v1alpha.Site{})
-
+		Invokes(testing.NewRootCreateAction(sitesResource, site), &v1alpha.Site{})
 	if obj == nil {
 		return nil, err
 	}
@@ -93,8 +88,7 @@ func (c *FakeSites) Create(site *v1alpha.Site) (result *v1alpha.Site, err error)
 // Update takes the representation of a site and updates it. Returns the server's representation of the site, and an error, if there is any.
 func (c *FakeSites) Update(site *v1alpha.Site) (result *v1alpha.Site, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(sitesResource, c.ns, site), &v1alpha.Site{})
-
+		Invokes(testing.NewRootUpdateAction(sitesResource, site), &v1alpha.Site{})
 	if obj == nil {
 		return nil, err
 	}
@@ -105,8 +99,7 @@ func (c *FakeSites) Update(site *v1alpha.Site) (result *v1alpha.Site, err error)
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
 func (c *FakeSites) UpdateStatus(site *v1alpha.Site) (*v1alpha.Site, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(sitesResource, "status", c.ns, site), &v1alpha.Site{})
-
+		Invokes(testing.NewRootUpdateSubresourceAction(sitesResource, "status", site), &v1alpha.Site{})
 	if obj == nil {
 		return nil, err
 	}
@@ -116,14 +109,13 @@ func (c *FakeSites) UpdateStatus(site *v1alpha.Site) (*v1alpha.Site, error) {
 // Delete takes name of the site and deletes it. Returns an error if one occurs.
 func (c *FakeSites) Delete(name string, options *v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(sitesResource, c.ns, name), &v1alpha.Site{})
-
+		Invokes(testing.NewRootDeleteAction(sitesResource, name), &v1alpha.Site{})
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeSites) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(sitesResource, c.ns, listOptions)
+	action := testing.NewRootDeleteCollectionAction(sitesResource, listOptions)
 
 	_, err := c.Fake.Invokes(action, &v1alpha.SiteList{})
 	return err
@@ -132,8 +124,7 @@ func (c *FakeSites) DeleteCollection(options *v1.DeleteOptions, listOptions v1.L
 // Patch applies the patch and returns the patched site.
 func (c *FakeSites) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha.Site, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(sitesResource, c.ns, name, pt, data, subresources...), &v1alpha.Site{})
-
+		Invokes(testing.NewRootPatchSubresourceAction(sitesResource, name, pt, data, subresources...), &v1alpha.Site{})
 	if obj == nil {
 		return nil, err
 	}

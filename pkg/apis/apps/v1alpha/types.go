@@ -86,6 +86,7 @@ type SelectiveDeploymentList struct {
 }
 
 // +genclient
+// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Site describes a Site resource
@@ -108,7 +109,6 @@ type SiteSpec struct {
 	URL       string    `json:"url"`
 	Address   string    `json:"address"`
 	Contact   []Contact `json:"contact"`
-	Node      []Node    `json:"node"`
 }
 
 // Contact
@@ -117,13 +117,6 @@ type Contact struct {
 	LastName  string `json:"lastname"`
 	Email     string `json:"email"`
 	Phone     string `json:"phone"`
-}
-
-// Nodes
-type Node struct {
-	Name    string `json:"name"`
-	Add     bool   `json:"add"`
-	Disable bool   `json:"disable"`
 }
 
 // SiteStatus is the status for a Site resource
@@ -144,6 +137,48 @@ type SiteList struct {
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+// Project describes a Project resource
+type Project struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	meta_v1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the project resource spec
+	Spec ProjectSpec `json:"spec"`
+	// Status is the project resource status
+	Status ProjectStatus `json:"status,omitempty"`
+}
+
+// ProjectSpec is the spec for a Project resource
+type ProjectSpec struct {
+	Users       []ProjectUsers `json:"users"`
+	Description string         `json:"description"`
+}
+
+type ProjectUsers struct {
+	Site     string `json:"site"`
+	Username string `json:"username"`
+}
+
+// ProjectStatus is the status for a Project resource
+type ProjectStatus struct {
+	Enabled bool `json:"enabled"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ProjectList is a list of Project resources
+type ProjectList struct {
+	meta_v1.TypeMeta `json:",inline"`
+	meta_v1.ListMeta `json:"metadata"`
+
+	Items []Project `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // Slice describes a Slice resource
 type Slice struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
@@ -159,17 +194,21 @@ type Slice struct {
 
 // SliceSpec is the spec for a Slice resource
 type SliceSpec struct {
-	Type        string   `json:"type"`
-	Profile     string   `json:"profile"`
-	Users       []string `json:"users"`
-	Description string   `json:"description"`
+	Type        string       `json:"type"`
+	Profile     string       `json:"profile"`
+	Users       []SliceUsers `json:"users"`
+	Description string       `json:"description"`
+}
+
+type SliceUsers struct {
+	Site     string `json:"site"`
+	Username string `json:"username"`
 }
 
 // SliceStatus is the status for a Slice resource
 type SliceStatus struct {
-	Overloading bool              `json:"overloading"`
-	TTL         *meta_v1.Duration `json:"ttl"`
-	Expires     *meta_v1.Time     `json:"expires"`
+	Renew   bool          `json:"renew"`
+	Expires *meta_v1.Time `json:"expires"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -200,35 +239,35 @@ type User struct {
 
 // UserSpec is the spec for a User resource
 type UserSpec struct {
-	FirstName string `json:"firstname"`
-	LastName  string `json:"lastname"`
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	Profile   string `json:"profile"`
-	URL       string `json:"url"`
-	Bio       string `json:"bio"`
+	FirstName string   `json:"firstname"`
+	LastName  string   `json:"lastname"`
+	Email     string   `json:"email"`
+	Password  string   `json:"password"`
+	Roles     []string `json:"roles"`
+	URL       string   `json:"url"`
+	Bio       string   `json:"bio"`
 }
 
 // UserStatus is the status for a User resource
 type UserStatus struct {
-	Enabled    bool    `json:"enabled"`
-	Kubeconfig bool    `json:"kubeconfig"`
-	AUP        AUP     `json:"aup"`
-	Token      []Token `json:"token"`
-}
-
-// Token
-type Token struct {
-	Value   string `json:"firstname"`
-	Expires string `json:"expires"`
-	IP      string `json:"ip"`
-	Browser string `json:"browser"`
+	Active   bool    `json:"active"`
+	Approved bool    `json:"approved"`
+	AUP      AUP     `json:"aup"`
+	WebAuth  WebAuth `json:"webauth"`
 }
 
 // AUP
 type AUP struct {
-	Accepted bool `json:"accepted"`
-	Expires  bool `json:"expires"`
+	Accepted bool          `json:"accepted"`
+	Renew    bool          `json:"renew"`
+	Expires  *meta_v1.Time `json:"expires"`
+}
+
+// WebAuth
+type WebAuth struct {
+	Login   bool          `json:"login"`
+	Renew   bool          `json:"renew"`
+	Expires *meta_v1.Time `json:"expires"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

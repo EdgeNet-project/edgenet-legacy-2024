@@ -29,12 +29,16 @@ type FakeAppsV1alpha struct {
 	*testing.Fake
 }
 
+func (c *FakeAppsV1alpha) Projects(namespace string) v1alpha.ProjectInterface {
+	return &FakeProjects{c, namespace}
+}
+
 func (c *FakeAppsV1alpha) SelectiveDeployments(namespace string) v1alpha.SelectiveDeploymentInterface {
 	return &FakeSelectiveDeployments{c, namespace}
 }
 
-func (c *FakeAppsV1alpha) Sites(namespace string) v1alpha.SiteInterface {
-	return &FakeSites{c, namespace}
+func (c *FakeAppsV1alpha) Sites() v1alpha.SiteInterface {
+	return &FakeSites{c}
 }
 
 func (c *FakeAppsV1alpha) Slices(namespace string) v1alpha.SliceInterface {

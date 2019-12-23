@@ -386,9 +386,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:bbe51412d9915d64ffaa96b51d409e070665efc5194fcf145c4a27d4133107a4"
+  digest = "1:bac77e18329fa88ea880b9a7cfcb8fd25d8b835397dd9143f4b162a43e35bb60"
   name = "golang.org/x/crypto"
-  packages = ["ssh/terminal"]
+  packages = [
+    "ed25519",
+    "ed25519/internal/edwards25519",
+    "pbkdf2",
+    "ssh/terminal",
+  ]
   pruneopts = "UT"
   revision = "22d7a77e9e5f409e934ed268692e56707cd169e5"
 
@@ -492,6 +497,19 @@
   pruneopts = "UT"
   revision = "d2d2541c53f18d2a059457998ce2876cc8e67cbf"
   version = "v0.9.1"
+
+[[projects]]
+  digest = "1:45df33697961c5703020e4f00720743622bc4d383138958f0b57d9db0b4921fd"
+  name = "gopkg.in/square/go-jose.v2"
+  packages = [
+    ".",
+    "cipher",
+    "json",
+    "jwt",
+  ]
+  pruneopts = "UT"
+  revision = "8fd82ff1d52a5162ff23c0a48e2c64a1fa4a3f8f"
+  version = "v2.4.0"
 
 [[projects]]
   digest = "1:4d2e5a73dc1500038e504a8d78b986630e3626dc027bc030ba5c75da257cdb96"
@@ -617,9 +635,12 @@
   version = "kubernetes-1.14.0"
 
 [[projects]]
-  digest = "1:961abc41dfa5e1cebc786b794f74c5b4feb53ccd16e118b42ec115f50b2492af"
+  digest = "1:71c95d81a294dcee66147ff711896968d512b05df9bf6183cb289c6570c60b4f"
   name = "k8s.io/apiserver"
   packages = [
+    "pkg/authentication/authenticator",
+    "pkg/authentication/serviceaccount",
+    "pkg/authentication/user",
     "pkg/features",
     "pkg/util/feature",
   ]
@@ -649,15 +670,13 @@
   version = "kubernetes-1.14.2"
 
 [[projects]]
-  digest = "1:6048917cb797c1ac95ccf805a5c61b8d5d8e247d8772b9be4257104021b9c726"
+  digest = "1:619171b2e73ce34423708677ac4761f961e95bdc72a8411f9879f7a499daf987"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
     "discovery/cached/disk",
     "discovery/fake",
     "dynamic",
-    "informers/apps/v1",
-    "informers/internalinterfaces",
     "kubernetes",
     "kubernetes/fake",
     "kubernetes/scheme",
@@ -733,7 +752,6 @@
     "kubernetes/typed/storage/v1alpha1/fake",
     "kubernetes/typed/storage/v1beta1",
     "kubernetes/typed/storage/v1beta1/fake",
-    "listers/apps/v1",
     "pkg/apis/clientauthentication",
     "pkg/apis/clientauthentication/v1alpha1",
     "pkg/apis/clientauthentication/v1beta1",
@@ -829,7 +847,7 @@
   revision = "a01b7d5d6c2258c80a4a10070f3dee9cd575d9c7"
 
 [[projects]]
-  digest = "1:fd2446639581629139ad8758953bf938c07691e929d28c6d7415d50ffe447b85"
+  digest = "1:d02e3e0facfc021ed11e6ff63d96472346308433ed04315ad99b7d736e03c0b9"
   name = "k8s.io/kubernetes"
   packages = [
     "cmd/kubeadm/app/apis/kubeadm",
@@ -857,6 +875,7 @@
     "pkg/proxy/apis/config",
     "pkg/registry/core/service/allocator",
     "pkg/registry/core/service/ipallocator",
+    "pkg/serviceaccount",
     "pkg/util/interrupt",
     "pkg/version",
   ]
@@ -929,6 +948,7 @@
     "k8s.io/api/core/v1",
     "k8s.io/api/rbac/v1",
     "k8s.io/apimachinery/pkg/api/errors",
+    "k8s.io/apimachinery/pkg/api/resource",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/labels",
     "k8s.io/apimachinery/pkg/runtime",
@@ -941,7 +961,6 @@
     "k8s.io/cli-runtime/pkg/genericclioptions",
     "k8s.io/client-go/discovery",
     "k8s.io/client-go/discovery/fake",
-    "k8s.io/client-go/informers/apps/v1",
     "k8s.io/client-go/kubernetes",
     "k8s.io/client-go/rest",
     "k8s.io/client-go/testing",
@@ -956,6 +975,7 @@
     "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig",
     "k8s.io/kubernetes/pkg/kubectl/cmd/config",
     "k8s.io/kubernetes/pkg/kubectl/cmd/util",
+    "k8s.io/kubernetes/pkg/serviceaccount",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
