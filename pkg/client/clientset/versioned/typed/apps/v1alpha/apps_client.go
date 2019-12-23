@@ -28,6 +28,7 @@ import (
 
 type AppsV1alphaInterface interface {
 	RESTClient() rest.Interface
+	ProjectsGetter
 	SelectiveDeploymentsGetter
 	SitesGetter
 	SlicesGetter
@@ -39,12 +40,16 @@ type AppsV1alphaClient struct {
 	restClient rest.Interface
 }
 
+func (c *AppsV1alphaClient) Projects(namespace string) ProjectInterface {
+	return newProjects(c, namespace)
+}
+
 func (c *AppsV1alphaClient) SelectiveDeployments(namespace string) SelectiveDeploymentInterface {
 	return newSelectiveDeployments(c, namespace)
 }
 
-func (c *AppsV1alphaClient) Sites(namespace string) SiteInterface {
-	return newSites(c, namespace)
+func (c *AppsV1alphaClient) Sites() SiteInterface {
+	return newSites(c)
 }
 
 func (c *AppsV1alphaClient) Slices(namespace string) SliceInterface {

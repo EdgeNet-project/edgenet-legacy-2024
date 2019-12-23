@@ -18,6 +18,14 @@ limitations under the License.
 
 package v1alpha
 
+// ProjectListerExpansion allows custom methods to be added to
+// ProjectLister.
+type ProjectListerExpansion interface{}
+
+// ProjectNamespaceListerExpansion allows custom methods to be added to
+// ProjectNamespaceLister.
+type ProjectNamespaceListerExpansion interface{}
+
 // SelectiveDeploymentListerExpansion allows custom methods to be added to
 // SelectiveDeploymentLister.
 type SelectiveDeploymentListerExpansion interface{}
@@ -29,10 +37,6 @@ type SelectiveDeploymentNamespaceListerExpansion interface{}
 // SiteListerExpansion allows custom methods to be added to
 // SiteLister.
 type SiteListerExpansion interface{}
-
-// SiteNamespaceListerExpansion allows custom methods to be added to
-// SiteNamespaceLister.
-type SiteNamespaceListerExpansion interface{}
 
 // SliceListerExpansion allows custom methods to be added to
 // SliceLister.

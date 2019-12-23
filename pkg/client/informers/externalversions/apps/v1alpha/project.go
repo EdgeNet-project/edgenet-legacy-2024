@@ -31,58 +31,59 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// SiteInformer provides access to a shared informer and lister for
-// Sites.
-type SiteInformer interface {
+// ProjectInformer provides access to a shared informer and lister for
+// Projects.
+type ProjectInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha.SiteLister
+	Lister() v1alpha.ProjectLister
 }
 
-type siteInformer struct {
+type projectInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
+	namespace        string
 }
 
-// NewSiteInformer constructs a new informer for Site type.
+// NewProjectInformer constructs a new informer for Project type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewSiteInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredSiteInformer(client, resyncPeriod, indexers, nil)
+func NewProjectInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredProjectInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredSiteInformer constructs a new informer for Site type.
+// NewFilteredProjectInformer constructs a new informer for Project type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredSiteInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredProjectInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AppsV1alpha().Sites().List(options)
+				return client.AppsV1alpha().Projects(namespace).List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AppsV1alpha().Sites().Watch(options)
+				return client.AppsV1alpha().Projects(namespace).Watch(options)
 			},
 		},
-		&appsv1alpha.Site{},
+		&appsv1alpha.Project{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *siteInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredSiteInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *projectInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredProjectInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *siteInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&appsv1alpha.Site{}, f.defaultInformer)
+func (f *projectInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&appsv1alpha.Project{}, f.defaultInformer)
 }
 
-func (f *siteInformer) Lister() v1alpha.SiteLister {
-	return v1alpha.NewSiteLister(f.Informer().GetIndexer())
+func (f *projectInformer) Lister() v1alpha.ProjectLister {
+	return v1alpha.NewProjectLister(f.Informer().GetIndexer())
 }
