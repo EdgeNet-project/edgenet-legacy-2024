@@ -135,6 +135,48 @@ type SiteList struct {
 }
 
 // +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SiteRegistrationRequest describes a SiteRegistrationRequest resource
+type SiteRegistrationRequest struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	meta_v1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the siteregistrationrequest resource spec
+	Spec SiteRegistrationRequestSpec `json:"spec"`
+	// Status is the siteregistrationrequest resource status
+	Status SiteRegistrationRequestStatus `json:"status,omitempty"`
+}
+
+// SiteRegistrationRequestSpec is the spec for a SiteRegistrationRequest resource
+type SiteRegistrationRequestSpec struct {
+	FullName  string    `json:"fullname"`
+	ShortName string    `json:"shortname"`
+	URL       string    `json:"url"`
+	Address   string    `json:"address"`
+	Contact   []Contact `json:"contact"`
+}
+
+// SiteRegistrationRequestStatus is the status for a SiteRegistrationRequest resource
+type SiteRegistrationRequestStatus struct {
+	Approved bool          `json:"approved"`
+	Expires  *meta_v1.Time `json:"expires"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SiteRegistrationRequestList is a list of SiteRegistrationRequest resources
+type SiteRegistrationRequestList struct {
+	meta_v1.TypeMeta `json:",inline"`
+	meta_v1.ListMeta `json:"metadata"`
+
+	Items []SiteRegistrationRequest `json:"items"`
+}
+
+// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Project describes a Project resource

@@ -31,6 +31,7 @@ type AppsV1alphaInterface interface {
 	ProjectsGetter
 	SelectiveDeploymentsGetter
 	SitesGetter
+	SiteRegistrationRequestsGetter
 	SlicesGetter
 	UsersGetter
 }
@@ -50,6 +51,10 @@ func (c *AppsV1alphaClient) SelectiveDeployments(namespace string) SelectiveDepl
 
 func (c *AppsV1alphaClient) Sites() SiteInterface {
 	return newSites(c)
+}
+
+func (c *AppsV1alphaClient) SiteRegistrationRequests() SiteRegistrationRequestInterface {
+	return newSiteRegistrationRequests(c)
 }
 
 func (c *AppsV1alphaClient) Slices(namespace string) SliceInterface {
