@@ -24,6 +24,8 @@ type SelectiveDeploymentExpansion interface{}
 
 type SiteExpansion interface{}
 
+type SiteRegistrationRequestExpansion interface{}
+
 type SliceExpansion interface{}
 
 type UserExpansion interface{}
