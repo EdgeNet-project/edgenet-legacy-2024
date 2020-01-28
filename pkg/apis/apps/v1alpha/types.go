@@ -162,8 +162,9 @@ type SiteRegistrationRequestSpec struct {
 
 // SiteRegistrationRequestStatus is the status for a SiteRegistrationRequest resource
 type SiteRegistrationRequestStatus struct {
-	Approved bool          `json:"approved"`
-	Expires  *meta_v1.Time `json:"expires"`
+	EmailVerify bool          `json:"emailverify"`
+	Approved    bool          `json:"approved"`
+	Expires     *meta_v1.Time `json:"expires"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -292,24 +293,9 @@ type UserSpec struct {
 
 // UserStatus is the status for a User resource
 type UserStatus struct {
-	Active   bool    `json:"active"`
-	Approved bool    `json:"approved"`
-	AUP      AUP     `json:"aup"`
-	WebAuth  WebAuth `json:"webauth"`
-}
-
-// AUP
-type AUP struct {
-	Accepted bool          `json:"accepted"`
-	Renew    bool          `json:"renew"`
-	Expires  *meta_v1.Time `json:"expires"`
-}
-
-// WebAuth
-type WebAuth struct {
-	Login   bool          `json:"login"`
-	Renew   bool          `json:"renew"`
-	Expires *meta_v1.Time `json:"expires"`
+	Active  bool `json:"active"`
+	AUP     bool `json:"aup"`
+	WebAuth bool `json:"webauth"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -320,4 +306,161 @@ type UserList struct {
 	meta_v1.ListMeta `json:"metadata"`
 
 	Items []User `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// UserRegistrationRequest describes a UserRegistrationRequest resource
+type UserRegistrationRequest struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	meta_v1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the userregistrationrequest resource spec
+	Spec UserRegistrationRequestSpec `json:"spec"`
+	// Status is the userregistrationrequest resource status
+	Status UserRegistrationRequestStatus `json:"status,omitempty"`
+}
+
+// UserRegistrationRequestSpec is the spec for a UserRegistrationRequest resource
+type UserRegistrationRequestSpec struct {
+	FirstName string   `json:"firstname"`
+	LastName  string   `json:"lastname"`
+	Email     string   `json:"email"`
+	Password  string   `json:"password"`
+	Roles     []string `json:"roles"`
+	URL       string   `json:"url"`
+	Bio       string   `json:"bio"`
+}
+
+// UserRegistrationRequestStatus is the status for a UserRegistrationRequest resource
+type UserRegistrationRequestStatus struct {
+	EmailVerify bool          `json:"emailverify"`
+	Approved    bool          `json:"approved"`
+	Expires     *meta_v1.Time `json:"expires"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// UserRegistrationRequestList is a list of UserRegistrationRequest resources
+type UserRegistrationRequestList struct {
+	meta_v1.TypeMeta `json:",inline"`
+	meta_v1.ListMeta `json:"metadata"`
+
+	Items []UserRegistrationRequest `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// AcceptableUsePolicy describes a AcceptableUsePolicy resource
+type AcceptableUsePolicy struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	meta_v1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the acceptableusepolicy resource spec
+	Spec AcceptableUsePolicySpec `json:"spec"`
+	// Status is the acceptableusepolicy resource status
+	Status AcceptableUsePolicyStatus `json:"status,omitempty"`
+}
+
+// AcceptableUsePolicySpec is the spec for a AcceptableUsePolicy resource
+type AcceptableUsePolicySpec struct {
+	Accepted bool `json:"accepted"`
+}
+
+// AcceptableUsePolicyStatus is the status for a AcceptableUsePolicy resource
+type AcceptableUsePolicyStatus struct {
+	Renew   bool          `json:"renew"`
+	Expires *meta_v1.Time `json:"expires"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// AcceptableUsePolicyList is a list of AcceptableUsePolicy resources
+type AcceptableUsePolicyList struct {
+	meta_v1.TypeMeta `json:",inline"`
+	meta_v1.ListMeta `json:"metadata"`
+
+	Items []AcceptableUsePolicy `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Login describes a Login resource
+type Login struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	meta_v1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the login resource spec
+	Spec LoginSpec `json:"spec"`
+	// Status is the login resource status
+	Status LoginStatus `json:"status,omitempty"`
+}
+
+// LoginSpec is the spec for a Login resource
+type LoginSpec struct {
+	Password string `json:"password"`
+}
+
+// LoginStatus is the status for a Login resource
+type LoginStatus struct {
+	Renew   bool          `json:"renew"`
+	Expires *meta_v1.Time `json:"expires"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// LoginList is a list of Login resources
+type LoginList struct {
+	meta_v1.TypeMeta `json:",inline"`
+	meta_v1.ListMeta `json:"metadata"`
+
+	Items []Login `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// EmailVerification describes a EmailVerification resource
+type EmailVerification struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	meta_v1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the emailverification resource spec
+	Spec EmailVerificationSpec `json:"spec"`
+	// Status is the login resource status
+	Status EmailVerificationStatus `json:"status,omitempty"`
+}
+
+// EmailVerificationSpec is the spec for a EmailVerification resource
+type EmailVerificationSpec struct {
+	Kind       string `json:"kind"`
+	Identifier string `json:"identifier"`
+	Verified   bool   `json:"verified"`
+}
+
+// EmailVerificationStatus is the status for a Login resource
+type EmailVerificationStatus struct {
+	Renew   bool          `json:"renew"`
+	Expires *meta_v1.Time `json:"expires"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// EmailVerificationList is a list of EmailVerification resources
+type EmailVerificationList struct {
+	meta_v1.TypeMeta `json:",inline"`
+	meta_v1.ListMeta `json:"metadata"`
+
+	Items []EmailVerification `json:"items"`
 }

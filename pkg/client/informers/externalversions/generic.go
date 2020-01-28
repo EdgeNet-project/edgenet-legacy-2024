@@ -53,6 +53,12 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=apps.edgenet.io, Version=v1alpha
+	case v1alpha.SchemeGroupVersion.WithResource("acceptableusepolicies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().AcceptableUsePolicies().Informer()}, nil
+	case v1alpha.SchemeGroupVersion.WithResource("emailverifications"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().EmailVerifications().Informer()}, nil
+	case v1alpha.SchemeGroupVersion.WithResource("logins"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Logins().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("projects"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Projects().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("selectivedeployments"):
@@ -65,6 +71,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Slices().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("users"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Users().Informer()}, nil
+	case v1alpha.SchemeGroupVersion.WithResource("userregistrationrequests"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().UserRegistrationRequests().Informer()}, nil
 
 	}
 
