@@ -18,6 +18,12 @@ limitations under the License.
 
 package v1alpha
 
+type AcceptableUsePolicyExpansion interface{}
+
+type EmailVerificationExpansion interface{}
+
+type LoginExpansion interface{}
+
 type ProjectExpansion interface{}
 
 type SelectiveDeploymentExpansion interface{}
@@ -29,3 +35,5 @@ type SiteRegistrationRequestExpansion interface{}
 type SliceExpansion interface{}
 
 type UserExpansion interface{}
+
+type UserRegistrationRequestExpansion interface{}

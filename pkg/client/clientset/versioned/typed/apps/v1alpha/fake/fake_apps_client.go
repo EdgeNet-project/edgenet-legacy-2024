@@ -29,6 +29,18 @@ type FakeAppsV1alpha struct {
 	*testing.Fake
 }
 
+func (c *FakeAppsV1alpha) AcceptableUsePolicies(namespace string) v1alpha.AcceptableUsePolicyInterface {
+	return &FakeAcceptableUsePolicies{c, namespace}
+}
+
+func (c *FakeAppsV1alpha) EmailVerifications(namespace string) v1alpha.EmailVerificationInterface {
+	return &FakeEmailVerifications{c, namespace}
+}
+
+func (c *FakeAppsV1alpha) Logins(namespace string) v1alpha.LoginInterface {
+	return &FakeLogins{c, namespace}
+}
+
 func (c *FakeAppsV1alpha) Projects(namespace string) v1alpha.ProjectInterface {
 	return &FakeProjects{c, namespace}
 }
@@ -51,6 +63,10 @@ func (c *FakeAppsV1alpha) Slices(namespace string) v1alpha.SliceInterface {
 
 func (c *FakeAppsV1alpha) Users(namespace string) v1alpha.UserInterface {
 	return &FakeUsers{c, namespace}
+}
+
+func (c *FakeAppsV1alpha) UserRegistrationRequests(namespace string) v1alpha.UserRegistrationRequestInterface {
+	return &FakeUserRegistrationRequests{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

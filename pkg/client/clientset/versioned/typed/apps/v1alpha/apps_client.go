@@ -28,17 +28,33 @@ import (
 
 type AppsV1alphaInterface interface {
 	RESTClient() rest.Interface
+	AcceptableUsePoliciesGetter
+	EmailVerificationsGetter
+	LoginsGetter
 	ProjectsGetter
 	SelectiveDeploymentsGetter
 	SitesGetter
 	SiteRegistrationRequestsGetter
 	SlicesGetter
 	UsersGetter
+	UserRegistrationRequestsGetter
 }
 
 // AppsV1alphaClient is used to interact with features provided by the apps.edgenet.io group.
 type AppsV1alphaClient struct {
 	restClient rest.Interface
+}
+
+func (c *AppsV1alphaClient) AcceptableUsePolicies(namespace string) AcceptableUsePolicyInterface {
+	return newAcceptableUsePolicies(c, namespace)
+}
+
+func (c *AppsV1alphaClient) EmailVerifications(namespace string) EmailVerificationInterface {
+	return newEmailVerifications(c, namespace)
+}
+
+func (c *AppsV1alphaClient) Logins(namespace string) LoginInterface {
+	return newLogins(c, namespace)
 }
 
 func (c *AppsV1alphaClient) Projects(namespace string) ProjectInterface {
@@ -63,6 +79,10 @@ func (c *AppsV1alphaClient) Slices(namespace string) SliceInterface {
 
 func (c *AppsV1alphaClient) Users(namespace string) UserInterface {
 	return newUsers(c, namespace)
+}
+
+func (c *AppsV1alphaClient) UserRegistrationRequests(namespace string) UserRegistrationRequestInterface {
+	return newUserRegistrationRequests(c, namespace)
 }
 
 // NewForConfig creates a new AppsV1alphaClient for the given config.

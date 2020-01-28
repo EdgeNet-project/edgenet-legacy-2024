@@ -24,6 +24,12 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// AcceptableUsePolicies returns a AcceptableUsePolicyInformer.
+	AcceptableUsePolicies() AcceptableUsePolicyInformer
+	// EmailVerifications returns a EmailVerificationInformer.
+	EmailVerifications() EmailVerificationInformer
+	// Logins returns a LoginInformer.
+	Logins() LoginInformer
 	// Projects returns a ProjectInformer.
 	Projects() ProjectInformer
 	// SelectiveDeployments returns a SelectiveDeploymentInformer.
@@ -36,6 +42,8 @@ type Interface interface {
 	Slices() SliceInformer
 	// Users returns a UserInformer.
 	Users() UserInformer
+	// UserRegistrationRequests returns a UserRegistrationRequestInformer.
+	UserRegistrationRequests() UserRegistrationRequestInformer
 }
 
 type version struct {
@@ -47,6 +55,21 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// AcceptableUsePolicies returns a AcceptableUsePolicyInformer.
+func (v *version) AcceptableUsePolicies() AcceptableUsePolicyInformer {
+	return &acceptableUsePolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// EmailVerifications returns a EmailVerificationInformer.
+func (v *version) EmailVerifications() EmailVerificationInformer {
+	return &emailVerificationInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// Logins returns a LoginInformer.
+func (v *version) Logins() LoginInformer {
+	return &loginInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Projects returns a ProjectInformer.
@@ -77,4 +100,9 @@ func (v *version) Slices() SliceInformer {
 // Users returns a UserInformer.
 func (v *version) Users() UserInformer {
 	return &userInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// UserRegistrationRequests returns a UserRegistrationRequestInformer.
+func (v *version) UserRegistrationRequests() UserRegistrationRequestInformer {
+	return &userRegistrationRequestInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
