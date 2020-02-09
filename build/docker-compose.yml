@@ -36,3 +36,106 @@ services:
     image: edgenet-selectivedeployment:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
+  edgenet-site:
+    container_name: edgenet-site
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/site/Dockerfile
+    image: edgenet-site:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+      - ../config/:/root/config/
+      - ../assets/templates/:/root/assets/templates/
+  edgenet-siteregistrationrequest:
+    container_name: edgenet-siteregistrationrequest
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/siteregistrationrequest/Dockerfile
+    image: edgenet-siteregistrationrequest:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+      - ../config/:/root/config/
+      - ../assets/templates/:/root/assets/templates/
+  edgenet-user:
+    container_name: edgenet-user
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/user/Dockerfile
+    image: edgenet-user:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+      - ../config/:/root/config/
+      - ../assets/templates/:/root/assets/templates/
+      - ../assets/certs:/root/assets/certs
+      - ../assets/kubeconfigs:/root/assets/kubeconfigs
+  edgenet-userregistrationrequest:
+    container_name: edgenet-userregistrationrequest
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/userregistrationrequest/Dockerfile
+    image: edgenet-userregistrationrequest:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+      - ../config/:/root/config/
+      - ../assets/templates/:/root/assets/templates/
+  edgenet-acceptableusepolicy:
+    container_name: edgenet-acceptableusepolicy
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/acceptableusepolicy/Dockerfile
+    image: edgenet-acceptableusepolicy:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+      - ../config/:/root/config/
+      - ../assets/templates/:/root/assets/templates/
+  edgenet-login:
+    container_name: edgenet-login
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/login/Dockerfile
+    image: edgenet-login:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+      - ../config/:/root/config/
+      - ../assets/templates/:/root/assets/templates/
+  edgenet-emailverification:
+    container_name: edgenet-emailverification
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/emailverification/Dockerfile
+    image: edgenet-emailverification:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+      - ../config/:/root/config/
+      - ../assets/templates/:/root/assets/templates/
+  edgenet-slice:
+    container_name: edgenet-slice
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/slice/Dockerfile
+    image: edgenet-slice:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+      - ../config/:/root/config/
+      - ../assets/kubeconfigs:/root/assets/kubeconfigs
+      - ../assets/templates/:/root/assets/templates/
+  edgenet-project:
+    container_name: edgenet-project
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/project/Dockerfile
+    image: edgenet-project:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+      - ../config/:/root/config/
+      - ../assets/kubeconfigs:/root/assets/kubeconfigs
+      - ../assets/templates/:/root/assets/templates/
