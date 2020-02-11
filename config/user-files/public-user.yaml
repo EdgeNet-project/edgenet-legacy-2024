@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: public-user
+  namespace: site-edgenet
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: public-user
+rules:
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["siteregistrationrequests", "userregistrationrequests", "login"]
+  verbs: ["create"]
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["emailverifications"]
+  verbs: ["get", "patch", "update"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: public-user
+roleRef:
+  kind: ClusterRole
+  name: public-user
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: public-user
+  namespace: site-edgenet
