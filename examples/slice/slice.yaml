@@ -1,0 +1,12 @@
+apiVersion: apps.edgenet.io/v1alpha
+kind: Slice
+metadata:
+  name: playground
+spec:
+  type: Development
+  profile: High
+  users:
+    - site: sorbonne-university
+      username: usersu
+    - site: planetlab-europe
+      username: userple

@@ -8,7 +8,8 @@ spec:
   url: http://www.sorbonne-universite.fr/
   address: 21 rue de l’École de médecine 75006 Paris
   contact:
-    - firstname: Berat
-      lastname: Senel
-      email: berat.senel@lip6.fr
-      phone: "+33XXXXXXXXX"
+    username: usersu
+    firstname: Firstname
+    lastname: Lastname
+    email: usersu@lip6.fr
+    phone: "+33XXXXXXXXX"
