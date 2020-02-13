@@ -65,6 +65,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&EmailVerificationList{},
 		&Slice{},
 		&SliceList{},
+		&Project{},
+		&ProjectList{},
 	)
 
 	// Register the type in the scheme
