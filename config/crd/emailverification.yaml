@@ -26,9 +26,9 @@ spec:
     singular: emailverification
     kind: EmailVerification
   additionalPrinterColumns:
-    - name: Username
+    - name: Identifier
       type: string
-      JSONPath: .spec.username
+      JSONPath: .spec.identifier
     - name: Verified
       type: boolean
       JSONPath: .spec.verified

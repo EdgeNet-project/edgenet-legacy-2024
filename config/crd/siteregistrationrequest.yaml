@@ -68,15 +68,22 @@ spec:
             address:
               type: string
             contact:
-              type: array
-              items:
-                  type: object
-                  properties:
-                    firstname:
-                      type: string
-                    lastname:
-                      type: string
-                    email:
-                      type: string
-                    phone:
-                      type: string
+              type: object
+              required:
+                - username
+                - firstname
+                - lastname
+                - email
+                - phone
+              properties:
+                username:
+                  type: string
+                  pattern: "^[a-z0-9]*$"
+                firstname:
+                  type: string
+                lastname:
+                  type: string
+                email:
+                  type: string
+                phone:
+                  type: string
