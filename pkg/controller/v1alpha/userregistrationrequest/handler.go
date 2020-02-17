@@ -179,6 +179,9 @@ func (t *Handler) runApprovalTimeout(URRCopy *apps_v1alpha.UserRegistrationReque
 	timeoutRenewed := make(chan bool, 1)
 	terminated := make(chan bool, 1)
 	var timeout <-chan time.Time
+	if URRCopy.Status.Expires != nil {
+		timeout = time.After(time.Until(URRCopy.Status.Expires.Time))
+	}
 	closeChannels := func() {
 		close(registrationApproved)
 		close(timeoutRenewed)
