@@ -108,12 +108,12 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			emailVerification.Spec.Kind = "User"
 			emailVerification.Spec.Identifier = URRCopy.GetName()
 			_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(URRCopy.GetNamespace()).Create(emailVerification.DeepCopy())
-			log.Println(err)
 			if err == nil {
 				// Set the HTML template variables
 				contentData := mailer.VerifyContentData{}
 				contentData.CommonData.Site = URROwnerNamespace.Labels["site-name"]
 				contentData.CommonData.Username = URRCopyUpdated.GetName()
+				contentData.CommonData.Name = fmt.Sprintf("%s %s", URRCopyUpdated.Spec.FirstName, URRCopyUpdated.Spec.LastName)
 				contentData.CommonData.Email = []string{URRCopyUpdated.Spec.Email}
 				contentData.Code = emailVerificationCode
 				mailer.Send("user-email-verification", contentData)

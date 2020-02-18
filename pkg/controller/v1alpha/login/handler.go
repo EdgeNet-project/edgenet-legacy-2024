@@ -127,6 +127,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 							contentData := mailer.LoginContentData{}
 							contentData.CommonData.Site = loginOwnerNamespace.Labels["site-name"]
 							contentData.CommonData.Username = user.GetName()
+							contentData.CommonData.Name = fmt.Sprintf("%s %s", user.Spec.FirstName, user.Spec.LastName)
 							contentData.CommonData.Email = []string{user.Spec.Email}
 							contentData.Token = string(secret.Data["token"])
 							mailer.Send("login", contentData)
