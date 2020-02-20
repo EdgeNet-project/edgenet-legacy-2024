@@ -99,25 +99,23 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	if projectOwnerSite.Status.Enabled && projectCopy.GetGeneration() == 1 {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
-
-		// When a project is deleted, the owner references feature allows the namespace to be automatically removed. Additionally,
-		// when all users who participate in the project are disabled, the project is automatically removed because of the owner references.
-		projectOwnerReferences, projectChildNamespaceOwnerReferences := t.setOwnerReferences(projectCopy)
-		projectCopy.ObjectMeta.OwnerReferences = projectOwnerReferences
-		projectCopyUpdated, _ := t.edgenetClientset.AppsV1alpha().Projects(projectCopy.GetNamespace()).Update(projectCopy)
-		projectCopy = projectCopyUpdated
-		// Enable the project
-		projectCopy.Status.Enabled = true
-		defer t.edgenetClientset.AppsV1alpha().Projects(projectCopy.GetNamespace()).UpdateStatus(projectCopy)
-		// Each namespace created by projects have an indicator as "project" to provide singularity
-		projectChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-project-%s", projectCopy.GetNamespace(), projectCopy.GetName()), OwnerReferences: projectChildNamespaceOwnerReferences}}
-		// Namespace labels indicate this namespace created by a project, not by a site or slice
-		namespaceLabels := map[string]string{"owner": "project", "owner-name": projectCopy.GetName(), "site-name": projectOwnerNamespace.Labels["site-name"]}
-		projectChildNamespace.SetLabels(namespaceLabels)
-		projectOwnerNamespaceCreated, err := t.clientset.CoreV1().Namespaces().Create(projectChildNamespace)
-		if err == nil {
-			// Create rolebindings according to the users who participate in the project and are PI and managers of the site
-			t.createRoleBindings(projectOwnerNamespaceCreated.GetName(), projectCopy, projectOwnerNamespace.Labels["site-name"])
+		_, err := t.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("project-%s", projectCopy.GetName()), metav1.GetOptions{})
+		if err != nil {
+			// When a project is deleted, the owner references feature allows the namespace to be automatically removed. Additionally,
+			// when all users who participate in the project are disabled, the project is automatically removed because of the owner references.
+			projectOwnerReferences, projectChildNamespaceOwnerReferences := t.setOwnerReferences(projectCopy)
+			projectCopy.ObjectMeta.OwnerReferences = projectOwnerReferences
+			projectCopyUpdated, _ := t.edgenetClientset.AppsV1alpha().Projects(projectCopy.GetNamespace()).Update(projectCopy)
+			projectCopy = projectCopyUpdated
+			// Enable the project
+			projectCopy.Status.Enabled = true
+			defer t.edgenetClientset.AppsV1alpha().Projects(projectCopy.GetNamespace()).UpdateStatus(projectCopy)
+			// Each namespace created by projects have an indicator as "project" to provide singularity
+			projectChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-project-%s", projectCopy.GetNamespace(), projectCopy.GetName()), OwnerReferences: projectChildNamespaceOwnerReferences}}
+			// Namespace labels indicate this namespace created by a project, not by a site or slice
+			namespaceLabels := map[string]string{"owner": "project", "owner-name": projectCopy.GetName(), "site-name": projectOwnerNamespace.Labels["site-name"]}
+			projectChildNamespace.SetLabels(namespaceLabels)
+			t.clientset.CoreV1().Namespaces().Create(projectChildNamespace)
 		}
 	} else if !projectOwnerSite.Status.Enabled {
 		t.edgenetClientset.AppsV1alpha().Projects(projectCopy.GetNamespace()).Delete(projectCopy.GetName(), &metav1.DeleteOptions{})
@@ -139,7 +137,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 		if fieldUpdated.users || fieldUpdated.enabled {
 			// Delete all existing role bindings in the project (child) namespace
 			t.clientset.RbacV1().RoleBindings(projectChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
-			// Create role bindings in the project namespace from scratch
+			// Create rolebindings according to the users who participate in the project and are PI and managers of the site
 			t.createRoleBindings(projectChildNamespaceStr, projectCopy, projectOwnerNamespace.Labels["site-name"])
 			// Update the owner references of the project
 			projectOwnerReferences, _ := t.setOwnerReferences(projectCopy)
