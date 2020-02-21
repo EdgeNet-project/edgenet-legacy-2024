@@ -1,54 +1,93 @@
-# Make a site registration request in EdgeNet
+# Registering an EdgeNet site
 
-In EdgeNet, a site holds the users, projects and slices, and **maybe** the nodes added into the EdgeNet cluster by that site. Therefore,
-if you want to use EdgeNet as a user group with a hierarchy of authority responsibility,
-you need to register your site for EdgeNet.
+Authorizations to use EdgeNet are handed out hierarchically, so that local administrators approve local users who they know. 
+
+The central administrators of EdgeNet approve the establishment of *sites*, each site having its own local site administrator called a *PI* (principal investigator). A PI, in turn, approves the creation of individual user accounts. PIs also approve the creation of *projects*, which group users. And the PIs may be responsible for *nodes* that are contributed to the EdgeNet cluster.
+
+This tutorial guides you, as a future PI, through the registration of your site.
 
 ## Technologies you will use
-The technology that you will use is [Kubernetes](https://kubernetes.io/), to create
-and manipulate objects in EdgeNet. Furthermore, you will use [kubectl](https://kubernetes.io/docs/reference/kubectl/overview/), which is the Kubernetes command-line interface
-tool, to sign your site up for EdgeNet.
 
-## How to do?
+You will use [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview/), the [Kubernetes](https://kubernetes.io/) command-line interface, in conjunction with e-mail, to register a site with EdgeNet.
 
-You will use an EdgeNet public kubeconfig file to make your registration request.
+## What you will do
 
-### Create a request
-In the first place, you need to create a site registration object according to your
-information. This object must include site name consisting of [allowed characters](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/), fullname, shortname, url, address, and contact who is the responsible for this site. It is required to provide username with allowed chars, firstname, lastname, email, and phone in the contact info. Here is an example:
+You will use a public kubeconfig file provided by EdgeNet to create a *registration request* object that is associated with your e-mail address. Object creation generates an e-mail to you, containing a one-time code. You will authenticate yourself by using that code to patch the object. This will alert the EdgeNet administrators, who will either approve or deny your request. With approval, you receive via e-mail a kubeconfig file that is specific to you and that allows you to act as both a PI and a user of your site.
 
+## Steps
+
+### Make sure you have the Kubernetes command-line tool
+
+If you do not already have ``kubectl``, you will need to install it on your system. Follow the [Kubernetes documentation](https://kubernetes.io/docs/tasks/tools/install-kubectl/) for this.
+
+### Obtain a temporary access credential
+
+An EdgeNet site registration request is a Kubernetes object, and to manipulate objects on a Kubernetes system you need a kubeconfig file. EdgeNet provides a kubeconfig file that anyone can use for this.
+
+This public kubeconfig file is available here: [https://edge-net.org/downloads/config/public.cfg](https://edge-net.org/downloads/config/public.cfg). In what follows, we will assume that it is saved on your system as ``./public.cfg``.
+
+The public file does not allow any actions beyond the creation and, together with a one-time code, the modification of your own site registration request. Upon successful termination of the site registration process, you will be provided with another kubeconfig file that is specific to you and that will allow you to carry out PI and user actions having to do with your site.
+
+### Prepare a description of your site
+
+The [``.yaml`` format](https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/) is used to describe Kubernetes objects. Create one for the site registration request object, following the model of the example shown below. Your ``.yaml``file must specify the following information regarding your future site:
+- the **site name** that will be used by the EdgeNet system; it must follow [Kubernetes' rules for names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/) and must be different from any existing EdgeNet site names
+- the **full name** of the site, which is a human-readable name
+- the **short name** of the site, which is also human-readable, and can be the same as the full name, or a shorter name, in case the full name is long
+- the **URL** of the site
+- the **postal address** of the site
+- the **contact person** who is the responsible for this site; this is the site's first PI, who is typically yourself; the information provided for this person consists of:
+  - a **username** that will be used by the EdgeNet system; it must follow [Kubernetes' rules for names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/) and must be different from any existing EdgeNet usernames, **across all sites**
+  - a **first name** (human readable)
+  - a **last name** (human readable)
+  - an **e-mail address**
+  - a **phone number**, which should start with the country code using the plus notation, and without spaces or other formatting
+
+In what follows, we will assume that this file is saved on your system as ``./siteregistrationrequest.yaml``.
+
+Example: 
 ```yaml
 apiVersion: apps.edgenet.io/v1alpha
 kind: SiteRegistrationRequest
 metadata:
-  name: <your site name as a nickname, e.g. sorbonne-university>
+  name: sorbonne-universite
 spec:
-  fullname: <your site name, e.g. Sorbonne University>
-  shortname: <your site shortname, e.g. SU>
-  url: <your site website, e.g. http://www.sorbonne-universite.fr/>
-  address: <your site address, e.g. 21 rue de l’École de médecine 75006 Paris>
+  fullname: Sorbonne Université
+  shortname: SU
+  url: http://www.sorbonne-universite.fr/
+  address: 21 rue de l’École de médecine, 75006 Paris, France
   contact:
-    username: <your username>
-    firstname: <your firstname>
-    lastname: <your lastname>
-    email: <your email address>
-    phone: <your phone number, in format of "+XXXXXXXXXX">
+    username: timurfriedman
+    firstname: Timur
+    lastname: Friedman
+    email: timur.friedman@sorbonne-universite.fr
+    phone: +33123456789
 ```
 
-```
-kubectl create -f ./siteregistrationrequest.yaml --kubeconfig ./public-user.cfg
-```
+### Create your site registration request
 
-### Email verification
-
-When you create a site registration request, EdgeNet automatically sends you an email that includes a kubectl command providing unique identifier to verify your email address. You can find the example below for verification.
+Using ``kubectl``, create a site registration request object:
 
 ```
-kubectl patch emailverification bsv10kgeyo7pmazwpr -n site-edgenet --type='json' -p='[{"op": "replace", "path": "/spec/verified", "value": true}]' --kubeconfig ./public-user.cfg
+kubectl create -f ./siteregistrationrequest.yaml --kubeconfig ./public.cfg
 ```
 
-The system sends notification emails to the EdgeNet admins about your registration request when the verification is done.
+This will cause an e-mail containing a one-time code to be sent to the address that you specified.
 
-### Approval process
+### Authenticate your request using a one-time code
 
-At this point, your request will be approved or denied by an admin. However, we assume that your request has been approved, in this case, you will receive two emails. The first one says your registration completed while the second one contains your user information and user-specific kubeconfig file. Then you can start using EdgeNet with that kubeconfig file.
+The e-mail that you receive will contain a ``kubectl`` command that you can copy and paste onto your command line, editing only the path for the public kubeconfig file on your local system, if needed.
+
+In the example here, the one-time code is ``bsv10kgeyo7pmazwpr``:
+
+```
+kubectl patch emailverification bsv10kgeyo7pmazwpr -n site-edgenet --type='json' -p='[{"op": "replace", "path": "/spec/verified", "value": true}]' --kubeconfig ./public.cfg
+```
+
+After you have done this, the EdgeNet system sends a notification e-mail to the EdgeNet administrators, informing them of your registration request.
+
+### Wait for approval and receipt of your permanent access credential
+
+At this point, your request will be approved or denied by an admin. Assuming that your request has been approved, you will receive two emails. The first one confirms that your registration is complete, while the second one contains your user information and user-specific kubeconfig file.
+
+You can now start using EdgeNet with your user-specific kubeconfig file.
