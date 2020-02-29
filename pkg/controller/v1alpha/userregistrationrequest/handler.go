@@ -69,7 +69,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	// Create a copy of the user registration request object to make changes on it
 	URRCopy := obj.(*apps_v1alpha.UserRegistrationRequest).DeepCopy()
 	// Check if the email address is already taken
-	exist := t.checkUsernameEmailAddress(URRCopy)
+	exist := t.checkDuplicateObject(URRCopy)
 	if exist {
 		// If it is already taken, remove the user registration request object
 		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})
@@ -138,7 +138,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		// Check whether the request for user registration approved
 		if URRCopy.Status.Approved {
 			// Check again if the email address is already taken
-			exist := t.checkUsernameEmailAddress(URRCopy)
+			exist := t.checkDuplicateObject(URRCopy)
 			if !exist {
 				// Create a user on site
 				user := apps_v1alpha.User{}
@@ -250,8 +250,8 @@ timeoutLoop:
 	}
 }
 
-// checkUsernameEmailAddress checks whether a user exists with the same username or email address
-func (t *Handler) checkUsernameEmailAddress(URRCopy *apps_v1alpha.UserRegistrationRequest) bool {
+// checkDuplicateObject checks whether a user exists with the same username or email address
+func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationRequest) bool {
 	exist := false
 	// To check username on the users resource
 	userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).List(
@@ -275,6 +275,15 @@ func (t *Handler) checkUsernameEmailAddress(URRCopy *apps_v1alpha.UserRegistrati
 		for _, URRRow := range URRRaw.Items {
 			if URRRow.Spec.Email == URRCopy.Spec.Email && URRRow.GetUID() != URRCopy.GetUID() {
 				exist = true
+			}
+		}
+		if !exist {
+			// To check email address given at SRR
+			SRRRaw, _ := t.edgenetClientset.AppsV1alpha().SiteRegistrationRequests().List(metav1.ListOptions{})
+			for _, SRRRow := range SRRRaw.Items {
+				if SRRRow.Spec.Contact.Email == URRCopy.Spec.Email {
+					exist = true
+				}
 			}
 		}
 	}

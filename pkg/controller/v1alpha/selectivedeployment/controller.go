@@ -1,3 +1,19 @@
+/*
+Copyright 2020 Sorbonne Université
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package selectivedeployment
 
 import (
@@ -41,7 +57,7 @@ type controller struct {
 	wg             map[string]*sync.WaitGroup
 }
 
-// The main structure of informerEvent
+// The main structure of informerevent
 type informerevent struct {
 	key      string
 	function string
@@ -56,8 +72,6 @@ const noSchedule = "NoSchedule"
 const create = "create"
 const update = "update"
 const delete = "delete"
-const charset = "abcdefghijklmnopqrstuvwxyz" +
-	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 const trueStr = "True"
 const falseStr = "False"
 const unknownStr = "Unknown"
