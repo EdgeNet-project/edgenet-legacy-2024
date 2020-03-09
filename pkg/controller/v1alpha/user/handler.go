@@ -80,92 +80,96 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
 	userOwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(userOwnerNamespace.Labels["site-name"], metav1.GetOptions{})
 	// Check if the site is active
-	// If the service restarts, it creates all objects again
-	// Because of that, this section covers a variety of possibilities
 	if userOwnerSite.Status.Enabled == true && userCopy.GetGeneration() == 1 {
-		// Automatically creates an acceptable use policy object belonging to the user in the site namespace
-		// When a user is deleted, the owner references feature allows the related AUP to be automatically removed
-		userOwnerReferences := t.setOwnerReferences(userCopy)
-		userAUP := &apps_v1alpha.AcceptableUsePolicy{TypeMeta: metav1.TypeMeta{Kind: "AcceptableUsePolicy", APIVersion: "apps.edgenet.io/v1alpha"},
-			ObjectMeta: metav1.ObjectMeta{Name: userCopy.GetName(), OwnerReferences: userOwnerReferences}, Spec: apps_v1alpha.AcceptableUsePolicySpec{Accepted: false}}
-		t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Create(userAUP)
-		// Create user-specific roles regarding the resources of sites, users, and acceptableusepolicies
-		policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"sites"}, ResourceNames: []string{userOwnerNamespace.Labels["site-name"]},
-			Verbs: []string{"get"}}, {APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"get", "update", "patch"}},
-			{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"logins"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"*"}}}
-		userRole := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("user-%s", userCopy.GetName()), OwnerReferences: userOwnerReferences},
-			Rules: policyRule}
-		_, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(userRole)
+		// If the service restarts, it creates all objects again
+		// Because of that, this section covers a variety of possibilities
+		_, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
 		if err != nil {
-			log.Infof("Couldn't create user-%s role: %s", userCopy.GetName(), err)
-		}
-		// Create a dedicated role to allow the user access to accept/reject AUP, even if the AUP is rejected
-		policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"acceptableusepolicies", "acceptableusepolicies/status"}, ResourceNames: []string{userCopy.GetName()},
-			Verbs: []string{"get", "update", "patch"}}}
-		userRole = &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("user-aup-%s", userCopy.GetName()), OwnerReferences: userOwnerReferences},
-			Rules: policyRule}
-		_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(userRole)
-		if err != nil {
-			log.Infof("Couldn't create user-aup-%s role: %s", userCopy.GetName(), err)
-		}
-
-		// Check if the password has been replaced by a secret already
-		_, err = t.clientset.CoreV1().Secrets(userCopy.GetNamespace()).Get(userCopy.Spec.Password, metav1.GetOptions{})
-		if err != nil {
-			// Create a user-specific secret to keep the password safe
-			passwordSecret := registration.CreateSecretByPassword(userCopy)
-			// Update the password field as the secret's name for later use
-			userCopy.Spec.Password = passwordSecret
-			userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
-			if err == nil {
-				// To manipulate the object later
-				userCopy = userCopyUpdated
+			// Automatically creates an acceptable use policy object belonging to the user in the site namespace
+			// When a user is deleted, the owner references feature allows the related AUP to be automatically removed
+			userOwnerReferences := t.setOwnerReferences(userCopy)
+			userAUP := &apps_v1alpha.AcceptableUsePolicy{TypeMeta: metav1.TypeMeta{Kind: "AcceptableUsePolicy", APIVersion: "apps.edgenet.io/v1alpha"},
+				ObjectMeta: metav1.ObjectMeta{Name: userCopy.GetName(), OwnerReferences: userOwnerReferences}, Spec: apps_v1alpha.AcceptableUsePolicySpec{Accepted: false}}
+			t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Create(userAUP)
+			// Create user-specific roles regarding the resources of sites, users, and acceptableusepolicies
+			policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"sites"}, ResourceNames: []string{userOwnerNamespace.Labels["site-name"]},
+				Verbs: []string{"get"}}, {APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"get", "update", "patch"}},
+				{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"logins"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"*"}}}
+			userRole := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("user-%s", userCopy.GetName()), OwnerReferences: userOwnerReferences},
+				Rules: policyRule}
+			_, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(userRole)
+			if err != nil {
+				log.Infof("Couldn't create user-%s role: %s", userCopy.GetName(), err)
 			}
-		}
-		// Activate user
-		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
-		userCopy.Status.Active = true
-		// Create the main service account for permanent use
-		// In next versions, there will be a method to renew the token of this service account for security
-		_, err = registration.CreateServiceAccount(userCopy, "main")
-		if err != nil {
-			log.Println(err.Error())
-		}
-		// This function collects the bearer token from the created service account to form kubeconfig file and send it by email
-		makeConfigAvailable := func() {
-			for range time.Tick(30 * time.Second) {
-				serviceAccount, _ := t.clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
-				if len(serviceAccount.Secrets) > 0 {
-					registration.CreateConfig(serviceAccount)
-					break
+			// Create a dedicated role to allow the user access to accept/reject AUP, even if the AUP is rejected
+			policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"acceptableusepolicies", "acceptableusepolicies/status"}, ResourceNames: []string{userCopy.GetName()},
+				Verbs: []string{"get", "update", "patch"}}}
+			userRole = &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("user-aup-%s", userCopy.GetName()), OwnerReferences: userOwnerReferences},
+				Rules: policyRule}
+			_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(userRole)
+			if err != nil {
+				log.Infof("Couldn't create user-aup-%s role: %s", userCopy.GetName(), err)
+			}
+
+			// Check if the password has been replaced by a secret already
+			_, err = t.clientset.CoreV1().Secrets(userCopy.GetNamespace()).Get(userCopy.Spec.Password, metav1.GetOptions{})
+			if err != nil {
+				// Create a user-specific secret to keep the password safe
+				passwordSecret := registration.CreateSecretByPassword(userCopy)
+				// Update the password field as the secret's name for later use
+				userCopy.Spec.Password = passwordSecret
+				userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
+				if err == nil {
+					// To manipulate the object later
+					userCopy = userCopyUpdated
 				}
 			}
 
-		checkTokenTimer:
-			for {
-				select {
-				// Check every 30 seconds whether the secret related to the service account has been generated
-				case <-time.Tick(30 * time.Second):
+			// Activate user
+			defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+			userCopy.Status.Active = true
+			// Create the main service account for permanent use
+			// In next versions, there will be a method to renew the token of this service account for security
+			_, err = registration.CreateServiceAccount(userCopy, "main")
+			if err != nil {
+				log.Println(err.Error())
+			}
+			// This function collects the bearer token from the created service account to form kubeconfig file and send it by email
+			makeConfigAvailable := func() {
+				for range time.Tick(30 * time.Second) {
 					serviceAccount, _ := t.clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
 					if len(serviceAccount.Secrets) > 0 {
-						// Create kubeconfig file according to the web service account
 						registration.CreateConfig(serviceAccount)
-						// Set the HTML template variables
-						contentData := mailer.CommonContentData{}
-						contentData.CommonData.Site = userOwnerNamespace.Labels["site-name"]
-						contentData.CommonData.Username = userCopy.GetName()
-						contentData.CommonData.Name = fmt.Sprintf("%s %s", userCopy.Spec.FirstName, userCopy.Spec.LastName)
-						contentData.CommonData.Email = []string{userCopy.Spec.Email}
-						mailer.Send("user-registration-successful", contentData)
+						break
+					}
+				}
+
+			checkTokenTimer:
+				for {
+					select {
+					// Check every 30 seconds whether the secret related to the service account has been generated
+					case <-time.Tick(30 * time.Second):
+						serviceAccount, _ := t.clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
+						if len(serviceAccount.Secrets) > 0 {
+							// Create kubeconfig file according to the web service account
+							registration.CreateConfig(serviceAccount)
+							// Set the HTML template variables
+							contentData := mailer.CommonContentData{}
+							contentData.CommonData.Site = userOwnerNamespace.Labels["site-name"]
+							contentData.CommonData.Username = userCopy.GetName()
+							contentData.CommonData.Name = fmt.Sprintf("%s %s", userCopy.Spec.FirstName, userCopy.Spec.LastName)
+							contentData.CommonData.Email = []string{userCopy.Spec.Email}
+							mailer.Send("user-registration-successful", contentData)
+							break checkTokenTimer
+						}
+					case <-time.After(15 * time.Minute):
+						// Mail notification, TBD
 						break checkTokenTimer
 					}
-				case <-time.After(15 * time.Minute):
-					// Mail notification, TBD
-					break checkTokenTimer
 				}
 			}
+			go makeConfigAvailable()
 		}
-		go makeConfigAvailable()
 	} else if userOwnerSite.Status.Enabled == false && userCopy.Status.Active == true {
 		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
 		userCopy.Status.Active = false
@@ -374,10 +378,10 @@ func (t *Handler) checkDuplicateObject(userCopy *apps_v1alpha.User) bool {
 // setOwnerReferences puts the user as owner
 func (t *Handler) setOwnerReferences(userCopy *apps_v1alpha.User) []metav1.OwnerReference {
 	ownerReferences := []metav1.OwnerReference{}
-	newNamespaceRef := *metav1.NewControllerRef(userCopy, apps_v1alpha.SchemeGroupVersion.WithKind("User"))
+	newUserRef := *metav1.NewControllerRef(userCopy, apps_v1alpha.SchemeGroupVersion.WithKind("User"))
 	takeControl := false
-	newNamespaceRef.Controller = &takeControl
-	ownerReferences = append(ownerReferences, newNamespaceRef)
+	newUserRef.Controller = &takeControl
+	ownerReferences = append(ownerReferences, newUserRef)
 	return ownerReferences
 }
 
