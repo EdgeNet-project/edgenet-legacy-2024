@@ -465,3 +465,51 @@ type EmailVerificationList struct {
 
 	Items []EmailVerification `json:"items"`
 }
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NodeContribution describes a NodeContribution resource
+type NodeContribution struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	meta_v1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the nodecontribution resource spec
+	Spec NodeContributionSpec `json:"spec"`
+	// Status is the login resource status
+	Status NodeContributionStatus `json:"status,omitempty"`
+}
+
+// NodeContributionSpec is the spec for a NodeContribution resource
+type NodeContributionSpec struct {
+	Host        string        `json:"host"`
+	Port        int           `json:"port"`
+	Username    string        `json:"username"`
+	Password    string        `json:"password"`
+	Enabled     bool          `json:"enabled"`
+	Limitations []Limitations `json:"limitations"`
+}
+
+type Limitations struct {
+	Authority string `json:"authority"`
+	Project   string `json:"project"`
+	Slice     string `json:"slice"`
+}
+
+// NodeContributionStatus is the status for a node contribution
+type NodeContributionStatus struct {
+	State   string `json:"state"`
+	Message string `json:"message"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NodeContributionList is a list of NodeContribution resources
+type NodeContributionList struct {
+	meta_v1.TypeMeta `json:",inline"`
+	meta_v1.ListMeta `json:"metadata"`
+
+	Items []NodeContribution `json:"items"`
+}
