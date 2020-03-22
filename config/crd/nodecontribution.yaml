@@ -28,9 +28,9 @@ spec:
     shortNames:
       - nc
   additionalPrinterColumns:
-    - name: Hostname
+    - name: Address
       type: string
-      JSONPath: .spec.hostname
+      JSONPath: .spec.host
     - name: Port
       type: integer
       JSONPath: .spec.port
@@ -50,11 +50,11 @@ spec:
       properties:
         spec:
           required:
-            - hostname
+            - host
             - port
             - enabled
           properties:
-            hostname:
+            host:
               type: string
             port:
               type: integer
