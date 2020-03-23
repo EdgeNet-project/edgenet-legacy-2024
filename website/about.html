@@ -112,17 +112,17 @@
             </div>
           <div class="flex-item flex-item-stretch flex-column">
             <p class="text">
-              Let's register your site in EdgeNet:
+              Let's register your authority in EdgeNet:
             </p>
             <div class="control-group">
-              <a href="https://headnode.edge-net.org/#/login?signup=siteregistration">
-                <button class="custom-button custom-button-primary pulse-primary">Register My Site</button>
+              <a href="https://headnode.edge-net.org/#/login?signup=authorityregistration">
+                <button class="custom-button custom-button-primary pulse-primary">Create My Authority</button>
               </a>
             </div>
           </div>
           <div class="flex-item flex-item-stretch flex-column">
             <p class="text">
-              Or sign up yourself for a site in EdgeNet:
+              Or sign up yourself for a authority in EdgeNet:
             </p>
             <div class="control-group">
               <a href="https://headnode.edge-net.org/#/login?signup=userregistration">
@@ -132,6 +132,172 @@
           </div>
         </div>
         <!--End Text Only-->
+        <!-------------------------------------------------------------------------------------------->
+        <!--Start Text with Images and Videos-->
+        <div class="flex-row">
+          <div class="flex-item flex-column">
+            <h2 class="add-top-margin">Why EdgeNet?</h2>
+            <hr>
+            <h3 class="add-top-margin">Open Source</h3>
+            <p class="text">
+              EdgeNet is an open source project to contribute back to the Kubernetes community.
+              The backend, an extension of the Kubernetes API, is an API written in Go that is
+              open to those who have auth. It gets the benefit of client-go and Go packages for
+              talking to the Kubernetes API of EdgeNet and makes use of the Namecheap API and
+              the GeoLite2 database. You are very welcome to contribute our community! Let's
+              visit our GitHub repository:
+            </p>
+            <div class="control-group">
+              <a target="_blank" href="https://github.com/EdgeNet-project/">
+                <button class="custom-button-flat pulse-black">
+                  <img src="img/github.png">
+                  <span>GitHub</span>
+                </button>
+              </a>
+            </div>
+          </div>
+        </div>
+        <div class="flex-row">
+          <div class="flex-item flex-item-stretch flex-column">
+            <img class="image" src="img/kubernetes.png">
+          </div>
+          <div class="flex-item flex-item-stretch flex-column">
+            <h3 class="add-top-margin">Kubernetes Based</h3>
+            <p class="text">
+              Kubernetes is a well-known and an open-source system for the orchestration of containerized
+              applications. More explicitly, Kubernetes automates deployments, and it also scales and manages
+              containerized applications across a cluster. Originally, Kubernetes appears itself as a solution
+              for cloud infrastructure, but, there is a strong community who wants to bring it to Edge.
+              And, EdgeNet is one of the players to do so by building itself up on Kubernetes.
+            </p>
+          </div>
+        </div>
+        <div class="flex-row">
+          <div class="flex-item flex-item-stretch-2 flex-column">
+            <h3 class="add-top-margin">Docker Technology</h3>
+            <p class="text">
+              Thanks to containerization technology, it easier to build and deploy applications across
+              servers in a way that is a reliable and scalable way. It also provides us an opportunity
+              to avoid setting up an operating system per application. Briefly, Docker is a platform to
+              build, manage, and secure applications and also to may deploy them. EdgeNet users make
+              use of Docker containers to pack and deploy their applications.
+            </p>
+          </div>
+          <div class="flex-item flex-item-stretch flex-column">
+            <img class="image" src="img/docker.png">
+          </div>
+        </div>
+        <div class="flex-row">
+          <div class="flex-item flex-item-stretch flex-column">
+            <iframe width="420" height="240" src="https://www.youtube.com/embed/Tcc11sfhiHo" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+          </div>
+          <div class="flex-item flex-item-stretch flex-column">
+            <h3 class="add-top-margin">Edge Features</h3>
+            <p class="text">
+              EdgeNet is yet to focus on Device Edge, so the devices, such as smartphones, laptops, and sensors, that really
+              have limited spare compute and data storage capability with connectivity problems. Distinct from infrastructure
+              edge as device edge uses device resources, whereas infrastructure edge uses edge nodes such as individual servers
+              or other sets of computing resources. So, EdgeNet has established a Kubernetes edge cluster that the edge nodes,
+              with cloud-like capabilities are located in distributed locations at infrastructure edge. Moreover, EdgeNet makes
+              it easy for third parties to add, to contribute nodes into EdgeNet cluster in the way Kubernetes users do by using
+              <b>.YAML</b> configuration files. In addition to this, EdgeNet presents Selective Deployment that provides ability of
+              deploying applications based on the node geolocation.
+            </p>
+          </div>
+        </div>
+        <div class="flex-row">
+          <div class="flex-item flex-column">
+            <p class="text">
+              Selective Deployment allows users to deploy containerized applications to a widely distributed set of nodes
+              by choosing the nodes by their locations. Users can do so based on continents, countries, states/regions,
+              and cities, as well as polygons describes using latitudes and longitudes. Please <a href="./features.html">click here</a>
+              for further details.
+            </p>
+          </div>
+        </div>
+        <div class="flex-row">
+          <div class="flex-item flex-item-stretch-2 flex-column">
+            <h3 class="add-top-margin">Multitenancy</h3>
+            <p class="text">
+              EdgeNet inherits the multitenancy model, in use and development, mainly from PlanetLab. A authority is a physical location
+              where PlanetLab nodes are located, whereas a authority in EdgeNet is not required to provide a node. But, they both own
+              users and slices, additionally, authorities in EdgeNet have an added feature called Team inherited from
+              <a href="https://www.fed4fire.eu/">Fed4FIRE</a>.
+            </p>
+          </div>
+          <div class="flex-item flex-item-stretch flex-column">
+            <iframe width="280" height="140" src="https://www.youtube.com/embed/x1X2E9MqCAM" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+          </div>
+        </div>
+        <div class="flex-row">
+          <div class="flex-item flex-item-stretch flex-column">
+            <iframe width="280" height="140" src="https://www.youtube.com/embed/WcLK5Sm-LG0" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+          </div>
+          <div class="flex-item flex-item-stretch-2 flex-column">
+            <p class="text">
+              The central admins of EdgeNet approve the establishment of authorities, each authority having its own local authority admins called an authority-admin,
+              so Principal Investigator. An authority-admin approves the creation of individual user accounts. Authority-admins can delegate user approval,
+              creation of teams and slices to managers. And by giving a tech role can make a user be responsible for nodes
+              that are contributed to the EdgeNet cluster. And a user is anyone who develops and deploys applications on EdgeNet.
+              A slice is a set of allocated resources distributed across PlanetLab, and to most users, a slice means UNIX shell
+              access to certain PlanetLab nodes, whereas a slice means a set of allocated resources on the cluster in EdgeNet.
+              As a final one, Team groups users to give them permission to create slices independently.
+            </p>
+          </div>
+        </div>
+        <div class="flex-row">
+          <div class="flex-item flex-column">
+            <h3 class="add-top-margin">Vantage Points</h3>
+            <p class="text">
+              EdgeNet currently possesses moreover 50 nodes located in distributed locations across the U.S. and Europe. We aim
+              to reach higher numbers in wider area by having your contributions. Because of this, we have developed a feature
+              that makes it easy to add a node in EdgeNet cluster. In this way, with your contributions, EdgeNet would offer
+              more vantage points to users for doing experiments in a widely-spread cluster.
+            </p>
+          </div>
+        </div>
+        <!--End Text with Images and Videos-->
+        <!-------------------------------------------------------------------------------------------->
+        <!--Start Text with Images and Image buttons-->
+        <div class="flex-row">
+          <div class="flex-item flex-column">
+            <h2 class="add-top-margin">Architecture</h2>
+            <hr>
+            <p class="text">
+              Resources are endpoints of the Kubernetes API to store objects separately by kinds. Kubernetes has a built-in feature
+              that allows developers to generate customized resources dedicated their particular needs. These solutions called as
+              custom resources in Kubernetes, which enables users to create, edit, and delete objects belong to a custom resource
+              in the way they do for built-in resources by invoking kubectl. Thus, these custom solutions become a part of Kubernetes
+              and thanks to this feature we can avoid forcing user to learn a new syntax. In EdgeNet, we use CustomResourceDefinitions
+              (CRDs) to extend the Kubernetes API. Although CustomResourceDefinitions don't provide flexibility because of its restrictions,
+              they don't require to develop a new API server, saves us from a plent of coding task, as they use the native Kubernetes API Server.
+            </p>
+          </div>
+        </div>
+        <div class="flex-row-space-between">
+          <div class="flex-item flex-column">
+            <img class="image max-width-400" src="img/custom-resources.png">
+            <p class="image-caption">Custom Resources</p>
+          </div>
+          <div class="flex-item flex-column">
+            <a href="https://github.com/yenchiah/project-website-template" target="_blank" class="image max-width-400">
+              <img src="img/architecture.png">
+            </a>
+            <p class="image-caption">Aimed Architecture</p>
+          </div>
+        </div>
+        <div class="flex-row">
+          <div class="flex-item flex-column">
+            <p class="text">
+              The idea behind the development of EdgeNet is meeting distributed testbed requirements by using a common framework that
+              is Kubernetes in this case. EdgeNet aims being fully aling with Kubernetes to be able to contribute back to the community.
+              The custom resources feature of Kubernetes allows us to do so. Because all new features we develop as custom resources are
+              automatically adopted by <b>kubectl</b>. The features such as hardware management, logging & monitoring,
+              and privacy & security at Edge in scope of EdgeNet's vision!
+            </p>
+          </div>
+        </div>
+        <!--End Text with Images and Image buttons-->
         <!-------------------------------------------------------------------------------------------->
         <!--Start Text Only-->
         <div class="flex-row">
