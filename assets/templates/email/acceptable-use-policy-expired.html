@@ -456,7 +456,7 @@
                                 <tr>
                                   <td class="attributes_item">
                                     <span class="f-fallback">
-                                      <strong>Site:</strong> {{.CommonData.Site}}
+                                      <strong>Authority:</strong> {{.CommonData.Authority}}
                                     </span>
                                   </td>
                                 </tr>
@@ -478,7 +478,7 @@
                                   <td class="attributes_item">
                                     <span class="f-fallback">
                                         <strong>Kubectl command:</strong>
-                                        <p class="precode" style="white-space: pre">kubectl patch aup {{.CommonData.Username}} -n site-{{.CommonData.Site}} --type='json' -p='[{"op": "replace", "path": "/spec/accepted", "value": true}]'</p>
+                                        <p class="precode" style="white-space: pre">kubectl patch aup {{.CommonData.Username}} -n authority-{{.CommonData.Authority}} --type='json' -p='[{"op": "replace", "path": "/spec/accepted", "value": true}]'</p>
                                     </span>
                                   </td>
                                 </tr>

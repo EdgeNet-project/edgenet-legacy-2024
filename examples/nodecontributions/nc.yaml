@@ -1,0 +1,14 @@
+apiVersion: apps.edgenet.io/v1alpha
+kind: NodeContribution
+metadata:
+  name: test
+spec:
+  host: example-test.com
+  port: 22
+  enabled: true
+  username: boilerplate
+  password: test
+  limitations:
+    - authority: test
+      team: test
+      slice: test

@@ -135,7 +135,7 @@ func Start() {
 	}
 
 	// Cluster Roles for Slices
-	// Site PI
+	// Authority PI
 	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"selectivedeployments"}, Verbs: []string{"*"}},
 		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "replicationcontrollers", "services", "secrets"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"apps"}, Resources: []string{"daemonsets", "deployments", "replicasets", "statefulsets"}, Verbs: []string{"*"}},
@@ -150,14 +150,14 @@ func Start() {
 	if err != nil {
 		log.Infof("Couldn't create slice-pi cluster role: %s", err)
 	}
-	// Site Manager
+	// Authority Manager
 	sliceRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "slice-manager"},
 		Rules: policyRule}
 	_, err = clientset.RbacV1().ClusterRoles().Create(sliceRole)
 	if err != nil {
 		log.Infof("Couldn't create slice-manager cluster role: %s", err)
 	}
-	// Site User
+	// Authority User
 	sliceRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "slice-user"},
 		Rules: policyRule}
 	_, err = clientset.RbacV1().ClusterRoles().Create(sliceRole)

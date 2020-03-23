@@ -386,12 +386,16 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:bac77e18329fa88ea880b9a7cfcb8fd25d8b835397dd9143f4b162a43e35bb60"
+  digest = "1:0052c13cacf396bfad47a2920d0db186b4d130f70313812d8b7ef1bdb0531c68"
   name = "golang.org/x/crypto"
   packages = [
+    "curve25519",
     "ed25519",
     "ed25519/internal/edwards25519",
-    "pbkdf2",
+    "internal/chacha20",
+    "internal/subtle",
+    "poly1305",
+    "ssh",
     "ssh/terminal",
   ]
   pruneopts = "UT"
@@ -425,9 +429,10 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:820be5471f9063bf539a8e4acfcf71151c832932c6ae6aab5aa0e8957e5af173"
+  digest = "1:45795a1927aa604db6ee4b96d31ef6df11e52e5801f9c3fca7cf28c4bf82b0f4"
   name = "golang.org/x/sys"
   packages = [
+    "cpu",
     "unix",
     "windows",
   ]
@@ -497,19 +502,6 @@
   pruneopts = "UT"
   revision = "d2d2541c53f18d2a059457998ce2876cc8e67cbf"
   version = "v0.9.1"
-
-[[projects]]
-  digest = "1:45df33697961c5703020e4f00720743622bc4d383138958f0b57d9db0b4921fd"
-  name = "gopkg.in/square/go-jose.v2"
-  packages = [
-    ".",
-    "cipher",
-    "json",
-    "jwt",
-  ]
-  pruneopts = "UT"
-  revision = "8fd82ff1d52a5162ff23c0a48e2c64a1fa4a3f8f"
-  version = "v2.4.0"
 
 [[projects]]
   digest = "1:4d2e5a73dc1500038e504a8d78b986630e3626dc027bc030ba5c75da257cdb96"
@@ -635,12 +627,9 @@
   version = "kubernetes-1.14.0"
 
 [[projects]]
-  digest = "1:71c95d81a294dcee66147ff711896968d512b05df9bf6183cb289c6570c60b4f"
+  digest = "1:961abc41dfa5e1cebc786b794f74c5b4feb53ccd16e118b42ec115f50b2492af"
   name = "k8s.io/apiserver"
   packages = [
-    "pkg/authentication/authenticator",
-    "pkg/authentication/serviceaccount",
-    "pkg/authentication/user",
     "pkg/features",
     "pkg/util/feature",
   ]
@@ -847,7 +836,7 @@
   revision = "a01b7d5d6c2258c80a4a10070f3dee9cd575d9c7"
 
 [[projects]]
-  digest = "1:d02e3e0facfc021ed11e6ff63d96472346308433ed04315ad99b7d736e03c0b9"
+  digest = "1:fd2446639581629139ad8758953bf938c07691e929d28c6d7415d50ffe447b85"
   name = "k8s.io/kubernetes"
   packages = [
     "cmd/kubeadm/app/apis/kubeadm",
@@ -875,7 +864,6 @@
     "pkg/proxy/apis/config",
     "pkg/registry/core/service/allocator",
     "pkg/registry/core/service/ipallocator",
-    "pkg/serviceaccount",
     "pkg/util/interrupt",
     "pkg/version",
   ]
@@ -943,6 +931,7 @@
     "github.com/billputer/go-namecheap",
     "github.com/gorilla/mux",
     "github.com/oschwald/geoip2-golang",
+    "golang.org/x/crypto/ssh",
     "gopkg.in/yaml.v2",
     "k8s.io/api/apps/v1",
     "k8s.io/api/core/v1",
@@ -975,7 +964,6 @@
     "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig",
     "k8s.io/kubernetes/pkg/kubectl/cmd/config",
     "k8s.io/kubernetes/pkg/kubectl/cmd/util",
-    "k8s.io/kubernetes/pkg/serviceaccount",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

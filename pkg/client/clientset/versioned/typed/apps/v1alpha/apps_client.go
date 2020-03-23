@@ -29,13 +29,14 @@ import (
 type AppsV1alphaInterface interface {
 	RESTClient() rest.Interface
 	AcceptableUsePoliciesGetter
+	AuthoritiesGetter
+	AuthorityRequestsGetter
 	EmailVerificationsGetter
 	LoginsGetter
-	ProjectsGetter
+	NodeContributionsGetter
 	SelectiveDeploymentsGetter
-	SitesGetter
-	SiteRegistrationRequestsGetter
 	SlicesGetter
+	TeamsGetter
 	UsersGetter
 	UserRegistrationRequestsGetter
 }
@@ -49,6 +50,14 @@ func (c *AppsV1alphaClient) AcceptableUsePolicies(namespace string) AcceptableUs
 	return newAcceptableUsePolicies(c, namespace)
 }
 
+func (c *AppsV1alphaClient) Authorities() AuthorityInterface {
+	return newAuthorities(c)
+}
+
+func (c *AppsV1alphaClient) AuthorityRequests() AuthorityRequestInterface {
+	return newAuthorityRequests(c)
+}
+
 func (c *AppsV1alphaClient) EmailVerifications(namespace string) EmailVerificationInterface {
 	return newEmailVerifications(c, namespace)
 }
@@ -57,24 +66,20 @@ func (c *AppsV1alphaClient) Logins(namespace string) LoginInterface {
 	return newLogins(c, namespace)
 }
 
-func (c *AppsV1alphaClient) Projects(namespace string) ProjectInterface {
-	return newProjects(c, namespace)
+func (c *AppsV1alphaClient) NodeContributions(namespace string) NodeContributionInterface {
+	return newNodeContributions(c, namespace)
 }
 
 func (c *AppsV1alphaClient) SelectiveDeployments(namespace string) SelectiveDeploymentInterface {
 	return newSelectiveDeployments(c, namespace)
 }
 
-func (c *AppsV1alphaClient) Sites() SiteInterface {
-	return newSites(c)
-}
-
-func (c *AppsV1alphaClient) SiteRegistrationRequests() SiteRegistrationRequestInterface {
-	return newSiteRegistrationRequests(c)
-}
-
 func (c *AppsV1alphaClient) Slices(namespace string) SliceInterface {
 	return newSlices(c, namespace)
+}
+
+func (c *AppsV1alphaClient) Teams(namespace string) TeamInterface {
+	return newTeams(c, namespace)
 }
 
 func (c *AppsV1alphaClient) Users(namespace string) UserInterface {

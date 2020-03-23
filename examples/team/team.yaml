@@ -1,0 +1,9 @@
+apiVersion: apps.edgenet.io/v1alpha
+kind: Team
+metadata:
+  name: edgenet
+spec:
+  users:
+    - authority: sorbonne-university
+      username: usersu
+  description: "Description of the team"

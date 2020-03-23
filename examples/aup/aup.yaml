@@ -2,6 +2,6 @@ apiVersion: apps.edgenet.io/v1alpha
 kind: AcceptableUsePolicy
 metadata:
   name: usersu
-  namespace: site-sorbonne-university
+  namespace: authority-sorbonne-university
 spec:
   accepted: true
