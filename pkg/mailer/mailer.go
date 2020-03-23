@@ -119,8 +119,12 @@ func Send(subject string, contentData interface{}) {
 		to = []string{smtpServer.To}
 	case "authority-creation-successful":
 		to, body = setAuthorityRequestContent(contentData, smtpServer.From)
+	case "acceptable-use-policy-accepted":
+		to, body = setAUPConfirmationContent(contentData, smtpServer.From)
 	case "acceptable-use-policy-renewal":
 		to, body = setAUPRenewalContent(contentData, smtpServer.From)
+	case "acceptable-use-policy-expired":
+		to, body = setAUPExpiredContent(contentData, smtpServer.From)
 	case "slice-invitation":
 		to, body = setSliceInvitationContent(contentData, smtpServer.From)
 	case "team-invitation":
@@ -267,6 +271,34 @@ func setSliceInvitationContent(contentData interface{}, from string) ([]string, 
 	return to, body
 }
 
+// setAUPConfirmationContent to create an email body related to the acceptable use policy confirmation
+func setAUPConfirmationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+	AUPData := contentData.(CommonContentData)
+	// This represents receivers' email addresses
+	to := AUPData.CommonData.Email
+	// The HTML template
+	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-confirmation.html")
+	delimiter := generateRandomString(10)
+	body := setCommonEmailHeaders("EdgeNet Acceptable Use Policy Confirmed", from, to, delimiter)
+	t.Execute(&body, AUPData)
+
+	return to, body
+}
+
+// setAUPExpiredContent to create an email body related to the acceptable use policy expired
+func setAUPExpiredContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+	AUPData := contentData.(CommonContentData)
+	// This represents receivers' email addresses
+	to := AUPData.CommonData.Email
+	// The HTML template
+	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-expired.html")
+	delimiter := generateRandomString(10)
+	body := setCommonEmailHeaders("EdgeNet Acceptable Use Policy Expired", from, to, delimiter)
+	t.Execute(&body, AUPData)
+
+	return to, body
+}
+
 // setAUPRenewalContent to create an email body related to the acceptable use policy renewal
 func setAUPRenewalContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
 	AUPData := contentData.(CommonContentData)
@@ -275,7 +307,7 @@ func setAUPRenewalContent(contentData interface{}, from string) ([]string, bytes
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-renewal.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("Acceptable Use Policy Expiring", from, to, delimiter)
+	body := setCommonEmailHeaders("EdgeNet Acceptable Use Policy Expiring", from, to, delimiter)
 	t.Execute(&body, AUPData)
 
 	return to, body
@@ -303,7 +335,7 @@ func setAuthorityEmailVerificationContent(contentData interface{}, from string) 
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verify.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("Authority Request - Email Verification", from, to, delimiter)
+	body := setCommonEmailHeaders("EdgeNet Authority Registration Request - Do You Confirm?", from, to, delimiter)
 	t.Execute(&body, verificationData)
 
 	return to, body
