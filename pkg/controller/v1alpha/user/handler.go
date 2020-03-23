@@ -254,9 +254,9 @@ func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 	createLoop := func(slicesRaw *apps_v1alpha.SliceList, namespacePrefix string) {
 		for _, sliceRow := range slicesRaw.Items {
 			for _, sliceUser := range sliceRow.Spec.Users {
-				// If the user participates in the slice or it is a PI or a Manager of the owner authority
+				// If the user participates in the slice or it is an Authority-admin or a Manager of the owner authority
 				if (sliceUser.Authority == ownerAuthority && sliceUser.Username == userCopy.GetName()) ||
-					(userCopy.GetNamespace() == sliceRow.GetNamespace() && (containsRole(userCopy.Spec.Roles, "pi") || containsRole(userCopy.Spec.Roles, "manager"))) {
+					(userCopy.GetNamespace() == sliceRow.GetNamespace() && (containsRole(userCopy.Spec.Roles, "admin") || containsRole(userCopy.Spec.Roles, "manager"))) {
 					registration.CreateRoleBindingsByRoles(userCopy, fmt.Sprintf("%s-slice-%s", namespacePrefix, sliceRow.GetName()), "Slice")
 				}
 			}
@@ -268,9 +268,9 @@ func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 	// List the teams in the authority namespace
 	for _, teamRow := range teamsRaw.Items {
 		for _, teamUser := range teamRow.Spec.Users {
-			// If the user participates in the team or it is a PI or a Manager of the owner authority
+			// If the user participates in the team or it is an Authority-admin or a Manager of the owner authority
 			if (teamUser.Authority == ownerAuthority && teamUser.Username == userCopy.GetName()) ||
-				(userCopy.GetNamespace() == teamRow.GetNamespace() && (containsRole(userCopy.Spec.Roles, "pi") || containsRole(userCopy.Spec.Roles, "manager"))) {
+				(userCopy.GetNamespace() == teamRow.GetNamespace() && (containsRole(userCopy.Spec.Roles, "admin") || containsRole(userCopy.Spec.Roles, "manager"))) {
 				registration.CreateRoleBindingsByRoles(userCopy, fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName()), "Team")
 			}
 		}

@@ -134,7 +134,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			sliceChildNamespace.SetLabels(namespaceLabels)
 			sliceChildNamespaceCreated, err := t.clientset.CoreV1().Namespaces().Create(sliceChildNamespace)
 			if err == nil {
-				// Create rolebindings according to the users who participate in the slice and are PI and managers of the authority
+				// Create rolebindings according to the users who participate in the slice and are authority-admin and managers of the authority
 				t.createRoleBindings(sliceChildNamespaceCreated.GetName(), sliceCopy, sliceOwnerNamespace.Labels["authority-name"])
 			} else {
 				t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Delete(sliceCopy.GetName(), &metav1.DeleteOptions{})
@@ -254,11 +254,11 @@ func (t *Handler) createRoleBindings(sliceChildNamespaceStr string, sliceCopy *a
 			mailer.Send("slice-invitation", contentData)
 		}
 	}
-	// To create the rolebindings for the users who are PI and managers of the authority
+	// To create the rolebindings for the users who are authority-admin and managers of the authority
 	userRaw, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", ownerAuthority)).List(metav1.ListOptions{})
 	if err == nil {
 		for _, userRow := range userRaw.Items {
-			if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "pi") || containsRole(userRow.Spec.Roles, "manager")) {
+			if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "admin") || containsRole(userRow.Spec.Roles, "manager")) {
 				registration.CreateRoleBindingsByRoles(userRow.DeepCopy(), sliceChildNamespaceStr, "Slice")
 				contentData := mailer.ResourceAllocationData{}
 				contentData.CommonData.Authority = ownerAuthority

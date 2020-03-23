@@ -118,19 +118,26 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 		// To manipulate user object according to the changes of acceptable use policy
 		if fieldUpdated.accepted {
 			// Get the user who owns this acceptable use policy object
-			user, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(AUPCopy.GetName(), metav1.GetOptions{})
+			AUPUser, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(AUPCopy.GetName(), metav1.GetOptions{})
 			if AUPCopy.Spec.Accepted {
-				user.Status.AUP = true
+				AUPUser.Status.AUP = true
 
 				go t.runApprovalTimeout(AUPCopy)
 				// Set the expiration date according to the 6-month cycle
 				AUPCopy.Status.Expires = &metav1.Time{
 					Time: time.Now().Add(4382 * time.Hour),
 				}
+
+				contentData := mailer.CommonContentData{}
+				contentData.CommonData.Authority = AUPOwnerNamespace.Labels["authority-name"]
+				contentData.CommonData.Username = AUPCopy.GetName()
+				contentData.CommonData.Name = fmt.Sprintf("%s %s", AUPUser.Spec.FirstName, AUPUser.Spec.LastName)
+				contentData.CommonData.Email = []string{AUPUser.Spec.Email}
+				mailer.Send("acceptable-use-policy-accepted", contentData)
 			} else {
-				user.Status.AUP = false
+				AUPUser.Status.AUP = false
 			}
-			go t.edgenetClientset.AppsV1alpha().Users(user.GetNamespace()).UpdateStatus(user)
+			go t.edgenetClientset.AppsV1alpha().Users(AUPUser.GetNamespace()).UpdateStatus(AUPUser)
 		} else if AUPCopy.Spec.Accepted && AUPCopy.Status.Renew {
 			AUPCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(4382 * time.Hour),
