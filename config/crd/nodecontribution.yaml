@@ -70,11 +70,11 @@ spec:
               items:
                 type: object
                 required:
-                  - site
+                  - authority
                 properties:
-                  site:
+                  authority:
                     type: string
-                  project:
+                  team:
                     type: string
                   slice:
                     type: string

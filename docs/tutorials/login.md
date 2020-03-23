@@ -12,14 +12,14 @@ tool, to create a login object.
 You will use your EdgeNet kubeconfig file to create a login object.
 
 ### Get a web token
-This object must include a username consisting of [allowed characters](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/), the namespace of the site, which is a combination of **"site"** prefix and site nickname, you belong to, and your password. Here is an example:
+This object must include a username consisting of [allowed characters](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/), the namespace of the authority, which is a combination of **"authority"** prefix and authority nickname, you belong to, and your password. Here is an example:
 
 ```yaml
 apiVersion: apps.edgenet.io/v1alpha
 kind: Login
 metadata:
   name: <your username>
-  namespace: <your site name as a nickname with a site prefix, e.g. site-sorbonne-university>
+  namespace: <your authority name as a nickname with a authority prefix, e.g. authority-sorbonne-university>
 spec:
   password: <your password at least base64 encoded>
 ```

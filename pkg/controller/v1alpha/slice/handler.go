@@ -100,21 +100,21 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	log.Info("SliceHandler.ObjectCreated")
 	// Create a copy of the slice object to make changes on it
 	sliceCopy := obj.(*apps_v1alpha.Slice).DeepCopy()
-	// Find the site from the namespace in which the object is
+	// Find the authority from the namespace in which the object is
 	sliceOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(sliceCopy.GetNamespace(), metav1.GetOptions{})
-	sliceOwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(sliceOwnerNamespace.Labels["site-name"], metav1.GetOptions{})
-	// The section below checks whether the slice belongs to a project or directly to a site. After then, set the value as enabled
-	// if the site and the project (if it is an owner) enabled.
+	sliceOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(sliceOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	// The section below checks whether the slice belongs to a team or directly to a authority. After then, set the value as enabled
+	// if the authority and the team (if it is an owner) enabled.
 	var sliceOwnerEnabled bool
-	if sliceOwnerNamespace.Labels["owner"] == "project" {
-		sliceOwnerEnabled = sliceOwnerSite.Status.Enabled
+	if sliceOwnerNamespace.Labels["owner"] == "team" {
+		sliceOwnerEnabled = sliceOwnerAuthority.Status.Enabled
 		if sliceOwnerEnabled {
-			sliceOwnerProject, _ := t.edgenetClientset.AppsV1alpha().Projects(fmt.Sprintf("site-%s", sliceOwnerNamespace.Labels["site-name"])).
+			sliceOwnerTeam, _ := t.edgenetClientset.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", sliceOwnerNamespace.Labels["authority-name"])).
 				Get(sliceOwnerNamespace.Labels["owner-name"], metav1.GetOptions{})
-			sliceOwnerEnabled = sliceOwnerProject.Status.Enabled
+			sliceOwnerEnabled = sliceOwnerTeam.Status.Enabled
 		}
 	} else {
-		sliceOwnerEnabled = sliceOwnerSite.Status.Enabled
+		sliceOwnerEnabled = sliceOwnerAuthority.Status.Enabled
 	}
 	// Check if the owner(s) is/are active
 	if sliceOwnerEnabled {
@@ -129,13 +129,13 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			sliceCopy = sliceCopyUpdated
 			// Each namespace created by slices have an indicator as "slice" to provide singularity
 			sliceChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-slice-%s", sliceCopy.GetNamespace(), sliceCopy.GetName()), OwnerReferences: sliceChildNamespaceOwnerReferences}}
-			// Namespace labels indicate this namespace created by a slice, not by a site or project
-			namespaceLabels := map[string]string{"owner": "slice", "owner-name": sliceCopy.GetName(), "site-name": sliceOwnerNamespace.Labels["site-name"]}
+			// Namespace labels indicate this namespace created by a slice, not by a authority or team
+			namespaceLabels := map[string]string{"owner": "slice", "owner-name": sliceCopy.GetName(), "authority-name": sliceOwnerNamespace.Labels["authority-name"]}
 			sliceChildNamespace.SetLabels(namespaceLabels)
 			sliceChildNamespaceCreated, err := t.clientset.CoreV1().Namespaces().Create(sliceChildNamespace)
 			if err == nil {
-				// Create rolebindings according to the users who participate in the slice and are PI and managers of the site
-				t.createRoleBindings(sliceChildNamespaceCreated.GetName(), sliceCopy, sliceOwnerNamespace.Labels["site-name"])
+				// Create rolebindings according to the users who participate in the slice and are PI and managers of the authority
+				t.createRoleBindings(sliceChildNamespaceCreated.GetName(), sliceCopy, sliceOwnerNamespace.Labels["authority-name"])
 			} else {
 				t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Delete(sliceCopy.GetName(), &metav1.DeleteOptions{})
 			}
@@ -154,23 +154,23 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	log.Info("SliceHandler.ObjectUpdated")
 	// Create a copy of the slice object to make changes on it
 	sliceCopy := obj.(*apps_v1alpha.Slice).DeepCopy()
-	// Find the site from the namespace in which the object is
+	// Find the authority from the namespace in which the object is
 	sliceOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(sliceCopy.GetNamespace(), metav1.GetOptions{})
-	sliceOwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(sliceOwnerNamespace.Labels["site-name"], metav1.GetOptions{})
+	sliceOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(sliceOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	sliceChildNamespaceStr := fmt.Sprintf("%s-slice-%s", sliceCopy.GetNamespace(), sliceCopy.GetName())
 	fieldUpdated := updated.(fields)
-	// The section below checks whether the slice belongs to a project or directly to a site. After then, set the value as enabled
-	// if the site and the project (if it is an owner) enabled.
+	// The section below checks whether the slice belongs to a team or directly to a authority. After then, set the value as enabled
+	// if the authority and the team (if it is an owner) enabled.
 	var sliceOwnerEnabled bool
-	if sliceOwnerNamespace.Labels["owner"] == "project" {
-		sliceOwnerEnabled = sliceOwnerSite.Status.Enabled
+	if sliceOwnerNamespace.Labels["owner"] == "team" {
+		sliceOwnerEnabled = sliceOwnerAuthority.Status.Enabled
 		if sliceOwnerEnabled {
-			sliceOwnerProject, _ := t.edgenetClientset.AppsV1alpha().Projects(fmt.Sprintf("site-%s", sliceOwnerNamespace.Labels["site-name"])).
+			sliceOwnerTeam, _ := t.edgenetClientset.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", sliceOwnerNamespace.Labels["authority-name"])).
 				Get(sliceOwnerNamespace.Labels["owner-name"], metav1.GetOptions{})
-			sliceOwnerEnabled = sliceOwnerProject.Status.Enabled
+			sliceOwnerEnabled = sliceOwnerTeam.Status.Enabled
 		}
 	} else {
-		sliceOwnerEnabled = sliceOwnerSite.Status.Enabled
+		sliceOwnerEnabled = sliceOwnerAuthority.Status.Enabled
 	}
 	// Check if the owner(s) is/are active
 	if sliceOwnerEnabled {
@@ -179,7 +179,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			// Delete all existing role bindings in the slice (child) namespace
 			t.clientset.RbacV1().RoleBindings(sliceChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
 			// Create role bindings in the slice namespace from scratch
-			t.createRoleBindings(sliceChildNamespaceStr, sliceCopy, sliceOwnerNamespace.Labels["site-name"])
+			t.createRoleBindings(sliceChildNamespaceStr, sliceCopy, sliceOwnerNamespace.Labels["authority-name"])
 			// Update the owner references of the slice
 			sliceOwnerReferences, _ := t.setOwnerReferences(sliceCopy)
 			sliceCopy.ObjectMeta.OwnerReferences = sliceOwnerReferences
@@ -237,35 +237,35 @@ func (t *Handler) setConstrainsByProfile(childNamespace string, sliceCopy *apps_
 }
 
 // createRoleBindings creates user role bindings according to the roles
-func (t *Handler) createRoleBindings(sliceChildNamespaceStr string, sliceCopy *apps_v1alpha.Slice, ownerSite string) {
+func (t *Handler) createRoleBindings(sliceChildNamespaceStr string, sliceCopy *apps_v1alpha.Slice, ownerAuthority string) {
 	// This part creates the rolebindings for the users who participate in the slice
 	for _, sliceUser := range sliceCopy.Spec.Users {
-		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("site-%s", sliceUser.Site)).Get(sliceUser.Username, metav1.GetOptions{})
+		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", sliceUser.Authority)).Get(sliceUser.Username, metav1.GetOptions{})
 		if err == nil && user.Status.Active && user.Status.AUP {
 			registration.CreateRoleBindingsByRoles(user.DeepCopy(), sliceChildNamespaceStr, "Slice")
 			contentData := mailer.ResourceAllocationData{}
-			contentData.CommonData.Site = sliceUser.Site
+			contentData.CommonData.Authority = sliceUser.Authority
 			contentData.CommonData.Username = sliceUser.Username
 			contentData.CommonData.Name = fmt.Sprintf("%s %s", user.Spec.FirstName, user.Spec.LastName)
 			contentData.CommonData.Email = []string{user.Spec.Email}
-			contentData.Site = ownerSite
+			contentData.Authority = ownerAuthority
 			contentData.Name = sliceCopy.GetName()
 			contentData.Namespace = sliceChildNamespaceStr
 			mailer.Send("slice-invitation", contentData)
 		}
 	}
-	// To create the rolebindings for the users who are PI and managers of the site
-	userRaw, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("site-%s", ownerSite)).List(metav1.ListOptions{})
+	// To create the rolebindings for the users who are PI and managers of the authority
+	userRaw, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", ownerAuthority)).List(metav1.ListOptions{})
 	if err == nil {
 		for _, userRow := range userRaw.Items {
 			if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "pi") || containsRole(userRow.Spec.Roles, "manager")) {
 				registration.CreateRoleBindingsByRoles(userRow.DeepCopy(), sliceChildNamespaceStr, "Slice")
 				contentData := mailer.ResourceAllocationData{}
-				contentData.CommonData.Site = ownerSite
+				contentData.CommonData.Authority = ownerAuthority
 				contentData.CommonData.Username = userRow.GetName()
 				contentData.CommonData.Name = fmt.Sprintf("%s %s", userRow.Spec.FirstName, userRow.Spec.LastName)
 				contentData.CommonData.Email = []string{userRow.Spec.Email}
-				contentData.Site = ownerSite
+				contentData.Authority = ownerAuthority
 				contentData.Name = sliceCopy.GetName()
 				contentData.Namespace = sliceChildNamespaceStr
 				mailer.Send("slice-invitation", contentData)
@@ -279,7 +279,7 @@ func (t *Handler) setOwnerReferences(sliceCopy *apps_v1alpha.Slice) ([]metav1.Ow
 	// The following section makes users who participate in that slice become the slice owners
 	ownerReferences := []metav1.OwnerReference{}
 	for _, sliceUser := range sliceCopy.Spec.Users {
-		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("site-%s", sliceUser.Site)).Get(sliceUser.Username, metav1.GetOptions{})
+		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", sliceUser.Authority)).Get(sliceUser.Username, metav1.GetOptions{})
 		if err == nil && user.Status.Active && user.Status.AUP {
 			newSliceRef := *metav1.NewControllerRef(user.DeepCopy(), apps_v1alpha.SchemeGroupVersion.WithKind("User"))
 			takeControl := false

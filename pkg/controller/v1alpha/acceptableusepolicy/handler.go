@@ -66,11 +66,11 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	log.Info("AUPHandler.ObjectCreated")
 	// Create a copy of the acceptable use policy object to make changes on it
 	AUPCopy := obj.(*apps_v1alpha.AcceptableUsePolicy).DeepCopy()
-	// Find the site from the namespace in which the object is
+	// Find the authority from the namespace in which the object is
 	AUPOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(AUPCopy.GetNamespace(), metav1.GetOptions{})
-	AUPOwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(AUPOwnerNamespace.Labels["site-name"], metav1.GetOptions{})
-	// Check if the site is active
-	if AUPOwnerSite.Status.Enabled {
+	AUPOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(AUPOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	// Check if the authority is active
+	if AUPOwnerAuthority.Status.Enabled {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		if AUPCopy.Spec.Accepted && AUPCopy.Status.Expires == nil {
@@ -110,10 +110,10 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	// Create a copy of the acceptable use policy object to make changes on it
 	AUPCopy := obj.(*apps_v1alpha.AcceptableUsePolicy).DeepCopy()
 	AUPOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(AUPCopy.GetNamespace(), metav1.GetOptions{})
-	AUPOwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(AUPOwnerNamespace.Labels["site-name"], metav1.GetOptions{})
+	AUPOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(AUPOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	fieldUpdated := updated.(fields)
 
-	if AUPOwnerSite.Status.Enabled {
+	if AUPOwnerAuthority.Status.Enabled {
 		defer t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
 		// To manipulate user object according to the changes of acceptable use policy
 		if fieldUpdated.accepted {
@@ -215,7 +215,7 @@ timeoutLoop:
 			AUPOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(AUPCopy.GetNamespace(), metav1.GetOptions{})
 			AUPUser, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(AUPCopy.GetName(), metav1.GetOptions{})
 			contentData := mailer.CommonContentData{}
-			contentData.CommonData.Site = AUPOwnerNamespace.Labels["site-name"]
+			contentData.CommonData.Authority = AUPOwnerNamespace.Labels["authority-name"]
 			contentData.CommonData.Username = AUPCopy.GetName()
 			contentData.CommonData.Name = fmt.Sprintf("%s %s", AUPUser.Spec.FirstName, AUPUser.Spec.LastName)
 			contentData.CommonData.Email = []string{AUPUser.Spec.Email}
@@ -226,7 +226,7 @@ timeoutLoop:
 			AUPOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(AUPCopy.GetNamespace(), metav1.GetOptions{})
 			AUPUser, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(AUPCopy.GetName(), metav1.GetOptions{})
 			contentData := mailer.CommonContentData{}
-			contentData.CommonData.Site = AUPOwnerNamespace.Labels["site-name"]
+			contentData.CommonData.Authority = AUPOwnerNamespace.Labels["authority-name"]
 			contentData.CommonData.Username = AUPCopy.GetName()
 			contentData.CommonData.Name = fmt.Sprintf("%s %s", AUPUser.Spec.FirstName, AUPUser.Spec.LastName)
 			contentData.CommonData.Email = []string{AUPUser.Spec.Email}

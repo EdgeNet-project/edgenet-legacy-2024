@@ -459,7 +459,7 @@
                                 <tr>
                                   <td class="attributes_item">
                                     <span class="f-fallback">
-                                      <strong>Site:</strong> {{.CommonData.Site}}
+                                      <strong>Authority:</strong> {{.CommonData.Authority}}
                                     </span>
                                   </td>
                                 </tr>
@@ -489,7 +489,7 @@
                                   <td class="attributes_item">
                                     <span class="f-fallback">
                                         <strong>cURL request:</strong>
-                                        <p class="precode" style="white-space: pre">curl --location --request PATCH 'http://localhost:8001/apis/apps.edgenet.io/v1alpha/namespaces/site-{{.CommonData.Site}}/acceptableusepolicies/{{.CommonData.Username}}/status' \
+                                        <p class="precode" style="white-space: pre">curl --location --request PATCH 'http://localhost:8001/apis/apps.edgenet.io/v1alpha/namespaces/authority-{{.CommonData.Authority}}/acceptableusepolicies/{{.CommonData.Username}}/status' \
 --header 'Accept: application/json' \
 --header 'Content-Type: application/json-patch+json' \
 --data-raw '[{"op": "replace", "path": "/status/renew", "value": true}]'</p>

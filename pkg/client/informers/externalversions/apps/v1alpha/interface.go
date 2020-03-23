@@ -26,20 +26,22 @@ import (
 type Interface interface {
 	// AcceptableUsePolicies returns a AcceptableUsePolicyInformer.
 	AcceptableUsePolicies() AcceptableUsePolicyInformer
+	// Authorities returns a AuthorityInformer.
+	Authorities() AuthorityInformer
+	// AuthorityRequests returns a AuthorityRequestInformer.
+	AuthorityRequests() AuthorityRequestInformer
 	// EmailVerifications returns a EmailVerificationInformer.
 	EmailVerifications() EmailVerificationInformer
 	// Logins returns a LoginInformer.
 	Logins() LoginInformer
-	// Projects returns a ProjectInformer.
-	Projects() ProjectInformer
+	// NodeContributions returns a NodeContributionInformer.
+	NodeContributions() NodeContributionInformer
 	// SelectiveDeployments returns a SelectiveDeploymentInformer.
 	SelectiveDeployments() SelectiveDeploymentInformer
-	// Sites returns a SiteInformer.
-	Sites() SiteInformer
-	// SiteRegistrationRequests returns a SiteRegistrationRequestInformer.
-	SiteRegistrationRequests() SiteRegistrationRequestInformer
 	// Slices returns a SliceInformer.
 	Slices() SliceInformer
+	// Teams returns a TeamInformer.
+	Teams() TeamInformer
 	// Users returns a UserInformer.
 	Users() UserInformer
 	// UserRegistrationRequests returns a UserRegistrationRequestInformer.
@@ -62,6 +64,16 @@ func (v *version) AcceptableUsePolicies() AcceptableUsePolicyInformer {
 	return &acceptableUsePolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
+// Authorities returns a AuthorityInformer.
+func (v *version) Authorities() AuthorityInformer {
+	return &authorityInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// AuthorityRequests returns a AuthorityRequestInformer.
+func (v *version) AuthorityRequests() AuthorityRequestInformer {
+	return &authorityRequestInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
 // EmailVerifications returns a EmailVerificationInformer.
 func (v *version) EmailVerifications() EmailVerificationInformer {
 	return &emailVerificationInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
@@ -72,9 +84,9 @@ func (v *version) Logins() LoginInformer {
 	return &loginInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
-// Projects returns a ProjectInformer.
-func (v *version) Projects() ProjectInformer {
-	return &projectInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// NodeContributions returns a NodeContributionInformer.
+func (v *version) NodeContributions() NodeContributionInformer {
+	return &nodeContributionInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // SelectiveDeployments returns a SelectiveDeploymentInformer.
@@ -82,19 +94,14 @@ func (v *version) SelectiveDeployments() SelectiveDeploymentInformer {
 	return &selectiveDeploymentInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
-// Sites returns a SiteInformer.
-func (v *version) Sites() SiteInformer {
-	return &siteInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
-}
-
-// SiteRegistrationRequests returns a SiteRegistrationRequestInformer.
-func (v *version) SiteRegistrationRequests() SiteRegistrationRequestInformer {
-	return &siteRegistrationRequestInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
-}
-
 // Slices returns a SliceInformer.
 func (v *version) Slices() SliceInformer {
 	return &sliceInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// Teams returns a TeamInformer.
+func (v *version) Teams() TeamInformer {
+	return &teamInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Users returns a UserInformer.

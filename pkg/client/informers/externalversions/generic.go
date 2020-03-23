@@ -55,20 +55,22 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=apps.edgenet.io, Version=v1alpha
 	case v1alpha.SchemeGroupVersion.WithResource("acceptableusepolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().AcceptableUsePolicies().Informer()}, nil
+	case v1alpha.SchemeGroupVersion.WithResource("authorities"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Authorities().Informer()}, nil
+	case v1alpha.SchemeGroupVersion.WithResource("authorityrequests"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().AuthorityRequests().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("emailverifications"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().EmailVerifications().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("logins"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Logins().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("projects"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Projects().Informer()}, nil
+	case v1alpha.SchemeGroupVersion.WithResource("nodecontributions"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().NodeContributions().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("selectivedeployments"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().SelectiveDeployments().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("sites"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Sites().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("siteregistrationrequests"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().SiteRegistrationRequests().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("slices"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Slices().Informer()}, nil
+	case v1alpha.SchemeGroupVersion.WithResource("teams"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Teams().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("users"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Users().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("userregistrationrequests"):

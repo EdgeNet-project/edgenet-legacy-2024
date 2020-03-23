@@ -87,19 +87,21 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	log.Info("NCHandler.ObjectCreated")
 	// Create a copy of the node contribution object to make changes on it
 	NCCopy := obj.(*apps_v1alpha.NodeContribution).DeepCopy()
-	// Find the site from the namespace in which the object is
+	// Find the authority from the namespace in which the object is
 	NCOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(NCCopy.GetNamespace(), metav1.GetOptions{})
-	// If the object's kind is SiteRegistrationRequest, `site-edgenet` namespace hosts the node contribution object.
-	// Otherwise, the object belongs to the namespace that the site created.
-	var siteEnabled bool
-	if NCOwnerNamespace.GetName() == "site-edgenet" {
-		siteEnabled = true
+	// If the object's kind is AuthorityRequest, `registration` namespace hosts the node contribution object.
+	// Otherwise, the object belongs to the namespace that the authority created.
+	nodeName := fmt.Sprintf("%s.%s.edge-net.io", NCOwnerNamespace.Labels["authority-name"], NCCopy.GetName())
+	var authorityEnabled bool
+	if NCOwnerNamespace.GetName() == "authority-edgenet" {
+		nodeName = fmt.Sprintf("%s.edge-net.io", NCCopy.GetName())
+		authorityEnabled = true
 	} else {
-		NCOwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(NCOwnerNamespace.Labels["site-name"], metav1.GetOptions{})
-		siteEnabled = NCOwnerSite.Status.Enabled
+		NCOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(NCOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+		authorityEnabled = NCOwnerAuthority.Status.Enabled
 	}
-	// Check if the site is active
-	if siteEnabled {
+	// Check if the authority is active
+	if authorityEnabled {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		config := &ssh.ClientConfig{
@@ -179,15 +181,17 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	// Create a copy of the node contribution object to make changes on it
 	NCCopy := obj.(*apps_v1alpha.NodeContribution).DeepCopy()
 	NCOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(NCCopy.GetNamespace(), metav1.GetOptions{})
-	var siteEnabled bool
-	if NCOwnerNamespace.GetName() == "site-edgenet" {
-		siteEnabled = true
+	nodeName := fmt.Sprintf("%s.%s.edge-net.io", NCOwnerNamespace.Labels["authority-name"], NCCopy.GetName())
+	var authorityEnabled bool
+	if NCOwnerNamespace.GetName() == "registration" {
+		nodeName = fmt.Sprintf("%s.edge-net.io", NCCopy.GetName())
+		authorityEnabled = true
 	} else {
-		NCOwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(NCOwnerNamespace.Labels["site-name"], metav1.GetOptions{})
-		siteEnabled = NCOwnerSite.Status.Enabled
+		NCOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(NCOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+		authorityEnabled = NCOwnerAuthority.Status.Enabled
 	}
-	// Check whether the site enabled
-	if siteEnabled {
+	// Check whether the authority enabled
+	if authorityEnabled {
 		// Check whether the node contribution is done
 		recordType := getRecordType(NCCopy.Spec.Host)
 		if recordType == "" {
@@ -223,15 +227,15 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // sendEmail to send notification to cluster admins and authority managers about node contribution
-func (t *Handler) sendEmail(kind, site, namespace, username, fullname string) {
+func (t *Handler) sendEmail(kind, authority, namespace, username, fullname string) {
 	// Set the HTML template variables
 	contentData := mailer.CommonContentData{}
-	contentData.CommonData.Site = site
+	contentData.CommonData.Authority = authority
 	contentData.CommonData.Username = username
 	contentData.CommonData.Name = fullname
 	contentData.CommonData.Email = []string{}
 	if kind == "user-email-verified-alert" {
-		// Put the email addresses of the site PI and managers in the email to be sent list
+		// Put the email addresses of the authority PI and managers in the email to be sent list
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(namespace).List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
 			for _, userRole := range userRow.Spec.Roles {
@@ -661,7 +665,7 @@ func getRecordType(ip string) string {
 
 // setNodeOwnerReferences returns the node contribution as owner
 func (t *Handler) setNodeOwnerReferences(NCCopy *apps_v1alpha.NodeContribution) []metav1.OwnerReference {
-	// The section below makes namespace who created by the site become the site owner
+	// The section below makes namespace who created by the authority become the authority owner
 	newNodeRef := *metav1.NewControllerRef(NCCopy, apps_v1alpha.SchemeGroupVersion.WithKind("NodeContribution"))
 	takeControl := false
 	newNodeRef.Controller = &takeControl

@@ -28,6 +28,7 @@ import (
 	appsinformer_v1 "headnode/pkg/client/informers/externalversions/apps/v1alpha"
 
 	log "github.com/Sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -63,6 +64,11 @@ const delete = "delete"
 
 // Start function is entry point of the controller
 func Start() {
+	clientset, err := authorization.CreateClientSet()
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
 	edgenetClientset, err := authorization.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
@@ -126,6 +132,9 @@ func Start() {
 		queue:    queue,
 		handler:  EVHandler,
 	}
+
+	registrationNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "registration"}}
+	clientset.CoreV1().Namespaces().Create(registrationNamespace)
 
 	// A channel to terminate elegantly
 	stopCh := make(chan struct{})

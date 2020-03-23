@@ -1,0 +1,15 @@
+apiVersion: apps.edgenet.io/v1alpha
+kind: AuthorityRequest
+metadata:
+  name: sorbonne-university
+spec:
+  fullname: Sorbonne University
+  shortname: SU
+  url: http://www.sorbonne-universite.fr/
+  address: 21 rue de l’École de médecine 75006 Paris
+  contact:
+    username: usersu
+    firstname: Firstname
+    lastname: Lastname
+    email: usersu@lip6.fr
+    phone: "+33XXXXXXXXX"
