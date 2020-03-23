@@ -134,19 +134,19 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			}
 			// Automatically enable authority and update authority status
 			authorityCopy.Status.Enabled = true
-			enableAuthorityPI := func() {
+			enableAuthorityAdmin := func() {
 				t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
-				// Create a user as PI on authority
+				// Create a user as admin on authority
 				user := apps_v1alpha.User{}
 				user.SetName(strings.ToLower(authorityCopy.Spec.Contact.Username))
 				user.Spec.Email = authorityCopy.Spec.Contact.Email
 				user.Spec.FirstName = authorityCopy.Spec.Contact.FirstName
 				user.Spec.LastName = authorityCopy.Spec.Contact.LastName
 				user.Spec.Password = generateRandomString(10)
-				user.Spec.Roles = []string{"PI"}
+				user.Spec.Roles = []string{"Admin"}
 				t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", authorityCopy.GetName())).Create(user.DeepCopy())
 			}
-			defer enableAuthorityPI()
+			defer enableAuthorityAdmin()
 
 			// Set the HTML template variables
 			contentData := mailer.CommonContentData{}

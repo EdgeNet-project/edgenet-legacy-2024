@@ -161,16 +161,31 @@ func Start() {
 	nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			nodeObj := obj.(*corev1.Node)
+			for key, _ := range nodeObj.Labels {
+				if key == "node-role.kubernetes.io/master" {
+					return
+				}
+			}
 			for _, owner := range nodeObj.GetOwnerReferences() {
-				if owner.Kind == "NodeContribution" {
-					NCRaw, err := edgenetClientset.AppsV1alpha().NodeContributions("").
-						List(metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", owner.Name)})
-					if err != nil {
-						log.Println(err.Error())
-						panic(err.Error())
-					}
-					if len(NCRaw.Items) == 0 {
-						clientset.CoreV1().Nodes().Delete(nodeObj.GetName(), &metav1.DeleteOptions{})
+				if owner.Kind == "Namespace" {
+					NCRaw, err := edgenetClientset.AppsV1alpha().NodeContributions(owner.Name).List(metav1.ListOptions{})
+					if err == nil {
+						if len(NCRaw.Items) == 0 {
+							log.Println("No Node Contribution Attached The Node")
+							clientset.CoreV1().Nodes().Delete(nodeObj.GetName(), &metav1.DeleteOptions{})
+						} else {
+							NCOwnerNamespace, _ := clientset.CoreV1().Namespaces().Get(owner.Name, metav1.GetOptions{})
+							exist := false
+							for _, NCRow := range NCRaw.Items {
+								nodeName := fmt.Sprintf("%s.%s.edge-net.io", NCOwnerNamespace.Labels["authority-name"], NCRow.GetName())
+								if NCRow.GetName() == nodeName {
+									exist = true
+								}
+							}
+							if !exist {
+								clientset.CoreV1().Nodes().Delete(nodeObj.GetName(), &metav1.DeleteOptions{})
+							}
+						}
 					}
 				}
 			}
@@ -181,52 +196,70 @@ func Start() {
 			oldReady := node.GetConditionReadyStatus(oldObj)
 			newReady := node.GetConditionReadyStatus(newObj)
 			for _, owner := range newObj.GetOwnerReferences() {
+				for _, owner := range newObj.GetOwnerReferences() {
+					if owner.Kind == "Namespace" {
+						NCRaw, err := edgenetClientset.AppsV1alpha().NodeContributions(owner.Name).List(metav1.ListOptions{})
+						if err == nil {
+							if len(NCRaw.Items) == 0 {
+								log.Println("No Node Contribution Attached The Node")
+								clientset.CoreV1().Nodes().Delete(newObj.GetName(), &metav1.DeleteOptions{})
+							} else {
+								NCOwnerNamespace, _ := clientset.CoreV1().Namespaces().Get(owner.Name, metav1.GetOptions{})
+								for _, NCRow := range NCRaw.Items {
+									nodeName := fmt.Sprintf("%s.%s.edge-net.io", NCOwnerNamespace.Labels["authority-name"], NCRow.GetName())
+									if NCRow.GetName() == nodeName {
+										NCRow := NCRow.DeepCopy()
+										if (oldReady == falseStr && newReady == trueStr) ||
+											(oldReady == unknownStr && newReady == trueStr) {
+											if NCRow.Status.State != success {
+												NCRow.Status.State = success
+												if NCRow.Status.State == recover {
+													NCRow.Status.Message = "Node recovery successful"
+												} else {
+													NCRow.Status.Message = "Node is ready"
+												}
+												edgenetClientset.AppsV1alpha().NodeContributions(NCRow.GetNamespace()).UpdateStatus(NCRow)
+											}
+										} else if (oldReady == trueStr && newReady == falseStr) ||
+											(oldReady == trueStr && newReady == unknownStr) {
+											if NCRow.Status.State != failure {
+												NCRow.Status.State = failure
+												NCRow.Status.Message = "Node is not ready"
+												edgenetClientset.AppsV1alpha().NodeContributions(NCRow.GetNamespace()).UpdateStatus(NCRow)
+											}
+										}
+
+										if (oldObj.Spec.Unschedulable == true && newObj.Spec.Unschedulable == false) ||
+											(oldObj.Spec.Unschedulable == false && newObj.Spec.Unschedulable == true) {
+											if NCRow.Spec.Enabled == newObj.Spec.Unschedulable {
+												// Create a patch slice and initialize it to the label size
+												nodePatchArr := make([]patchByBoolValue, 1)
+												nodePatch := patchByBoolValue{}
+												// Append the data existing in the label map to the slice
+												nodePatch.Op = "replace"
+												nodePatch.Path = "/spec/unschedulable"
+												nodePatch.Value = !NCRow.Spec.Enabled
+												nodePatchArr[0] = nodePatch
+												nodePatchJSON, _ := json.Marshal(nodePatchArr)
+												// Patch the nodes with the arguments:
+												// hostname, patch type, and patch data
+												_, err = clientset.CoreV1().Nodes().Patch(newObj.GetName(), types.JSONPatchType, nodePatchJSON)
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+
 				if owner.Kind == "NodeContribution" {
 					NCRaw, err := edgenetClientset.AppsV1alpha().NodeContributions("").
 						List(metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", owner.Name)})
-					if err != nil {
-						log.Println(err.Error())
-						panic(err.Error())
-					}
-					for _, NCRow := range NCRaw.Items {
-						if NCRow.GetUID() == owner.UID {
-							NCCopy := NCRow.DeepCopy()
-							if (oldReady == falseStr && newReady == trueStr) ||
-								(oldReady == unknownStr && newReady == trueStr) {
-								if NCCopy.Status.State != success {
-									NCCopy.Status.State = success
-									if NCCopy.Status.State == recover {
-										NCCopy.Status.Message = "Node recovery successful"
-									} else {
-										NCCopy.Status.Message = "Node is ready"
-									}
-									edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
-								}
-							} else if (oldReady == trueStr && newReady == falseStr) ||
-								(oldReady == trueStr && newReady == unknownStr) {
-								if NCCopy.Status.State != failure {
-									NCCopy.Status.State = failure
-									NCCopy.Status.Message = "Node is not ready"
-									edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
-								}
-							}
+					if err == nil {
+						for _, NCRow := range NCRaw.Items {
+							if NCRow.GetUID() == owner.UID {
 
-							if (oldObj.Spec.Unschedulable == true && newObj.Spec.Unschedulable == false) ||
-								(oldObj.Spec.Unschedulable == false && newObj.Spec.Unschedulable == true) {
-								if NCCopy.Spec.Enabled == newObj.Spec.Unschedulable {
-									// Create a patch slice and initialize it to the label size
-									nodePatchArr := make([]patchByBoolValue, 1)
-									nodePatch := patchByBoolValue{}
-									// Append the data existing in the label map to the slice
-									nodePatch.Op = "replace"
-									nodePatch.Path = "/spec/unschedulable"
-									nodePatch.Value = !NCCopy.Spec.Enabled
-									nodePatchArr[0] = nodePatch
-									nodePatchJSON, _ := json.Marshal(nodePatchArr)
-									// Patch the nodes with the arguments:
-									// hostname, patch type, and patch data
-									_, err = clientset.CoreV1().Nodes().Patch(newObj.GetName(), types.JSONPatchType, nodePatchJSON)
-								}
 							}
 						}
 					}
@@ -234,22 +267,7 @@ func Start() {
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			nodeObj := obj.(*corev1.Node)
-			for _, owner := range nodeObj.GetOwnerReferences() {
-				if owner.Kind == "NodeContribution" {
-					NCRaw, err := edgenetClientset.AppsV1alpha().NodeContributions("").
-						List(metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", owner.Name)})
-					if err != nil {
-						log.Println(err.Error())
-						panic(err.Error())
-					}
-					for _, NCRow := range NCRaw.Items {
-						if NCRow.GetUID() == owner.UID {
-							edgenetClientset.AppsV1alpha().NodeContributions(NCRow.GetNamespace()).Delete(NCRow.GetName(), &metav1.DeleteOptions{})
-						}
-					}
-				}
-			}
+			log.Println("Node Deleted Event")
 		},
 	})
 	controller := controller{

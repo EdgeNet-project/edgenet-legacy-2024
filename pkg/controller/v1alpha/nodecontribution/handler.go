@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -102,8 +101,10 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		NCOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(NCOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 		authorityEnabled = NCOwnerAuthority.Status.Enabled
 	}
+	log.Println("AUTHORITY CHECK")
 	// Check if the authority is active
 	if authorityEnabled {
+		log.Println("AUTHORITY ENABLED")
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		config := &ssh.ClientConfig{
@@ -124,6 +125,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		defer conn.Close()
 		contributedNode, err := t.clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 		if err == nil {
+			log.Println("NODE FOUND")
 			if node.GetConditionReadyStatus(contributedNode.DeepCopy()) != trueStr {
 				recordType := getRecordType(NCCopy.Spec.Host)
 				if recordType == "" {
@@ -138,6 +140,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			}
 		} else {
+			log.Println("NODE NOT FOUND")
 			recordType := getRecordType(NCCopy.Spec.Host)
 			if recordType == "" {
 				NCCopy.Status.State = failure
@@ -168,27 +171,27 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				return
 			}
 			// Create a patch slice and initialize it to the label size
-			nodePatchArr := make([]interface{}, 2)
-			nodePatchByOwnerReferences := patchByOwnerReferenceValue{}
+			nodePatchArr := make([]interface{}, 1)
+			//nodePatchByOwnerReferences := patchByOwnerReferenceValue{}
 			nodePatchByBool := patchByBoolValue{}
-			nodePatchOwnerReference := patchOwnerReference{}
+			/*nodePatchOwnerReference := patchOwnerReference{}
 			nodePatchOwnerReference.APIVersion = "apps.edgenet.io/v1alpha"
 			nodePatchOwnerReference.BlockOwnerDeletion = true
 			nodePatchOwnerReference.Controller = false
-			nodePatchOwnerReference.Kind = "NodeContribution"
-			nodePatchOwnerReference.Name = NCCopy.GetName()
-			nodePatchOwnerReference.UID = string(NCCopy.GetUID())
+			nodePatchOwnerReference.Kind = "Namespace"
+			nodePatchOwnerReference.Name = NCOwnerNamespace.GetName()
+			nodePatchOwnerReference.UID = string(NCOwnerNamespace.GetUID())
 			nodePatchOwnerReferences := append([]patchOwnerReference{}, nodePatchOwnerReference)
 
 			// Append the data existing in the label map to the slice
 			nodePatchByOwnerReferences.Op = "add"
 			nodePatchByOwnerReferences.Path = "/metadata/ownerReferences"
 			nodePatchByOwnerReferences.Value = nodePatchOwnerReferences
-			nodePatchArr[0] = nodePatchByOwnerReferences
+			nodePatchArr[0] = nodePatchByOwnerReferences*/
 			nodePatchByBool.Op = "replace"
 			nodePatchByBool.Path = "/spec/unschedulable"
 			nodePatchByBool.Value = !NCCopy.Spec.Enabled
-			nodePatchArr[1] = nodePatchByBool
+			nodePatchArr[0] = nodePatchByBool
 
 			nodePatchJSON, _ := json.Marshal(nodePatchArr)
 			// Patch the nodes with the arguments:
@@ -203,7 +206,15 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			}
 		}
 	} else {
-		t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).Delete(NCCopy.GetName(), &metav1.DeleteOptions{})
+		log.Println("AUTHORITY NOT ENABLED")
+		NCCopy.Spec.Enabled = false
+		NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).Update(NCCopy)
+		if err == nil {
+			NCCopy = NCCopyUpdated
+			NCCopy.Status.State = failure
+			NCCopy.Status.Message = "Authority disabled"
+			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
+		}
 	}
 }
 
@@ -222,8 +233,10 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		NCOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(NCOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 		authorityEnabled = NCOwnerAuthority.Status.Enabled
 	}
+	log.Println("AUTHORITY CHECK")
 	// Check whether the authority enabled
 	if authorityEnabled {
+		log.Println("AUTHORITY ENABLED")
 		// Check whether the node contribution is done
 		recordType := getRecordType(NCCopy.Spec.Host)
 		if recordType == "" {
@@ -240,6 +253,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		addr := fmt.Sprintf("%s:%d", NCCopy.Spec.Host, NCCopy.Spec.Port)
 		contributedNode, err := t.clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 		if err == nil {
+			log.Println("NODE FOUND")
 			if contributedNode.Spec.Unschedulable != !NCCopy.Spec.Enabled {
 				// Create a patch slice and initialize it to the label size
 				nodePatchArr := make([]patchByBoolValue, 1)
@@ -262,6 +276,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			}
 		} else {
+			log.Println("NODE NOT FOUND")
 			conn, err := ssh.Dial("tcp", addr, config)
 			if err != nil {
 				log.Println(err)
@@ -294,27 +309,27 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 				return
 			}
 			// Create a patch slice and initialize it to the label size
-			nodePatchArr := make([]interface{}, 2)
-			nodePatchByOwnerReferences := patchByOwnerReferenceValue{}
+			nodePatchArr := make([]interface{}, 1)
+			//nodePatchByOwnerReferences := patchByOwnerReferenceValue{}
 			nodePatchByBool := patchByBoolValue{}
-			nodePatchOwnerReference := patchOwnerReference{}
+			/*nodePatchOwnerReference := patchOwnerReference{}
 			nodePatchOwnerReference.APIVersion = "apps.edgenet.io/v1alpha"
 			nodePatchOwnerReference.BlockOwnerDeletion = true
 			nodePatchOwnerReference.Controller = false
-			nodePatchOwnerReference.Kind = "NodeContribution"
-			nodePatchOwnerReference.Name = NCCopy.GetName()
-			nodePatchOwnerReference.UID = string(NCCopy.GetUID())
+			nodePatchOwnerReference.Kind = "Namespace"
+			nodePatchOwnerReference.Name = NCOwnerNamespace.GetName()
+			nodePatchOwnerReference.UID = string(NCOwnerNamespace.GetUID())
 			nodePatchOwnerReferences := append([]patchOwnerReference{}, nodePatchOwnerReference)
 
 			// Append the data existing in the label map to the slice
 			nodePatchByOwnerReferences.Op = "add"
 			nodePatchByOwnerReferences.Path = "/metadata/ownerReferences"
 			nodePatchByOwnerReferences.Value = nodePatchOwnerReferences
-			nodePatchArr[0] = nodePatchByOwnerReferences
+			nodePatchArr[0] = nodePatchByOwnerReferences*/
 			nodePatchByBool.Op = "replace"
 			nodePatchByBool.Path = "/spec/unschedulable"
 			nodePatchByBool.Value = !NCCopy.Spec.Enabled
-			nodePatchArr[1] = nodePatchByBool
+			nodePatchArr[0] = nodePatchByBool
 
 			nodePatchJSON, _ := json.Marshal(nodePatchArr)
 			// Patch the nodes with the arguments:
@@ -329,7 +344,16 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 			}
 		}
 	} else {
-		t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).Delete(NCCopy.GetName(), &metav1.DeleteOptions{})
+		log.Println("AUTHORITY NOT ENABLED")
+
+		NCCopy.Spec.Enabled = false
+		NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).Update(NCCopy)
+		if err == nil {
+			NCCopy = NCCopyUpdated
+			NCCopy.Status.State = failure
+			NCCopy.Status.Message = "Authority disabled"
+			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
+		}
 	}
 }
 
@@ -348,11 +372,11 @@ func (t *Handler) sendEmail(kind, authority, namespace, username, fullname strin
 	contentData.CommonData.Name = fullname
 	contentData.CommonData.Email = []string{}
 	if kind == "user-email-verified-alert" {
-		// Put the email addresses of the authority PI and managers in the email to be sent list
+		// Put the email addresses of the authority-admins and managers in the email to be sent list
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(namespace).List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
 			for _, userRole := range userRow.Spec.Roles {
-				if strings.ToLower(userRole) == "pi" || strings.ToLower(userRole) == "manager" {
+				if strings.ToLower(userRole) == "admin" || strings.ToLower(userRole) == "manager" {
 					contentData.CommonData.Email = append(contentData.CommonData.Email, userRow.Spec.Email)
 				}
 			}
@@ -485,7 +509,7 @@ func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *a
 		return err
 	}
 	//sess.Stdout = os.Stdout
-	sess.Stderr = os.Stderr
+	//sess.Stderr = os.Stderr
 
 	sess, err = startShell(sess)
 	if err != nil {
@@ -557,7 +581,7 @@ func reconfigureNode(conn *ssh.Client, hostname string) error {
 		return err
 	}
 	//sess.Stdout = os.Stdout
-	sess.Stderr = os.Stderr
+	//sess.Stderr = os.Stderr
 
 	sess, err = startShell(sess)
 	if err != nil {
@@ -770,14 +794,4 @@ func getRecordType(ip string) string {
 		}
 	}
 	return ""
-}
-
-// setNodeOwnerReferences returns the node contribution as owner
-func (t *Handler) setNodeOwnerReferences(NCCopy *apps_v1alpha.NodeContribution) []metav1.OwnerReference {
-	// The section below makes namespace who created by the authority become the authority owner
-	newNodeRef := *metav1.NewControllerRef(NCCopy, apps_v1alpha.SchemeGroupVersion.WithKind("NodeContribution"))
-	takeControl := false
-	newNodeRef.Controller = &takeControl
-	nodeOwnerReferences := []metav1.OwnerReference{newNodeRef}
-	return nodeOwnerReferences
 }
