@@ -17,6 +17,7 @@ limitations under the License.
 package nodecontribution
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -37,6 +38,7 @@ import (
 	namecheap "github.com/billputer/go-namecheap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -114,10 +116,13 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		conn, err := ssh.Dial("tcp", addr, config)
 		if err != nil {
 			log.Println(err)
+			NCCopy.Status.State = failure
+			NCCopy.Status.Message = "SSH handshake failed"
+			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			return
 		}
 		defer conn.Close()
-		contributedNode, err := t.clientset.CoreV1().Nodes().Get(fmt.Sprintf("%s-%s.edge-net.io", NCCopy.GetNamespace(), NCCopy.GetName()), metav1.GetOptions{})
+		contributedNode, err := t.clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 		if err == nil {
 			if node.GetConditionReadyStatus(contributedNode.DeepCopy()) != trueStr {
 				recordType := getRecordType(NCCopy.Spec.Host)
@@ -127,7 +132,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 					t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 					return
 				}
-				go t.startRecoveringProcedure(addr, config, NCCopy, contributedNode)
+				go t.startRecoveringProcedure(addr, config, nodeName, NCCopy, contributedNode)
 				NCCopy.Status.State = recover
 				NCCopy.Status.Message = "Node recovering"
 				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
@@ -141,7 +146,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				return
 			}
 			hostRecord := namecheap.DomainDNSHost{
-				Name:    NCCopy.GetName(),
+				Name:    nodeName,
 				Type:    recordType,
 				Address: NCCopy.Spec.Host,
 			}
@@ -154,7 +159,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				}
 			}
 
-			err := t.cleanInstallation(conn, NCCopy)
+			err := t.cleanInstallation(conn, nodeName, NCCopy)
 			if err != nil {
 				log.Println(err)
 				NCCopy.Status.State = failure
@@ -162,13 +167,40 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 				return
 			}
-			contributedNode, err = t.clientset.CoreV1().Nodes().Get(fmt.Sprintf("%s-%s.edge-net.io", NCCopy.GetNamespace(), NCCopy.GetName()), metav1.GetOptions{})
-			nodeOwnerReferences := t.setNodeOwnerReferences(NCCopy)
-			contributedNode.ObjectMeta.OwnerReferences = nodeOwnerReferences
-			t.clientset.CoreV1().Nodes().Update(contributedNode)
-			NCCopy.Status.State = success
-			NCCopy.Status.Message = "Node installation successful"
-			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
+			// Create a patch slice and initialize it to the label size
+			nodePatchArr := make([]interface{}, 2)
+			nodePatchByOwnerReferences := patchByOwnerReferenceValue{}
+			nodePatchByBool := patchByBoolValue{}
+			nodePatchOwnerReference := patchOwnerReference{}
+			nodePatchOwnerReference.APIVersion = "apps.edgenet.io/v1alpha"
+			nodePatchOwnerReference.BlockOwnerDeletion = true
+			nodePatchOwnerReference.Controller = false
+			nodePatchOwnerReference.Kind = "NodeContribution"
+			nodePatchOwnerReference.Name = NCCopy.GetName()
+			nodePatchOwnerReference.UID = string(NCCopy.GetUID())
+			nodePatchOwnerReferences := append([]patchOwnerReference{}, nodePatchOwnerReference)
+
+			// Append the data existing in the label map to the slice
+			nodePatchByOwnerReferences.Op = "add"
+			nodePatchByOwnerReferences.Path = "/metadata/ownerReferences"
+			nodePatchByOwnerReferences.Value = nodePatchOwnerReferences
+			nodePatchArr[0] = nodePatchByOwnerReferences
+			nodePatchByBool.Op = "replace"
+			nodePatchByBool.Path = "/spec/unschedulable"
+			nodePatchByBool.Value = !NCCopy.Spec.Enabled
+			nodePatchArr[1] = nodePatchByBool
+
+			nodePatchJSON, _ := json.Marshal(nodePatchArr)
+			// Patch the nodes with the arguments:
+			// hostname, patch type, and patch data
+			_, err = t.clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
+			if err != nil {
+				log.Println(err.Error())
+			} else {
+				NCCopy.Status.State = success
+				NCCopy.Status.Message = "Node installation successful"
+				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
+			}
 		}
 	} else {
 		t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).Delete(NCCopy.GetName(), &metav1.DeleteOptions{})
@@ -200,18 +232,99 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			return
 		}
-		if NCCopy.Status.State == failure {
-			contributedNode, err := t.clientset.CoreV1().Nodes().Get(fmt.Sprintf("%s-%s.edge-net.io", NCCopy.GetNamespace(), NCCopy.GetName()), metav1.GetOptions{})
-			if err == nil {
-				config := &ssh.ClientConfig{
-					User:            NCCopy.Spec.Username,
-					Auth:            []ssh.AuthMethod{ssh.PublicKeys(t.publicKey), ssh.Password(NCCopy.Spec.Password)},
-					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-				}
-				addr := fmt.Sprintf("%s:%d", NCCopy.Spec.Host, NCCopy.Spec.Port)
-				go t.startRecoveringProcedure(addr, config, NCCopy, contributedNode)
+		config := &ssh.ClientConfig{
+			User:            NCCopy.Spec.Username,
+			Auth:            []ssh.AuthMethod{ssh.PublicKeys(t.publicKey), ssh.Password(NCCopy.Spec.Password)},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		}
+		addr := fmt.Sprintf("%s:%d", NCCopy.Spec.Host, NCCopy.Spec.Port)
+		contributedNode, err := t.clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+		if err == nil {
+			if contributedNode.Spec.Unschedulable != !NCCopy.Spec.Enabled {
+				// Create a patch slice and initialize it to the label size
+				nodePatchArr := make([]patchByBoolValue, 1)
+				nodePatch := patchByBoolValue{}
+				// Append the data existing in the label map to the slice
+				nodePatch.Op = "replace"
+				nodePatch.Path = "/spec/unschedulable"
+				nodePatch.Value = !NCCopy.Spec.Enabled
+				nodePatchArr[0] = nodePatch
+				nodePatchJSON, _ := json.Marshal(nodePatchArr)
+				// Patch the nodes with the arguments:
+				// hostname, patch type, and patch data
+				t.clientset.CoreV1().Nodes().Patch(contributedNode.GetName(), types.JSONPatchType, nodePatchJSON)
+			}
+
+			if NCCopy.Status.State == failure {
+				go t.startRecoveringProcedure(addr, config, nodeName, NCCopy, contributedNode)
 				NCCopy.Status.State = recover
 				NCCopy.Status.Message = "Node recovering"
+				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
+			}
+		} else {
+			conn, err := ssh.Dial("tcp", addr, config)
+			if err != nil {
+				log.Println(err)
+				NCCopy.Status.State = failure
+				NCCopy.Status.Message = "SSH handshake failed"
+				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
+				return
+			}
+			defer conn.Close()
+			hostRecord := namecheap.DomainDNSHost{
+				Name:    nodeName,
+				Type:    recordType,
+				Address: NCCopy.Spec.Host,
+			}
+			result, state := node.SetHostname(hostRecord)
+			if !result {
+				if state == "exist" {
+					log.Printf("Error: Hostname %s or address %s already exists", hostRecord.Name, hostRecord.Address)
+				} else {
+					log.Printf("Error: Hostname %s or address %s couldn't added", hostRecord.Name, hostRecord.Address)
+				}
+			}
+
+			err = t.cleanInstallation(conn, nodeName, NCCopy)
+			if err != nil {
+				log.Println(err)
+				NCCopy.Status.State = failure
+				NCCopy.Status.Message = "Node installation failed"
+				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
+				return
+			}
+			// Create a patch slice and initialize it to the label size
+			nodePatchArr := make([]interface{}, 2)
+			nodePatchByOwnerReferences := patchByOwnerReferenceValue{}
+			nodePatchByBool := patchByBoolValue{}
+			nodePatchOwnerReference := patchOwnerReference{}
+			nodePatchOwnerReference.APIVersion = "apps.edgenet.io/v1alpha"
+			nodePatchOwnerReference.BlockOwnerDeletion = true
+			nodePatchOwnerReference.Controller = false
+			nodePatchOwnerReference.Kind = "NodeContribution"
+			nodePatchOwnerReference.Name = NCCopy.GetName()
+			nodePatchOwnerReference.UID = string(NCCopy.GetUID())
+			nodePatchOwnerReferences := append([]patchOwnerReference{}, nodePatchOwnerReference)
+
+			// Append the data existing in the label map to the slice
+			nodePatchByOwnerReferences.Op = "add"
+			nodePatchByOwnerReferences.Path = "/metadata/ownerReferences"
+			nodePatchByOwnerReferences.Value = nodePatchOwnerReferences
+			nodePatchArr[0] = nodePatchByOwnerReferences
+			nodePatchByBool.Op = "replace"
+			nodePatchByBool.Path = "/spec/unschedulable"
+			nodePatchByBool.Value = !NCCopy.Spec.Enabled
+			nodePatchArr[1] = nodePatchByBool
+
+			nodePatchJSON, _ := json.Marshal(nodePatchArr)
+			// Patch the nodes with the arguments:
+			// hostname, patch type, and patch data
+			_, err = t.clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
+			if err != nil {
+				log.Println(err.Error())
+			} else {
+				NCCopy.Status.State = success
+				NCCopy.Status.Message = "Node installation successful"
 				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			}
 		}
@@ -249,7 +362,7 @@ func (t *Handler) sendEmail(kind, authority, namespace, username, fullname strin
 }
 
 func (t *Handler) startRecoveringProcedure(addr string, config *ssh.ClientConfig,
-	NCCopy *apps_v1alpha.NodeContribution, contributedNode *corev1.Node) {
+	nodeName string, NCCopy *apps_v1alpha.NodeContribution, contributedNode *corev1.Node) {
 	endProcedure := make(chan bool, 1)
 	startReboot := make(chan bool, 1)
 	establishConnection := make(chan bool, 1)
@@ -314,7 +427,7 @@ checkNodeRecovery:
 					endProcedure <- true
 				}
 				time.Sleep(5 * time.Minute)
-				err := t.cleanInstallation(conn, NCCopy)
+				err := t.cleanInstallation(conn, nodeName, NCCopy)
 				if err != nil {
 					log.Println(err)
 					endProcedure <- true
@@ -337,14 +450,13 @@ checkNodeRecovery:
 	}
 }
 
-func (t *Handler) cleanInstallation(conn *ssh.Client, NCCopy *apps_v1alpha.NodeContribution) error {
+func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *apps_v1alpha.NodeContribution) error {
 	uninstallationCommands, err := getUninstallationCommands(conn)
 	if err != nil {
 		log.Println(err)
 		return err
 	}
-	installationCommands, err := getInstallationCommands(conn,
-		fmt.Sprintf("%s-%s.edge-net.io", NCCopy.GetNamespace(), NCCopy.GetName()), t.getKubernetesVersion()[1:])
+	installationCommands, err := getInstallationCommands(conn, nodeName, t.getKubernetesVersion()[1:])
 	if err != nil {
 		log.Println(err)
 		return err
@@ -372,7 +484,7 @@ func (t *Handler) cleanInstallation(conn *ssh.Client, NCCopy *apps_v1alpha.NodeC
 		log.Println(err)
 		return err
 	}
-	sess.Stdout = os.Stdout
+	//sess.Stdout = os.Stdout
 	sess.Stderr = os.Stderr
 
 	sess, err = startShell(sess)
@@ -381,7 +493,6 @@ func (t *Handler) cleanInstallation(conn *ssh.Client, NCCopy *apps_v1alpha.NodeC
 		return err
 	}
 	for _, cmd := range commands {
-		log.Println(cmd)
 		_, err = fmt.Fprintf(stdin, "%s\n", cmd)
 		if err != nil {
 			log.Println(err)
@@ -424,7 +535,6 @@ func reconfigureNode(conn *ssh.Client, hostname string) error {
 	}
 	sess, err := startSession(conn)
 	if err != nil {
-		log.Println("Stop Service Session")
 		log.Println(err)
 		return err
 	}
@@ -447,7 +557,7 @@ func reconfigureNode(conn *ssh.Client, hostname string) error {
 		return err
 	}
 	//sess.Stdout = os.Stdout
-	//sess.Stderr = os.Stderr
+	sess.Stderr = os.Stderr
 
 	sess, err = startShell(sess)
 	if err != nil {
@@ -456,7 +566,6 @@ func reconfigureNode(conn *ssh.Client, hostname string) error {
 	}
 
 	for _, cmd := range commands {
-		log.Println(cmd)
 		_, err = fmt.Fprintf(stdin, "%s\n", cmd)
 		if err != nil {
 			log.Println(err)
@@ -580,7 +689,7 @@ func getUninstallationCommands(conn *ssh.Client) ([]string, error) {
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands to be sent
 		commands := []string{
-			"sudo kubeadm reset -y",
+			"sudo kubeadm reset -f",
 			"sudo apt-get purge kubeadm kubectl kubelet kubernetes-cni kube* docker-engine docker docker.io docker-ce -y",
 			"sudo apt-get autoremove -y",
 		}
@@ -588,7 +697,7 @@ func getUninstallationCommands(conn *ssh.Client) ([]string, error) {
 	} else if centos, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*", string(output[:])); centos {
 		// The commands to be sent
 		commands := []string{
-			"sudo kubeadm reset -y",
+			"sudo kubeadm reset -f",
 			"sudo yum remove kubeadm kubectl kubelet kubernetes-cni kube* docker docker-ce docker-ce-cli docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine -y",
 			"sudo yum clean all -y",
 			"sudo yum autoremove -y",
