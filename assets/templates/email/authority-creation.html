@@ -424,7 +424,7 @@
             <tr>
               <td class="email-masthead">
                 <a href="https://edge-net.org" class="f-fallback email-masthead_name">
-                  <img src="https://edge-net.org/assets/images/logo.png" alt="EdgeNet" height="155" width="220" />
+                  <img src="http://edgenet.planet-lab.eu:8081/img/logo.png" alt="EdgeNet" />
                 </a>
               </td>
             </tr>
@@ -437,8 +437,10 @@
                     <td class="content-cell">
                       <div class="f-fallback">
                         <h1>Dear {{.CommonData.Name}},</h1>
-                        <p>Thank you for registering {{.CommonData.Authority}} authority with EdgeNet. As a next step, your user will be created on your authority and then your kubeconfig file will be delivered to your email address. You could then use your kubeconfig file to be consumed by our dashboard or by kubectl.</p>
-                        <p>Here's your authority and user information:</p>
+                        <p>Thank you for registering {{.CommonData.Authority}} authority with EdgeNet. This e-mail confirms that we have accepted the registration.</p>
+                        <p>We will now create the user account that you requested along with the registration. A second e-mail will confirm that your user account has been set up.</p>
+                        <p>Please be sure to save the new user-specific kubeconfig file that comes with the second e-mail, as this is what will allow you to use the system and administer your authority.</p>
+                        <p>Here is your authority and user information:</p>
                         <table class="attributes" width="100%" cellpadding="0" cellspacing="0" role="presentation">
                           <tr>
                             <td class="attributes_content">
