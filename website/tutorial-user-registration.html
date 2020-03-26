@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+
+<head>
+  <title>User Registration Tutorial | EdgeNet Project</title>
+  <meta charset="utf-8" name="viewport" content="width=device-width, initial-scale=1">
+  <link href="css/frame.css" media="screen" rel="stylesheet" type="text/css" />
+  <link href="css/controls.css" media="screen" rel="stylesheet" type="text/css" />
+  <link href="css/custom.css" media="screen" rel="stylesheet" type="text/css" />
+  <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+  <link href='https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300,700' rel='stylesheet' type='text/css'>
+  <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700" rel="stylesheet">
+  <link rel="apple-touch-icon" sizes="57x57" href="img/favicon/apple-icon-57x57.png">
+  <link rel="apple-touch-icon" sizes="60x60" href="img/favicon/apple-icon-60x60.png">
+  <link rel="apple-touch-icon" sizes="72x72" href="img/favicon/apple-icon-72x72.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="img/favicon/apple-icon-76x76.png">
+  <link rel="apple-touch-icon" sizes="114x114" href="img/favicon/apple-icon-114x114.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="img/favicon/apple-icon-120x120.png">
+  <link rel="apple-touch-icon" sizes="144x144" href="img/favicon/apple-icon-144x144.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="img/favicon/apple-icon-152x152.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="img/favicon/apple-icon-180x180.png">
+  <link rel="icon" type="image/png" sizes="192x192"  href="img/favicon/android-icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="img/favicon/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="img/favicon/favicon-96x96.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="img/favicon/favicon-16x16.png">
+  <link rel="manifest" href="img/favicon/manifest.json">
+  <meta name="msapplication-TileColor" content="#ffffff">
+  <meta name="msapplication-TileImage" content="favicon/ms-icon-144x144.png">
+  <meta name="theme-color" content="#ffffff">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script src="js/menu.js"></script>
+  <style>
+    .menu-tutorials {
+      color: rgb(96, 134, 214) !important;
+      opacity: 1 !important;
+      font-weight: 700 !important;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="menu-container"></div>
+  <div class="content-container">
+    <div class="content">
+      <div class="content-table flex-column">
+        <!-------------------------------------------------------------------------------------------->
+        <div class="flex-row">
+          <div class="flex-item flex-column">
+            <h1 id="make-a-user-registration-request-in-edgenet">Make a user registration request in EdgeNet</h1>
+            <p>In EdgeNet, a user can have a variety of roles as authority-admin, Manager, and User, and Tech role will be enabled in the future to manage node operations. However, anyone who wants to use EdgeNet can make registration request to a authority only to become a user.</p>
+            <h2 id="technologies-you-will-use">Technologies you will use</h2>
+            <p>The technology that you will use is <a href="https://kubernetes.io/">Kubernetes</a>, to create
+            and manipulate objects in EdgeNet. Furthermore, you will use <a href="https://kubernetes.io/docs/reference/kubectl/overview/">kubectl</a>, which is the Kubernetes command-line interface
+            tool, to sign your user up for a authority in EdgeNet.</p>
+            <h2 id="how-to-do-">How to do?</h2>
+            <p>You will use an EdgeNet public kubeconfig file to make your registration request.</p>
+            <h3 id="create-a-request">Create a request</h3>
+            <p>In the first place, you need to create a user registration object according to your
+            information. This object must include username consisting of <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/names/">allowed characters</a>, the namespace of the authority, which is a combination of <strong>&quot;authority&quot;</strong> prefix and authority nickname, you want yourself to register in, firstname, lastname, email, password, and roles. Here is an example:</p>
+            <pre class="pre"><code class="lang-yaml"><span class="hljs-symbol">apiVersion:</span> apps.edgenet.io/v1alpha
+            <span class="hljs-symbol">kind:</span> UserRegistrationRequest
+            <span class="hljs-symbol">metadata:</span>
+            <span class="hljs-symbol">  name:</span> <span class="hljs-params">&lt;your username&gt;</span>
+            <span class="hljs-symbol">  namespace:</span> <span class="hljs-params">&lt;your authority name as a nickname with a authority prefix, e.g. authority-sorbonne-university&gt;</span>
+            <span class="hljs-symbol">spec:</span>
+            <span class="hljs-symbol">  firstname:</span> <span class="hljs-params">&lt;your firstname&gt;</span>
+            <span class="hljs-symbol">  lastname:</span> <span class="hljs-params">&lt;your lastname&gt;</span>
+            <span class="hljs-symbol">  email:</span> <span class="hljs-params">&lt;your email address&gt;</span>
+            <span class="hljs-symbol">  password:</span> <span class="hljs-params">&lt;your password at least base64 encoded&gt;</span>
+            <span class="hljs-symbol">  roles:</span> [User]
+            </code></pre>
+            <pre class="pre"><code>kubectl create -f .<span class="hljs-regexp">/userregistrationrequest.yaml --kubeconfig ./</span><span class="hljs-keyword">public</span>-user.cfg
+            </code></pre><h3 id="email-verification">Email verification</h3>
+            <p>When you create a user registration request, EdgeNet automatically sends you an email that includes a kubectl command providing unique identifier to verify your email address. You can find the example below for verification.</p>
+            <pre class="pre"><code>kubectl patch emailverification bsv10kgeyo7pmazwpr -n &lt;your authority name <span class="hljs-keyword">as</span> a nickname <span class="hljs-keyword">with</span> a authority prefix&gt; --<span class="hljs-class"><span class="hljs-keyword">type</span></span>='json' -p='[{<span class="hljs-string">"op"</span>: <span class="hljs-string">"replace"</span>, <span class="hljs-string">"path"</span>: <span class="hljs-string">"/spec/verified"</span>, <span class="hljs-string">"value"</span>: <span class="hljs-keyword">true</span>}]' --kubeconfig ./<span class="hljs-keyword">public</span>-user.cfg
+            </code></pre><p>The system sends notification emails to the authority-admin(s) and manager(s) about your registration request when the verification is done.</p>
+            <h3 id="approval-process">Approval process</h3>
+            <p>At this point, your request will be approved or denied by the authority-admin(s) or manager(s) of the authority. However, we assume that your request has been approved, in this case, you will receive two emails. The first one says your registration completed while the second one contains your user information and user-specific kubeconfig file. Then you can start using EdgeNet with that kubeconfig file.</p>
+          </div>
+        </div>
+        <!-------------------------------------------------------------------------------------------->
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

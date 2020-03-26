@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+
+<head>
+  <title>Authority Request Tutorial | EdgeNet Project</title>
+  <meta charset="utf-8" name="viewport" content="width=device-width, initial-scale=1">
+  <link href="css/frame.css" media="screen" rel="stylesheet" type="text/css" />
+  <link href="css/controls.css" media="screen" rel="stylesheet" type="text/css" />
+  <link href="css/custom.css" media="screen" rel="stylesheet" type="text/css" />
+  <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+  <link href='https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300,700' rel='stylesheet' type='text/css'>
+  <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700" rel="stylesheet">
+  <link rel="apple-touch-icon" sizes="57x57" href="img/favicon/apple-icon-57x57.png">
+  <link rel="apple-touch-icon" sizes="60x60" href="img/favicon/apple-icon-60x60.png">
+  <link rel="apple-touch-icon" sizes="72x72" href="img/favicon/apple-icon-72x72.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="img/favicon/apple-icon-76x76.png">
+  <link rel="apple-touch-icon" sizes="114x114" href="img/favicon/apple-icon-114x114.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="img/favicon/apple-icon-120x120.png">
+  <link rel="apple-touch-icon" sizes="144x144" href="img/favicon/apple-icon-144x144.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="img/favicon/apple-icon-152x152.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="img/favicon/apple-icon-180x180.png">
+  <link rel="icon" type="image/png" sizes="192x192"  href="img/favicon/android-icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="img/favicon/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="img/favicon/favicon-96x96.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="img/favicon/favicon-16x16.png">
+  <link rel="manifest" href="img/favicon/manifest.json">
+  <meta name="msapplication-TileColor" content="#ffffff">
+  <meta name="msapplication-TileImage" content="favicon/ms-icon-144x144.png">
+  <meta name="theme-color" content="#ffffff">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script src="js/menu.js"></script>
+  <style>
+    .menu-tutorials {
+      color: rgb(96, 134, 214) !important;
+      opacity: 1 !important;
+      font-weight: 700 !important;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="menu-container"></div>
+  <div class="content-container">
+    <div class="content">
+      <div class="content-table flex-column">
+        <!-------------------------------------------------------------------------------------------->
+        <div class="flex-row">
+          <div class="flex-item flex-item-stretch flex-column">
+            <h1 id="registering-an-edgenet-authority">Registering an EdgeNet authority</h1>
+            <p class="text">
+              This tutorial describes whether and how you can set up an <em>authority</em> on EdgeNet,
+              with yourself as the authority administrator. An authority administrator takes responsibility
+              for the approval of EdgeNet users who they can vouch for.
+            </p>
+            <p>Authorizations to use EdgeNet are handed out hierarchically, establishing a chain of responsibility. We, as the central administrators of EdgeNet, approve the establishment of authorities and their administrators. An administrator, in turn, approves the creation of individual user accounts. The administrator can give some of those users administrative rights to, in turn, approve other users.</p>
+            <p>Our job is to ensure that only bona fide researchers can create and administer local authorities. If you wish to create an authority, please be sure to register with your institutional e-mail address, and please direct us to an institutional website or provide other evidence of your role. In general, we approve faculty members at institutions of higher education and senior researchers at research centers, but we will consider other cases as well.</p>
+            <p>A local authority administrator also approves the creation of <em>teams</em>, which group users. And an administrator manages, either directly or through a user to whom they delegate this role, any <em>nodes</em> that are contributed on behalf of the authority to the EdgeNet cluster.</p>
+            <p>If you believe that you may be eligible to act as the local administrator of an authority, the remainder of this tutorial guides you through the registration process.</p>
+            <p>If you would like to use EdgeNet but do not believe that you can act as a local administrator, we encourage you to identify someone at your institution who is already an administrator, or who would be willing to register as one.</p>
+            <h3 id="a-note-on-terminology-for-planetlab-users">A note on terminology for PlanetLab users</h3>
+            <p>For those of you familiar with PlanetLab, an authority is similar to a <em>site</em> and a local authority administrator is similar to a <em>PI</em>.</p>
+            <h2 id="technologies-you-will-use">Technologies you will use</h2>
+            <p>You will use <a href="https://kubernetes.io/docs/reference/kubectl/overview/"><code>kubectl</code></a>, the <a href="https://kubernetes.io/">Kubernetes</a> command-line interface, in conjunction with e-mail.</p>
+            <h2 id="what-you-will-do">What you will do</h2>
+            <p>You will use a public kubeconfig file provided by EdgeNet to create a <em>registration request</em> object that is associated with your e-mail address. Object creation generates an e-mail to you, containing a one-time code. You will authenticate yourself by using that code to patch the object. This will alert EdgeNet&#39;s central administrators, who will, if all is in order, approve your request. With approval, you receive via e-mail a kubeconfig file that is specific to you and that allows you to act as both the local administrator and a user of your authority.</p>
+            <h2 id="steps">Steps</h2>
+            <h3 id="make-sure-you-have-the-kubernetes-command-line-tool">Make sure you have the Kubernetes command-line tool</h3>
+            <p>If you do not already have <code>kubectl</code>, you will need to install it on your system. Follow the <a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/">Kubernetes documentation</a> for this.</p>
+            <h3 id="obtain-a-temporary-access-credential">Obtain a temporary access credential</h3>
+            <p>An EdgeNet authority request is a Kubernetes object, and to manipulate objects on a Kubernetes system you need a kubeconfig file. EdgeNet provides a public kubeconfig file that anyone can use for the prupose of creating authority requests.</p>
+            <p>This public kubeconfig file is available here: <a href="https://edge-net.org/downloads/config/public.cfg">https://edge-net.org/downloads/config/public.cfg</a>. In what follows, we will assume that it is saved in your working directory on your system as <code>./public.cfg</code>.</p>
+            <p>The public file does not allow any actions beyond the creation of an authority request and the use of the one-time code to confirm the request. Once the request goes through, you will be provided with another kubeconfig file that is specific to you and that will allow you to carry out adminstrative actions having to do with your authority, as well as to use EdgeNet as an ordinary user.</p>
+            <h3 id="prepare-a-description-of-your-authority">Prepare a description of your authority</h3>
+            <p>The <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/"><code>.yaml</code> format</a> is used to describe Kubernetes objects. Create one for the authority request object, following the model of the example shown below. Your <code>.yaml</code>file must specify the following information regarding your future authority:</p>
+            <ul>
+            <li>the <strong>authority name</strong> that will be used by the EdgeNet system; it must follow <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/names/">Kubernetes&#39; rules for names</a> and must be different from any existing EdgeNet authority names</li>
+            <li>the <strong>full name</strong> of the authority, which is a human-readable name</li>
+            <li>the <strong>short name</strong> of the authority, which is also human-readable, and can be the same as the full name, or a shorter name, in case the full name is long</li>
+            <li>the <strong>URL</strong> of the authority; this should be a web page from your institution that confirms your role as a bona fide researcher</li>
+            <li>the <strong>postal address</strong> of the authority</li>
+            <li>the <strong>contact person</strong> who is the responsible for this authority; this is the authority&#39;s first administrator, who is typically yourself; the information provided for this person consists of:<ul>
+            <li>a <strong>username</strong> that will be used by the EdgeNet system; it must follow <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/names/">Kubernetes&#39; rules for names</a>; note that usernames need only be distinct within an authority</li>
+            <li>a <strong>first name</strong> (human readable)</li>
+            <li>a <strong>last name</strong> (human readable)</li>
+            <li>an <strong>e-mail address</strong>, which should be an institutional e-mail address</li>
+            <li>a <strong>phone number</strong>, which should be in qutoation marks, start with the country code using the plus notation, and not contain any spaces or other formatting</li>
+            </ul>
+            </li>
+            </ul>
+            <p>In what follows, we will assume that this file is saved in your working directory on your system as <code>./authorityrequest.yaml</code>.</p>
+            <p>Example:</p>
+            <pre class="pre"><code class="lang-yaml"><span class="hljs-attribute">apiVersion</span>: apps.edgenet.io/v1alpha
+            <span class="hljs-attribute">kind</span>: AuthorityRequest
+            <span class="hljs-attribute">metadata</span>:
+              <span class="hljs-attribute">name</span>: lip6-lab
+            <span class="hljs-attribute">spec</span>:
+              <span class="hljs-attribute">fullname</span>: Laboratoire LIP6-CNRS
+              <span class="hljs-attribute">shortname</span>: lip6
+              <span class="hljs-attribute">url</span>: <span class="hljs-attribute">https</span>:<span class="hljs-comment">//www.lip6.fr/recherche/team_membres.php?acronyme=NPA</span>
+              <span class="hljs-attribute">address</span>: <span class="hljs-number">4</span> place Jussieu, boite <span class="hljs-number">169</span>, <span class="hljs-number">75005</span> Paris, France
+              <span class="hljs-attribute">contact</span>:
+                <span class="hljs-attribute">username</span>: timurfriedman
+                <span class="hljs-attribute">firstname</span>: Timur
+                <span class="hljs-attribute">lastname</span>: Friedman
+                <span class="hljs-attribute">email</span>: timur.friedman<span class="hljs-variable">@sorbonne-universite</span>.fr
+                <span class="hljs-attribute">phone</span>: <span class="hljs-string">"+33123456789"</span>
+            </code></pre>
+            <h3 id="create-your-authority-request">Create your authority request</h3>
+            <p>Using <code>kubectl</code>, create a authority request object:</p>
+            <pre class="pre"><code>kubectl create -f .<span class="hljs-regexp">/authorityrequest.yaml --kubeconfig ./</span><span class="hljs-keyword">public</span>.cfg
+            </code></pre><p>This will cause an e-mail containing a one-time code to be sent to the address that you specified.</p>
+            <h3 id="authenticate-your-request-using-a-one-time-code">Authenticate your request using a one-time code</h3>
+            <p>The e-mail that you receive will contain a <code>kubectl</code> command that you can copy and paste onto your command line, editing only the path for the public kubeconfig file on your local system, if needed.</p>
+            <p>In the example here, the one-time code is <code>bsv10kgeyo7pmazwpr</code>:</p>
+            <pre class="pre"><code>kubectl patch emailverification bsv10kgeyo7pmazwpr -n registration --<span class="hljs-class"><span class="hljs-keyword">type</span></span>='json' -p='[{<span class="hljs-string">"op"</span>: <span class="hljs-string">"replace"</span>, <span class="hljs-string">"path"</span>: <span class="hljs-string">"/spec/verified"</span>, <span class="hljs-string">"value"</span>: <span class="hljs-keyword">true</span>}]' --kubeconfig ./<span class="hljs-keyword">public</span>.cfg
+            </code></pre><p>After you have done this, the EdgeNet system sends a notification e-mail to EdgeNet&#39;s central administrators, informing them of your registration request.</p>
+            <h3 id="wait-for-approval-and-receipt-of-your-permanent-access-credential">Wait for approval and receipt of your permanent access credential</h3>
+            <p>At this point, the EdgeNet central administrators will, if needed, contact you, and, provided everything is in order, approve your registration request. Upon approval, you will receive two emails. The first one confirms that your registration is complete, while the second one contains your user information and user-specific kubeconfig file.</p>
+            <p>You can now start using EdgeNet, as both administrator of your local authority and as a regular user, with your user-specific kubeconfig file.</p>
+          </div>
+        </div>
+        <!-------------------------------------------------------------------------------------------->
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>
