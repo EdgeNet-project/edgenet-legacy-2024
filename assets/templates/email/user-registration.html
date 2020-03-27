@@ -4,7 +4,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="x-apple-disable-message-reformatting" />
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <title>User registration successful</title>
+    <title>[EdgeNet] User registration successful</title>
     <style type="text/css" rel="stylesheet" media="all">
     /* Base ------------------------------ */
 
@@ -445,12 +445,13 @@
                       <div class="f-fallback">
                         <h1>Dear {{.CommonData.Name}},</h1>
                         <p>
-                          You will find your personal kubeconfig file attached to this e-mail. It gives you user access to EdgeNet, and for all future interaction with the platform it replaces the public EdgeNet kubeconfig file that you used to request your account. Please save this file in a secure location, as you would a password.
+                          Thank you for registering with EdgeNet. We have created a user-specific
+                          main service account, which needs to be kept secure, for you. You could
+                          find your kubeconfig file attached to be consumed by our dashboad or by
+                          kubectl. But there are two more steps you need to take; read the acceptable
+                          use policy to understand and accept.
                         </p>
-                        <p>
-                          We understand that the security of this means of providing you with your access credentials needs to be improved, and it is a priority on the EdgeNet development roadmap.
-                        </p>
-                        <p>Before you can proceed further, you will need to read and agree to EdgeNet's acceptable use policy (AUP), which you can read by clicking on the button below.</p>
+                        <p>Please click on the button below to find the acceptable use policy of EdgeNet:</p>
                         <!-- Action -->
                         <table class="body-action" align="center" width="100%" cellpadding="0" cellspacing="0" role="presentation">
                           <tr>
@@ -467,7 +468,10 @@
                             </td>
                           </tr>
                         </table>
-                        <p>By executing the <b>kubectl</b> command below (assuming that you have saved your kubeconfig file as ./edgenet-kubeconfig.cfg), you indicate that you agree to the AUP:</p>
+                        <p>
+                          Here's your user information accompanying by the <b>kubectl command</b>
+                          to accept the acceptable use policy:
+                        </p>
                         <table class="attributes" width="100%" cellpadding="0" cellspacing="0" role="presentation">
                           <tr>
                             <td class="attributes_content">
@@ -504,7 +508,7 @@
                                   <td class="attributes_item">
                                     <span class="f-fallback">
                                         <strong>Kubectl command:</strong>
-                                        <p class="precode" style="white-space: pre">kubectl patch aup {{.CommonData.Username}} -n authority-{{.CommonData.Authority}} --type='json' -p='[{"op": "replace", "path": "/spec/accepted", "value": true}]' --kubeconfig ./public.cfg</p>
+                                        <p class="precode" style="white-space: pre">kubectl patch aup {{.CommonData.Username}} -n authority-{{.CommonData.Authority}} --type='json' -p='[{"op": "replace", "path": "/spec/accepted", "value": true}]' --kubeconfig ./edgenet-kubeconfig.cfg</p>
                                     </span>
                                   </td>
                                 </tr>
@@ -512,15 +516,25 @@
                             </td>
                           </tr>
                         </table>
-                        <p>
-                        After doing this, you may start to use EdgeNet as you would any Kubernetes cluster, while taking advantage of the EdgeNet-specific extensions.
-                        </p>
-                        <p>
-                        For continued use, we will periodically ask you to renew your agreement to the AUP.
-                        </p>
-                        <p>Sincerely,
-                          <br>The EdgeNet Team</p>
-                        <p><strong>P.S.</strong> Please do not hesitate to <a href="mailto:support@planet-lab.eu">contact us</a> for help, or take a look at <a href="https://github.com/EdgeNet-project/headnode/tree/release-1.0/docs/tutorials">our documentation</a>.</p>
+                        <p>Once you accept the policy, let's click on the button to take yourself to the dashboard: </p>
+                        <!-- Action -->
+                        <table class="body-action" align="center" width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                          <tr>
+                            <td align="center">
+                              <!-- Border based button
+           https://litmus.com/blog/a-guide-to-bulletproof-buttons-in-email-design -->
+                              <table width="100%" border="0" cellspacing="0" cellpadding="0" role="presentation">
+                                <tr>
+                                  <td align="center">
+                                    <a href="https://headnode.edge-net.org/" class="f-fallback button" target="_blank">Click</a>
+                                  </td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                        <p>Sincerely,<br><br>The EdgeNet Support Team<br>at PlanetLab Europe</p>
+                        <p>P.S. Support is available <a href="http://edge-net.org/support.html">on the web</a>, and please do not hesitate to contact us <a href="mailto:edgenet-support@planet-lab.eu">by e-mail</a>.</p>
                         <!-- Sub copy -->
                         <table class="body-sub" role="presentation">
                           <tr>
@@ -541,10 +555,11 @@
                 <table class="email-footer" align="center" width="570" cellpadding="0" cellspacing="0" role="presentation">
                   <tr>
                     <td class="content-cell" align="center">
-                      <p class="f-fallback sub align-center">&copy; 2020 EdgeNet. All rights reserved.</p>
-                      <p class="f-fallback sub align-center">
-                        EdgeNet is a joint project of US Ignite, Sorbonne University, the NYU Tandon School of Engineering, the Swarm Lab at UC Berkeley, the Computer Sciences department at the University of Victoria, the University of Vienna, and Cslash.
-                      </p>
+                      <p class="f-fallback sub align-center">&copy;2020 Sorbonne University on behalf of the EdgeNet partners.</p>
+                      <p class="f-fallback sub align-center">EdgeNet is operated by PlanetLab Europe on behalf of the EdgeNet partners.</p>
+                      <p class="f-fallback sub align-center">EdgeNet is a joint project of US Ignite, the LIP6 lab at Sorbonne University,
+                        the NYU Tandon School of Engineering, the Swarm Lab at UC Berkeley,
+                        the Computer Science department at the University of Victoria, the University of Vienna, and Cslash.</p>
                     </td>
                   </tr>
                 </table>
