@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Code | EdgeNet Project</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/base/jquery-ui.css" media="screen" rel="stylesheet" type="text/css" />
+    <link href="css/frame.css" media="screen" rel="stylesheet" type="text/css" />
+    <link href="css/controls.css" media="screen" rel="stylesheet" type="text/css" />
+    <link href="css/widgets.css" media="screen" rel="stylesheet" type="text/css" />
+    <link href="css/custom.css" media="screen" rel="stylesheet" type="text/css" />
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300,700' rel='stylesheet' type='text/css'>
+    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700" rel="stylesheet">
+    <link rel="apple-touch-icon" sizes="57x57" href="img/favicon/apple-icon-57x57.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="img/favicon/apple-icon-60x60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="img/favicon/apple-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="img/favicon/apple-icon-76x76.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="img/favicon/apple-icon-114x114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="img/favicon/apple-icon-120x120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="img/favicon/apple-icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="img/favicon/apple-icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="img/favicon/apple-icon-180x180.png">
+    <link rel="icon" type="image/png" sizes="192x192"  href="img/favicon/android-icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="img/favicon/favicon-96x96.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="img/favicon/favicon-16x16.png">
+    <link rel="manifest" href="img/favicon/manifest.json">
+    <meta name="msapplication-TileColor" content="#ffffff">
+    <meta name="msapplication-TileImage" content="favicon/ms-icon-144x144.png">
+    <meta name="theme-color" content="#ffffff">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="js/menu.js"></script>
+    <script src="js/widgets.js"></script>
+    <style>
+      .menu-code {
+        color: rgb(96, 134, 214) !important;
+        opacity: 1 !important;
+        font-weight: 700 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="menu-container"></div>
+    <div class="content-container">
+      <div class="content">
+        <div class="content-table flex-column">
+          <!-- ************************************************************************************** -->
+          <!--Start Source Code-->
+          <div class="flex-row">
+            <div class="flex-item flex-column">
+              <h2>Source Code</h2>
+              <hr>
+              <p class="text-small-margin">
+                <a target="_blank" href="https://github.com/EdgeNet-project/headnode">The EdgeNet API</a> is a Kubernetes API extension written in
+                <a target="_blank" href="https://golang.org/">Go</a> that is only accessible via the kubectl and the portals we develop. For being
+                compatible with Kubernetes, it gets the benefit of <a target="_blank" href="https://github.com/kubernetes/client-go">client-go</a>
+                for talking to the Kubernetes cluster of EdgeNet, and <a href="https://godoc.org/k8s.io/kubernetes">Kubernetes Go packages</a> for
+                taking the advantage of functionallities already developed for Kubernetes. It also makes use of the Namecheap API for configuring
+                DNS records, corresponding the names including <b>`edgenet.io`</b> domain name, of the nodes added into the cluster. Addition to these,
+                a custom controller called <b>nodelabeler</b> lists and watches the nodes of the cluster to detect <b>add & edit node</b> operations,
+                and then attaches geolabels on them by using <a target="_blank" href="https://dev.maxmind.com/geoip/geoip2/geolite2/">GeoLite2</a>.
+              </p>
+            </div>
+            <div class="flex-row">
+              <div class="flex-item flex-item-stretch flex-column">
+                <p class="text">
+                  You can find EdgeNet's free, open-source, liberally-licensed software at our GitHub repository:<br>
+                </p>
+                <div class="control-group">
+                  <a class="custom-button-flat" target="_blank" href="https://github.com/EdgeNet-project/headnode">
+                    <img alt="GitHub" src="img/github.png"> <span>Visit EdgeNet's GitHub Repository</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!--End Source Code-->
+          <!-- ************************************************************************************** -->
+          <!--Start Architecture-->
+          <div class="flex-row">
+            <div class="flex-item flex-column">
+              <h2 class="add-top-margin">Architecture</h2>
+              <hr>
+              <p class="text">
+                Resources are endpoints of the Kubernetes API to store objects separately by kinds. Kubernetes has a built-in feature
+                that allows developers to generate customized resources dedicated their particular needs. These solutions called as
+                <a target="_blank" href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">custom resources</a>
+                in Kubernetes, which enables users to create, edit, and delete objects belong to a custom resource in the way they do for
+                built-in resources by invoking kubectl. Thus, these custom solutions become a part of Kubernetes and thanks to this feature
+                we can avoid forcing user to learn a new syntax. In EdgeNet, we use CustomResourceDefinitions (CRDs) to extend the Kubernetes API.
+                Although CustomResourceDefinitions don't provide flexibility because of its restrictions, they don't require to develop a new API
+                server, saves us from a plent of coding task, as they use the native Kubernetes API Server.
+              </p>
+            </div>
+          </div>
+          <div class="flex-row-space-between">
+            <div class="flex-item flex-column">
+              <img class="image max-width-400" alt="CRDs" src="img/custom-resources.png">
+              <p class="image-caption">Custom Resources</p>
+            </div>
+            <div class="flex-item flex-column">
+              <a href="https://github.com/yenchiah/project-website-template" target="_blank" class="image max-width-400">
+                <img alt="EdgeNet Architecture" src="img/architecture.png">
+              </a>
+              <p class="image-caption">Aimed Architecture</p>
+            </div>
+          </div>
+          <div class="flex-row">
+            <div class="flex-item flex-column">
+              <p class="text">
+                The idea behind the development of EdgeNet is meeting distributed testbed requirements by using a common framework that
+                is Kubernetes in this case. EdgeNet aims being fully aling with Kubernetes to be able to contribute back to the community.
+                The custom resources feature of Kubernetes allows us to do so. Because all new features we develop as custom resources are
+                automatically adopted by <b>kubectl</b>. The features such as hardware management, logging & monitoring,
+                and privacy & security at Edge in scope of EdgeNet's vision!
+              </p>
+            </div>
+          </div>
+          <!--End Architecture-->
+          <!-- ************************************************************************************** -->
+          <!--Start Detailed Information-->
+          <div class="flex-row">
+            <div class="flex-item flex-item-stretch flex-column">
+              <p class="text">
+                The API documentation that describes the main functionallities of the head node is created by
+                <a target="_blank" href="https://www.getpostman.com/">Postman</a>:
+              </p>
+              <div class="control-group">
+                <a class="custom-button custom-button-info pulse-info" target="_blank"
+                  href="https://documenter.getpostman.com/view/7656709/SzYT4gRL?version=latest">
+                  <span>API Documentation</span>
+                </a>
+              </div>
+            </div>
+            <div class="flex-item flex-item-stretch flex-column">
+              <p class="text">
+                The EdgeNet features, including drawings, that are custom resources of Kubernetes:
+              </p>
+              <div class="control-group">
+                <a class="custom-button custom-button-primary pulse-primary" href="features.html">
+                  <span>Features</span>
+                </a>
+              </div>
+            </div>
+          </div>
+          <!--End Detailed Information-->
+          <!-- ************************************************************************************** -->
+        </div>
+      </div>
+    </div>
+    <script src="js/custom.js"></script>
+  </body>
+</html>
