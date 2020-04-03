@@ -55,21 +55,20 @@
               <p>You will use your EdgeNet kubeconfig file to create a slice.</p>
               <h3 id="create-a-slice">Create a slice</h3>
               <p>This object must include a slice name consisting of <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/names/">allowed characters</a>, slice type that can be Classroom, Experiment, Testing, and Development, slice profile that can be Low, Medium, and High, users that include username and authority to which username belongs. Here is an example:</p>
-              <pre class="pre"><code class="lang-yaml"><span class="hljs-attr">apiVersion:</span> apps.edgenet.io/v1alpha
-              <span class="hljs-attr">kind:</span> Slice
-              <span class="hljs-attr">metadata:</span>
-              <span class="hljs-attr">  name:</span> &lt;your slice name<span class="hljs-string">&gt;
-              </span><span class="hljs-attr">spec:</span>
-              <span class="hljs-attr">  type:</span> &lt;your slice type<span class="hljs-string">&gt;
-              </span><span class="hljs-attr">  profile:</span> &lt;your slice profile<span class="hljs-string">&gt;
-              </span><span class="hljs-attr">  users:</span>
-              <span class="hljs-attr">    - authority:</span> &lt;authority name<span class="hljs-string">&gt;
-              </span><span class="hljs-attr">      username:</span> &lt;username<span class="hljs-string">&gt;
-              </span><span class="hljs-attr">    - authority:</span> &lt;authority name<span class="hljs-string">&gt;
-              </span><span class="hljs-attr">      username:</span> &lt;username<span class="hljs-string">&gt;</span>
-              </code></pre>
-              <pre class="pre"><code>kubectl <span class="hljs-built_in">create</span> -f ./slice.yaml <span class="hljs-comment">--kubeconfig ./your-kubeconfig.cfg</span>
-              </code></pre><h3 id="notification-process">Notification process</h3>
+              <pre class="pre"><code class="lang-yaml">apiVersion: apps.edgenet.io/v1alpha
+kind: Slice
+metadata:
+  name: &lt;your slice name&gt;
+spec:
+  type: &lt;your slice type&gt;
+  profile: &lt;your slice profile&gt;
+  users:
+    - authority: &lt;authority name&gt;
+      username: &lt;username&gt;
+    - authority: &lt;authority name&gt;
+      username: &lt;username&gt;</code></pre>
+              <pre class="pre"><code>kubectl create -f ./slice.yaml --kubeconfig ./your-kubeconfig.cfg</code></pre>
+              <h3 id="notification-process">Notification process</h3>
               <p>At this point, the authority-admin(s) and manager(s) of the authority on which slice created and the participants of the slice get their invitations by email containing slice information.</p>
             </div>
           </div>
