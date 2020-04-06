@@ -17,6 +17,7 @@ limitations under the License.
 package slice
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -49,13 +50,19 @@ type controller struct {
 type informerevent struct {
 	key      string
 	function string
-	updated  fields
+	change   fields
 }
 
 // This contains the fields to check whether they are updated
 type fields struct {
 	profile bool
-	users   bool
+	users   userData
+}
+
+type userData struct {
+	status  bool
+	deleted string
+	added   string
 }
 
 // Constant variables for events
@@ -103,13 +110,22 @@ func Start() {
 			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 			event.function = update
 			// Find out whether the fields updated
-			event.updated.profile = false
-			event.updated.users = false
+			event.change.profile = false
+			event.change.users.status = false
 			if oldObj.(*apps_v1alpha.Slice).Spec.Profile != newObj.(*apps_v1alpha.Slice).Spec.Profile {
-				event.updated.profile = true
+				event.change.profile = true
 			}
 			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.Slice).Spec.Users, newObj.(*apps_v1alpha.Slice).Spec.Users) {
-				event.updated.users = true
+				event.change.users.status = true
+				sliceDeleted, sliceAdded := dry(oldObj.(*apps_v1alpha.Slice).Spec.Users, newObj.(*apps_v1alpha.Slice).Spec.Users)
+				sliceDeletedJSON, err := json.Marshal(sliceDeleted)
+				if err == nil {
+					event.change.users.deleted = string(sliceDeletedJSON)
+				}
+				sliceAddedJSON, err := json.Marshal(sliceAdded)
+				if err == nil {
+					event.change.users.added = string(sliceAddedJSON)
+				}
 			}
 			log.Infof("Update slice: %s", event.key)
 			if err == nil {
@@ -137,7 +153,7 @@ func Start() {
 	// Cluster Roles for Slices
 	// Authority Admin
 	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"selectivedeployments"}, Verbs: []string{"*"}},
-		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "replicationcontrollers", "services", "secrets"}, Verbs: []string{"*"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "replicationcontrollers", "services", "secrets"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"apps"}, Resources: []string{"daemonsets", "deployments", "replicasets", "statefulsets"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"autoscaling"}, Resources: []string{"horizontalpodautoscalers"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"batch"}, Resources: []string{"cronjobs", "jobs"}, Verbs: []string{"*"}},
@@ -211,6 +227,38 @@ func (c *controller) runWorker() {
 	log.Info("runWorker: completed")
 }
 
+// dry function remove the same values of the old and new objects from the old object to have
+// the slice of deleted and added values.
+func dry(oldSlice []apps_v1alpha.SliceUsers, newSlice []apps_v1alpha.SliceUsers) ([]apps_v1alpha.SliceUsers, []apps_v1alpha.SliceUsers) {
+	var deletedSlice []apps_v1alpha.SliceUsers
+	var addedSlice []apps_v1alpha.SliceUsers
+
+	for _, oldValue := range oldSlice {
+		exists := false
+		for _, newValue := range newSlice {
+			if oldValue.Authority == newValue.Authority && oldValue.Username == newValue.Username {
+				exists = true
+			}
+		}
+		if !exists {
+			deletedSlice = append(deletedSlice, apps_v1alpha.SliceUsers{Authority: oldValue.Authority, Username: oldValue.Username})
+		}
+	}
+	for _, newValue := range newSlice {
+		exists := false
+		for _, oldValue := range oldSlice {
+			if newValue.Authority == oldValue.Authority && newValue.Username == oldValue.Username {
+				exists = true
+			}
+		}
+		if !exists {
+			addedSlice = append(addedSlice, apps_v1alpha.SliceUsers{Authority: newValue.Authority, Username: newValue.Username})
+		}
+	}
+
+	return deletedSlice, addedSlice
+}
+
 // This function deals with the queue and sends each item in it to the specified handler to be processed.
 func (c *controller) processNextItem() bool {
 	log.Info("processNextItem: start")
@@ -246,7 +294,7 @@ func (c *controller) processNextItem() bool {
 			c.handler.ObjectCreated(item)
 		} else if event.(informerevent).function == update {
 			c.logger.Infof("Controller.processNextItem: object updated detected: %s", keyRaw)
-			c.handler.ObjectUpdated(item, event.(informerevent).updated)
+			c.handler.ObjectUpdated(item, event.(informerevent).change)
 		}
 	}
 	c.queue.Forget(event.(informerevent).key)

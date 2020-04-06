@@ -47,10 +47,11 @@ type CommonContentData struct {
 
 // ResourceAllocationData to set the common variables
 type ResourceAllocationData struct {
-	CommonData commonData
-	Name       string
-	Namespace  string
-	Authority  string
+	CommonData     commonData
+	Name           string
+	OwnerNamespace string
+	ChildNamespace string
+	Authority      string
 }
 
 // LoginContentData to set the login-specific variables
@@ -106,17 +107,13 @@ func Send(subject string, contentData interface{}) {
 	case "user-email-verification":
 		to, body = setUserEmailVerificationContent(contentData, smtpServer.From)
 	case "user-email-verified-alert":
-		to, body = setUserVerifiedAlertContent(contentData, smtpServer.From)
-		if len(to) == 0 {
-			to = []string{smtpServer.To}
-		}
+		to, body = setUserVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To})
 	case "user-registration-successful":
 		to, body = setUserRegistrationContent(contentData, smtpServer.From)
 	case "authority-email-verification":
 		to, body = setAuthorityEmailVerificationContent(contentData, smtpServer.From)
 	case "authority-email-verified-alert":
-		_, body = setAuthorityVerifiedAlertContent(contentData, smtpServer.From)
-		to = []string{smtpServer.To}
+		to, body = setAuthorityVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To})
 	case "authority-creation-successful":
 		to, body = setAuthorityRequestContent(contentData, smtpServer.From)
 	case "acceptable-use-policy-accepted":
@@ -125,8 +122,8 @@ func Send(subject string, contentData interface{}) {
 		to, body = setAUPRenewalContent(contentData, smtpServer.From)
 	case "acceptable-use-policy-expired":
 		to, body = setAUPExpiredContent(contentData, smtpServer.From)
-	case "slice-invitation":
-		to, body = setSliceInvitationContent(contentData, smtpServer.From)
+	case "slice-creation", "slice-removal", "slice-reminder", "slice-deletion", "slice-crash":
+		to, body = setSliceContent(contentData, smtpServer.From, subject)
 	case "team-invitation":
 		to, body = setTeamInvitationContent(contentData, smtpServer.From)
 	}
@@ -257,15 +254,28 @@ func setTeamInvitationContent(contentData interface{}, from string) ([]string, b
 	return to, body
 }
 
-// setSliceInvitationContent to create an email body related to the slice invitation
-func setSliceInvitationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+// setSliceContent to create an email body related to the slice emails
+func setSliceContent(contentData interface{}, from, subject string) ([]string, bytes.Buffer) {
 	sliceData := contentData.(ResourceAllocationData)
 	// This represents receivers' email addresses
 	to := sliceData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/slice-invitation.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("New Slice Invitation", from, to, delimiter)
+	title := "Slice event"
+	switch subject {
+	case "slice-creation":
+		title = "[EdgeNet] Slice invitation"
+	case "slice-removal":
+		title = "[EdgeNet] Slice farewell message"
+	case "slice-reminder":
+		title = "[EdgeNet] Slice renewal reminder"
+	case "slice-deletion":
+		title = "[EdgeNet] Slice deleted"
+	case "slice-crash":
+		title = "[EdgeNet] Slice creation failed"
+	}
+	body := setCommonEmailHeaders(title, from, to, delimiter)
 	t.Execute(&body, sliceData)
 
 	return to, body
@@ -342,10 +352,8 @@ func setAuthorityEmailVerificationContent(contentData interface{}, from string) 
 }
 
 // setAuthorityVerifiedAlertContent to create an email body related to the email verified alert
-func setAuthorityVerifiedAlertContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+func setAuthorityVerifiedAlertContent(contentData interface{}, from string, to []string) ([]string, bytes.Buffer) {
 	alertData := contentData.(CommonContentData)
-	// This represents receivers' email addresses
-	to := alertData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verified-alert.html")
 	delimiter := generateRandomString(10)
@@ -398,10 +406,12 @@ func setUserEmailVerificationContent(contentData interface{}, from string) ([]st
 }
 
 // setUserVerifiedAlertContent to create an email body related to the email verified alert
-func setUserVerifiedAlertContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+func setUserVerifiedAlertContent(contentData interface{}, from string, to []string) ([]string, bytes.Buffer) {
 	alertData := contentData.(CommonContentData)
 	// This represents receivers' email addresses
-	to := alertData.CommonData.Email
+	if len(alertData.CommonData.Email) > 0 {
+		to = alertData.CommonData.Email
+	}
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/user-email-verified-alert.html")
 	delimiter := generateRandomString(10)
