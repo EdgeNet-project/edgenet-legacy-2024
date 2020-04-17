@@ -158,7 +158,7 @@
        s.async = true
        s.defer = true
        s.type = "text/javascript";
-       s.src  = "https://maps.googleapis.com/maps/api/js?key=APIKEY&callback=gmap_draw";
+       s.src  = "https://maps.googleapis.com/maps/api/js?key=AIzaSyBlJ4wNJ-0S1kKMT9x5fZT_20A0qxDyW1k&callback=gmap_draw";
        window.gmap_draw = function(){
          getNodeList()
        };
