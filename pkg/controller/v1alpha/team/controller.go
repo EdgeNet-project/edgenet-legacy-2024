@@ -17,6 +17,7 @@ limitations under the License.
 package team
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -50,13 +51,26 @@ type controller struct {
 type informerevent struct {
 	key      string
 	function string
-	updated  fields
+	change   fields
 }
 
 // This contains the fields to check whether they are updated
 type fields struct {
-	users   bool
 	enabled bool
+	users   userData
+	object  objectData
+}
+
+type userData struct {
+	status  bool
+	deleted string
+	added   string
+}
+
+type objectData struct {
+	name           string
+	ownerNamespace string
+	childNamespace string
 }
 
 // Constant variables for events
@@ -104,13 +118,24 @@ func Start() {
 			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 			event.function = update
 			// Find out whether the fields updated
-			event.updated.enabled = false
-			event.updated.users = false
+			event.change.enabled = false
+			event.change.users.status = false
+			event.change.users.deleted = ""
+			event.change.users.added = ""
 			if oldObj.(*apps_v1alpha.Team).Status.Enabled != newObj.(*apps_v1alpha.Team).Status.Enabled {
-				event.updated.enabled = true
+				event.change.enabled = true
 			}
 			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.Team).Spec.Users, newObj.(*apps_v1alpha.Team).Spec.Users) {
-				event.updated.users = true
+				event.change.users.status = true
+				sliceDeleted, sliceAdded := dry(oldObj.(*apps_v1alpha.Team).Spec.Users, newObj.(*apps_v1alpha.Team).Spec.Users)
+				sliceDeletedJSON, err := json.Marshal(sliceDeleted)
+				if err == nil {
+					event.change.users.deleted = string(sliceDeletedJSON)
+				}
+				sliceAddedJSON, err := json.Marshal(sliceAdded)
+				if err == nil {
+					event.change.users.added = string(sliceAddedJSON)
+				}
 			}
 			log.Infof("Update team: %s", event.key)
 			if err == nil {
@@ -122,6 +147,16 @@ func Start() {
 			// Put the resource object into a key
 			event.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			event.function = delete
+			event.change.users.status = true
+			event.change.users.deleted = ""
+			sliceDeletedJSON, err := json.Marshal(obj.(*apps_v1alpha.Team).Spec.Users)
+			if err == nil {
+				event.change.users.deleted = string(sliceDeletedJSON)
+			}
+			event.change.object.name = obj.(*apps_v1alpha.Team).GetName()
+			event.change.object.ownerNamespace = obj.(*apps_v1alpha.Team).GetNamespace()
+			event.change.object.childNamespace = fmt.Sprintf("%s-team-%s", obj.(*apps_v1alpha.Team).GetNamespace(), obj.(*apps_v1alpha.Team).GetName())
+			event.change.enabled = obj.(*apps_v1alpha.Team).Status.Enabled
 			log.Infof("Delete team: %s", event.key)
 			if err == nil {
 				queue.Add(event)
@@ -234,7 +269,7 @@ func (c *controller) processNextItem() bool {
 	if !exists {
 		if event.(informerevent).function == delete {
 			c.logger.Infof("Controller.processNextItem: object deleted detected: %s", keyRaw)
-			c.handler.ObjectDeleted(item)
+			c.handler.ObjectDeleted(item, event.(informerevent).change)
 		}
 	} else {
 		if event.(informerevent).function == create {
@@ -242,7 +277,7 @@ func (c *controller) processNextItem() bool {
 			c.handler.ObjectCreated(item)
 		} else if event.(informerevent).function == update {
 			c.logger.Infof("Controller.processNextItem: object updated detected: %s", keyRaw)
-			c.handler.ObjectUpdated(item, event.(informerevent).updated)
+			c.handler.ObjectUpdated(item, event.(informerevent).change)
 		}
 	}
 	c.queue.Forget(event.(informerevent).key)
@@ -251,21 +286,35 @@ func (c *controller) processNextItem() bool {
 }
 
 // dry function remove the same values of the old and new objects from the old object to have
-// the team of deleted values.
-func dry(oldTeam []apps_v1alpha.TeamUsers, newTeam []apps_v1alpha.TeamUsers) []string {
-	var uniqueTeam []string
-	for _, oldValue := range oldTeam {
+// the slice of deleted and added values.
+func dry(oldSlice []apps_v1alpha.TeamUsers, newSlice []apps_v1alpha.TeamUsers) ([]apps_v1alpha.TeamUsers, []apps_v1alpha.TeamUsers) {
+	var deletedSlice []apps_v1alpha.TeamUsers
+	var addedSlice []apps_v1alpha.TeamUsers
+
+	for _, oldValue := range oldSlice {
 		exists := false
-		for _, newValue := range newTeam {
+		for _, newValue := range newSlice {
 			if oldValue.Authority == newValue.Authority && oldValue.Username == newValue.Username {
 				exists = true
 			}
 		}
 		if !exists {
-			uniqueTeam = append(uniqueTeam, fmt.Sprintf("%s?/delta/? %s", oldValue.Authority, oldValue.Username))
+			deletedSlice = append(deletedSlice, apps_v1alpha.TeamUsers{Authority: oldValue.Authority, Username: oldValue.Username})
 		}
 	}
-	return uniqueTeam
+	for _, newValue := range newSlice {
+		exists := false
+		for _, oldValue := range oldSlice {
+			if newValue.Authority == oldValue.Authority && newValue.Username == oldValue.Username {
+				exists = true
+			}
+		}
+		if !exists {
+			addedSlice = append(addedSlice, apps_v1alpha.TeamUsers{Authority: newValue.Authority, Username: newValue.Username})
+		}
+	}
+
+	return deletedSlice, addedSlice
 }
 
 func generateRandomString(n int) string {
