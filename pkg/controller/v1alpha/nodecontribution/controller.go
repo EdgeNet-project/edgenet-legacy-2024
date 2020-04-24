@@ -21,9 +21,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"syscall"
 	"time"
 
+	apps_v1alpha "headnode/pkg/apis/apps/v1alpha"
 	"headnode/pkg/authorization"
 	appsinformer_v1 "headnode/pkg/client/informers/externalversions/apps/v1alpha"
 	"headnode/pkg/node"
@@ -61,23 +63,12 @@ type patchByBoolValue struct {
 	Path  string `json:"path"`
 	Value bool   `json:"value"`
 }
-type patchByOwnerReferenceValue struct {
-	Op    string                `json:"op"`
-	Path  string                `json:"path"`
-	Value []patchOwnerReference `json:"value"`
-}
-type patchOwnerReference struct {
-	APIVersion         string `json:"apiVersion"`
-	BlockOwnerDeletion bool   `json:"blockOwnerDeletion"`
-	Controller         bool   `json:"controller"`
-	Kind               string `json:"kind"`
-	Name               string `json:"name"`
-	UID                string `json:"uid"`
-}
 
 // Constant variables for events
-const failure = "Failure"
+const inprogress = "Installing"
 const recover = "Recovering"
+const failure = "Failure"
+const incomplete = "Halting"
 const success = "Successful"
 const noSchedule = "NoSchedule"
 const create = "create"
@@ -124,11 +115,13 @@ func Start() {
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
-			event.function = update
-			log.Infof("Update nodecontribution: %s", event.key)
-			if err == nil {
-				queue.Add(event)
+			if reflect.DeepEqual(oldObj.(*apps_v1alpha.NodeContribution).Status, newObj.(*apps_v1alpha.NodeContribution).Status) {
+				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
+				event.function = update
+				log.Infof("Update nodecontribution: %s", event.key)
+				if err == nil {
+					queue.Add(event)
+				}
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
@@ -214,9 +207,9 @@ func Start() {
 											if NCRow.Status.State != success {
 												NCRow.Status.State = success
 												if NCRow.Status.State == recover {
-													NCRow.Status.Message = "Node recovery successful"
+													NCRow.Status.Message = append(NCRow.Status.Message, "Node recovery successful")
 												} else {
-													NCRow.Status.Message = "Node is ready"
+													NCRow.Status.Message = append(NCRow.Status.Message, "Node is ready")
 												}
 												edgenetClientset.AppsV1alpha().NodeContributions(NCRow.GetNamespace()).UpdateStatus(NCRow)
 											}
@@ -224,7 +217,7 @@ func Start() {
 											(oldReady == trueStr && newReady == unknownStr) {
 											if NCRow.Status.State != failure {
 												NCRow.Status.State = failure
-												NCRow.Status.Message = "Node is not ready"
+												NCRow.Status.Message = append(NCRow.Status.Message, "Node is not ready")
 												edgenetClientset.AppsV1alpha().NodeContributions(NCRow.GetNamespace()).UpdateStatus(NCRow)
 											}
 										}
