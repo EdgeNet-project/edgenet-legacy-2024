@@ -26,14 +26,6 @@ type AcceptableUsePolicyListerExpansion interface{}
 // AcceptableUsePolicyNamespaceLister.
 type AcceptableUsePolicyNamespaceListerExpansion interface{}
 
-// AuthorityListerExpansion allows custom methods to be added to
-// AuthorityLister.
-type AuthorityListerExpansion interface{}
-
-// AuthorityRequestListerExpansion allows custom methods to be added to
-// AuthorityRequestLister.
-type AuthorityRequestListerExpansion interface{}
-
 // EmailVerificationListerExpansion allows custom methods to be added to
 // EmailVerificationLister.
 type EmailVerificationListerExpansion interface{}
@@ -50,13 +42,13 @@ type LoginListerExpansion interface{}
 // LoginNamespaceLister.
 type LoginNamespaceListerExpansion interface{}
 
-// NodeContributionListerExpansion allows custom methods to be added to
-// NodeContributionLister.
-type NodeContributionListerExpansion interface{}
+// ProjectListerExpansion allows custom methods to be added to
+// ProjectLister.
+type ProjectListerExpansion interface{}
 
-// NodeContributionNamespaceListerExpansion allows custom methods to be added to
-// NodeContributionNamespaceLister.
-type NodeContributionNamespaceListerExpansion interface{}
+// ProjectNamespaceListerExpansion allows custom methods to be added to
+// ProjectNamespaceLister.
+type ProjectNamespaceListerExpansion interface{}
 
 // SelectiveDeploymentListerExpansion allows custom methods to be added to
 // SelectiveDeploymentLister.
@@ -66,6 +58,14 @@ type SelectiveDeploymentListerExpansion interface{}
 // SelectiveDeploymentNamespaceLister.
 type SelectiveDeploymentNamespaceListerExpansion interface{}
 
+// SiteListerExpansion allows custom methods to be added to
+// SiteLister.
+type SiteListerExpansion interface{}
+
+// SiteRegistrationRequestListerExpansion allows custom methods to be added to
+// SiteRegistrationRequestLister.
+type SiteRegistrationRequestListerExpansion interface{}
+
 // SliceListerExpansion allows custom methods to be added to
 // SliceLister.
 type SliceListerExpansion interface{}
@@ -73,14 +73,6 @@ type SliceListerExpansion interface{}
 // SliceNamespaceListerExpansion allows custom methods to be added to
 // SliceNamespaceLister.
 type SliceNamespaceListerExpansion interface{}
-
-// TeamListerExpansion allows custom methods to be added to
-// TeamLister.
-type TeamListerExpansion interface{}
-
-// TeamNamespaceListerExpansion allows custom methods to be added to
-// TeamNamespaceLister.
-type TeamNamespaceListerExpansion interface{}
 
 // UserListerExpansion allows custom methods to be added to
 // UserLister.

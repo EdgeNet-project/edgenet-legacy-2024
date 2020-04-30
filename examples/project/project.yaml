@@ -1,0 +1,9 @@
+apiVersion: apps.edgenet.io/v1alpha
+kind: Project
+metadata:
+  name: edgenet
+spec:
+  users:
+    - site: sorbonne-university
+      username: usersu
+  description: "Description of the project"

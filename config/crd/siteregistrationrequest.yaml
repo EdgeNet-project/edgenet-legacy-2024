@@ -1,0 +1,89 @@
+# Copyright 2019 Sorbonne Université
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: siteregistrationrequests.apps.edgenet.io
+spec:
+  group: apps.edgenet.io
+  version: v1alpha
+  scope: Cluster
+  subresources:
+    status: {}
+  names:
+    plural: siteregistrationrequests
+    singular: siteregistrationrequest
+    kind: SiteRegistrationRequest
+    shortNames:
+      - srr
+  additionalPrinterColumns:
+    - name: Official Name
+      type: string
+      JSONPath: .spec.fullname
+    - name: Short Name
+      type: string
+      JSONPath: .spec.shortname
+    - name: URL
+      type: string
+      JSONPath: .spec.url
+    - name: Address
+      type: string
+      JSONPath: .spec.address
+    - name: Expires
+      type: string
+      JSONPath: .status.expires
+    - name: Age
+      type: date
+      JSONPath: .metadata.creationTimestamp
+  validation:
+    openAPIV3Schema:
+      required:
+        - spec
+      properties:
+        spec:
+          required:
+            - fullname
+            - shortname
+            - url
+            - address
+            - contact
+          properties:
+            fullname:
+              type: string
+            shortname:
+              type: string
+            url:
+              type: string
+            address:
+              type: string
+            contact:
+              type: object
+              required:
+                - username
+                - firstname
+                - lastname
+                - email
+                - phone
+              properties:
+                username:
+                  type: string
+                  pattern: "^[a-z0-9]*$"
+                firstname:
+                  type: string
+                lastname:
+                  type: string
+                email:
+                  type: string
+                phone:
+                  type: string

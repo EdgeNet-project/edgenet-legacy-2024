@@ -76,23 +76,23 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Delete(userCopy.GetName(), &metav1.DeleteOptions{})
 		return
 	}
-	// Find the authority from the namespace in which the object is
+	// Find the site from the namespace in which the object is
 	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
-	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
-	// Check if the authority is active
-	if userOwnerAuthority.Status.Enabled == true && userCopy.GetGeneration() == 1 {
+	userOwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(userOwnerNamespace.Labels["site-name"], metav1.GetOptions{})
+	// Check if the site is active
+	if userOwnerSite.Status.Enabled == true && userCopy.GetGeneration() == 1 {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		_, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
 		if err != nil {
-			// Automatically creates an acceptable use policy object belonging to the user in the authority namespace
+			// Automatically creates an acceptable use policy object belonging to the user in the site namespace
 			// When a user is deleted, the owner references feature allows the related AUP to be automatically removed
 			userOwnerReferences := t.setOwnerReferences(userCopy)
 			userAUP := &apps_v1alpha.AcceptableUsePolicy{TypeMeta: metav1.TypeMeta{Kind: "AcceptableUsePolicy", APIVersion: "apps.edgenet.io/v1alpha"},
 				ObjectMeta: metav1.ObjectMeta{Name: userCopy.GetName(), OwnerReferences: userOwnerReferences}, Spec: apps_v1alpha.AcceptableUsePolicySpec{Accepted: false}}
 			t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Create(userAUP)
-			// Create user-specific roles regarding the resources of authority, users, and acceptableusepolicies
-			policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"authorities"}, ResourceNames: []string{userOwnerNamespace.Labels["authority-name"]},
+			// Create user-specific roles regarding the resources of sites, users, and acceptableusepolicies
+			policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"sites"}, ResourceNames: []string{userOwnerNamespace.Labels["site-name"]},
 				Verbs: []string{"get"}}, {APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"get", "update", "patch"}},
 				{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"logins"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"*"}}}
 			userRole := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("user-%s", userCopy.GetName()), OwnerReferences: userOwnerReferences},
@@ -155,7 +155,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 							registration.CreateConfig(serviceAccount)
 							// Set the HTML template variables
 							contentData := mailer.CommonContentData{}
-							contentData.CommonData.Authority = userOwnerNamespace.Labels["authority-name"]
+							contentData.CommonData.Site = userOwnerNamespace.Labels["site-name"]
 							contentData.CommonData.Username = userCopy.GetName()
 							contentData.CommonData.Name = fmt.Sprintf("%s %s", userCopy.Spec.FirstName, userCopy.Spec.LastName)
 							contentData.CommonData.Email = []string{userCopy.Spec.Email}
@@ -170,7 +170,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			}
 			go makeConfigAvailable()
 		}
-	} else if userOwnerAuthority.Status.Enabled == false && userCopy.Status.Active == true {
+	} else if userOwnerSite.Status.Enabled == false && userCopy.Status.Active == true {
 		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
 		userCopy.Status.Active = false
 	}
@@ -182,7 +182,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	// Create a copy of the user object to make changes on it
 	userCopy := obj.(*apps_v1alpha.User).DeepCopy()
 	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
-	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	userOwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(userOwnerNamespace.Labels["site-name"], metav1.GetOptions{})
 	fieldUpdated := updated.(fields)
 	// Security check to prevent any kind of manipulation on the AUP
 	if fieldUpdated.aup {
@@ -195,7 +195,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			}
 		}
 	}
-	if userOwnerAuthority.Status.Enabled {
+	if userOwnerSite.Status.Enabled {
 		if userCopy.Status.Active && userCopy.Status.AUP {
 			// To update the secret of password
 			if fieldUpdated.password {
@@ -213,11 +213,11 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			// To manipulate role bindings according to the changes
 			if fieldUpdated.active || fieldUpdated.aup || fieldUpdated.roles {
 				slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(metav1.ListOptions{})
-				teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(userCopy.GetNamespace()).List(metav1.ListOptions{})
+				projectsRaw, _ := t.edgenetClientset.AppsV1alpha().Projects(userCopy.GetNamespace()).List(metav1.ListOptions{})
 				if fieldUpdated.roles {
-					t.deleteRoleBindings(userCopy, slicesRaw, teamsRaw)
+					t.deleteRoleBindings(userCopy, slicesRaw, projectsRaw)
 				}
-				t.createRoleBindings(userCopy, slicesRaw, teamsRaw, userOwnerAuthority.GetName())
+				t.createRoleBindings(userCopy, slicesRaw, projectsRaw, userOwnerSite.GetName())
 				if fieldUpdated.active {
 					t.createAUPRoleBinding(userCopy)
 				}
@@ -226,15 +226,15 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			// To manipulate role bindings according to the changes
 			if (userCopy.Status.Active == false && fieldUpdated.active) || (userCopy.Status.AUP == false && fieldUpdated.aup) {
 				slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(metav1.ListOptions{})
-				teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(userCopy.GetNamespace()).List(metav1.ListOptions{})
-				t.deleteRoleBindings(userCopy, slicesRaw, teamsRaw)
+				projectsRaw, _ := t.edgenetClientset.AppsV1alpha().Projects(userCopy.GetNamespace()).List(metav1.ListOptions{})
+				t.deleteRoleBindings(userCopy, slicesRaw, projectsRaw)
 			}
 			// To create AUP role binding for the user
 			if userCopy.Status.Active && fieldUpdated.active {
 				t.createAUPRoleBinding(userCopy)
 			}
 		}
-	} else if userOwnerAuthority.Status.Enabled == false && userCopy.Status.Active == true {
+	} else if userOwnerSite.Status.Enabled == false && userCopy.Status.Active == true {
 		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
 		userCopy.Status.Active = false
 	}
@@ -247,43 +247,43 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // createRoleBindings creates user role bindings according to the roles
-func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *apps_v1alpha.SliceList, teamsRaw *apps_v1alpha.TeamList, ownerAuthority string) {
+func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *apps_v1alpha.SliceList, projectsRaw *apps_v1alpha.ProjectList, ownerSite string) {
 	// Create role bindings independent of user roles
 	registration.CreateSpecificRoleBindings(userCopy)
 	// This part creates the rolebindings one by one in different namespaces
 	createLoop := func(slicesRaw *apps_v1alpha.SliceList, namespacePrefix string) {
 		for _, sliceRow := range slicesRaw.Items {
 			for _, sliceUser := range sliceRow.Spec.Users {
-				// If the user participates in the slice or it is a PI or a Manager of the owner authority
-				if (sliceUser.Authority == ownerAuthority && sliceUser.Username == userCopy.GetName()) ||
+				// If the user participates in the slice or it is a PI or a Manager of the owner site
+				if (sliceUser.Site == ownerSite && sliceUser.Username == userCopy.GetName()) ||
 					(userCopy.GetNamespace() == sliceRow.GetNamespace() && (containsRole(userCopy.Spec.Roles, "pi") || containsRole(userCopy.Spec.Roles, "manager"))) {
 					registration.CreateRoleBindingsByRoles(userCopy, fmt.Sprintf("%s-slice-%s", namespacePrefix, sliceRow.GetName()), "Slice")
 				}
 			}
 		}
 	}
-	// Create the rolebindings in the authority namespace
-	registration.CreateRoleBindingsByRoles(userCopy, userCopy.GetNamespace(), "Authority")
+	// Create the rolebindings in the site namespace
+	registration.CreateRoleBindingsByRoles(userCopy, userCopy.GetNamespace(), "Site")
 	createLoop(slicesRaw, userCopy.GetNamespace())
-	// List the teams in the authority namespace
-	for _, teamRow := range teamsRaw.Items {
-		for _, teamUser := range teamRow.Spec.Users {
-			// If the user participates in the team or it is a PI or a Manager of the owner authority
-			if (teamUser.Authority == ownerAuthority && teamUser.Username == userCopy.GetName()) ||
-				(userCopy.GetNamespace() == teamRow.GetNamespace() && (containsRole(userCopy.Spec.Roles, "pi") || containsRole(userCopy.Spec.Roles, "manager"))) {
-				registration.CreateRoleBindingsByRoles(userCopy, fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName()), "Team")
+	// List the projects in the site namespace
+	for _, projectRow := range projectsRaw.Items {
+		for _, projectUser := range projectRow.Spec.Users {
+			// If the user participates in the project or it is a PI or a Manager of the owner site
+			if (projectUser.Site == ownerSite && projectUser.Username == userCopy.GetName()) ||
+				(userCopy.GetNamespace() == projectRow.GetNamespace() && (containsRole(userCopy.Spec.Roles, "pi") || containsRole(userCopy.Spec.Roles, "manager"))) {
+				registration.CreateRoleBindingsByRoles(userCopy, fmt.Sprintf("%s-project-%s", userCopy.GetNamespace(), projectRow.GetName()), "Project")
 			}
 		}
-		// List the slices in the team namespace
-		teamSlicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName())).List(metav1.ListOptions{})
-		createLoop(teamSlicesRaw, fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName()))
+		// List the slices in the project namespace
+		projectSlicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("%s-project-%s", userCopy.GetNamespace(), projectRow.GetName())).List(metav1.ListOptions{})
+		createLoop(projectSlicesRaw, fmt.Sprintf("%s-project-%s", userCopy.GetNamespace(), projectRow.GetName()))
 	}
 }
 
 // deleteRoleBindings removes user role bindings in the namespaces related
-func (t *Handler) deleteRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *apps_v1alpha.SliceList, teamsRaw *apps_v1alpha.TeamList) {
-	// To delete the cluster role binding which allows user to get the authority object
-	t.clientset.RbacV1().ClusterRoleBindings().Delete(fmt.Sprintf("%s-%s-for-authority", userCopy.GetNamespace(), userCopy.GetName()), &metav1.DeleteOptions{})
+func (t *Handler) deleteRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *apps_v1alpha.SliceList, projectsRaw *apps_v1alpha.ProjectList) {
+	// To delete the cluster role binding which allows user to get the site object
+	t.clientset.RbacV1().ClusterRoleBindings().Delete(fmt.Sprintf("%s-%s-for-site", userCopy.GetNamespace(), userCopy.GetName()), &metav1.DeleteOptions{})
 	// This part deletes the rolebindings one by one
 	deletionLoop := func(roleBindings *rbacv1.RoleBindingList) {
 		for _, roleBindingRow := range roleBindings.Items {
@@ -301,22 +301,22 @@ func (t *Handler) deleteRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 	if userCopy.Status.Active {
 		roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", userCopy.GetNamespace(), userCopy.GetName())}
 	}
-	// List the rolebindings in the authority namespace
+	// List the rolebindings in the site namespace
 	roleBindings, _ := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).List(roleBindingListOptions)
 	deletionLoop(roleBindings)
-	// List the rolebindings in the slice namespaces which directly created by slices in the authority namespace
+	// List the rolebindings in the slice namespaces which directly created by slices in the site namespace
 	for _, sliceRow := range slicesRaw.Items {
 		roleBindings, _ := t.clientset.RbacV1().RoleBindings(fmt.Sprintf("%s-slice-%s", userCopy.GetNamespace(), sliceRow.GetName())).List(metav1.ListOptions{})
 		deletionLoop(roleBindings)
 	}
-	for _, teamRow := range teamsRaw.Items {
-		// List the rolebindings in the team namespace
-		roleBindings, _ := t.clientset.RbacV1().RoleBindings(teamRow.GetNamespace()).List(metav1.ListOptions{})
+	for _, projectRow := range projectsRaw.Items {
+		// List the rolebindings in the project namespace
+		roleBindings, _ := t.clientset.RbacV1().RoleBindings(projectRow.GetNamespace()).List(metav1.ListOptions{})
 		deletionLoop(roleBindings)
-		// List the rolebindings in the slice namespaces which created by slices in the team namespace
-		teamSlicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName())).List(metav1.ListOptions{})
-		for _, teamSliceRow := range teamSlicesRaw.Items {
-			roleBindings, _ := t.clientset.RbacV1().RoleBindings(fmt.Sprintf("%s-team-%s-slice-%s", userCopy.GetNamespace(), teamRow.GetName(), teamSliceRow.GetName())).List(metav1.ListOptions{})
+		// List the rolebindings in the slice namespaces which created by slices in the project namespace
+		projectSlicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("%s-project-%s", userCopy.GetNamespace(), projectRow.GetName())).List(metav1.ListOptions{})
+		for _, projectSliceRow := range projectSlicesRaw.Items {
+			roleBindings, _ := t.clientset.RbacV1().RoleBindings(fmt.Sprintf("%s-project-%s-slice-%s", userCopy.GetNamespace(), projectRow.GetName(), projectSliceRow.GetName())).List(metav1.ListOptions{})
 			deletionLoop(roleBindings)
 		}
 	}

@@ -89,21 +89,21 @@ type SelectiveDeploymentList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Authority describes a Authority resource
-type Authority struct {
+// Site describes a Site resource
+type Site struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
 	meta_v1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	meta_v1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Spec is the authority resource spec
-	Spec AuthoritySpec `json:"spec"`
-	// Status is the authority resource status
-	Status AuthorityStatus `json:"status,omitempty"`
+	// Spec is the site resource spec
+	Spec SiteSpec `json:"spec"`
+	// Status is the site resource status
+	Status SiteStatus `json:"status,omitempty"`
 }
 
-// AuthoritySpec is the spec for a Authority resource
-type AuthoritySpec struct {
+// SiteSpec is the spec for a Site resource
+type SiteSpec struct {
 	FullName  string  `json:"fullname"`
 	ShortName string  `json:"shortname"`
 	URL       string  `json:"url"`
@@ -120,40 +120,40 @@ type Contact struct {
 	Phone     string `json:"phone"`
 }
 
-// AuthorityStatus is the status for a Authority resource
-type AuthorityStatus struct {
+// SiteStatus is the status for a Site resource
+type SiteStatus struct {
 	Enabled bool `json:"enabled"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// AuthorityList is a list of Authority resources
-type AuthorityList struct {
+// SiteList is a list of Site resources
+type SiteList struct {
 	meta_v1.TypeMeta `json:",inline"`
 	meta_v1.ListMeta `json:"metadata"`
 
-	Items []Authority `json:"items"`
+	Items []Site `json:"items"`
 }
 
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// AuthorityRequest describes a AuthorityRequest resource
-type AuthorityRequest struct {
+// SiteRegistrationRequest describes a SiteRegistrationRequest resource
+type SiteRegistrationRequest struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
 	meta_v1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	meta_v1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Spec is the authorityrequest resource spec
-	Spec AuthorityRequestSpec `json:"spec"`
-	// Status is the authorityrequest resource status
-	Status AuthorityRequestStatus `json:"status,omitempty"`
+	// Spec is the siteregistrationrequest resource spec
+	Spec SiteRegistrationRequestSpec `json:"spec"`
+	// Status is the siteregistrationrequest resource status
+	Status SiteRegistrationRequestStatus `json:"status,omitempty"`
 }
 
-// AuthorityRequestSpec is the spec for a AuthorityRequest resource
-type AuthorityRequestSpec struct {
+// SiteRegistrationRequestSpec is the spec for a SiteRegistrationRequest resource
+type SiteRegistrationRequestSpec struct {
 	FullName  string  `json:"fullname"`
 	ShortName string  `json:"shortname"`
 	URL       string  `json:"url"`
@@ -161,8 +161,8 @@ type AuthorityRequestSpec struct {
 	Contact   Contact `json:"contact"`
 }
 
-// AuthorityRequestStatus is the status for a AuthorityRequest resource
-type AuthorityRequestStatus struct {
+// SiteRegistrationRequestStatus is the status for a SiteRegistrationRequest resource
+type SiteRegistrationRequestStatus struct {
 	EmailVerify bool          `json:"emailverify"`
 	Approved    bool          `json:"approved"`
 	Expires     *meta_v1.Time `json:"expires"`
@@ -170,54 +170,54 @@ type AuthorityRequestStatus struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// AuthorityRequestList is a list of AuthorityRequest resources
-type AuthorityRequestList struct {
+// SiteRegistrationRequestList is a list of SiteRegistrationRequest resources
+type SiteRegistrationRequestList struct {
 	meta_v1.TypeMeta `json:",inline"`
 	meta_v1.ListMeta `json:"metadata"`
 
-	Items []AuthorityRequest `json:"items"`
+	Items []SiteRegistrationRequest `json:"items"`
 }
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Team describes a Team resource
-type Team struct {
+// Project describes a Project resource
+type Project struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
 	meta_v1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	meta_v1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Spec is the team resource spec
-	Spec TeamSpec `json:"spec"`
-	// Status is the team resource status
-	Status TeamStatus `json:"status,omitempty"`
+	// Spec is the project resource spec
+	Spec ProjectSpec `json:"spec"`
+	// Status is the project resource status
+	Status ProjectStatus `json:"status,omitempty"`
 }
 
-// TeamSpec is the spec for a Team resource
-type TeamSpec struct {
-	Users       []TeamUsers `json:"users"`
-	Description string      `json:"description"`
+// ProjectSpec is the spec for a Project resource
+type ProjectSpec struct {
+	Users       []ProjectUsers `json:"users"`
+	Description string         `json:"description"`
 }
 
-type TeamUsers struct {
-	Authority string `json:"authority"`
-	Username  string `json:"username"`
+type ProjectUsers struct {
+	Site     string `json:"site"`
+	Username string `json:"username"`
 }
 
-// TeamStatus is the status for a Team resource
-type TeamStatus struct {
+// ProjectStatus is the status for a Project resource
+type ProjectStatus struct {
 	Enabled bool `json:"enabled"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// TeamList is a list of Team resources
-type TeamList struct {
+// ProjectList is a list of Project resources
+type ProjectList struct {
 	meta_v1.TypeMeta `json:",inline"`
 	meta_v1.ListMeta `json:"metadata"`
 
-	Items []Team `json:"items"`
+	Items []Project `json:"items"`
 }
 
 // +genclient
@@ -245,8 +245,8 @@ type SliceSpec struct {
 }
 
 type SliceUsers struct {
-	Authority string `json:"authority"`
-	Username  string `json:"username"`
+	Site     string `json:"site"`
+	Username string `json:"username"`
 }
 
 // SliceStatus is the status for a Slice resource
@@ -494,7 +494,7 @@ type NodeContributionSpec struct {
 
 type Limitations struct {
 	Authority string `json:"authority"`
-	Team      string `json:"team"`
+	Project   string `json:"project"`
 	Slice     string `json:"slice"`
 }
 

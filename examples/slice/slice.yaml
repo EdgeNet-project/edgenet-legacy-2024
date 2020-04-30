@@ -6,7 +6,7 @@ spec:
   type: Development
   profile: High
   users:
-    - authority: sorbonne-university
+    - site: sorbonne-university
       username: usersu
-    - authority: planetlab-europe
+    - site: planetlab-europe
       username: userple

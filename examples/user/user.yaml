@@ -2,7 +2,7 @@ apiVersion: apps.edgenet.io/v1alpha
 kind: User
 metadata:
   name: usersu
-  namespace: authority-sorbonne-university
+  namespace: site-sorbonne-university
 spec:
   firstname: Firstname
   lastname: Lastname

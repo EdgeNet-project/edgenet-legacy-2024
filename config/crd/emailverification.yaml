@@ -52,7 +52,7 @@ spec:
             kind:
               type: string
               enum:
-                - Authority
+                - Site
                 - User
             identifier:
               type: string

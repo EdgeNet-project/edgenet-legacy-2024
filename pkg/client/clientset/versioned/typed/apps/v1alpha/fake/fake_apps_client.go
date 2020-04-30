@@ -33,14 +33,6 @@ func (c *FakeAppsV1alpha) AcceptableUsePolicies(namespace string) v1alpha.Accept
 	return &FakeAcceptableUsePolicies{c, namespace}
 }
 
-func (c *FakeAppsV1alpha) Authorities() v1alpha.AuthorityInterface {
-	return &FakeAuthorities{c}
-}
-
-func (c *FakeAppsV1alpha) AuthorityRequests() v1alpha.AuthorityRequestInterface {
-	return &FakeAuthorityRequests{c}
-}
-
 func (c *FakeAppsV1alpha) EmailVerifications(namespace string) v1alpha.EmailVerificationInterface {
 	return &FakeEmailVerifications{c, namespace}
 }
@@ -49,20 +41,24 @@ func (c *FakeAppsV1alpha) Logins(namespace string) v1alpha.LoginInterface {
 	return &FakeLogins{c, namespace}
 }
 
-func (c *FakeAppsV1alpha) NodeContributions(namespace string) v1alpha.NodeContributionInterface {
-	return &FakeNodeContributions{c, namespace}
+func (c *FakeAppsV1alpha) Projects(namespace string) v1alpha.ProjectInterface {
+	return &FakeProjects{c, namespace}
 }
 
 func (c *FakeAppsV1alpha) SelectiveDeployments(namespace string) v1alpha.SelectiveDeploymentInterface {
 	return &FakeSelectiveDeployments{c, namespace}
 }
 
-func (c *FakeAppsV1alpha) Slices(namespace string) v1alpha.SliceInterface {
-	return &FakeSlices{c, namespace}
+func (c *FakeAppsV1alpha) Sites() v1alpha.SiteInterface {
+	return &FakeSites{c}
 }
 
-func (c *FakeAppsV1alpha) Teams(namespace string) v1alpha.TeamInterface {
-	return &FakeTeams{c, namespace}
+func (c *FakeAppsV1alpha) SiteRegistrationRequests() v1alpha.SiteRegistrationRequestInterface {
+	return &FakeSiteRegistrationRequests{c}
+}
+
+func (c *FakeAppsV1alpha) Slices(namespace string) v1alpha.SliceInterface {
+	return &FakeSlices{c, namespace}
 }
 
 func (c *FakeAppsV1alpha) Users(namespace string) v1alpha.UserInterface {

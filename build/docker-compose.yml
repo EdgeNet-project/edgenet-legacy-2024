@@ -36,24 +36,24 @@ services:
     image: edgenet-selectivedeployment:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-  edgenet-authority:
-    container_name: edgenet-authority
+  edgenet-site:
+    container_name: edgenet-site
     restart: always
     build:
       context: ../
-      dockerfile: ./build/authority/Dockerfile
-    image: edgenet-authority:v1.0.0
+      dockerfile: ./build/site/Dockerfile
+    image: edgenet-site:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
       - ../config/:/root/config/
       - ../assets/templates/:/root/assets/templates/
-  edgenet-authorityrequest:
-    container_name: edgenet-authorityrequest
+  edgenet-siteregistrationrequest:
+    container_name: edgenet-siteregistrationrequest
     restart: always
     build:
       context: ../
-      dockerfile: ./build/authorityrequest/Dockerfile
-    image: edgenet-authorityrequest:v1.0.0
+      dockerfile: ./build/siteregistrationrequest/Dockerfile
+    image: edgenet-siteregistrationrequest:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
       - ../config/:/root/config/
@@ -127,13 +127,13 @@ services:
       - ../config/:/root/config/
       - ../assets/kubeconfigs:/root/assets/kubeconfigs
       - ../assets/templates/:/root/assets/templates/
-  edgenet-team:
-    container_name: edgenet-team
+  edgenet-project:
+    container_name: edgenet-project
     restart: always
     build:
       context: ../
-      dockerfile: ./build/team/Dockerfile
-    image: edgenet-team:v1.0.0
+      dockerfile: ./build/project/Dockerfile
+    image: edgenet-project:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
       - ../config/:/root/config/

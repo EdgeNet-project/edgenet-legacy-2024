@@ -67,7 +67,7 @@ spec:
               items:
                 type: object
                 properties:
-                  authority:
+                  site:
                     type: string
                   username:
                     type: string

@@ -20,21 +20,19 @@ package v1alpha
 
 type AcceptableUsePolicyExpansion interface{}
 
-type AuthorityExpansion interface{}
-
-type AuthorityRequestExpansion interface{}
-
 type EmailVerificationExpansion interface{}
 
 type LoginExpansion interface{}
 
-type NodeContributionExpansion interface{}
+type ProjectExpansion interface{}
 
 type SelectiveDeploymentExpansion interface{}
 
-type SliceExpansion interface{}
+type SiteExpansion interface{}
 
-type TeamExpansion interface{}
+type SiteRegistrationRequestExpansion interface{}
+
+type SliceExpansion interface{}
 
 type UserExpansion interface{}
 

@@ -2,7 +2,7 @@ apiVersion: apps.edgenet.io/v1alpha
 kind: UserRegistrationRequest
 metadata:
   name: bsenel
-  namespace: authority-edgenet
+  namespace: site-sorbonne-university
 spec:
   firstname: Firstname
   lastname: Lastname

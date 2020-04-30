@@ -70,11 +70,11 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	log.Info("LoginHandler.ObjectCreated")
 	// Create a copy of the login object to make changes on it
 	loginCopy := obj.(*apps_v1alpha.Login).DeepCopy()
-	// Find the authority from the namespace in which the object is
+	// Find the site from the namespace in which the object is
 	loginOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(loginCopy.GetNamespace(), metav1.GetOptions{})
-	loginOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(loginOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
-	// Check if the authority is active
-	if loginOwnerAuthority.Status.Enabled {
+	loginOwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(loginOwnerNamespace.Labels["site-name"], metav1.GetOptions{})
+	// Check if the site is active
+	if loginOwnerSite.Status.Enabled {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		credentialsMatch, user := t.validateCredentials(loginCopy)
@@ -125,7 +125,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 							secret, _ := t.clientset.CoreV1().Secrets(webServiceAccount.GetNamespace()).Get(tokenSecret, metav1.GetOptions{})
 							// Set the HTML template variables including the web token
 							contentData := mailer.LoginContentData{}
-							contentData.CommonData.Authority = loginOwnerNamespace.Labels["authority-name"]
+							contentData.CommonData.Site = loginOwnerNamespace.Labels["site-name"]
 							contentData.CommonData.Username = user.GetName()
 							contentData.CommonData.Name = fmt.Sprintf("%s %s", user.Spec.FirstName, user.Spec.LastName)
 							contentData.CommonData.Email = []string{user.Spec.Email}
@@ -146,8 +146,8 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			go t.edgenetClientset.AppsV1alpha().Users(user.GetNamespace()).UpdateStatus(user)
 			// Copy the core user role bindings to grant the same access rights to the web token
 			slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(user.GetNamespace()).List(metav1.ListOptions{})
-			teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(user.GetNamespace()).List(metav1.ListOptions{})
-			t.updateRoleBindings(user, slicesRaw, teamsRaw)
+			projectsRaw, _ := t.edgenetClientset.AppsV1alpha().Projects(user.GetNamespace()).List(metav1.ListOptions{})
+			t.updateRoleBindings(user, slicesRaw, projectsRaw)
 		} else {
 			t.secureLogout(loginCopy)
 		}
@@ -165,9 +165,9 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	// Create a copy of the login object to make changes on it
 	loginCopy := obj.(*apps_v1alpha.Login).DeepCopy()
 	loginOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(loginCopy.GetNamespace(), metav1.GetOptions{})
-	loginOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(loginOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	loginOwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(loginOwnerNamespace.Labels["site-name"], metav1.GetOptions{})
 
-	if loginOwnerAuthority.Status.Enabled {
+	if loginOwnerSite.Status.Enabled {
 		defer t.edgenetClientset.AppsV1alpha().Logins(loginCopy.GetNamespace()).UpdateStatus(loginCopy)
 		// Extend the expiration date
 		if loginCopy.Status.Renew {
@@ -218,7 +218,7 @@ func (t *Handler) secureLogout(loginCopy *apps_v1alpha.Login) {
 }
 
 // updateRoleBindings links the web service account up with the rolebindings of user
-func (t *Handler) updateRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *apps_v1alpha.SliceList, teamsRaw *apps_v1alpha.TeamList) {
+func (t *Handler) updateRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *apps_v1alpha.SliceList, projectsRaw *apps_v1alpha.ProjectList) {
 	// This part puts the web service account into the rolebindings one by one
 	updateLoop := func(roleBindings *rbacv1.RoleBindingList) {
 		for _, roleBindingRow := range roleBindings.Items {
@@ -233,22 +233,22 @@ func (t *Handler) updateRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 			}
 		}
 	}
-	// List the rolebindings in the authority namespace
+	// List the rolebindings in the site namespace
 	roleBindings, _ := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).List(metav1.ListOptions{})
 	updateLoop(roleBindings)
-	// List the rolebindings in the slice namespaces which directly created by slices in the authority namespace
+	// List the rolebindings in the slice namespaces which directly created by slices in the site namespace
 	for _, sliceRow := range slicesRaw.Items {
 		roleBindings, _ := t.clientset.RbacV1().RoleBindings(fmt.Sprintf("%s-slice-%s", userCopy.GetNamespace(), sliceRow.GetName())).List(metav1.ListOptions{})
 		updateLoop(roleBindings)
 	}
-	for _, teamRow := range teamsRaw.Items {
-		// List the rolebindings in the team namespace
-		roleBindings, _ := t.clientset.RbacV1().RoleBindings(teamRow.GetNamespace()).List(metav1.ListOptions{})
+	for _, projectRow := range projectsRaw.Items {
+		// List the rolebindings in the project namespace
+		roleBindings, _ := t.clientset.RbacV1().RoleBindings(projectRow.GetNamespace()).List(metav1.ListOptions{})
 		updateLoop(roleBindings)
-		// List the rolebindings in the slice namespaces which created by slices in the team namespace
-		teamSlicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName())).List(metav1.ListOptions{})
-		for _, teamSliceRow := range teamSlicesRaw.Items {
-			roleBindings, _ := t.clientset.RbacV1().RoleBindings(fmt.Sprintf("%s-team-%s-slice-%s", userCopy.GetNamespace(), teamRow.GetName(), teamSliceRow.GetName())).List(metav1.ListOptions{})
+		// List the rolebindings in the slice namespaces which created by slices in the project namespace
+		projectSlicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("%s-project-%s", userCopy.GetNamespace(), projectRow.GetName())).List(metav1.ListOptions{})
+		for _, projectSliceRow := range projectSlicesRaw.Items {
+			roleBindings, _ := t.clientset.RbacV1().RoleBindings(fmt.Sprintf("%s-project-%s-slice-%s", userCopy.GetNamespace(), projectRow.GetName(), projectSliceRow.GetName())).List(metav1.ListOptions{})
 			updateLoop(roleBindings)
 		}
 	}

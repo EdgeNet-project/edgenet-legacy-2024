@@ -75,11 +75,11 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})
 		return
 	}
-	// Find the authority from the namespace in which the object is
+	// Find the site from the namespace in which the object is
 	URROwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(URRCopy.GetNamespace(), metav1.GetOptions{})
-	URROwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(URROwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
-	// Check if the authority is active
-	if URROwnerAuthority.Status.Enabled {
+	URROwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(URROwnerNamespace.Labels["site-name"], metav1.GetOptions{})
+	// Check if the site is active
+	if URROwnerSite.Status.Enabled {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		if URRCopy.Status.Expires == nil {
@@ -99,7 +99,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			// The section below is a part of the method which provides email verification
 			// Email verification code is a security point for email verification. The user
 			// registration object creates an email verification object with a name which is
-			// this email verification code. Only who knows the authority and the email verification
+			// this email verification code. Only who knows the site and the email verification
 			// code can manipulate that object by using a public token.
 			URROwnerReferences := t.setOwnerReferences(URRCopyUpdated)
 			emailVerificationCode := "bs" + generateRandomString(16)
@@ -111,7 +111,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			if err == nil {
 				// Set the HTML template variables
 				contentData := mailer.VerifyContentData{}
-				contentData.CommonData.Authority = URROwnerNamespace.Labels["authority-name"]
+				contentData.CommonData.Site = URROwnerNamespace.Labels["site-name"]
 				contentData.CommonData.Username = URRCopyUpdated.GetName()
 				contentData.CommonData.Name = fmt.Sprintf("%s %s", URRCopyUpdated.Spec.FirstName, URRCopyUpdated.Spec.LastName)
 				contentData.CommonData.Email = []string{URRCopyUpdated.Spec.Email}
@@ -132,15 +132,15 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	// Create a copy of the user registration request object to make changes on it
 	URRCopy := obj.(*apps_v1alpha.UserRegistrationRequest).DeepCopy()
 	URROwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(URRCopy.GetNamespace(), metav1.GetOptions{})
-	URROwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(URROwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	URROwnerSite, _ := t.edgenetClientset.AppsV1alpha().Sites().Get(URROwnerNamespace.Labels["site-name"], metav1.GetOptions{})
 
-	if URROwnerAuthority.Status.Enabled {
+	if URROwnerSite.Status.Enabled {
 		// Check whether the request for user registration approved
 		if URRCopy.Status.Approved {
 			// Check again if the email address is already taken
 			exist := t.checkDuplicateObject(URRCopy)
 			if !exist {
-				// Create a user on authority
+				// Create a user on site
 				user := apps_v1alpha.User{}
 				user.SetName(URRCopy.GetName())
 				user.Spec.Bio = URRCopy.Spec.Bio
@@ -278,10 +278,10 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 			}
 		}
 		if !exist {
-			// To check email address given at authorityRequest
-			authorityRequestRaw, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{})
-			for _, authorityRequestRow := range authorityRequestRaw.Items {
-				if authorityRequestRow.Spec.Contact.Email == URRCopy.Spec.Email {
+			// To check email address given at SRR
+			SRRRaw, _ := t.edgenetClientset.AppsV1alpha().SiteRegistrationRequests().List(metav1.ListOptions{})
+			for _, SRRRow := range SRRRaw.Items {
+				if SRRRow.Spec.Contact.Email == URRCopy.Spec.Email {
 					exist = true
 				}
 			}

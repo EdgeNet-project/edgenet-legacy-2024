@@ -34,10 +34,10 @@ import (
 
 // commonData to have the common data
 type commonData struct {
-	Authority string
-	Username  string
-	Name      string
-	Email     []string
+	Site     string
+	Username string
+	Name     string
+	Email    []string
 }
 
 // CommonContentData to set the common variables
@@ -50,7 +50,7 @@ type ResourceAllocationData struct {
 	CommonData commonData
 	Name       string
 	Namespace  string
-	Authority  string
+	Site       string
 }
 
 // LoginContentData to set the login-specific variables
@@ -102,29 +102,29 @@ func Send(subject string, contentData interface{}) {
 	var body bytes.Buffer
 	switch subject {
 	case "login":
-		to, body = setLoginContent(contentData, smtpServer.From)
+		to, body = setLoginContent(contentData)
 	case "user-email-verification":
-		to, body = setUserEmailVerificationContent(contentData, smtpServer.From)
+		to, body = setUserEmailVerificationContent(contentData)
 	case "user-email-verified-alert":
-		to, body = setUserVerifiedAlertContent(contentData, smtpServer.From)
+		to, body = setUserVerifiedAlertContent(contentData)
 		if len(to) == 0 {
 			to = []string{smtpServer.To}
 		}
 	case "user-registration-successful":
-		to, body = setUserRegistrationContent(contentData, smtpServer.From)
-	case "authority-email-verification":
-		to, body = setAuthorityEmailVerificationContent(contentData, smtpServer.From)
-	case "authority-email-verified-alert":
-		_, body = setAuthorityVerifiedAlertContent(contentData, smtpServer.From)
+		to, body = setUserRegistrationContent(contentData)
+	case "site-email-verification":
+		to, body = setSiteEmailVerificationContent(contentData)
+	case "site-email-verified-alert":
+		_, body = setSiteVerifiedAlertContent(contentData)
 		to = []string{smtpServer.To}
-	case "authority-creation-successful":
-		to, body = setAuthorityRequestContent(contentData, smtpServer.From)
+	case "site-registration-successful":
+		to, body = setSiteRegistrationContent(contentData)
 	case "acceptable-use-policy-renewal":
-		to, body = setAUPRenewalContent(contentData, smtpServer.From)
+		to, body = setAUPRenewalContent(contentData)
 	case "slice-invitation":
-		to, body = setSliceInvitationContent(contentData, smtpServer.From)
-	case "team-invitation":
-		to, body = setTeamInvitationContent(contentData, smtpServer.From)
+		to, body = setSliceInvitationContent(contentData)
+	case "project-invitation":
+		to, body = setProjectInvitationContent(contentData)
 	}
 
 	// Create a new Client connected to the SMTP server
@@ -185,41 +185,27 @@ func Send(subject string, contentData interface{}) {
 }
 
 // setCommonEmailHeaders to create an email body by subject and common headers
-func setCommonEmailHeaders(subject string, from string, to []string, delimiter string) bytes.Buffer {
-	var headerTo string
-	for i, addr := range to {
-		if i == 0 {
-			headerTo = addr
-		} else {
-			headerTo = fmt.Sprintf("%s, %s", headerTo, addr)
-		}
-	}
-
+func setCommonEmailHeaders(subject string, delimiter string) bytes.Buffer {
 	var body bytes.Buffer
-	headers := fmt.Sprintf("From: %s\r\n", from)
-	headers += fmt.Sprintf("To: %s\r\n", headerTo)
-	headers += fmt.Sprintf("Subject: %s\r\n", subject)
-	headers += "MIME-Version: 1.0\r\n"
+	headers := "MIME-Version: 1.0\r\n"
 	headers += fmt.Sprintf("Content-Type: multipart/mixed; boundary=\"%s\"\r\n", delimiter)
 	headers += fmt.Sprintf("\r\n--%s\r\n", delimiter)
 	headers += "Content-Type: text/html; charset=\"utf-8\"\r\n"
 	headers += "Content-Transfer-Encoding: 7bit\r\n"
+	body.Write([]byte(fmt.Sprintf("Subject: %s\n%s\n\n", subject, headers)))
 
-	log.Println(headers)
-	//body.Write([]byte(fmt.Sprintf("Subject: %s\n%s\n\n", subject, headers)))
-	body.Write([]byte(headers))
 	return body
 }
 
 // setLoginContent to create an email body related to the user login activity
-func setLoginContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+func setLoginContent(contentData interface{}) ([]string, bytes.Buffer) {
 	loginData := contentData.(LoginContentData)
 	// This represents receivers' email addresses
 	to := loginData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/web-token.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("Logged In - Web Token Delivery", from, to, delimiter)
+	body := setCommonEmailHeaders("Logged In - Web Token Delivery", delimiter)
 	t.Execute(&body, loginData)
 
 	headers := fmt.Sprintf("\r\n--%s\r\n", delimiter)
@@ -228,7 +214,7 @@ func setLoginContent(contentData interface{}, from string) ([]string, bytes.Buff
 	headers += "Content-Disposition: attachment;filename=\"edgenet-web-kubeconfig.cfg\"\r\n"
 	// Read the kubeconfig file created for web authentication
 	// It will be in the attachment of email
-	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet-authority-%s-%s-webauth.cfg", loginData.CommonData.Authority,
+	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet-site-%s-%s-webauth.cfg", loginData.CommonData.Site,
 		loginData.CommonData.Username))
 	if fileErr != nil {
 		log.Panic(fileErr)
@@ -239,99 +225,99 @@ func setLoginContent(contentData interface{}, from string) ([]string, bytes.Buff
 	return to, body
 }
 
-// setTeamInvitationContent to create an email body related to the team invitation
-func setTeamInvitationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
-	teamData := contentData.(ResourceAllocationData)
+// setProjectInvitationContent to create an email body related to the project invitation
+func setProjectInvitationContent(contentData interface{}) ([]string, bytes.Buffer) {
+	projectData := contentData.(ResourceAllocationData)
 	// This represents receivers' email addresses
-	to := teamData.CommonData.Email
+	to := projectData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/team-invitation.html")
+	t, _ := template.ParseFiles("../../assets/templates/email/project-invitation.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("New Team Invitation", from, to, delimiter)
-	t.Execute(&body, teamData)
+	body := setCommonEmailHeaders("New Project Invitation", delimiter)
+	t.Execute(&body, projectData)
 
 	return to, body
 }
 
 // setSliceInvitationContent to create an email body related to the slice invitation
-func setSliceInvitationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+func setSliceInvitationContent(contentData interface{}) ([]string, bytes.Buffer) {
 	sliceData := contentData.(ResourceAllocationData)
 	// This represents receivers' email addresses
 	to := sliceData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/slice-invitation.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("New Slice Invitation", from, to, delimiter)
+	body := setCommonEmailHeaders("New Slice Invitation", delimiter)
 	t.Execute(&body, sliceData)
 
 	return to, body
 }
 
 // setAUPRenewalContent to create an email body related to the acceptable use policy renewal
-func setAUPRenewalContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+func setAUPRenewalContent(contentData interface{}) ([]string, bytes.Buffer) {
 	AUPData := contentData.(CommonContentData)
 	// This represents receivers' email addresses
 	to := AUPData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-renewal.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("Acceptable Use Policy Expiring", from, to, delimiter)
+	body := setCommonEmailHeaders("Acceptable Use Policy Expiring", delimiter)
 	t.Execute(&body, AUPData)
 
 	return to, body
 }
 
-// setAuthorityRequestContent to create an email body related to the authority creation activity
-func setAuthorityRequestContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+// setSiteRegistrationContent to create an email body related to the site registration activity
+func setSiteRegistrationContent(contentData interface{}) ([]string, bytes.Buffer) {
 	registrationData := contentData.(CommonContentData)
 	// This represents receivers' email addresses
 	to := registrationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/authority-creation.html")
+	t, _ := template.ParseFiles("../../assets/templates/email/site-registration.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("Authority Successfully Created", from, to, delimiter)
+	body := setCommonEmailHeaders("Site Registration Successful", delimiter)
 	t.Execute(&body, registrationData)
 
 	return to, body
 }
 
-// setAuthorityEmailVerificationContent to create an email body related to the email verification
-func setAuthorityEmailVerificationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+// setSiteEmailVerificationContent to create an email body related to the email verification
+func setSiteEmailVerificationContent(contentData interface{}) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verify.html")
+	t, _ := template.ParseFiles("../../assets/templates/email/site-email-verify.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("Authority Request - Email Verification", from, to, delimiter)
+	body := setCommonEmailHeaders("Site Registration - Email Verification", delimiter)
 	t.Execute(&body, verificationData)
 
 	return to, body
 }
 
-// setAuthorityVerifiedAlertContent to create an email body related to the email verified alert
-func setAuthorityVerifiedAlertContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+// setSiteVerifiedAlertContent to create an email body related to the email verified alert
+func setSiteVerifiedAlertContent(contentData interface{}) ([]string, bytes.Buffer) {
 	alertData := contentData.(CommonContentData)
 	// This represents receivers' email addresses
 	to := alertData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verified-alert.html")
+	t, _ := template.ParseFiles("../../assets/templates/email/site-email-verified-alert.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("Authority Request - Email Verified", from, to, delimiter)
+	body := setCommonEmailHeaders("Site Registration - Email Verified", delimiter)
 	t.Execute(&body, alertData)
 
 	return to, body
 }
 
 // setUserRegistrationContent to create an email body related to the user registration activity
-func setUserRegistrationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+func setUserRegistrationContent(contentData interface{}) ([]string, bytes.Buffer) {
 	registrationData := contentData.(CommonContentData)
 	// This represents receivers' email addresses
 	to := registrationData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/user-registration.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("User Registration Successful", from, to, delimiter)
+	body := setCommonEmailHeaders("User Registration Successful", delimiter)
 	t.Execute(&body, registrationData)
 
 	headers := fmt.Sprintf("\r\n--%s\r\n", delimiter)
@@ -340,7 +326,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 	headers += "Content-Disposition: attachment;filename=\"edgenet-kubeconfig.cfg\"\r\n"
 	// Read the kubeconfig file created for web authentication
 	// It will be in the attachment of email
-	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet-authority-%s-%s.cfg", registrationData.CommonData.Authority,
+	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet-site-%s-%s.cfg", registrationData.CommonData.Site,
 		registrationData.CommonData.Username))
 	if fileErr != nil {
 		log.Panic(fileErr)
@@ -352,28 +338,28 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 }
 
 // setUserEmailVerificationContent to create an email body related to the email verification
-func setUserEmailVerificationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+func setUserEmailVerificationContent(contentData interface{}) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/user-email-verify.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("Signed Up - Email Verification", from, to, delimiter)
+	body := setCommonEmailHeaders("Signed Up - Email Verification", delimiter)
 	t.Execute(&body, verificationData)
 
 	return to, body
 }
 
 // setUserVerifiedAlertContent to create an email body related to the email verified alert
-func setUserVerifiedAlertContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+func setUserVerifiedAlertContent(contentData interface{}) ([]string, bytes.Buffer) {
 	alertData := contentData.(CommonContentData)
 	// This represents receivers' email addresses
 	to := alertData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/user-email-verified-alert.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("User Email Verified", from, to, delimiter)
+	body := setCommonEmailHeaders("User Email Verified", delimiter)
 	t.Execute(&body, alertData)
 
 	return to, body
