@@ -486,7 +486,7 @@ type NodeContribution struct {
 type NodeContributionSpec struct {
 	Host        string        `json:"host"`
 	Port        int           `json:"port"`
-	User        string        `json:"user"`
+	Username    string        `json:"username"`
 	Password    string        `json:"password"`
 	Enabled     bool          `json:"enabled"`
 	Limitations []Limitations `json:"limitations"`
@@ -500,8 +500,8 @@ type Limitations struct {
 
 // NodeContributionStatus is the status for a node contribution
 type NodeContributionStatus struct {
-	State   string   `json:"state"`
-	Message []string `json:"message"`
+	State   string `json:"state"`
+	Message string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

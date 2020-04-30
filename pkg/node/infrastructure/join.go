@@ -84,7 +84,7 @@ func CreateToken(clientset clientset.Interface, duration time.Duration, hostname
 		}
 	}
 
-	joinCommand := fmt.Sprintf("kubeadm join %s --token %s --discovery-token-ca-cert-hash %s --cri-socket /var/run/docker.sock", server, tokens[0].Token.String(), CA)
+	joinCommand := fmt.Sprintf("kubeadm join %s --token %s --discovery-token-ca-cert-hash %s", server, tokens[0].Token.String(), CA)
 	return joinCommand, nil
 }
 
@@ -92,12 +92,12 @@ func getHosts(client *namecheap.Client) namecheap.DomainDNSGetHostsResult {
 	hostsResponse, err := client.DomainsDNSGetHosts("edge-net", "io")
 	if err != nil {
 		log.Println(err.Error())
-		return namecheap.DomainDNSGetHostsResult{}
+		panic(err.Error())
 	}
 	responseJSON, err := json.Marshal(hostsResponse)
 	if err != nil {
 		log.Println(err.Error())
-		return namecheap.DomainDNSGetHostsResult{}
+		panic(err.Error())
 	}
 	hostList := namecheap.DomainDNSGetHostsResult{}
 	json.Unmarshal([]byte(responseJSON), &hostList)
@@ -124,8 +124,7 @@ func SetHostname(client *namecheap.Client, hostRecord namecheap.DomainDNSHost) (
 	setResponse, err := client.DomainDNSSetHosts("edge-net", "io", hostList.Hosts)
 	if err != nil {
 		log.Println(err.Error())
-		log.Printf("Set host failed: %s - %s", hostRecord.Name, hostRecord.Address)
-		return false, "failed"
+		panic(err.Error())
 	} else if setResponse.IsSuccess == false {
 		log.Printf("Set host unknown problem: %s - %s", hostRecord.Name, hostRecord.Address)
 		return false, "unknown"

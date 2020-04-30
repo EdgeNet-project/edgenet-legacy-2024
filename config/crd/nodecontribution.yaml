@@ -59,7 +59,7 @@ spec:
             port:
               type: integer
               minimum: 1
-            user:
+            username:
               type: string
             password:
               type: string
