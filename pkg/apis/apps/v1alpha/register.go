@@ -67,8 +67,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&SliceList{},
 		&Project{},
 		&ProjectList{},
-		&NodeContribution{},
-		&NodeContributionList{},
 	)
 
 	// Register the type in the scheme
