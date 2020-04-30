@@ -233,7 +233,7 @@ func setProjectInvitationContent(contentData interface{}) ([]string, bytes.Buffe
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/project-invitation.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("New Project Invitation", delimiter)
+	body := setCommonEmailHeaders("New Project Created", delimiter)
 	t.Execute(&body, projectData)
 
 	return to, body
@@ -247,7 +247,7 @@ func setSliceInvitationContent(contentData interface{}) ([]string, bytes.Buffer)
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/slice-invitation.html")
 	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("New Slice Invitation", delimiter)
+	body := setCommonEmailHeaders("New Slice Created", delimiter)
 	t.Execute(&body, sliceData)
 
 	return to, body

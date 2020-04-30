@@ -174,8 +174,8 @@ func (t *Handler) createRoleBindings(projectChildNamespaceStr string, projectCop
 			contentData.CommonData.Email = []string{user.Spec.Email}
 			contentData.Site = ownerSite
 			contentData.Name = projectCopy.GetName()
-			contentData.Namespace = projectChildNamespaceStr
-			mailer.Send("project-invitation", contentData)
+			contentData.Namespace = projectCopy.GetNamespace()
+			mailer.Send("project-creation", contentData)
 		}
 	}
 	// To create the rolebindings for the users who are PI and managers of the site
@@ -191,8 +191,8 @@ func (t *Handler) createRoleBindings(projectChildNamespaceStr string, projectCop
 				contentData.CommonData.Email = []string{userRow.Spec.Email}
 				contentData.Site = ownerSite
 				contentData.Name = projectCopy.GetName()
-				contentData.Namespace = projectChildNamespaceStr
-				mailer.Send("project-invitation", contentData)
+				contentData.Namespace = projectCopy.GetNamespace()
+				mailer.Send("project-creation", contentData)
 			}
 		}
 	}
