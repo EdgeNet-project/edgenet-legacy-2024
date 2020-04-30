@@ -1,19 +1,3 @@
-/*
-Copyright 2020 Sorbonne Université
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package site
 
 import (
@@ -51,7 +35,7 @@ type informerevent struct {
 	function string
 }
 
-// Constant variables for events
+// Definitions of the site CRD
 const create = "create"
 const update = "update"
 const delete = "delete"
@@ -95,6 +79,7 @@ func Start() {
 			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.Site).Status, newObj.(*apps_v1alpha.Site).Status) {
 				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 				event.function = update
+
 				log.Infof("Update site: %s", event.key)
 				if err == nil {
 					queue.Add(event)
@@ -121,9 +106,7 @@ func Start() {
 
 	// Cluster Roles for Sites
 	// Site PI
-	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users", "users/status", "userregistrationrequests",
-		"userregistrationrequests/status", "slices", "slices/status", "projects", "projects/status", "nodecontributions"}, Verbs: []string{"*"}},
-		{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"acceptableusepolicies"}, Verbs: []string{"get", "list"}}}
+	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users", "slices", "nodecontributions"}, Verbs: []string{"*"}}}
 	siteRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "site-pi"},
 		Rules: policyRule}
 	_, err = clientset.RbacV1().ClusterRoles().Create(siteRole)
@@ -131,9 +114,8 @@ func Start() {
 		log.Infof("Couldn't create site-pi cluster role: %s", err)
 	}
 	// Site Manager
-	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"userregistrationrequests", "userregistrationrequests/status",
-		"slices", "slices/status", "projects", "projects/status"}, Verbs: []string{"*"}},
-		{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users", "acceptableusepolicies"}, Verbs: []string{"get", "list"}}}
+	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices"}, Verbs: []string{"*"}},
+		{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users"}, Verbs: []string{"get", "list"}}}
 	siteRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "site-manager"},
 		Rules: policyRule}
 	_, err = clientset.RbacV1().ClusterRoles().Create(siteRole)
@@ -149,7 +131,7 @@ func Start() {
 		log.Infof("Couldn't create site-tech cluster role: %s", err)
 	}
 	// Site User
-	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "projects"}, Verbs: []string{"get", "list"}}}
+	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices"}, Verbs: []string{"get", "list"}}}
 	siteRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "site-user"},
 		Rules: policyRule}
 	_, err = clientset.RbacV1().ClusterRoles().Create(siteRole)
