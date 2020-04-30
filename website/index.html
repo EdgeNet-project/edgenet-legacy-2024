@@ -1,9 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
   <head>
     <title>EdgeNet Project | Kubernetes at the edge with multitenancy</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8" name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/base/jquery-ui.css" media="screen" rel="stylesheet" type="text/css" />
     <link href="css/frame.css" media="screen" rel="stylesheet" type="text/css" />
     <link href="css/controls.css" media="screen" rel="stylesheet" type="text/css" />
@@ -45,12 +44,12 @@
     <div class="content-container">
       <div class="content">
         <div class="content-table flex-column">
-          <!-- ************************************************************************************** -->
+          <!-------------------------------------------------------------------------------------------->
           <!--Start Intro-->
           <div class="flex-row">
             <div class="flex-item flex-column">
               <p class="text">
-                <img class="image-wrap-text-right max-width-400" alt="EdgeNet Logo" src="img/logo-big.png">
+                <img class="image-wrap-text-right max-width-400" src="img/logo-big.png">
                 Welcome to EdgeNet, the globally distributed edge cloud for Internet researchers.
                 EdgeNet is based on <em>industry-standard Cloud software</em>, using
                 <a href="https://www.docker.com/">Docker</a> for containerization and
@@ -61,19 +60,18 @@
             </div>
           </div>
           <!--End Intro-->
-          <!-- ************************************************************************************** -->
-          <!--Start Registration-->
+          <!-------------------------------------------------------------------------------------------->
+          <!--Start Text Only-->
           <div class="flex-row">
             <div class="flex-item flex-item-stretch flex-column">
               <p class="text">
                 You are an established researcher at a public or private institution,
                 and you are prepared to authorize other people of your choosing to use EdgeNet,
-                while vouching for their responsible use of the infrastructure:
+                while vouching for their responsible use of the infrastructure
               </p>
               <div class="control-group">
-                <a class="custom-button custom-button-primary pulse-primary"
-                  href="https://headnode.edge-net.org/#/login?signup=authorityregistration">
-                  <span>Register an Authority</span>
+                <a href="https://headnode.edge-net.org/#/login?signup=authorityregistration">
+                  <button class="custom-button custom-button-primary pulse-primary"><span>Register an Authority</span></button>
                 </a>
               </div>
             </div>
@@ -83,16 +81,15 @@
                 or you work under their supervision or are their student:
               </p>
               <div class="control-group">
-                <a class="custom-button custom-button-primary pulse-primary"
-                  href="https://headnode.edge-net.org/#/login?signup=userregistration">
-                  <span>Sign Up as a User</span>
+                <a href="https://headnode.edge-net.org/#/login?signup=userregistration">
+                  <button class="custom-button custom-button-primary pulse-primary"><span>Sign Up as a User</span></button>
                 </a>
               </div>
             </div>
           </div>
-          <!--End Registration-->
-          <!-- ************************************************************************************** -->
-          <!--Start Contribution and Welcome Message-->
+          <!--End Text Only-->
+          <!-------------------------------------------------------------------------------------------->
+          <!--Start Text Only-->
           <div class="flex-row">
             <div class="flex-item flex-item-stretch flex-column">
               <p class="text">
@@ -101,9 +98,8 @@
                 colleagues contribute, the more of the global infrastructure you can use.
               </p>
               <div class="control-group">
-                <a class="custom-button custom-button-info pulse-info"
-                  href="https://headnode.edge-net.org/#/login?signup=nodecontribution">
-                  <span>Enroll a Node</span>
+                <a href="https://headnode.edge-net.org/#/login?signup=nodecontribution">
+                  <button class="custom-button custom-button-info pulse-info"><span>Enroll a Node</span></button>
                 </a>
               </div>
               <p class="text">
@@ -112,8 +108,10 @@
                 your own use. <br>
               </p>
               <div class="control-group">
-                <a class="custom-button-flat pulse-black" target="_blank" href="https://github.com/EdgeNet-project/">
-                  <img alt="EdgeNet GitHub" src="img/github.png"> <span>Visit EdgeNet's GitHub Repository</span>
+                <a target="_blank" href="https://github.com/EdgeNet-project/">
+                  <button class="custom-button-flat pulse-black">
+                    <img src="img/github.png"> <span>Visit EdgeNet's GitHub Repository</span>
+                  </button>
                 </a>
               </div>
               <p class="text">
@@ -126,9 +124,9 @@
                 ensure a smooth transition for you as well. </p>
             </div>
           </div>
-          <!--End Contribution and Welcome Message-->
-          <!-- ************************************************************************************** -->
-          <!--Start Table and Map of Node List-->
+          <!--End Intro-->
+          <!-------------------------------------------------------------------------------------------->
+          <!--Start Text with Images and Videos-->
           <div class="flex-row">
             <div class="flex-item flex-column">
               <h3 class="add-top-margin">Vantage Points</h3>
@@ -168,26 +166,26 @@
               </div>
             </div>
           </div>
-          <!--End Table and Map of Node List-->
-          <!-- ************************************************************************************** -->
+          <!--End Text with Images and Videos-->
+          <!-------------------------------------------------------------------------------------------->
           <!--Start Credits-->
           <div class="flex-row">
             <div class="flex-item flex-item-stretch flex-column">
-              <p class="text text-small text-italic">
+              <p class="text text-small text-italic"> 
                 EdgeNet is a joint project of <a href="https://www.us-ignite.org">US Ignite</a>,
-                the <a href="https://www.lip6.fr/">LIP6</a> lab at
+                the <a href="https://www.lip6.fr/">LIP6</a> lab at 
                 <a href="http://www.sorbonne-universite.fr/">Sorbonne University</a>,
                 <a href="https://engineering.nyu.edu/">the NYU Tandon School of Engineering</a>,
-                <a href="https://swarmlab.berkeley.edu/home">The Swarm Lab</a> at
+                <a href="https://swarmlab.berkeley.edu/home">The Swarm Lab</a> at 
                 <a href="https://www.berkeley.edu/">UC-Berkeley</a>,
-                <a href="https://www.uvic.ca/engineering/computerscience/">Computer Sciences department</a> at
+                <a href="https://www.uvic.ca/engineering/computerscience/">Computer Sciences department</a> at 
                 <a href="https://www.uvic.ca/">the University of Victoria</a>,
                 <a href="https://www.univie.ac.at/">the University of Vienna</a>, <a href="https://cslash.net/">Cslash</a>,
                 and <a href="https://sorbonne-universite.fr/en">Sorbonne University</a>. It has received funding from the
                 <a href="https://www.nsf.org/">National Science Foundation</a> under contract CNS-1820901 and through
                 a <a href="https://www.vmware.com/">VMware</a> donation to Sorbonne University.
                 Nodes are provided by the US <a href="https://geni.net">GENI</a> and
-                <a href="http://www.exogeni.net/">ExoGENI</a> projects, Canada’s
+                <a href="http://www.exogeni.net/">ExoGENI</a> projects, Canada’s 
                 <a href="https://www.savinetwork.ca/">Smart Applications on Virtual Infrastructure</a> project, and
                 <a href="https://www.planet-lab.eu/">PlanetLab Europe</a>. The cluster head node
                 is hosted by  <a href="https://www.planet-lab.eu/">PlanetLab Europe</a> , which administers the platform.
@@ -195,7 +193,7 @@
             </div>
           </div>
           <!--End Credits-->
-          <!-- ************************************************************************************** -->
+          <!-------------------------------------------------------------------------------------------->
         </div>
       </div>
     </div>

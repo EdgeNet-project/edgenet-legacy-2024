@@ -1,78 +1,80 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <title>Team Creation Support | EdgeNet Project</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="css/frame.css" media="screen" rel="stylesheet" type="text/css" />
-    <link href="css/controls.css" media="screen" rel="stylesheet" type="text/css" />
-    <link href="css/custom.css" media="screen" rel="stylesheet" type="text/css" />
-    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
-    <link href='https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300,700' rel='stylesheet' type='text/css'>
-    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700" rel="stylesheet">
-    <link rel="apple-touch-icon" sizes="57x57" href="img/favicon/apple-icon-57x57.png">
-    <link rel="apple-touch-icon" sizes="60x60" href="img/favicon/apple-icon-60x60.png">
-    <link rel="apple-touch-icon" sizes="72x72" href="img/favicon/apple-icon-72x72.png">
-    <link rel="apple-touch-icon" sizes="76x76" href="img/favicon/apple-icon-76x76.png">
-    <link rel="apple-touch-icon" sizes="114x114" href="img/favicon/apple-icon-114x114.png">
-    <link rel="apple-touch-icon" sizes="120x120" href="img/favicon/apple-icon-120x120.png">
-    <link rel="apple-touch-icon" sizes="144x144" href="img/favicon/apple-icon-144x144.png">
-    <link rel="apple-touch-icon" sizes="152x152" href="img/favicon/apple-icon-152x152.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="img/favicon/apple-icon-180x180.png">
-    <link rel="icon" type="image/png" sizes="192x192"  href="img/favicon/android-icon-192x192.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="96x96" href="img/favicon/favicon-96x96.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="img/favicon/favicon-16x16.png">
-    <link rel="manifest" href="img/favicon/manifest.json">
-    <meta name="msapplication-TileColor" content="#ffffff">
-    <meta name="msapplication-TileImage" content="favicon/ms-icon-144x144.png">
-    <meta name="theme-color" content="#ffffff">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
-    <script src="js/menu.js"></script>
-    <style>
-      .menu-supports {
-        color: rgb(96, 134, 214) !important;
-        opacity: 1 !important;
-        font-weight: 700 !important;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="menu-container"></div>
-    <div class="content-container">
-      <div class="content">
-        <div class="content-table flex-column">
-          <!-- ************************************************************************************** -->
-          <div class="flex-row">
-            <div class="flex-item flex-column">
-              <h1 id="create-a-team-in-edgenet">Create a team in EdgeNet</h1>
-              <p>In EdgeNet, an authority-admin or manager can directly create a team that empowers participants to create slices. Participants, ie users, may belong to different authorities.</p>
-              <h2 id="technologies-you-will-use">Technologies you will use</h2>
-              <p>The technology that you will use is <a href="https://kubernetes.io/">Kubernetes</a>, to create
-              and manipulate objects in EdgeNet. Furthermore, you will use <a href="https://kubernetes.io/docs/reference/kubectl/overview/">kubectl</a>, which is the Kubernetes command-line interface
-              tool, to create a team.</p>
-              <h2 id="how-to-do-">How to do?</h2>
-              <p>You will use your EdgeNet kubeconfig file to create a team.</p>
-              <h3 id="create-a-team">Create a team</h3>
-              <p>This object must include a team name consisting of <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/names/">allowed characters</a>, users that include username and authority to which username belongs, and team description. Here is an example:</p>
-              <pre class="pre"><code class="lang-yaml"><span class="hljs-symbol">apiVersion:</span> apps.edgenet.io/v1alpha
-              <span class="hljs-symbol">kind:</span> Team
-              <span class="hljs-symbol">metadata:</span>
-              <span class="hljs-symbol">  name:</span> <span class="hljs-params">&lt;your team name&gt;</span>
-              <span class="hljs-symbol">spec:</span>
-              <span class="hljs-symbol">  users:</span>
-                  - authority: <span class="hljs-params">&lt;authority name&gt;</span>
-              <span class="hljs-symbol">      username:</span> <span class="hljs-params">&lt;username&gt;</span>
-              <span class="hljs-symbol">  description:</span> <span class="hljs-params">&lt;team description&gt;</span>
-              </code></pre>
-              <pre class="pre"><code>kubectl <span class="hljs-built_in">create</span> -f ./team.yaml <span class="hljs-comment">--kubeconfig ./your-kubeconfig.cfg</span>
-              </code></pre><h3 id="notification-process">Notification process</h3>
-              <p>At this point, the authority-admin(s) and manager(s) of the authority on which team created and the participants of the team get their invitations by email containing team information.</p>
-            </div>
+<html>
+
+<head>
+  <title>Team Creation Support | EdgeNet Project</title>
+  <meta charset="utf-8" name="viewport" content="width=device-width, initial-scale=1">
+  <link href="css/frame.css" media="screen" rel="stylesheet" type="text/css" />
+  <link href="css/controls.css" media="screen" rel="stylesheet" type="text/css" />
+  <link href="css/custom.css" media="screen" rel="stylesheet" type="text/css" />
+  <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+  <link href='https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300,700' rel='stylesheet' type='text/css'>
+  <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700" rel="stylesheet">
+  <link rel="apple-touch-icon" sizes="57x57" href="img/favicon/apple-icon-57x57.png">
+  <link rel="apple-touch-icon" sizes="60x60" href="img/favicon/apple-icon-60x60.png">
+  <link rel="apple-touch-icon" sizes="72x72" href="img/favicon/apple-icon-72x72.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="img/favicon/apple-icon-76x76.png">
+  <link rel="apple-touch-icon" sizes="114x114" href="img/favicon/apple-icon-114x114.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="img/favicon/apple-icon-120x120.png">
+  <link rel="apple-touch-icon" sizes="144x144" href="img/favicon/apple-icon-144x144.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="img/favicon/apple-icon-152x152.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="img/favicon/apple-icon-180x180.png">
+  <link rel="icon" type="image/png" sizes="192x192"  href="img/favicon/android-icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="img/favicon/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="img/favicon/favicon-96x96.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="img/favicon/favicon-16x16.png">
+  <link rel="manifest" href="img/favicon/manifest.json">
+  <meta name="msapplication-TileColor" content="#ffffff">
+  <meta name="msapplication-TileImage" content="favicon/ms-icon-144x144.png">
+  <meta name="theme-color" content="#ffffff">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script src="js/menu.js"></script>
+  <style>
+    .menu-supports {
+      color: rgb(96, 134, 214) !important;
+      opacity: 1 !important;
+      font-weight: 700 !important;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="menu-container"></div>
+  <div class="content-container">
+    <div class="content">
+      <div class="content-table flex-column">
+        <!-------------------------------------------------------------------------------------------->
+        <div class="flex-row">
+          <div class="flex-item flex-column">
+            <h1 id="create-a-team-in-edgenet">Create a team in EdgeNet</h1>
+            <p>In EdgeNet, an authority-admin or manager can directly create a team that empowers participants to create slices. Participants, ie users, may belong to different authorities.</p>
+            <h2 id="technologies-you-will-use">Technologies you will use</h2>
+            <p>The technology that you will use is <a href="https://kubernetes.io/">Kubernetes</a>, to create
+            and manipulate objects in EdgeNet. Furthermore, you will use <a href="https://kubernetes.io/docs/reference/kubectl/overview/">kubectl</a>, which is the Kubernetes command-line interface
+            tool, to create a team.</p>
+            <h2 id="how-to-do-">How to do?</h2>
+            <p>You will use your EdgeNet kubeconfig file to create a team.</p>
+            <h3 id="create-a-team">Create a team</h3>
+            <p>This object must include a team name consisting of <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/names/">allowed characters</a>, users that include username and authority to which username belongs, and team description. Here is an example:</p>
+            <pre class="pre"><code class="lang-yaml"><span class="hljs-symbol">apiVersion:</span> apps.edgenet.io/v1alpha
+            <span class="hljs-symbol">kind:</span> Team
+            <span class="hljs-symbol">metadata:</span>
+            <span class="hljs-symbol">  name:</span> <span class="hljs-params">&lt;your team name&gt;</span>
+            <span class="hljs-symbol">spec:</span>
+            <span class="hljs-symbol">  users:</span>
+                - authority: <span class="hljs-params">&lt;authority name&gt;</span>
+            <span class="hljs-symbol">      username:</span> <span class="hljs-params">&lt;username&gt;</span>
+            <span class="hljs-symbol">  description:</span> <span class="hljs-params">&lt;team description&gt;</span>
+            </code></pre>
+            <pre class="pre"><code>kubectl <span class="hljs-built_in">create</span> -f ./team.yaml <span class="hljs-comment">--kubeconfig ./your-kubeconfig.cfg</span>
+            </code></pre><h3 id="notification-process">Notification process</h3>
+            <p>At this point, the authority-admin(s) and manager(s) of the authority on which team created and the participants of the team get their invitations by email containing team information.</p>
           </div>
-          <!-- ************************************************************************************** -->
         </div>
+        <!-------------------------------------------------------------------------------------------->
       </div>
     </div>
-  </body>
+  </div>
+</body>
+
 </html>
