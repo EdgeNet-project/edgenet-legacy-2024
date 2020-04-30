@@ -89,15 +89,13 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				SRRObj.Status.EmailVerify = true
 				t.edgenetClientset.AppsV1alpha().SiteRegistrationRequests().UpdateStatus(SRRObj)
 				// Send email to inform admins of the cluster
-				t.sendEmail("site-email-verified-alert", EVCopy.Spec.Identifier, EVOwnerNamespace.GetName(), SRRObj.Spec.Contact.Username,
-					fmt.Sprintf("%s %s", SRRObj.Spec.Contact.FirstName, SRRObj.Spec.Contact.LastName))
+				t.sendEmail("site-email-verified-alert", EVCopy.Spec.Identifier, EVOwnerNamespace.GetName(), "")
 			} else if strings.ToLower(EVCopy.Spec.Kind) == "user" {
 				URRObj, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(EVCopy.GetNamespace()).Get(EVCopy.Spec.Identifier, metav1.GetOptions{})
 				URRObj.Status.EmailVerify = true
 				t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRObj.GetNamespace()).UpdateStatus(URRObj)
 				// Send email to inform PIs and managers
-				t.sendEmail("user-email-verified-alert", EVOwnerNamespace.Labels["site-name"], EVOwnerNamespace.GetName(), EVCopy.Spec.Identifier,
-					fmt.Sprintf("%s %s", URRObj.Spec.FirstName, URRObj.Spec.LastName))
+				t.sendEmail("user-email-verified-alert", EVOwnerNamespace.Labels["site-name"], EVOwnerNamespace.GetName(), EVCopy.Spec.Identifier)
 			}
 			// Delete the unique email verification object as it gets verified
 			t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(EVCopy.GetName(), &metav1.DeleteOptions{})
@@ -156,14 +154,12 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 				SRRObj, _ := t.edgenetClientset.AppsV1alpha().SiteRegistrationRequests().Get(EVCopy.Spec.Identifier, metav1.GetOptions{})
 				SRRObj.Status.EmailVerify = true
 				t.edgenetClientset.AppsV1alpha().SiteRegistrationRequests().UpdateStatus(SRRObj)
-				t.sendEmail("site-email-verified-alert", EVCopy.Spec.Identifier, EVOwnerNamespace.GetName(), SRRObj.Spec.Contact.Username,
-					fmt.Sprintf("%s %s", SRRObj.Spec.Contact.FirstName, SRRObj.Spec.Contact.LastName))
+				t.sendEmail("site-email-verified-alert", EVCopy.Spec.Identifier, EVOwnerNamespace.GetName(), "")
 			} else if strings.ToLower(EVCopy.Spec.Kind) == "user" {
 				URRObj, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(EVCopy.GetNamespace()).Get(EVCopy.Spec.Identifier, metav1.GetOptions{})
 				URRObj.Status.EmailVerify = true
 				t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRObj.GetNamespace()).UpdateStatus(URRObj)
-				t.sendEmail("user-email-verified-alert", EVOwnerNamespace.Labels["site-name"], EVOwnerNamespace.GetName(), EVCopy.Spec.Identifier,
-					fmt.Sprintf("%s %s", URRObj.Spec.FirstName, URRObj.Spec.LastName))
+				t.sendEmail("user-email-verified-alert", EVOwnerNamespace.Labels["site-name"], EVOwnerNamespace.GetName(), EVCopy.Spec.Identifier)
 			}
 			t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(EVCopy.GetName(), &metav1.DeleteOptions{})
 		} else {
@@ -188,12 +184,11 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // sendEmail to send notification to PIs and managers about email verification
-func (t *Handler) sendEmail(kind, site, namespace, username, fullname string) {
+func (t *Handler) sendEmail(kind, site, namespace, username string) {
 	// Set the HTML template variables
 	contentData := mailer.CommonContentData{}
 	contentData.CommonData.Site = site
 	contentData.CommonData.Username = username
-	contentData.CommonData.Name = fullname
 	contentData.CommonData.Email = []string{}
 	if kind == "user-email-verified-alert" {
 		// Put the email addresses of the site PI and managers in the email to be sent list
