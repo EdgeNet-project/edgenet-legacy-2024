@@ -40,10 +40,13 @@ spec:
       JSONPath: .spec.roles
     - name: AUP
       type: boolean
-      JSONPath: .status.aup
+      JSONPath: .status.aup.accepted
     - name: Active
       type: boolean
       JSONPath: .status.active
+    - name: Approved
+      type: boolean
+      JSONPath: .status.approved
     - name: Age
       type: date
       JSONPath: .metadata.creationTimestamp
@@ -76,6 +79,7 @@ spec:
               items:
                 type: string
                 enum:
+                  - Admin
                   - PI
                   - Manager
                   - Tech
