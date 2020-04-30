@@ -137,7 +137,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 		if fieldUpdated.users || fieldUpdated.enabled {
 			// Delete all existing role bindings in the team (child) namespace
 			t.clientset.RbacV1().RoleBindings(teamChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
-			// Create rolebindings according to the users who participate in the team and are authority-admin and managers of the authority
+			// Create rolebindings according to the users who participate in the team and are PI and managers of the authority
 			t.createRoleBindings(teamChildNamespaceStr, teamCopy, teamOwnerNamespace.Labels["authority-name"])
 			// Update the owner references of the team
 			teamOwnerReferences, _ := t.setOwnerReferences(teamCopy)
@@ -176,11 +176,11 @@ func (t *Handler) createRoleBindings(teamChildNamespaceStr string, teamCopy *app
 			mailer.Send("team-invitation", contentData)
 		}
 	}
-	// To create the rolebindings for the users who are authority-admin and managers of the authority
+	// To create the rolebindings for the users who are PI and managers of the authority
 	userRaw, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", ownerAuthority)).List(metav1.ListOptions{})
 	if err == nil {
 		for _, userRow := range userRaw.Items {
-			if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "admin") || containsRole(userRow.Spec.Roles, "manager")) {
+			if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "pi") || containsRole(userRow.Spec.Roles, "manager")) {
 				registration.CreateRoleBindingsByRoles(userRow.DeepCopy(), teamChildNamespaceStr, "Team")
 				contentData := mailer.ResourceAllocationData{}
 				contentData.CommonData.Authority = ownerAuthority

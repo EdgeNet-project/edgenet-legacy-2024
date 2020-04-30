@@ -95,7 +95,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				URRObj, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(EVCopy.GetNamespace()).Get(EVCopy.Spec.Identifier, metav1.GetOptions{})
 				URRObj.Status.EmailVerify = true
 				t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRObj.GetNamespace()).UpdateStatus(URRObj)
-				// Send email to inform authority-admins and managers
+				// Send email to inform PIs and managers
 				t.sendEmail("user-email-verified-alert", EVOwnerNamespace.Labels["authority-name"], EVOwnerNamespace.GetName(), EVCopy.Spec.Identifier,
 					fmt.Sprintf("%s %s", URRObj.Spec.FirstName, URRObj.Spec.LastName))
 			}
@@ -187,7 +187,7 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// Mail notification, TBD
 }
 
-// sendEmail to send notification to authority-admins and managers about email verification
+// sendEmail to send notification to PIs and managers about email verification
 func (t *Handler) sendEmail(kind, authority, namespace, username, fullname string) {
 	// Set the HTML template variables
 	contentData := mailer.CommonContentData{}
@@ -196,11 +196,11 @@ func (t *Handler) sendEmail(kind, authority, namespace, username, fullname strin
 	contentData.CommonData.Name = fullname
 	contentData.CommonData.Email = []string{}
 	if kind == "user-email-verified-alert" {
-		// Put the email addresses of the authority-admins and managers in the email to be sent list
+		// Put the email addresses of the authority PI and managers in the email to be sent list
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(namespace).List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
 			for _, userRole := range userRow.Spec.Roles {
-				if strings.ToLower(userRole) == "admin" || strings.ToLower(userRole) == "manager" {
+				if strings.ToLower(userRole) == "pi" || strings.ToLower(userRole) == "manager" {
 					contentData.CommonData.Email = append(contentData.CommonData.Email, userRow.Spec.Email)
 				}
 			}

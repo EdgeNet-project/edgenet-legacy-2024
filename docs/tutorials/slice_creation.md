@@ -1,6 +1,6 @@
 # Create a slice in EdgeNet
 
-In EdgeNet, an authority-admin or manager can directly create a slice that is a workspace to deploy applications towards the cluster. There are three slice profiles, which are Low, Medium, and High, that directly impacts on the Slice expiration date and resource quota on the namespace. Participants, ie users, may belong to different authorities.
+In EdgeNet, a PI or manager can directly create a slice that is a workspace to deploy applications towards the cluster. There are three slice profiles, which are Low, Medium, and High, that directly impacts on the Slice expiration date and resource quota on the namespace. Participants, ie users, may belong to different authorities.
 
 ## Technologies you will use
 The technology that you will use is [Kubernetes](https://kubernetes.io/), to create
@@ -35,4 +35,4 @@ kubectl create -f ./slice.yaml --kubeconfig ./your-kubeconfig.cfg
 
 ### Notification process
 
-At this point, the authority-admin(s) and manager(s) of the authority on which slice created and the participants of the slice get their invitations by email containing slice information.
+At this point, the PI(s) and manager(s) of the authority on which slice created and the participants of the slice get their invitations by email containing slice information.

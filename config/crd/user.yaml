@@ -76,7 +76,7 @@ spec:
               items:
                 type: string
                 enum:
-                  - Admin
+                  - PI
                   - Manager
                   - Tech
                   - User

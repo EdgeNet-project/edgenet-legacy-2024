@@ -135,7 +135,7 @@ func Start() {
 	}
 
 	// Cluster Roles for Slices
-	// Authority Admin
+	// Authority PI
 	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"selectivedeployments"}, Verbs: []string{"*"}},
 		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "replicationcontrollers", "services", "secrets"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"apps"}, Resources: []string{"daemonsets", "deployments", "replicasets", "statefulsets"}, Verbs: []string{"*"}},
@@ -144,11 +144,11 @@ func Start() {
 		{APIGroups: []string{"extensions"}, Resources: []string{"daemonsets", "deployments", "ingresses", "networkpolicies", "replicasets", "replicationcontrollers"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"networking.k8s.io"}, Resources: []string{"ingresses", "networkpolicies"}, Verbs: []string{"*"}},
 		{APIGroups: []string{""}, Resources: []string{"events", "controllerrevisions"}, Verbs: []string{"get", "list", "watch"}}}
-	sliceRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "slice-admin"},
+	sliceRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "slice-pi"},
 		Rules: policyRule}
 	_, err = clientset.RbacV1().ClusterRoles().Create(sliceRole)
 	if err != nil {
-		log.Infof("Couldn't create slice-admin cluster role: %s", err)
+		log.Infof("Couldn't create slice-pi cluster role: %s", err)
 	}
 	// Authority Manager
 	sliceRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "slice-manager"},
