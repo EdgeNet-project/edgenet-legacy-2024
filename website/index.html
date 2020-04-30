@@ -1,16 +1,23 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
     <title>EdgeNet Project | Kubernetes at the edge with multitenancy</title>
-    <meta charset="utf-8" name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/base/jquery-ui.css" media="screen" rel="stylesheet" type="text/css" />
-    <link href="css/frame.css" media="screen" rel="stylesheet" type="text/css" />
-    <link href="css/controls.css" media="screen" rel="stylesheet" type="text/css" />
-    <link href="css/widgets.css" media="screen" rel="stylesheet" type="text/css" />
-    <link href="css/custom.css" media="screen" rel="stylesheet" type="text/css" />
-    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
-    <link href='https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300,700' rel='stylesheet' type='text/css'>
-    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700" rel="stylesheet">
+    <link href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/base/jquery-ui.css"
+      media="screen"
+      rel="stylesheet"
+      type="text/css">
+    <link href="css/frame.css" media="screen" rel="stylesheet" type="text/css">
+    <link href="css/controls.css" media="screen" rel="stylesheet" type="text/css">
+    <link href="css/widgets.css" media="screen" rel="stylesheet" type="text/css">
+    <link href="css/custom.css" media="screen" rel="stylesheet" type="text/css">
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:400,700" rel="stylesheet"
+      type="text/css">
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300,700"
+      rel="stylesheet"
+      type="text/css">
+    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700"
+      rel="stylesheet">
     <link rel="apple-touch-icon" sizes="57x57" href="img/favicon/apple-icon-57x57.png">
     <link rel="apple-touch-icon" sizes="60x60" href="img/favicon/apple-icon-60x60.png">
     <link rel="apple-touch-icon" sizes="72x72" href="img/favicon/apple-icon-72x72.png">
@@ -20,7 +27,7 @@
     <link rel="apple-touch-icon" sizes="144x144" href="img/favicon/apple-icon-144x144.png">
     <link rel="apple-touch-icon" sizes="152x152" href="img/favicon/apple-icon-152x152.png">
     <link rel="apple-touch-icon" sizes="180x180" href="img/favicon/apple-icon-180x180.png">
-    <link rel="icon" type="image/png" sizes="192x192"  href="img/favicon/android-icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="img/favicon/android-icon-192x192.png">
     <link rel="icon" type="image/png" sizes="32x32" href="img/favicon/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="96x96" href="img/favicon/favicon-96x96.png">
     <link rel="icon" type="image/png" sizes="16x16" href="img/favicon/favicon-16x16.png">
@@ -32,96 +39,75 @@
     <script src="js/menu.js"></script>
     <script src="js/widgets.js"></script>
     <style>
-      .menu-index {
-        color: rgb(96, 134, 214) !important;
-        opacity: 1 !important;
-        font-weight: 700 !important;
-      }
-    </style>
+    .menu-index {
+      color: rgb(96, 134, 214) !important;
+      opacity: 1 !important;
+      font-weight: 700 !important;
+    }
+  </style>
   </head>
-  <body>
-    <div class="menu-container"></div>
+  <body><!-------------------------------------------------------------------------------------------->
+    <!--Start Intro-->
     <div class="content-container">
       <div class="content">
         <div class="content-table flex-column">
-          <!-------------------------------------------------------------------------------------------->
-          <!--Start Intro-->
           <div class="flex-row">
             <div class="flex-item flex-column">
-              <p class="text">
-                <img class="image-wrap-text-right max-width-400" src="img/logo-big.png">
-                Welcome to EdgeNet, the globally distributed edge cloud for Internet researchers.
-                EdgeNet is based on <em>industry-standard Cloud software</em>, using
-                <a href="https://www.docker.com/">Docker</a> for containerization and
-                <a href="https://kubernetes.io/">Kubernetes</a> for deployment and node management. <br><br>
-                As a <b>user</b>, deploy your Dockerized application across EdgeNet's
-                dozens of nodes within five minutes.
-              </p>
-            </div>
-          </div>
-          <!--End Intro-->
-          <!-------------------------------------------------------------------------------------------->
-          <!--Start Text Only-->
-          <div class="flex-row">
-            <div class="flex-item flex-item-stretch flex-column">
-              <p class="text">
-                You are an established researcher at a public or private institution,
-                and you are prepared to authorize other people of your choosing to use EdgeNet,
-                while vouching for their responsible use of the infrastructure
-              </p>
-              <div class="control-group">
-                <a href="https://headnode.edge-net.org/#/login?signup=authorityregistration">
-                  <button class="custom-button custom-button-primary pulse-primary"><span>Register an Authority</span></button>
-                </a>
+              <p class="text"> <img class="image-wrap-text-right max-width-400"
+                  src="img/logo-big.png">
+                Welcome to EdgeNet, the globally distributed edge cloud for
+                Internet researchers. EdgeNet is based on <em>industry-standard
+                  Cloud software</em>, using <a href="https://www.docker.com/">Docker</a>
+                for&nbsp; containerization and <a href="https://kubernetes.io/">Kubernetes</a>
+                for deployment and node management.<br>
+                <br>
+                As a <strong>user</strong>, deploy your Dockerized application
+                across EdgeNet's dozens of nodes within five minutes. </p>
+              <!--Start Text Only-->
+              <div class="flex-row">
+                <div class="flex-item flex-column"><br>
+                </div>
+                <div class="flex-item flex-item-stretch flex-column">
+                  <p>You are<span style="font-family: monospace;"><span style="font-family: &quot;Source Sans Pro&quot;,Helvetica,Arial,sans-serif;">
+                      </span></span>an established researcher at a public or
+                    private institution, and you are prepared to authorize other
+                    people of your choosing to use EdgeNet, while vouching for
+                    their responsible use of the infrastructure</p>
+                  <div class="control-group"> <a href="https://headnode.edge-net.org/#/login?signup=siteregistration">
+                      <button class="custom-button custom-button-primary pulse-primary">Register
+                        an Authority</button> </a> </div>
+                </div>
+                <div class="flex-item flex-item-stretch flex-column">
+                  <p class="text"> You are a colleague of someone who has
+                    already registered an authority with EdgeNet, or you work
+                    under their supervision or are their student: </p>
+                  <div class="control-group"> <a href="https://headnode.edge-net.org/#/login?signup=userregistration">
+                      <button class="custom-button custom-button-primary pulse-primary"><span>Sign
+                          Up as a User</span></button> </a> </div>
+                </div>
               </div>
-            </div>
-            <div class="flex-item flex-item-stretch flex-column">
-              <p class="text">
-                You are a colleague of someone who has already registered an authority with EdgeNet,
-                or you work under their supervision or are their student:
-              </p>
-              <div class="control-group">
-                <a href="https://headnode.edge-net.org/#/login?signup=userregistration">
-                  <button class="custom-button custom-button-primary pulse-primary"><span>Sign Up as a User</span></button>
-                </a>
-              </div>
-            </div>
-          </div>
-          <!--End Text Only-->
-          <!-------------------------------------------------------------------------------------------->
-          <!--Start Text Only-->
-          <div class="flex-row">
-            <div class="flex-item flex-item-stretch flex-column">
-              <p class="text">
-                As a <b>contributor</b> to the infrastructure, simply set up a VM and
-                make it available to EdgeNet, again within minutes. The more you and your
-                colleagues contribute, the more of the global infrastructure you can use.
-              </p>
-              <div class="control-group">
-                <a href="https://headnode.edge-net.org/#/login?signup=nodecontribution">
-                  <button class="custom-button custom-button-info pulse-info"><span>Enroll a Node</span></button>
-                </a>
-              </div>
-              <p class="text">
-                As an edge cloud <b>technologist</b>, download
+              <!--End Text Only-->
+              <p> As a <strong>contributor</strong> to the infrastructure,
+                simply set up a VM and make it available to EdgeNet, again
+                within minutes. The more you and your colleagues contribute, the
+                more of the global infrastructure you can use. </p>
+              <div class="control-group"> <a href=""> <button class="custom-button custom-button-primary pulse-primary"><span>Enroll
+                      a Node</span></button> </a> </div>
+              <p> As an edge cloud <strong>technologist</strong>, download
                 EdgeNet's free, open-source, liberally-licensed software for
                 your own use. <br>
               </p>
-              <div class="control-group">
-                <a target="_blank" href="https://github.com/EdgeNet-project/">
-                  <button class="custom-button-flat pulse-black">
-                    <img src="img/github.png"> <span>Visit EdgeNet's GitHub Repository</span>
-                  </button>
-                </a>
+              <div class="control-group"> <a target="_blank" href="https://github.com/EdgeNet-project/">
+                  <button class="custom-button-flat pulse-black"> <img src="img/github.png">
+                    <span>Visit EdgeNet's GitHub Repository</span> </button> </a>
               </div>
-              <p class="text">
-                We extend a special warm welcome to PlanetLab users. If you are a
-                <a href="https://planet-lab.eu">PlanetLab Europe</a> user, there is
-                nothing you need to do: we will migrate your account to EdgeNet shortly.
-                If you are a user of the US-based PlanetLab, please send us an e-mail
-                (<a href="mailto:timur.friedman@sorbonne-universite.fr">timur.friedman@sorbonne-universite.fr</a>,
-                <a href="mailto:rick@mcgeer.com">rick@mcgeer.com</a>) so that we can
-                ensure a smooth transition for you as well. </p>
+              <p>We extend a special warm welcome to PlanetLab users. If you are
+                a&nbsp; <a href="https://planet-lab.eu">PlanetLab Europe</a>
+                user, there is nothing you need to do: we will migrate your
+                account to EdgeNet shortly. If you are a user of the US-based
+                PlanetLab, please send us an e-mail (<a href="mailto:Timur%20Friedman%20%3Ctimur.friedman@sorbonne-universite.fr%3E,%20Rick%20McGeer%20%3Crick@mcgeer.com%3E">timur.friedman@sorbonne-universite.fr,
+                  rick@mcgeer.com</a>) so that we can ensure a smooth transition
+                for you as well. </p>
             </div>
           </div>
           <!--End Intro-->
@@ -129,17 +115,19 @@
           <!--Start Text with Images and Videos-->
           <div class="flex-row">
             <div class="flex-item flex-column">
-              <h3 class="add-top-margin">Vantage Points</h3>
-              <p class="text">
-                EdgeNet currently offers over 50 nodes distributed across the U.S. and Europe.
-                We aim to reach higher numbers in wider area by having your contributions.
-              </p>
-              <p class="text text-center graph-title">
-                Current EdgeNet Node List. Total Nodes: <span class="node-count">41</span> / Active Nodes: <span class="active-node-count">28</span>
-              </p>
+              <h2 class="add-top-margin">Vantage Points<a target="_blank" href="https://github.com/EdgeNet-project/"></a></h2>
+            </div>
+          </div>
+          <div class="flex-row">
+            <div class="flex-item flex-column">
+              <p class="text"> EdgeNet currently offers over 50 nodes
+                distributed across the U.S. and Europe. </p>
+              <p class="text text-center graph-title"> Current EdgeNet Node
+                List. Total Nodes: <span class="node-count">41</span> / Active
+                Nodes: <span class="active-node-count">28</span> </p>
               <div class="custom-tab" id="custom-tab">
-                <div class="custom-tab-menu center">
-                  <a class="custom-tab-menu-item active" data-content="iframe">Map</a>
+                <div class="custom-tab-menu center"> <a class="custom-tab-menu-item active"
+                    data-content="iframe">Map</a>
                   <a class="custom-tab-menu-item" data-content="table">Table</a>
                 </div>
                 <div class="custom-tab-content" data-content="table">
@@ -157,7 +145,8 @@
                           <th class="text-center">Ready</th>
                         </tr>
                       </thead>
-                      <tbody class="node-container"></tbody>
+                      <tbody class="node-container">
+                      </tbody>
                     </table>
                   </div>
                 </div>

@@ -82,60 +82,60 @@
         </div>
         <div class="flex-row">
           <div class="flex-item flex-column">
-            <h2>Authorities</h2>
+            <h2>Sites</h2>
             <hr>
             <p class="text-small-margin">
-              <img class="image-wrap-text max-width-400" src="img/authority.jpg">
+              <img class="image-wrap-text max-width-400" src="img/site.jpg">
               Authorizations to use EdgeNet are handed out hierarchically, so that local administrators approve local users who they know.
-              The central administrators of EdgeNet approve the establishment of authorities, each authority having its own local authority administrator
-              called an authority-admin. An authority-admin, in turn, approves the creation of individual user accounts. Authority-admins also approve
-              the creation of teams, which group users. And the authority-admins may be responsible for nodes that are contributed to
-              the EdgeNet cluster. Authority Operations in EdgeNet consist of two Custom Resource Definitions; AuthorityRequests,
-              and Authorities. Those allow us to enable user roles that we desired in Kubernetes. You could find the details of each below.
-              There is a public endpoint, can be interacted using public kubeconfig file, for the requests of authority and user registrations.
+              The central administrators of EdgeNet approve the establishment of sites, each site having its own local site administrator
+              called a PI (principal investigator). A PI, in turn, approves the creation of individual user accounts. PIs also approve
+              the creation of projects, which group users. And the PIs may be responsible for nodes that are contributed to
+              the EdgeNet cluster. Site Operations in EdgeNet consist of two Custom Resource Definitions; SiteRegistrationRequests,
+              and Sites. Those allow us to enable user roles that we desired in Kubernetes. You could find the details of each below.
+              There is a public endpoint, can be interacted using public kubeconfig file, for the requests of site and user registrations.
             </p>
             <p class="text-small-margin">
-              The Authority CRD, as a non-namespaced API resource, enables establishing the user role models that we desired and designed
-              in Kubernetes. Thereby, a user group with a hierarchy of authority responsibility can use EdgeNet under the roof of a authority.
-              Moreover, a authority hosts the teams that allow the users of that authority to create slices freely, and the slices that users
+              The Site CRD, as a non-namespaced API resource, enables establishing the user role models that we desired and designed
+              in Kubernetes. Thereby, a user group with a hierarchy of authority responsibility can use EdgeNet under the roof of a site.
+              Moreover, a site hosts the projects that allow the users of that site to create slices freely, and the slices that users
               can deploy their applications, by the respect of resource quota constraints of that slice, towards the EdgeNet cluster.
             </p>
             <p class="text-small-margin">
-              Only cluster admins and authority requests approved by cluster admins may create a authority object in EdgeNet.
-              To create a authority, no other users are allowed or there is no other way. When a authority is created, an authority-admin user is created based
-              on the Authority's contact information.
+              Only cluster admins and site registration requests approved by cluster admins may create a site object in EdgeNet.
+              To create a site, no other users are allowed or there is no other way. When a site is created, a PI user is created based
+              on the Site's contact information.
             </p>
-            <h3>Authority Requests</h3>
+            <h3>Site Registration Requests</h3>
             <p class="text-small-margin add-bottom-margin">
-              The AuthorityRequests CRD, as a non-namespaced API resource, provides a public endpoint to allow making authority
-              registration requests independently. A user who wishes to register his authority at EdgeNet can do that directly by using
+              The SiteRegistrationRequests CRD, as a non-namespaced API resource, provides a public endpoint to allow making site
+              registration requests independently. A user who wishes to register his site at EdgeNet can do that directly by using
               the EdgeNet Portal or by kubectl with an EdgeNet public kubeconfig file that can be obtained by requesting the portal
               to a valid email address.
             </p>
             <p class="text-small-margin">
               The controller behind this custom resource automatically removes the registration request after 72 hours if the
-              registration request is not approved by a cluster-admin. When a authority request object is created, the system sends
-              an email verification object to the contact of that authority. Cluster-admins are not notified until the email is verified.
-              In case of a cluster-admin approves a authority request, the controller creates a authority object according to the
-              authority request which gets deleted after.
+              registration request is not approved by a cluster-admin. When a site registration object is created, the system sends
+              an email verification object to the contact of that site. Cluster-admins are not notified until the email is verified.
+              In case of a cluster-admin approves a site registration request, the controller creates a site object according to the
+              site registration request which gets deleted after.
             </p>
             <p class="text-small-margin">
               <b>But, how it works?</b><br>
               When a registration request has been made, EdgeNet sends an email including a one-time code for the email verification
               of that user. That is to avoid struggling with fake registration requests. At this point, there is no notification
-              reaches to the email address of the EdgeNet cluster admin. Then, authority-admins verified their email address, need to be done in
+              reaches to the email address of the EdgeNet cluster admin. Then, PIs verified their email address, need to be done in
               24 hours, by using the one-time codes they received.
             </p>
             <p class="text-small-margin">
               This is the time the cluster-admin needs to take action that is approving the request before 72 hours in total passed
-              away. Because the admin gets a notification about the authority requests since authority-admin verified the email address.
-              In the next steps, the authority request controller creates a authority object according to request data. And, when
-              a authority is created in EdgeNet, the authority controller generates a namespace by combining the authority name and the string of
-              “authority” as a prefix, then sets a resource quota in it to prevent deploying applications in this namespace, and creates an
-              authority-admin user. Herewith, the authority controller sends a notification that says your authority creation is successful while the user controller
+              away. Because the admin gets a notification about the site registration requests since PI verified the email address.
+              In the next steps, the site registration request controller creates a site object according to request data. And, when
+              a site is created in EdgeNet, the site controller generates a namespace by combining the site name and the string of
+              “site” as a prefix, then sets a resource quota in it to prevent deploying applications in this namespace, and creates a
+              PI user. Herewith, the site controller sends a notification that says your site registration is successful while the user controller
               creates a service account dedicated to the user and generates a kubeconfig file to deliver it along with the user
-              information by email. Authority-admin can now start using EdgeNet with the user-specific kubeconfig file, which means authority-admin is ready
-              to welcome user registration requests on the authority.
+              information by email. PI can now start using EdgeNet with the user-specific kubeconfig file, which means PI is ready
+              to welcome user registration requests on the site.
             </p>
           </div>
         </div>
@@ -148,30 +148,30 @@
               The User CRD, as a namespaced API resource, assigns service accounts to users and delivers kubeconfig file that
               generated according to that service account. The system attaches role bindings to service account based on their user
               roles to fulfill desired user role models. Thereby, a user can do actions that correspond to the user role in Kubernetes.
-              Only cluster admins or authority-admins(s) of that authority and user registration requests approved by a cluster-admin or an authority-admin or
-              a manager of that authority may create a user object in EdgeNet. To create a user, no other users are allowed or there is no
-              other way. Authority-admin can change user roles after user object is created.
+              Only cluster admins or PI(s) of that site and user registration requests approved by a cluster-admin or a PI or
+              a manager of that site may create a user object in EdgeNet. To create a user, no other users are allowed or there is no
+              other way. PI can change user roles after user object is created.
             </p>
             <h3>User Registration Requests</h3>
             <p class="text-small-margin">
               The UserRegistrationRequests CRD, as a namespaced API resource, provides a public endpoint to allow making user
-              registration requests to authorities independently. A user who wishes to register himself to a authority at EdgeNet can do that
+              registration requests to sites independently. A user who wishes to register himself to a site at EdgeNet can do that
               directly by using the EdgeNet Portal or by kubectl with an EdgeNet public kubeconfig file that can be obtained by
               requesting the portal to a valid email address. The user registration request only covers the regular user role.
             </p>
             <p class="text-small-margin">
               The controller behind this custom resource automatically removes the registration request after 72 hours if the
-              registration request is not approved by a cluster-admin or an authority-admin or a manager of that authority. When a user registration
-              object is created, the system sends an email verification object. The authority-admin(s) and manager(s) are not notified until
+              registration request is not approved by a cluster-admin or a PI or a manager of that site. When a user registration
+              object is created, the system sends an email verification object. The site PI(s) and manager(s) are not notified until
               the email is verified. When a user registration request gets approved, the controller creates a user object according
               to the user registration request which gets deleted after.
             </p>
             <p class="text-small-margin add-bottom-margin">
-              Likely authority-admins have been done, but with a difference, users make registration requests on authorities that already registered
-              in EdgeNet. And again EdgeNet has the same procedure about email verification to prevent fake requests on the authorities
-              that would be boring for authority-admins if EdgeNet informs them about all requests without email verification. As authority-admins receive
+              Likely PIs have been done, but with a difference, users make registration requests on sites that already registered
+              in EdgeNet. And again EdgeNet has the same procedure about email verification to prevent fake requests on the sites
+              that would be boring for PIs if EdgeNet informs them about all requests without email verification. As PIs receive
               the kubeconfig file by email, the user controller delivers the user information along with a kubeconfig file to the
-              user's email address. So, users can now start using EdgeNet as well. But, the authority namespace is not a workspace which
+              user's email address. So, users can now start using EdgeNet as well. But, the site namespace is not a workspace which
               users collaborate with.
             </p>
           </div>
@@ -196,7 +196,7 @@
             <hr>
             <p class="text-small-margin">
               The Acceptable Use Policy (AUP) CRD, as a namespaced API resource, ensures that EdgeNet is GDPR compliant. Any user
-              registered in a authority has to accept this policy to start using EdgeNet. A user must accept this policy every 6 months.
+              registered in a site has to accept this policy to start using EdgeNet. A user must accept this policy every 6 months.
             </p>
             <p class="text-small-margin add-bottom-margin">
               The controller behind this custom resource automatically turns the AUP object into unaccepted after six months if
@@ -206,30 +206,30 @@
         </div>
         <div class="flex-row">
           <div class="flex-item flex-column">
-            <h2>Teams</h2>
+            <h2>Projects</h2>
             <hr>
             <p class="text-small-margin">
-              The Teams CRD, as a namespaced API resource, empowers users to create slices independently, rather than just sticking
-              this authorization to authority admins and managers. Participants of a team, ie users, may belong to different authorities. And, the authority-admin(s)
-              and manager(s) of the authority on which team created are natural participants of that team.
+              The Projects CRD, as a namespaced API resource, empowers users to create slices independently, rather than just sticking
+              this authorization to PIs and managers. Participants of a project, ie users, may belong to different sites. And, the PI(s)
+              and manager(s) of the site on which project created are natural participants of that project.
             </p>
             <p class="text-small-margin">
-              When a team object is created, the controller crafts a namespace that provides general authorization to create slices
-              on it. Thereby, any participant of a team can create a slice freely. Additionally, the authority-admin(s) and manager(s) of the
-              authority on which team created and the participants of the team get their invitations by email containing team
+              When a project object is created, the controller crafts a namespace that provides general authorization to create slices
+              on it. Thereby, any participant of a project can create a slice freely. Additionally, the PI(s) and manager(s) of the
+              site on which project created and the participants of the project get their invitations by email containing project
               information.</p>
             </p>
             <p class="text-small-margin">
-              <img class="image-wrap-text max-width-400" src="img/team.jpg">
-              Authority-admins or Managers authorized by authority-admins can create teams by choosing users from different authorities. When a team is created,
-              the team controller generates a namespace and sets the name by combining authority namespace and team name. For example,
-              authority-a-team-a as you can see at the top middle of this slide. But,  it is not allowed to deploy applications in a team
-              namespace either. However, a team namespace authorizes users who participate in, to create slices in the team
+              <img class="image-wrap-text max-width-400" src="img/project.jpg">
+              PIs or Managers authorized by PIs can create projects by choosing users from different sites. When a project is created,
+              the project controller generates a namespace and sets the name by combining site namespace and project name. For example,
+              site-a-project-a as you can see at the top middle of this slide. But,  it is not allowed to deploy applications in a project
+              namespace either. However, a project namespace authorizes users who participate in, to create slices in the project
               namespace.
             </p>
             <p class="text-small-margin add-bottom-margin">
-              Users participating in a team namespace can create slices by choosing users from different authorities. When a slice is
-              created, the slice controller generates a namespace the same as the team controller does but it sets a resource
+              Users participating in a project namespace can create slices by choosing users from different sites. When a slice is
+              created, the slice controller generates a namespace the same as the project controller does but it sets a resource
               quota depending on the slice profile.
             </p>
           </div>
@@ -239,18 +239,18 @@
             <h2>Slices</h2>
             <hr>
             <p class="text-small-margin">
-              <img class="image-wrap-text max-width-400" src="img/team-slice.jpg">
+              <img class="image-wrap-text max-width-400" src="img/project-slice.jpg">
               The Slices CRD, as a namespaced API resource, allows users to deploy their applications towards the cluster. There are
               three slice profiles, which are Low, Medium, and High, that directly impacts on the expiration date and resource quota.
-              Participants of a slice, ie users, may belong to different authorities. And, the authority-admin(s) and manager(s) of the authority on which slice
+              Participants of a slice, ie users, may belong to different sites. And, the PI(s) and manager(s) of the site on which slice
               created are natural participants of that slice.
             </p>
             <p class="text-small-margin add-bottom-margin">
-              <img class="image-wrap-text-right max-width-400" src="img/authority-slice.jpg">
+              <img class="image-wrap-text-right max-width-400" src="img/site-slice.jpg">
               The controller behind this custom resource automatically removes a slice object after the expiration date expires if
               the slice is not extended. When a slice object is created, the controller sets an expiration date and crafts a namespace
               with a resource quota and those parameters are determined by the system depending on the slice profile. Additionally,
-              the authority-admin(s) and manager(s) of the authority on which slice created and the participants of the slice get their invitations
+              the PI(s) and manager(s) of the site on which slice created and the participants of the slice get their invitations
               by email containing slice information.
             </p>
           </div>
@@ -260,14 +260,14 @@
             <h2>Future Work</h2>
             <hr>
             <ul>
-              <li>Authority & Team Consumable Resource Right
+              <li>Site & Project Consumable Resource Right
                 <ul>
                   <li>
-                    Define a consumable resource right in Authority to prevent over slice creation and provide the justice of resource
+                    Define a consumable resource right in Site to prevent over slice creation and provide the justice of resource
                     sharing.
                   </li>
                   <li>
-                    In the team, authority-admin may want to limit over slice creation which drains all the resource right.
+                    In the project, PIs may want to limit over slice creation which drains all the resource right.
                   </li>
                 </ul>
               </li>
