@@ -1,7 +1,0 @@
-apiVersion: apps.edgenet.io/v1alpha
-kind: Login
-metadata:
-  name: usersu
-  namespace: site-sorbonne-university
-spec:
-  password: cGFzc3dvcmQ=
