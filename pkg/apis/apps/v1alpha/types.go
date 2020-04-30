@@ -161,15 +161,15 @@ type Slice struct {
 type SliceSpec struct {
 	Type        string   `json:"type"`
 	Profile     string   `json:"profile"`
+	TTL         string   `json:"ttl"`
 	Users       []string `json:"users"`
 	Description string   `json:"description"`
 }
 
 // SliceStatus is the status for a Slice resource
 type SliceStatus struct {
-	Overloading bool              `json:"overloading"`
-	TTL         *meta_v1.Duration `json:"ttl"`
-	Expires     *meta_v1.Time     `json:"expires"`
+	Overloading bool   `json:"overloading"`
+	Expires     string `json:"expires"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
