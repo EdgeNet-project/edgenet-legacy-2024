@@ -139,6 +139,15 @@ services:
       - ../config/:/root/config/
       - ../assets/kubeconfigs:/root/assets/kubeconfigs
       - ../assets/templates/:/root/assets/templates/
+  edgenet-website:
+    container_name: edgenet-website
+    restart: always
+    build:
+      context: ../website/
+      dockerfile: ../build/website/Dockerfile
+    image: edgenet-website:v1.0.0
+    ports:
+      - 8081:80
   edgenet-nodecontribution:
     container_name: edgenet-nodecontribution
     restart: always
