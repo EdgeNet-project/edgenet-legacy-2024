@@ -18,30 +18,6 @@ limitations under the License.
 
 package v1alpha
 
-// AcceptableUsePolicyListerExpansion allows custom methods to be added to
-// AcceptableUsePolicyLister.
-type AcceptableUsePolicyListerExpansion interface{}
-
-// AcceptableUsePolicyNamespaceListerExpansion allows custom methods to be added to
-// AcceptableUsePolicyNamespaceLister.
-type AcceptableUsePolicyNamespaceListerExpansion interface{}
-
-// EmailVerificationListerExpansion allows custom methods to be added to
-// EmailVerificationLister.
-type EmailVerificationListerExpansion interface{}
-
-// EmailVerificationNamespaceListerExpansion allows custom methods to be added to
-// EmailVerificationNamespaceLister.
-type EmailVerificationNamespaceListerExpansion interface{}
-
-// LoginListerExpansion allows custom methods to be added to
-// LoginLister.
-type LoginListerExpansion interface{}
-
-// LoginNamespaceListerExpansion allows custom methods to be added to
-// LoginNamespaceLister.
-type LoginNamespaceListerExpansion interface{}
-
 // ProjectListerExpansion allows custom methods to be added to
 // ProjectLister.
 type ProjectListerExpansion interface{}
@@ -81,11 +57,3 @@ type UserListerExpansion interface{}
 // UserNamespaceListerExpansion allows custom methods to be added to
 // UserNamespaceLister.
 type UserNamespaceListerExpansion interface{}
-
-// UserRegistrationRequestListerExpansion allows custom methods to be added to
-// UserRegistrationRequestLister.
-type UserRegistrationRequestListerExpansion interface{}
-
-// UserRegistrationRequestNamespaceListerExpansion allows custom methods to be added to
-// UserRegistrationRequestNamespaceLister.
-type UserRegistrationRequestNamespaceListerExpansion interface{}

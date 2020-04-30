@@ -34,8 +34,10 @@ assets/database/**
 examples/selective-deployment/object/error-handling/**
 examples/selective-deployment/object/error-handling
 
-examples/*.txt
-examples/*/*.txt
+pkg/user
+examples/selective-deployment/*.txt
+examples/site/*.txt
+examples/siteregistrationrequest/*.txt
 code-generation
 
 # Ignore OS X metadata files
