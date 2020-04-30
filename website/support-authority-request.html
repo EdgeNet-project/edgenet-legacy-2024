@@ -88,30 +88,31 @@
               </ul>
               <p>In what follows, we will assume that this file is saved in your working directory on your system as <code>./authorityrequest.yaml</code>.</p>
               <p>Example:</p>
-              <pre class="pre"><code class="lang-yaml">apiVersion: apps.edgenet.io/v1alpha
-kind: AuthorityRequest
-metadata:
-  name: lip6-lab
-spec:
-  fullname: Laboratoire LIP6-CNRS
-  shortname: lip6
-  url: https://www.lip6.fr/recherche/team_membres.php?acronyme=NPA
-  address: 4 place Jussieu, boite 169, 75005 Paris, France
-  contact:
-    username: timurfriedman
-    firstname: Timur
-    lastname: Friedman
-    email: timur.friedman@sorbonne-universite.fr
-    phone: "+33123456789"</code></pre>
+              <pre class="pre"><code class="lang-yaml"><span class="hljs-attribute">apiVersion</span>: apps.edgenet.io/v1alpha
+              <span class="hljs-attribute">kind</span>: AuthorityRequest
+              <span class="hljs-attribute">metadata</span>:
+                <span class="hljs-attribute">name</span>: lip6-lab
+              <span class="hljs-attribute">spec</span>:
+                <span class="hljs-attribute">fullname</span>: Laboratoire LIP6-CNRS
+                <span class="hljs-attribute">shortname</span>: lip6
+                <span class="hljs-attribute">url</span>: <span class="hljs-attribute">https</span>:<span class="hljs-comment">//www.lip6.fr/recherche/team_membres.php?acronyme=NPA</span>
+                <span class="hljs-attribute">address</span>: <span class="hljs-number">4</span> place Jussieu, boite <span class="hljs-number">169</span>, <span class="hljs-number">75005</span> Paris, France
+                <span class="hljs-attribute">contact</span>:
+                  <span class="hljs-attribute">username</span>: timurfriedman
+                  <span class="hljs-attribute">firstname</span>: Timur
+                  <span class="hljs-attribute">lastname</span>: Friedman
+                  <span class="hljs-attribute">email</span>: timur.friedman<span class="hljs-variable">@sorbonne-universite</span>.fr
+                  <span class="hljs-attribute">phone</span>: <span class="hljs-string">"+33123456789"</span>
+              </code></pre>
               <h3 id="create-your-authority-request">Create your authority request</h3>
               <p>Using <code>kubectl</code>, create a authority request object:</p>
-              <pre class="pre"><code>kubectl create -f ./authorityrequest.yaml --kubeconfig ./public.cfg</code></pre>
-              <p>This will cause an e-mail containing a one-time code to be sent to the address that you specified.</p>
+              <pre class="pre"><code>kubectl create -f .<span class="hljs-regexp">/authorityrequest.yaml --kubeconfig ./</span><span class="hljs-keyword">public</span>.cfg
+              </code></pre><p>This will cause an e-mail containing a one-time code to be sent to the address that you specified.</p>
               <h3 id="authenticate-your-request-using-a-one-time-code">Authenticate your request using a one-time code</h3>
               <p>The e-mail that you receive will contain a <code>kubectl</code> command that you can copy and paste onto your command line, editing only the path for the public kubeconfig file on your local system, if needed.</p>
               <p>In the example here, the one-time code is <code>bsv10kgeyo7pmazwpr</code>:</p>
-              <pre class="pre"><code>kubectl patch emailverification bsv10kgeyo7pmazwpr -n registration --type='json' -p='[{"op": "replace", "path": "/spec/verified", "value": true}]' --kubeconfig ./public.cfg</code></pre>
-              <p>After you have done this, the EdgeNet system sends a notification e-mail to EdgeNet&#39;s central administrators, informing them of your registration request.</p>
+              <pre class="pre"><code>kubectl patch emailverification bsv10kgeyo7pmazwpr -n registration --<span class="hljs-class"><span class="hljs-keyword">type</span></span>='json' -p='[{<span class="hljs-string">"op"</span>: <span class="hljs-string">"replace"</span>, <span class="hljs-string">"path"</span>: <span class="hljs-string">"/spec/verified"</span>, <span class="hljs-string">"value"</span>: <span class="hljs-keyword">true</span>}]' --kubeconfig ./<span class="hljs-keyword">public</span>.cfg
+              </code></pre><p>After you have done this, the EdgeNet system sends a notification e-mail to EdgeNet&#39;s central administrators, informing them of your registration request.</p>
               <h3 id="wait-for-approval-and-receipt-of-your-permanent-access-credential">Wait for approval and receipt of your permanent access credential</h3>
               <p>At this point, the EdgeNet central administrators will, if needed, contact you, and, provided everything is in order, approve your registration request. Upon approval, you will receive two emails. The first one confirms that your registration is complete, while the second one contains your user information and user-specific kubeconfig file.</p>
               <p>You can now start using EdgeNet, as both administrator of your local authority and as a regular user, with your user-specific kubeconfig file.</p>
