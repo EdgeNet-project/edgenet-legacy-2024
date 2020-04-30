@@ -19,44 +19,29 @@ limitations under the License.
 package v1alpha
 
 import (
-	v1alpha "headnode/pkg/apis/apps/v1alpha"
+	v1alpha "headnode/pkg/apis/selectivedeployment/v1alpha"
 	"headnode/pkg/client/clientset/versioned/scheme"
 
 	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	rest "k8s.io/client-go/rest"
 )
 
-type AppsV1alphaInterface interface {
+type EdgenetV1alphaInterface interface {
 	RESTClient() rest.Interface
 	SelectiveDeploymentsGetter
-	SitesGetter
-	SlicesGetter
-	UsersGetter
 }
 
-// AppsV1alphaClient is used to interact with features provided by the apps.edgenet.io group.
-type AppsV1alphaClient struct {
+// EdgenetV1alphaClient is used to interact with features provided by the edgenet.io group.
+type EdgenetV1alphaClient struct {
 	restClient rest.Interface
 }
 
-func (c *AppsV1alphaClient) SelectiveDeployments(namespace string) SelectiveDeploymentInterface {
+func (c *EdgenetV1alphaClient) SelectiveDeployments(namespace string) SelectiveDeploymentInterface {
 	return newSelectiveDeployments(c, namespace)
 }
 
-func (c *AppsV1alphaClient) Sites(namespace string) SiteInterface {
-	return newSites(c, namespace)
-}
-
-func (c *AppsV1alphaClient) Slices(namespace string) SliceInterface {
-	return newSlices(c, namespace)
-}
-
-func (c *AppsV1alphaClient) Users(namespace string) UserInterface {
-	return newUsers(c, namespace)
-}
-
-// NewForConfig creates a new AppsV1alphaClient for the given config.
-func NewForConfig(c *rest.Config) (*AppsV1alphaClient, error) {
+// NewForConfig creates a new EdgenetV1alphaClient for the given config.
+func NewForConfig(c *rest.Config) (*EdgenetV1alphaClient, error) {
 	config := *c
 	if err := setConfigDefaults(&config); err != nil {
 		return nil, err
@@ -65,12 +50,12 @@ func NewForConfig(c *rest.Config) (*AppsV1alphaClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &AppsV1alphaClient{client}, nil
+	return &EdgenetV1alphaClient{client}, nil
 }
 
-// NewForConfigOrDie creates a new AppsV1alphaClient for the given config and
+// NewForConfigOrDie creates a new EdgenetV1alphaClient for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) *AppsV1alphaClient {
+func NewForConfigOrDie(c *rest.Config) *EdgenetV1alphaClient {
 	client, err := NewForConfig(c)
 	if err != nil {
 		panic(err)
@@ -78,9 +63,9 @@ func NewForConfigOrDie(c *rest.Config) *AppsV1alphaClient {
 	return client
 }
 
-// New creates a new AppsV1alphaClient for the given RESTClient.
-func New(c rest.Interface) *AppsV1alphaClient {
-	return &AppsV1alphaClient{c}
+// New creates a new EdgenetV1alphaClient for the given RESTClient.
+func New(c rest.Interface) *EdgenetV1alphaClient {
+	return &EdgenetV1alphaClient{c}
 }
 
 func setConfigDefaults(config *rest.Config) error {
@@ -98,7 +83,7 @@ func setConfigDefaults(config *rest.Config) error {
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *AppsV1alphaClient) RESTClient() rest.Interface {
+func (c *EdgenetV1alphaClient) RESTClient() rest.Interface {
 	if c == nil {
 		return nil
 	}

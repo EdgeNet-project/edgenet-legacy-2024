@@ -14,16 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+// +k8s:deepcopy-gen=package
+// +groupName=edgenet.io
 
-import (
-	"headnode/pkg/authorization"
-	"headnode/pkg/controller/selectivedeployment"
-)
-
-func main() {
-	// Set kubeconfig to be used to create clientsets
-	authorization.SetKubeConfig()
-	// Start the controller to provide the functionalities of selectivedeployment resource
-	selectivedeployment.Start()
-}
+package v1alpha

@@ -19,7 +19,7 @@ limitations under the License.
 package scheme
 
 import (
-	appsv1alpha "headnode/pkg/apis/apps/v1alpha"
+	edgenetv1alpha "headnode/pkg/apis/selectivedeployment/v1alpha"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -32,7 +32,7 @@ var Scheme = runtime.NewScheme()
 var Codecs = serializer.NewCodecFactory(Scheme)
 var ParameterCodec = runtime.NewParameterCodec(Scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
-	appsv1alpha.AddToScheme,
+	edgenetv1alpha.AddToScheme,
 }
 
 // AddToScheme adds all types of this clientset into the given scheme. This allows composition

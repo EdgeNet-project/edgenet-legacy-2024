@@ -1,4 +1,4 @@
-apiVersion: apps.edgenet.io/v1alpha
+apiVersion: edgenet.io/v1alpha
 kind: SelectiveDeployment
 metadata:
   name: state

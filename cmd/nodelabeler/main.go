@@ -21,7 +21,7 @@ package main
 
 import (
 	"headnode/pkg/authorization"
-	"headnode/pkg/controller/v1/nodelabeler"
+	"headnode/pkg/controller/nodelabeler"
 )
 
 func main() {
