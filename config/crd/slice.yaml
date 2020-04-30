@@ -32,6 +32,9 @@ spec:
     - name: Profile
       type: string
       JSONPath: .spec.profile
+    - name: TTL
+      type: string
+      JSONPath: .status.ttl
     - name: Expires
       type: string
       JSONPath: .status.expires
@@ -62,15 +65,12 @@ spec:
                 - Low
                 - Medium
                 - High
+            ttl:
+              type: string
             users:
               type: array
               items:
-                type: object
-                properties:
-                  site:
-                    type: string
-                  username:
-                    type: string
-              minimum: 1
+                type: string
+                minimum: 1
             description:
               type: string

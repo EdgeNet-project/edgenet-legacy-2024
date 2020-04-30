@@ -35,18 +35,18 @@ spec:
     - name: Email
       type: string
       JSONPath: .spec.email
-    - name: Roles
+    - name: Profile
       type: string
-      JSONPath: .spec.roles
+      JSONPath: .spec.profile
+    - name: Kubeconfig
+      type: boolean
+      JSONPath: .status.kubeconfig
     - name: AUP
       type: boolean
       JSONPath: .status.aup.accepted
-    - name: Active
+    - name: Enabled
       type: boolean
-      JSONPath: .status.active
-    - name: Approved
-      type: boolean
-      JSONPath: .status.approved
+      JSONPath: .status.enabled
     - name: Age
       type: date
       JSONPath: .metadata.creationTimestamp
@@ -61,7 +61,7 @@ spec:
             - lastname
             - email
             - password
-            - roles
+            - profile
           properties:
             firstname:
               type: string
@@ -69,22 +69,16 @@ spec:
               type: string
             email:
               type: string
-              format: email
             password:
               type: string
-              format: password
               description: Secret
-            roles:
-              type: array
-              items:
-                type: string
-                enum:
-                  - Admin
-                  - PI
-                  - Manager
-                  - Tech
-                  - User
-              minimum: 1
+            profile:
+              type: string
+              enum:
+                - Admin
+                - PI
+                - Tech
+                - Default
             url:
               type: string
             bio:
