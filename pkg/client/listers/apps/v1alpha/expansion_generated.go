@@ -38,10 +38,6 @@ type SelectiveDeploymentNamespaceListerExpansion interface{}
 // SiteLister.
 type SiteListerExpansion interface{}
 
-// SiteRegistrationRequestListerExpansion allows custom methods to be added to
-// SiteRegistrationRequestLister.
-type SiteRegistrationRequestListerExpansion interface{}
-
 // SliceListerExpansion allows custom methods to be added to
 // SliceLister.
 type SliceListerExpansion interface{}

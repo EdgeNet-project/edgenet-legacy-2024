@@ -30,8 +30,6 @@ type Interface interface {
 	SelectiveDeployments() SelectiveDeploymentInformer
 	// Sites returns a SiteInformer.
 	Sites() SiteInformer
-	// SiteRegistrationRequests returns a SiteRegistrationRequestInformer.
-	SiteRegistrationRequests() SiteRegistrationRequestInformer
 	// Slices returns a SliceInformer.
 	Slices() SliceInformer
 	// Users returns a UserInformer.
@@ -62,11 +60,6 @@ func (v *version) SelectiveDeployments() SelectiveDeploymentInformer {
 // Sites returns a SiteInformer.
 func (v *version) Sites() SiteInformer {
 	return &siteInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
-}
-
-// SiteRegistrationRequests returns a SiteRegistrationRequestInformer.
-func (v *version) SiteRegistrationRequests() SiteRegistrationRequestInformer {
-	return &siteRegistrationRequestInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // Slices returns a SliceInformer.

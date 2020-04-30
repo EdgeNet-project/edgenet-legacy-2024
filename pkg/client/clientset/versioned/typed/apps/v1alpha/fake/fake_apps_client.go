@@ -41,10 +41,6 @@ func (c *FakeAppsV1alpha) Sites() v1alpha.SiteInterface {
 	return &FakeSites{c}
 }
 
-func (c *FakeAppsV1alpha) SiteRegistrationRequests() v1alpha.SiteRegistrationRequestInterface {
-	return &FakeSiteRegistrationRequests{c}
-}
-
 func (c *FakeAppsV1alpha) Slices(namespace string) v1alpha.SliceInterface {
 	return &FakeSlices{c, namespace}
 }

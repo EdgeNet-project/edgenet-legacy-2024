@@ -51,8 +51,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&SelectiveDeploymentList{},
 		&Site{},
 		&SiteList{},
-		&SiteRegistrationRequest{},
-		&SiteRegistrationRequestList{},
 		&User{},
 		&UserList{},
 		&Slice{},
