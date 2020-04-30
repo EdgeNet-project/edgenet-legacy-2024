@@ -45,32 +45,37 @@
           <!-- ************************************************************************************** -->
           <div class="flex-row">
             <div class="flex-item flex-item-stretch flex-column">
-              <h1 id="contributing-a-node-into-the-edgenet-cluster">Contributing a Node into the EdgeNet cluster</h1>
-              <p>This tutorial describes how a node can join EdgeNet. An authority administrator manages, perhaps by delegating the responsibilities, the nodes contributed by the authority itself or maybe authority users.</p>
-              <p>Besides the nodes provided by EdgeNet partners, each authority in EdgeNet can become a contributor to enlarge the cluster. An authority is able to allow their contributions to be <em>schedulable</em> or <em>unschedulable</em> for deployments.</p>
-              <p>As a contributor to the infrastructure, you will set up a VM and make it available to EdgeNet. Step by step, you will enable SSH server, create a new SSH user as a sudoer, and put our SSH public key into authorized keys or set a password that is not recommended. EdgeNet automates the installation and recovery processes of nodes.</p>
-              <p>The more you and other authorities contribute, the more of the global infrastructure all EdgeNet users can use. You can disable or remove the nodes that you contribute if and when you desire.</p>
-              <h3 id="a-note-on-the-operating-systems-we-currently-support">A note on the operating systems we currently support</h3>
-              <p>We strongly recommend that you choose <em>Ubuntu</em> or <em>CentOS</em> as the operating system on the server you want to add to the EdgeNet cluster. We tend to increase the supported operating systems.</p>
+              <h1 id="contributing-a-node-to-the-edgenet-cluster">Contributing a Node to the EdgeNet cluster</h1>
+              <p>EdgeNet thrives thanks to contributions from its users and from others who volunteer resources in support of the system. This tutorial describes the very simple process of adding a node to EdgeNet. If you are able to set up a virtual machine (VM) on a server that you administer, then you can contribute, which will be a great benefit to our growing infrastructure and to all EdgeNet users.</p>
+              <p>Each node falls under what we call an <em>authority</em> in EdgeNet, which is a group, or possibly just one person, that takes responsibility for users and/or resources. To contribute a node, please be sure that you are an authority administrator, or that an administrator of your authority has authorized you to make node contributions.</p>
+              <h2 id="preliminaries">Preliminaries</h2>
+              <p>To contribute a node, we assume that you already know how to set up a VM and ensure that certain of its port numbers are accessible from the internet.</p>
+              <h3 id="set-up-a-vm">Set up a VM</h3>
+              <p>EdgeNet is currently accepting <em>Ubuntu</em> and <em>CentOS</em> VMs as nodes. We plan to broaden our range of supported operating systems over time.</p>
+              <h3 id="open-your-firewall">Open your firewall</h3>
+              <p>EdgeNet is most useful to researchers if its nodes are entirely open to the internet, without a firewall blocking incoming traffic in any way. This is easiest if your server is in a perimeter network, sometimes called a <em>DMZ</em> or <em>science DMZ</em>. If you are contributing resources from elsewhere, please do your best, within the limits of what your institution allows, or, if the server is in your home, what you yourself are prepared to offer.</p>
+              <p>At a minimum, you may only contribute a node if the Kubernetes <a href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#check-required-ports">required ports</a> are accessible from the internet.</p>
               <h2 id="technologies-you-will-use">Technologies you will use</h2>
               <p>You will use <a href="https://kubernetes.io/docs/reference/kubectl/overview/"><code>kubectl</code></a>, the <a href="https://kubernetes.io/">Kubernetes</a> command-line interface.</p>
+              <p>You will most likely have used <code>kubectl</code> to create your EdgeNet user account to begin with. If you need to install it again, please see the releavant <a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/">Kubernetes documentation</a>.</p>
+              <p>You will also have received a user-specific kubeconfig file when you created your EdgeNet user account. You will authenticate with this kubeconfig file when you make a node contribution. In what follows, we will assume that it is saved in your working directory on your system as <code>./edgenet-kubeconfig.cfg</code>. If it is elsewhere, please be sure to modify the commands accordingly.</p>
               <h2 id="what-you-will-do">What you will do</h2>
-              <p>In the first place, please be sure your site, if exists, doesn't block the <a href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#check-required-ports">required ports</a>. You will enable SSH server on your server, then create an EdgeNet user as a <b>sudoer</b>, and copy &amp; paste the contents of our <a href="https://github.com/EdgeNet-project/headnode/blob/release-1.0/config/id_rsa.pub">SSH public key</a> into authorized keys. Once you have done so, you will use the user-specific kubeconfig file provided by EdgeNet to create a <em>node contribution</em> object. Object creation generates an SSH client allowing the headnode to connect to your server running an SSH server. You don't need to do anything since the node contribution controller starts a pre-defined procedure including the installation of necessary packages and running the kubeadm join command.</p>
+              <p>You will set up SSH on your VM, and then invoke <code>kubectl create</code> to create a <em>node contribution</em> object, which causes the VM to be integrated as a node into EdgeNet's Kubernetes cluster.</p>
               <h2 id="steps">Steps</h2>
-              <h3 id="make-sure-you-have-the-kubernetes-command-line-tool">Make sure you have the Kubernetes command-line tool</h3>
-              <p>If you do not already have <code>kubectl</code>, you will need to install it on your system. Follow the <a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/">Kubernetes documentation</a> for this.</p>
-              <h3 id="save-your-access-credential">Save your access credential</h3>
-              <p>The user-specific kubeconfig file provided by EdgeNet when you registered in allows you to do node contributions. In what follows, we will assume that it is saved in your working directory on your system as <code>./edgenet-kubeconfig.cfg</code>.</p>
+              <h3 id="set-up-ssh">Set up SSH</h3>
+              <p>Enable an SSH server on your VM, preferably on a port number other than the default port number of 22. You could use port 25020, for instance.</p>
+              <p>Create an EdgeNet user (the username does not matter) as a <strong>sudoer</strong>.</p>
+              <p>Copy &amp; paste the contents of <a href="https://github.com/EdgeNet-project/headnode/blob/release-1.0/config/id_rsa.pub">the EdgeNet public key</a> into the SSH authorized keys file for the EdgeNet user.</p>
               <h3 id="prepare-a-description-of-your-node-contribution">Prepare a description of your node contribution</h3>
-              <p>The <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/"><code>.yaml</code> format</a> is used to describe Kubernetes objects. Create one for the node contribution object, following the model of the example shown below. Your <code>.yaml</code>file must specify the following information regarding your future node contribution:</p>
+              <p>The <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/"><code>.yaml</code> format</a> is used to describe Kubernetes objects. Create one for the node contribution object, following the model of the example shown below. Your <code>.yaml</code>file must specify the following information regarding your node contribution:</p>
               <ul>
               <li>the <strong>node name</strong> that will be used by the EdgeNet system; it must follow <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/names/">Kubernetes&#39; rules for names</a> and must be different from any existing node names in your authority</li>
               <li>the <strong>namespace</strong> of the authority</li>
-              <li>the <strong>host</strong> of the node contribution, which is a human-readable IP address in IPv4 or IPv6 format</li>
-              <li>the <strong>port</strong> of the SSH server, which is 22 by default and recommended to allocate another port such as port 25020</li>
-              <li>the <strong>enabled</strong> of the scheduling; which is a boolean, and this should be true if you want to open the node you contribute</li>
-              <li>the <strong>user</strong> of the SSH client, which is the user you created on your server as a sudoer</li>
-              <li>the <strong>password</strong> of the SSH user; you don't need to define that if you put our public SSH key exists in authorized keys</li>
+              <li>the <strong>host</strong> IP address of the node contribution, in human-readable (ASCII) IPv4 or IPv6 format</li>
+              <li>the <strong>port</strong> number of the SSH server</li>
+              <li>whether scheduling of the nodes is <strong>enabled</strong>; which is a boolean, with <code>true</code> allowing the node to participate in the cluster</li>
+              <li>the SSH <strong>user</strong>, which is the username of the sudoer that you set up on the VM</li>
+              <li>the <strong>password</strong> of the SSH user; provide this only if for some reason you are not able to enable SSH access via the EdgeNet public key</li>
               </ul>
               <p>In what follows, we will assume that this file is saved in your working directory on your system as <code>./nodecontribution.yaml</code>.</p>
               <p>Example:</p>
@@ -84,13 +89,13 @@ spec:
   port: 25010
   enabled: true
   user: edgenet</code></pre>
-              <h3 id="do-your-node-contribution">Do your node contribution</h3>
+              <h3 id="make-your-node-contribution">Make your node contribution</h3>
               <p>Using <code>kubectl</code>, create a node contribution object:</p>
               <pre class="pre"><code>kubectl create -f ./nodecontribution.yaml --kubeconfig ./edgenet-kubeconfig.cfg</code></pre>
-              <p>This will start a procedure including the automated installation processes.</p>
-              <h3 id="check-the-installation-status-of-the-node-contribution">Check the installation status of the node contribution</h3>
-              <p>At this point, EdgeNet lists status messages to inform you about installation steps. You can have status details by invoking the kubectl describe command with a node name and your authority namespace that defined as <strong>ple-1</strong> and <strong>authority-lip6-lab</strong> in this tutorial.</p>
-              <p>Using <code>kubectl</code>, get status details of a node contribution object:</p>
+              <p>This will launch the automated installation of Kubernetes on the VM and the VM's integration as a node into EdgeNet's Kubernetes cluster. The EdgeNet headnode connects via SSH to the user account that you created on the VM. As a sudoer, that user installs the necessary packages and runs the <code>kubeadm join</code> command.</p>
+              <h3 id="check-the-installation-status">Check the installation status</h3>
+              <p>Follow the status messages as each installation step is completed.</p>
+              <p>You can at any time check on the status of your node contribution by invoking the <code>kubectl describe</code> command. In this example, the node name is <strong>ple-1</strong> and the authority namespace is <strong>authority-lip6-lab</strong>:</p>
               <pre class="pre"><code>kubectl describe nodecontribution ple-1 -n authority-lip6-lab --kubeconfig ./edgenet-kubeconfig.cfg</code></pre>
             </div>
           </div>
