@@ -124,8 +124,8 @@ func Send(subject string, contentData interface{}) {
 		to, body = setAUPExpiredContent(contentData, smtpServer.From)
 	case "slice-creation", "slice-removal", "slice-reminder", "slice-deletion", "slice-crash":
 		to, body = setSliceContent(contentData, smtpServer.From, subject)
-	case "team-creation", "team-removal", "team-deletion", "team-crash":
-		to, body = setTeamContent(contentData, smtpServer.From, subject)
+	case "team-invitation":
+		to, body = setTeamInvitationContent(contentData, smtpServer.From)
 	}
 
 	// Create a new Client connected to the SMTP server
@@ -240,26 +240,15 @@ func setLoginContent(contentData interface{}, from string) ([]string, bytes.Buff
 	return to, body
 }
 
-// setTeamContent to create an email body related to the team invitation
-func setTeamContent(contentData interface{}, from, subject string) ([]string, bytes.Buffer) {
+// setTeamInvitationContent to create an email body related to the team invitation
+func setTeamInvitationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
 	teamData := contentData.(ResourceAllocationData)
 	// This represents receivers' email addresses
 	to := teamData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles("../../assets/templates/email/team-invitation.html")
 	delimiter := generateRandomString(10)
-	title := "Team event"
-	switch subject {
-	case "team-creation":
-		title = "[EdgeNet] Team invitation"
-	case "team-removal":
-		title = "[EdgeNet] Team farewell message"
-	case "team-deletion":
-		title = "[EdgeNet] Team deleted"
-	case "team-crash":
-		title = "[EdgeNet] Team creation failed"
-	}
-	body := setCommonEmailHeaders(title, from, to, delimiter)
+	body := setCommonEmailHeaders("New Team Invitation", from, to, delimiter)
 	t.Execute(&body, teamData)
 
 	return to, body
