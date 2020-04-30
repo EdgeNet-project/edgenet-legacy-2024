@@ -104,16 +104,15 @@ type Site struct {
 
 // SiteSpec is the spec for a Site resource
 type SiteSpec struct {
-	FullName  string  `json:"fullname"`
-	ShortName string  `json:"shortname"`
-	URL       string  `json:"url"`
-	Address   string  `json:"address"`
-	Contact   Contact `json:"contact"`
+	FullName  string    `json:"fullname"`
+	ShortName string    `json:"shortname"`
+	URL       string    `json:"url"`
+	Address   string    `json:"address"`
+	Contact   []Contact `json:"contact"`
 }
 
 // Contact
 type Contact struct {
-	Username  string `json:"username"`
 	FirstName string `json:"firstname"`
 	LastName  string `json:"lastname"`
 	Email     string `json:"email"`
@@ -154,11 +153,11 @@ type SiteRegistrationRequest struct {
 
 // SiteRegistrationRequestSpec is the spec for a SiteRegistrationRequest resource
 type SiteRegistrationRequestSpec struct {
-	FullName  string  `json:"fullname"`
-	ShortName string  `json:"shortname"`
-	URL       string  `json:"url"`
-	Address   string  `json:"address"`
-	Contact   Contact `json:"contact"`
+	FullName  string    `json:"fullname"`
+	ShortName string    `json:"shortname"`
+	URL       string    `json:"url"`
+	Address   string    `json:"address"`
+	Contact   []Contact `json:"contact"`
 }
 
 // SiteRegistrationRequestStatus is the status for a SiteRegistrationRequest resource
