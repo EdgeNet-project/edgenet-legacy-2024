@@ -53,8 +53,6 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=apps.edgenet.io, Version=v1alpha
-	case v1alpha.SchemeGroupVersion.WithResource("projects"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Projects().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("selectivedeployments"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().SelectiveDeployments().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("sites"):
