@@ -112,8 +112,6 @@ func Start() {
 			// Find out whether the fields updated
 			event.change.profile = false
 			event.change.users.status = false
-			event.change.users.deleted = ""
-			event.change.users.added = ""
 			if oldObj.(*apps_v1alpha.Slice).Spec.Profile != newObj.(*apps_v1alpha.Slice).Spec.Profile {
 				event.change.profile = true
 			}
