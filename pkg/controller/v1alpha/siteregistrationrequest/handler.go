@@ -89,15 +89,12 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// Mail notification, TBD
 }
 
-// runApprovalTimeout puts a procedure in place to remove requests by approval or timeout
-func (t *Handler) runApprovalTimeout(SRRCopy *apps_v1alpha.SiteRegistrationRequest) {
+// setApprovalTimeout puts a procedure in place to remove requests by approval or timeout
+func (t *Handler) setApprovalTimeout(SRRCopy *apps_v1alpha.SiteRegistrationRequest) {
 	registrationApproved := make(chan bool, 1)
 	timeoutRenewed := make(chan bool, 1)
 	terminated := make(chan bool, 1)
 	var timeout <-chan time.Time
-	if SRRCopy.Status.Expires != nil {
-		timeout = time.After(time.Until(SRRCopy.Status.Expires.Time))
-	}
 	closeChannels := func() {
 		close(registrationApproved)
 		close(timeoutRenewed)

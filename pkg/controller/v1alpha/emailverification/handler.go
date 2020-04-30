@@ -209,9 +209,6 @@ func (t *Handler) runVerificationTimeout(EVCopy *apps_v1alpha.EmailVerification)
 	timeoutRenewed := make(chan bool, 1)
 	terminated := make(chan bool, 1)
 	var timeout <-chan time.Time
-	if EVCopy.Status.Expires != nil {
-		timeout = time.After(time.Until(EVCopy.Status.Expires.Time))
-	}
 	closeChannels := func() {
 		close(timeoutRenewed)
 		close(terminated)

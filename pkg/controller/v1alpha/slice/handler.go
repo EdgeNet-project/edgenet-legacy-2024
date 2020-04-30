@@ -300,9 +300,6 @@ func (t *Handler) runTimeout(sliceCopy *apps_v1alpha.Slice) {
 	timeoutRenewed := make(chan bool, 1)
 	terminated := make(chan bool, 1)
 	var timeout <-chan time.Time
-	if sliceCopy.Status.Expires != nil {
-		timeout = time.After(time.Until(sliceCopy.Status.Expires.Time))
-	}
 	closeChannels := func() {
 		close(timeoutRenewed)
 		close(terminated)

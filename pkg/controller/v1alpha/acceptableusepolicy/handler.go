@@ -155,10 +155,6 @@ func (t *Handler) runApprovalTimeout(AUPCopy *apps_v1alpha.AcceptableUsePolicy) 
 	terminated := make(chan bool, 1)
 	var timeout <-chan time.Time
 	var reminder <-chan time.Time
-	if AUPCopy.Status.Expires != nil {
-		timeout = time.After(time.Until(AUPCopy.Status.Expires.Time))
-		reminder = time.After(time.Until(AUPCopy.Status.Expires.Time.Add(time.Hour * -168)))
-	}
 	closeChannels := func() {
 		close(timeoutRenewed)
 		close(terminated)
