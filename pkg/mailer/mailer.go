@@ -207,7 +207,9 @@ func setCommonEmailHeaders(subject string, from string, to []string, delimiter s
 	}
 	headers += "Content-Type: text/html; charset=\"utf-8\"\r\n"
 	headers += "Content-Transfer-Encoding: 8bit\r\n"
-
+	if delimiter != "" {
+		headers += "\r\n"
+	}
 	log.Println(headers)
 	//body.Write([]byte(fmt.Sprintf("Subject: %s\n%s\n\n", subject, headers)))
 	body.Write([]byte(headers))
@@ -225,7 +227,7 @@ func setLoginContent(contentData interface{}, from string) ([]string, bytes.Buff
 	body := setCommonEmailHeaders("Logged In - Web Token Delivery", from, to, delimiter)
 	t.Execute(&body, loginData)
 
-	headers := fmt.Sprintf("\r\n--%s\r\n", delimiter)
+	headers := fmt.Sprintf("--%s\r\n", delimiter)
 	headers += "Content-Type: text/plain; charset=\"utf-8\"\r\n"
 	headers += "Content-Transfer-Encoding: base64\r\n"
 	headers += "Content-Disposition: attachment;filename=\"edgenet-web-kubeconfig.cfg\"\r\n"
@@ -237,7 +239,7 @@ func setLoginContent(contentData interface{}, from string) ([]string, bytes.Buff
 		log.Panic(fileErr)
 	}
 	attachment := "\r\n" + base64.StdEncoding.EncodeToString(rawFile)
-	body.Write([]byte(fmt.Sprintf("%s%s", headers, attachment)))
+	body.Write([]byte(fmt.Sprintf("%s%s\r\n\r\n--%s--", headers, attachment, delimiter)))
 
 	return to, body
 }
@@ -387,7 +389,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 	body := setCommonEmailHeaders("User Registration Successful", from, to, delimiter)
 	t.Execute(&body, registrationData)
 
-	headers := fmt.Sprintf("\r\n--%s\r\n", delimiter)
+	headers := fmt.Sprintf("--%s\r\n", delimiter)
 	headers += "Content-Type: text/plain; charset=\"utf-8\"\r\n"
 	headers += "Content-Transfer-Encoding: base64\r\n"
 	headers += "Content-Disposition: attachment;filename=\"edgenet-kubeconfig.cfg\"\r\n"
@@ -399,7 +401,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 		log.Panic(fileErr)
 	}
 	attachment := "\r\n" + base64.StdEncoding.EncodeToString(rawFile)
-	body.Write([]byte(fmt.Sprintf("%s%s", headers, attachment)))
+	body.Write([]byte(fmt.Sprintf("%s%s\r\n\r\n--%s--", headers, attachment, delimiter)))
 
 	return to, body
 }
