@@ -25,9 +25,9 @@ import (
 	"syscall"
 	"time"
 
-	apps_v1alpha "headnode/pkg/apis/apps/v1alpha"
-	"headnode/pkg/authorization"
-	appsinformer_v1 "headnode/pkg/client/informers/externalversions/apps/v1alpha"
+	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
+	"edgenet/pkg/authorization"
+	appsinformer_v1 "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
 
 	log "github.com/Sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"

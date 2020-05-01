@@ -23,8 +23,8 @@ import (
 	"syscall"
 	"time"
 
-	"headnode/pkg/authorization"
-	appsinformer_v1 "headnode/pkg/client/informers/externalversions/apps/v1alpha"
+	"edgenet/pkg/authorization"
+	appsinformer_v1 "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
 
 	log "github.com/Sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

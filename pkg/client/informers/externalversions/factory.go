@@ -19,9 +19,9 @@ limitations under the License.
 package externalversions
 
 import (
-	versioned "headnode/pkg/client/clientset/versioned"
-	apps "headnode/pkg/client/informers/externalversions/apps"
-	internalinterfaces "headnode/pkg/client/informers/externalversions/internalinterfaces"
+	versioned "edgenet/pkg/client/clientset/versioned"
+	apps "edgenet/pkg/client/informers/externalversions/apps"
+	internalinterfaces "edgenet/pkg/client/informers/externalversions/internalinterfaces"
 	reflect "reflect"
 	sync "sync"
 	time "time"

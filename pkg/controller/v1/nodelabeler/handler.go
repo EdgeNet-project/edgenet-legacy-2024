@@ -1,7 +1,7 @@
 package nodelabeler
 
 import (
-	"headnode/pkg/node"
+	"edgenet/pkg/node"
 	
 	log "github.com/Sirupsen/logrus"
 	api_v1 "k8s.io/api/core/v1"

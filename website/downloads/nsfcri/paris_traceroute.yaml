@@ -1,0 +1,38 @@
+# DaemonSet of Paris Traceroute exercise
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: paristraceroute
+spec:
+  template:
+    metadata:
+      labels:
+        app: multilevel-mda-lite-paristraceroute
+    spec:
+      hostNetwork: true
+      containers:
+        - name: multilevel-mda-lite-paristraceroute
+          image: bljuma/multilevel-mda-lite-paristraceroute
+          command: [ "/bin/bash", "-c", "--" ]
+          args: [ "while true; do sleep 30; done;" ]
+---
+# SelectiveDeployment to take Paris Traceroute DaemonSet under control
+apiVersion: edgenet.io/v1alpha
+kind: SelectiveDeployment
+metadata:
+  name: paristraceroute
+spec:
+  controller:
+    - type: DaemonSet
+      name: paristraceroute
+  type: State
+  selector:
+    - value: TX
+      operator: In
+      count: 0
+    - value: IL
+      operator: In
+      count: 0
+    - value: CA
+      operator: In
+      count: 2

@@ -25,10 +25,10 @@ import (
 	"regexp"
 	"strings"
 
-	apps_v1alpha "headnode/pkg/apis/apps/v1alpha"
-	"headnode/pkg/authorization"
-	custconfig "headnode/pkg/config"
-	"headnode/pkg/namespace"
+	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
+	"edgenet/pkg/authorization"
+	custconfig "edgenet/pkg/config"
+	"edgenet/pkg/namespace"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"

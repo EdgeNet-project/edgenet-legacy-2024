@@ -25,8 +25,8 @@ import (
 	"os"
 	"path/filepath"
 
-	edgenetclientset "headnode/pkg/client/clientset/versioned"
-	"headnode/pkg/config"
+	edgenetclientset "edgenet/pkg/client/clientset/versioned"
+	"edgenet/pkg/config"
 
 	namecheap "github.com/billputer/go-namecheap"
 	"k8s.io/client-go/kubernetes"

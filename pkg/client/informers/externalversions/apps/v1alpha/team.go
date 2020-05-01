@@ -19,10 +19,10 @@ limitations under the License.
 package v1alpha
 
 import (
-	appsv1alpha "headnode/pkg/apis/apps/v1alpha"
-	versioned "headnode/pkg/client/clientset/versioned"
-	internalinterfaces "headnode/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha "headnode/pkg/client/listers/apps/v1alpha"
+	appsv1alpha "edgenet/pkg/apis/apps/v1alpha"
+	versioned "edgenet/pkg/client/clientset/versioned"
+	internalinterfaces "edgenet/pkg/client/informers/externalversions/internalinterfaces"
+	v1alpha "edgenet/pkg/client/listers/apps/v1alpha"
 	time "time"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"

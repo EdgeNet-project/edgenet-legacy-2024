@@ -39,10 +39,10 @@ import (
 	"net/http"
 	"regexp"
 
-	"headnode/pkg/authorization"
-	"headnode/pkg/namespace"
-	"headnode/pkg/node"
-	"headnode/pkg/registration"
+	"edgenet/pkg/authorization"
+	"edgenet/pkg/namespace"
+	"edgenet/pkg/node"
+	"edgenet/pkg/registration"
 
 	namecheap "github.com/billputer/go-namecheap"
 	"github.com/gorilla/mux"

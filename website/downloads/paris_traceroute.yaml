@@ -1,0 +1,16 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: multilevel-mda-lite-paristraceroute
+spec:
+  template:
+    metadata:
+      labels:
+        app: multilevel-mda-lite-paristraceroute
+    spec:
+      hostNetwork: true
+      containers:
+        - name: multilevel-mda-lite-paristraceroute
+          image: bljuma/multilevel-mda-lite-paristraceroute
+          command: [ "/bin/bash", "-c", "--" ]
+          args: [ "while true; do sleep 30; done;" ]

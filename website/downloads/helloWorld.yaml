@@ -1,0 +1,16 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: hello-world-new
+spec:
+  template:
+    metadata:
+      labels:
+        app: hello-world-new
+    spec:
+      hostNetwork: true           
+      containers:
+        - name: hello-world-new
+          image: tutum/curl
+          command: ["/bin/sh"]
+          args: ["-c", "while true; do curl http://princeton.edge-net.io:5000/hello/$(hostname)/<username>; sleep 7200; done"]

@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	v1alpha "headnode/pkg/apis/apps/v1alpha"
+	v1alpha "edgenet/pkg/apis/apps/v1alpha"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"

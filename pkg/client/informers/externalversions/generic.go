@@ -19,8 +19,8 @@ limitations under the License.
 package externalversions
 
 import (
+	v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"fmt"
-	v1alpha "headnode/pkg/apis/apps/v1alpha"
 
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"

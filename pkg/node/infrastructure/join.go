@@ -24,7 +24,7 @@ import (
 	s "strings"
 	"time"
 
-	custconfig "headnode/pkg/config"
+	custconfig "edgenet/pkg/config"
 
 	namecheap "github.com/billputer/go-namecheap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -19,7 +19,7 @@ limitations under the License.
 package v1alpha
 
 import (
-	internalinterfaces "headnode/pkg/client/informers/externalversions/internalinterfaces"
+	internalinterfaces "edgenet/pkg/client/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to all the informers in this group version.

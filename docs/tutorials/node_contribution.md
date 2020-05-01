@@ -6,7 +6,7 @@ Each node falls under what we call an *authority* in EdgeNet, which is a group, 
 
 ## Preliminaries
 
-To contribute a node, we assume that you already know how to set up a VM and ensure that certain of its port numbers are accessible from the internet. 
+To contribute a node, we assume that you already know how to set up a VM and ensure that certain of its port numbers are accessible from the internet.
 
 ### Set up a VM
 
@@ -16,14 +16,14 @@ EdgeNet is currently accepting *Ubuntu* and *CentOS* VMs as nodes. We plan to br
 
 EdgeNet is most useful to researchers if its nodes are entirely open to the internet, without a firewall blocking incoming traffic in any way. This is easiest if your server is in a perimeter network, sometimes called a *DMZ* or *science DMZ*. If you are contributing resources from elsewhere, please do your best, within the limits of what your institution allows, or, if the server is in your home, what you yourself are prepared to offer.
 
-At a minimum, you may only contribute a node if the Kubernetes [required ports](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#check-required-ports) are accessible from the internet. 
+At a minimum, you may only contribute a node if the Kubernetes [required ports](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#check-required-ports) are accessible from the internet.
 
 ## Technologies you will use
 
 You will use [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview/), the [Kubernetes](https://kubernetes.io/) command-line interface.
 
 You will most likely have used ``kubectl`` to create your EdgeNet user account to begin with. If you need to install it again, please see the releavant [Kubernetes documentation](https://kubernetes.io/docs/tasks/tools/install-kubectl/).
- 
+
 You will also have received a user-specific kubeconfig file when you created your EdgeNet user account. You will authenticate with this kubeconfig file when you make a node contribution. In what follows, we will assume that it is saved in your working directory on your system as ``./edgenet-kubeconfig.cfg``. If it is elsewhere, please be sure to modify the commands accordingly.
 
 
@@ -40,7 +40,7 @@ Enable an SSH server on your VM, preferably on a port number other than the defa
 
 Create an EdgeNet user (the username does not matter) as a **sudoer**.
 
-Copy & paste the contents of [the EdgeNet public key](https://github.com/EdgeNet-project/headnode/blob/release-1.0/config/id_rsa.pub) into the SSH authorized keys file for the EdgeNet user.
+Copy & paste the contents of [the EdgeNet public key](https://github.com/EdgeNet-project/edgenet/blob/master/config/id_rsa.pub) into the SSH authorized keys file for the EdgeNet user.
 
 ### Prepare a description of your node contribution
 
@@ -48,7 +48,7 @@ The [``.yaml`` format](https://kubernetes.io/docs/concepts/overview/working-with
 - the node **name** that will be used by the EdgeNet system; it must follow [Kubernetes' rules for names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/) and must be different from any existing node names in your authority
 - the **namespace** of the authority
 - the **host** IP address of the node contribution, in human-readable (ASCII) IPv4 or IPv6 format
-- the **port** number of the SSH server 
+- the **port** number of the SSH server
 - whether scheduling of the nodes is **enabled**, which is a boolean, with ```true``` allowing the node to participate in the cluster
 - the SSH **user**, which is the username of the sudoer that you set up on the VM
 - the **password** of the SSH user; provide this only if for some reason you are not able to enable SSH access via the EdgeNet public key

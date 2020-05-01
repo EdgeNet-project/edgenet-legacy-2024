@@ -17,8 +17,8 @@ limitations under the License.
 package main
 
 import (
-	"headnode/pkg/authorization"
-	"headnode/pkg/controller/v1alpha/selectivedeployment"
+	"edgenet/pkg/authorization"
+	"edgenet/pkg/controller/v1alpha/selectivedeployment"
 )
 
 func main() {

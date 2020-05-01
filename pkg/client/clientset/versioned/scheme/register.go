@@ -19,7 +19,7 @@ limitations under the License.
 package scheme
 
 import (
-	appsv1alpha "headnode/pkg/apis/apps/v1alpha"
+	appsv1alpha "edgenet/pkg/apis/apps/v1alpha"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"

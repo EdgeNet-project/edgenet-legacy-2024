@@ -1,0 +1,19 @@
+apiVersion: edgenet.io/v1alpha
+kind: SelectiveDeployment
+metadata:
+  name: my-first-selectivedeployment
+spec:
+  controller:
+    - type: DaemonSet
+      name: my-first-daemonset
+  type: City
+  selector:
+    - value: Bloomington
+      operator: In
+      count: 2
+    - value: Los_Angeles
+      operator: In
+      count: 2
+    - value: Paris
+      operator: In
+      count: 2

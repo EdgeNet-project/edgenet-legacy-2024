@@ -201,10 +201,12 @@ func setCommonEmailHeaders(subject string, from string, to []string, delimiter s
 	headers += fmt.Sprintf("To: %s\r\n", headerTo)
 	headers += fmt.Sprintf("Subject: %s\r\n", subject)
 	headers += "MIME-Version: 1.0\r\n"
-	headers += fmt.Sprintf("Content-Type: multipart/mixed; boundary=\"%s\"\r\n", delimiter)
-	headers += fmt.Sprintf("\r\n--%s\r\n", delimiter)
+	if delimiter != "" {
+		headers += fmt.Sprintf("Content-Type: multipart/mixed; boundary=\"%s\"\r\n", delimiter)
+		headers += fmt.Sprintf("\r\n--%s\r\n", delimiter)
+	}
 	headers += "Content-Type: text/html; charset=\"utf-8\"\r\n"
-	headers += "Content-Transfer-Encoding: 7bit\r\n"
+	headers += "Content-Transfer-Encoding: 8bit\r\n"
 
 	log.Println(headers)
 	//body.Write([]byte(fmt.Sprintf("Subject: %s\n%s\n\n", subject, headers)))
@@ -247,7 +249,7 @@ func setTeamContent(contentData interface{}, from, subject string) ([]string, by
 	to := teamData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
-	delimiter := generateRandomString(10)
+	delimiter := ""
 	title := "Team event"
 	switch subject {
 	case "team-creation":
@@ -272,7 +274,7 @@ func setSliceContent(contentData interface{}, from, subject string) ([]string, b
 	to := sliceData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
-	delimiter := generateRandomString(10)
+	delimiter := ""
 	title := "Slice event"
 	switch subject {
 	case "slice-creation":
@@ -299,7 +301,7 @@ func setAUPConfirmationContent(contentData interface{}, from string) ([]string, 
 	to := AUPData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-confirmation.html")
-	delimiter := generateRandomString(10)
+	delimiter := ""
 	body := setCommonEmailHeaders("EdgeNet Acceptable Use Policy Confirmed", from, to, delimiter)
 	t.Execute(&body, AUPData)
 
@@ -313,7 +315,7 @@ func setAUPExpiredContent(contentData interface{}, from string) ([]string, bytes
 	to := AUPData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-expired.html")
-	delimiter := generateRandomString(10)
+	delimiter := ""
 	body := setCommonEmailHeaders("EdgeNet Acceptable Use Policy Expired", from, to, delimiter)
 	t.Execute(&body, AUPData)
 
@@ -327,7 +329,7 @@ func setAUPRenewalContent(contentData interface{}, from string) ([]string, bytes
 	to := AUPData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-renewal.html")
-	delimiter := generateRandomString(10)
+	delimiter := ""
 	body := setCommonEmailHeaders("EdgeNet Acceptable Use Policy Expiring", from, to, delimiter)
 	t.Execute(&body, AUPData)
 
@@ -341,7 +343,7 @@ func setAuthorityRequestContent(contentData interface{}, from string) ([]string,
 	to := registrationData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/authority-creation.html")
-	delimiter := generateRandomString(10)
+	delimiter := ""
 	body := setCommonEmailHeaders("Authority Successfully Created", from, to, delimiter)
 	t.Execute(&body, registrationData)
 
@@ -355,7 +357,7 @@ func setAuthorityEmailVerificationContent(contentData interface{}, from string) 
 	to := verificationData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verify.html")
-	delimiter := generateRandomString(10)
+	delimiter := ""
 	body := setCommonEmailHeaders("EdgeNet Authority Registration Request - Do You Confirm?", from, to, delimiter)
 	t.Execute(&body, verificationData)
 
@@ -367,7 +369,7 @@ func setAuthorityVerifiedAlertContent(contentData interface{}, from string, to [
 	alertData := contentData.(CommonContentData)
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verified-alert.html")
-	delimiter := generateRandomString(10)
+	delimiter := ""
 	body := setCommonEmailHeaders("Authority Request - Email Verified", from, to, delimiter)
 	t.Execute(&body, alertData)
 
@@ -409,7 +411,7 @@ func setUserEmailVerificationContent(contentData interface{}, from string) ([]st
 	to := verificationData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/user-email-verify.html")
-	delimiter := generateRandomString(10)
+	delimiter := ""
 	body := setCommonEmailHeaders("Signed Up - Email Verification", from, to, delimiter)
 	t.Execute(&body, verificationData)
 
@@ -425,7 +427,7 @@ func setUserVerifiedAlertContent(contentData interface{}, from string, to []stri
 	}
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/user-email-verified-alert.html")
-	delimiter := generateRandomString(10)
+	delimiter := ""
 	body := setCommonEmailHeaders("User Email Verified", from, to, delimiter)
 	t.Execute(&body, alertData)
 

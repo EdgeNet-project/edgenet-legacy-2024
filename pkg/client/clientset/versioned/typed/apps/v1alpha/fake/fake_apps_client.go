@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	v1alpha "headnode/pkg/client/clientset/versioned/typed/apps/v1alpha"
+	v1alpha "edgenet/pkg/client/clientset/versioned/typed/apps/v1alpha"
 
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"

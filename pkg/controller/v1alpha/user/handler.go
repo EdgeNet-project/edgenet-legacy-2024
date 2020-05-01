@@ -21,11 +21,11 @@ import (
 	"strings"
 	"time"
 
-	apps_v1alpha "headnode/pkg/apis/apps/v1alpha"
-	"headnode/pkg/authorization"
-	"headnode/pkg/client/clientset/versioned"
-	"headnode/pkg/mailer"
-	"headnode/pkg/registration"
+	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
+	"edgenet/pkg/authorization"
+	"edgenet/pkg/client/clientset/versioned"
+	"edgenet/pkg/mailer"
+	"edgenet/pkg/registration"
 
 	log "github.com/Sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"

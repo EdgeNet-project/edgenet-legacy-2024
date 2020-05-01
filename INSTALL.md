@@ -49,10 +49,10 @@ kubectl create -f https://raw.githubusercontent.com/kubernetes/dashboard/v1.10.1
 These need to be run to allow users to view namespaces and nodes at clusters scope.
 
 ```
-kubectl create -f https://raw.githubusercontent.com/EdgeNet-project/headnode/master/user_files/yml/namespace-viewer.yml
-kubectl create -f https://raw.githubusercontent.com/EdgeNet-project/headnode/master/user_files/yml/namespace-viewer-crb.yml
-kubectl create -f https://raw.githubusercontent.com/EdgeNet-project/headnode/master/user_files/yml/node-viewer.yml
-kubectl create -f https://raw.githubusercontent.com/EdgeNet-project/headnode/master/user_files/yml/node-viewer-crb.yml
+kubectl create -f https://raw.githubusercontent.com/EdgeNet-project/edgenet/master/user_files/yml/namespace-viewer.yml
+kubectl create -f https://raw.githubusercontent.com/EdgeNet-project/edgenet/master/user_files/yml/namespace-viewer-crb.yml
+kubectl create -f https://raw.githubusercontent.com/EdgeNet-project/edgenet/master/user_files/yml/node-viewer.yml
+kubectl create -f https://raw.githubusercontent.com/EdgeNet-project/edgenet/master/user_files/yml/node-viewer-crb.yml
 ```
 
 ## Command Line Proxy

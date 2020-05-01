@@ -19,9 +19,9 @@ limitations under the License.
 package fake
 
 import (
-	clientset "headnode/pkg/client/clientset/versioned"
-	appsv1alpha "headnode/pkg/client/clientset/versioned/typed/apps/v1alpha"
-	fakeappsv1alpha "headnode/pkg/client/clientset/versioned/typed/apps/v1alpha/fake"
+	clientset "edgenet/pkg/client/clientset/versioned"
+	appsv1alpha "edgenet/pkg/client/clientset/versioned/typed/apps/v1alpha"
+	fakeappsv1alpha "edgenet/pkg/client/clientset/versioned/typed/apps/v1alpha/fake"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"

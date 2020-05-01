@@ -1,8 +1,8 @@
 package main
 
 import (
-	"headnode/pkg/authorization"
-	"headnode/pkg/controller/v1alpha/slice"
+	"edgenet/pkg/authorization"
+	"edgenet/pkg/controller/v1alpha/slice"
 )
 
 func main() {

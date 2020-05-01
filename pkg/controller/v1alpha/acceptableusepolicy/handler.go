@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"time"
 
-	apps_v1alpha "headnode/pkg/apis/apps/v1alpha"
-	"headnode/pkg/authorization"
-	"headnode/pkg/client/clientset/versioned"
-	"headnode/pkg/mailer"
+	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
+	"edgenet/pkg/authorization"
+	"edgenet/pkg/client/clientset/versioned"
+	"edgenet/pkg/mailer"
 
 	log "github.com/Sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

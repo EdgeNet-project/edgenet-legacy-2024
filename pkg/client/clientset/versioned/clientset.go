@@ -19,7 +19,7 @@ limitations under the License.
 package versioned
 
 import (
-	appsv1alpha "headnode/pkg/client/clientset/versioned/typed/apps/v1alpha"
+	appsv1alpha "edgenet/pkg/client/clientset/versioned/typed/apps/v1alpha"
 
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"

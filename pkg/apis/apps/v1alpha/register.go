@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"headnode/pkg/apis/apps"
+	"edgenet/pkg/apis/apps"
 )
 
 // SchemeGroupVersion is the identifier for the API which includes

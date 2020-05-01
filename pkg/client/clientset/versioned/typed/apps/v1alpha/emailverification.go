@@ -19,8 +19,8 @@ limitations under the License.
 package v1alpha
 
 import (
-	v1alpha "headnode/pkg/apis/apps/v1alpha"
-	scheme "headnode/pkg/client/clientset/versioned/scheme"
+	v1alpha "edgenet/pkg/apis/apps/v1alpha"
+	scheme "edgenet/pkg/client/clientset/versioned/scheme"
 	"time"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"

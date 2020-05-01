@@ -19,8 +19,8 @@ limitations under the License.
 package v1alpha
 
 import (
-	v1alpha "headnode/pkg/apis/apps/v1alpha"
-	"headnode/pkg/client/clientset/versioned/scheme"
+	v1alpha "edgenet/pkg/apis/apps/v1alpha"
+	"edgenet/pkg/client/clientset/versioned/scheme"
 
 	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	rest "k8s.io/client-go/rest"

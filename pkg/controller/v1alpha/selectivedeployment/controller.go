@@ -27,10 +27,10 @@ import (
 	"syscall"
 	"time"
 
-	apps_v1alpha "headnode/pkg/apis/apps/v1alpha"
-	"headnode/pkg/authorization"
-	appsinformer_v1alpha "headnode/pkg/client/informers/externalversions/apps/v1alpha"
-	"headnode/pkg/node"
+	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
+	"edgenet/pkg/authorization"
+	appsinformer_v1alpha "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
+	"edgenet/pkg/node"
 
 	log "github.com/Sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"

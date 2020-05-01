@@ -7,8 +7,8 @@ import (
 	"syscall"
 	"time"
 
-	"headnode/pkg/authorization"
-	"headnode/pkg/node"
+	"edgenet/pkg/authorization"
+	"edgenet/pkg/node"
 
 	log "github.com/Sirupsen/logrus"
 	core_v1 "k8s.io/api/core/v1"

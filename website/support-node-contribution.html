@@ -60,12 +60,12 @@
               <p>You will most likely have used <code>kubectl</code> to create your EdgeNet user account to begin with. If you need to install it again, please see the releavant <a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/">Kubernetes documentation</a>.</p>
               <p>You will also have received a user-specific kubeconfig file when you created your EdgeNet user account. You will authenticate with this kubeconfig file when you make a node contribution. In what follows, we will assume that it is saved in your working directory on your system as <code>./edgenet-kubeconfig.cfg</code>. If it is elsewhere, please be sure to modify the commands accordingly.</p>
               <h2 id="what-you-will-do">What you will do</h2>
-              <p>You will set up SSH on your VM, and then invoke <code>kubectl create</code> to create a <em>node contribution</em> object, which causes the VM to be integrated as a node into EdgeNet's Kubernetes cluster.</p>
+              <p>You will set up EdgeNet access via SSH to your VM, and then invoke <code>kubectl create</code> to create a <em>node contribution</em> object, which causes the VM to be integrated as a node into EdgeNet's Kubernetes cluster.</p>
               <h2 id="steps">Steps</h2>
-              <h3 id="set-up-ssh">Set up SSH</h3>
+              <h3 id="set-up-edgenets-ssh-access-to-your-vm">Set up EdgeNet's SSH access to your VM</h3>
               <p>Enable an SSH server on your VM, preferably on a port number other than the default port number of 22. You could use port 25020, for instance.</p>
               <p>Create an EdgeNet user (the username does not matter) as a <strong>sudoer</strong>.</p>
-              <p>Copy &amp; paste the contents of <a href="https://github.com/EdgeNet-project/headnode/blob/release-1.0/config/id_rsa.pub">the EdgeNet public key</a> into the SSH authorized keys file for the EdgeNet user.</p>
+              <p>Copy &amp; paste the contents of <a href="https://github.com/EdgeNet-project/edgenet/blob/master/config/id_rsa.pub">the EdgeNet public key</a> into the SSH authorized keys file for the EdgeNet user.</p>
               <h3 id="prepare-a-description-of-your-node-contribution">Prepare a description of your node contribution</h3>
               <p>The <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/"><code>.yaml</code> format</a> is used to describe Kubernetes objects. Create one for the node contribution object, following the model of the example shown below. Your <code>.yaml</code>file must specify the following information regarding your node contribution:</p>
               <ul>

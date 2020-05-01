@@ -19,8 +19,8 @@ limitations under the License.
 package apps
 
 import (
-	v1alpha "headnode/pkg/client/informers/externalversions/apps/v1alpha"
-	internalinterfaces "headnode/pkg/client/informers/externalversions/internalinterfaces"
+	v1alpha "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
+	internalinterfaces "edgenet/pkg/client/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to each of this group's versions.
