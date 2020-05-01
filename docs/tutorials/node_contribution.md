@@ -29,12 +29,12 @@ You will also have received a user-specific kubeconfig file when you created you
 
 ## What you will do
 
-You will set up SSH on your VM, and then invoke ```kubectl create``` to create a *node contribution* object, which causes the VM to be integrated as a node into EdgeNet's Kubernetes cluster.
+You will set up EdgeNet access via SSH to your VM, and then invoke ```kubectl create``` to create a *node contribution* object, which causes the VM to be integrated as a node into EdgeNet's Kubernetes cluster.
 
 
 ## Steps
 
-### Set up SSH
+### Set up EdgeNet's SSH access to your VM
 
 Enable an SSH server on your VM, preferably on a port number other than the default port number of 22. You could use port 25020, for instance.
 
