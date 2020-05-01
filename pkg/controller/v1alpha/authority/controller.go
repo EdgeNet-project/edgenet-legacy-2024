@@ -133,7 +133,7 @@ func Start() {
 	// Authority Manager
 	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"userregistrationrequests", "userregistrationrequests/status",
 		"slices", "slices/status", "teams", "teams/status"}, Verbs: []string{"*"}},
-		{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users", "acceptableusepolicies"}, Verbs: []string{"get", "list"}}}
+		{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users", "acceptableusepolicies", "nodecontributions"}, Verbs: []string{"get", "list"}}}
 	authorityRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "authority-manager"},
 		Rules: policyRule}
 	_, err = clientset.RbacV1().ClusterRoles().Create(authorityRole)
@@ -149,7 +149,7 @@ func Start() {
 		log.Infof("Couldn't create authority-tech cluster role: %s", err)
 	}
 	// Authority User
-	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "teams"}, Verbs: []string{"get", "list"}}}
+	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "teams", "nodecontributions"}, Verbs: []string{"get", "list"}}}
 	authorityRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "authority-user"},
 		Rules: policyRule}
 	_, err = clientset.RbacV1().ClusterRoles().Create(authorityRole)
