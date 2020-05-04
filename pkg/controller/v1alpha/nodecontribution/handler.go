@@ -112,6 +112,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			NCCopy.Status.State = failure
 			NCCopy.Status.Message = append(NCCopy.Status.Message, "Host field must be an IP Address")
 			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
+			t.sendEmail(NCCopy)
 			return
 		}
 		// Set the client config according to the node contribution,
@@ -179,6 +180,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 			NCCopy.Status.State = failure
 			NCCopy.Status.Message = append(NCCopy.Status.Message, "Host field must be an IP Address")
 			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
+			t.sendEmail(NCCopy)
 			return
 		}
 		config := &ssh.ClientConfig{
@@ -221,20 +223,34 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // sendEmail to send notification to participants
-func (t *Handler) sendEmail(sliceUsername, sliceUserAuthority, sliceAuthority, sliceOwnerNamespace, sliceName, sliceNamespace, subject string) {
-	user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", sliceUserAuthority)).Get(sliceUsername, metav1.GetOptions{})
-	if err == nil && user.Status.Active && user.Status.AUP {
-		// Set the HTML template variables
-		contentData := mailer.ResourceAllocationData{}
-		contentData.CommonData.Authority = sliceUserAuthority
-		contentData.CommonData.Username = sliceUsername
-		contentData.CommonData.Name = fmt.Sprintf("%s %s", user.Spec.FirstName, user.Spec.LastName)
-		contentData.CommonData.Email = []string{user.Spec.Email}
-		contentData.Authority = sliceAuthority
-		contentData.Name = sliceName
-		contentData.OwnerNamespace = sliceOwnerNamespace
-		contentData.ChildNamespace = sliceNamespace
-		mailer.Send(subject, contentData)
+func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) {
+	// For those who are authority-admin and managers of the authority
+	userRaw, err := t.edgenetClientset.AppsV1alpha().Users(NCCopy.GetNamespace()).List(metav1.ListOptions{})
+	if err == nil {
+		contentData := mailer.MultiProviderData{}
+		contentData.Name = NCCopy.GetName()
+		contentData.Host = NCCopy.Spec.Host
+		contentData.Status = NCCopy.Status.State
+		contentData.Message = NCCopy.Status.Message
+		for _, userRow := range userRaw.Items {
+			if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "admin") || containsRole(userRow.Spec.Roles, "manager")) {
+				if err == nil && userRow.Status.Active && userRow.Status.AUP {
+					// Set the HTML template variables
+					contentData.CommonData.Authority = userRow.GetNamespace()
+					contentData.CommonData.Username = userRow.GetName()
+					contentData.CommonData.Name = fmt.Sprintf("%s %s", userRow.Spec.FirstName, userRow.Spec.LastName)
+					contentData.CommonData.Email = []string{userRow.Spec.Email}
+					if contentData.Status == failure {
+						mailer.Send("node-contribution-failure", contentData)
+					} else if contentData.Status == success {
+						mailer.Send("node-contribution-successful", contentData)
+					}
+				}
+			}
+		}
+		if contentData.Status == failure {
+			mailer.Send("node-contribution-failure-support", contentData)
+		}
 	}
 }
 
@@ -325,6 +341,7 @@ nodeInstallLoop:
 				NCCopy.Status.State = incomplete
 				NCCopy.Status.Message = append(NCCopy.Status.Message, "Node patch failed")
 				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
+				t.sendEmail(NCCopy)
 				break nodeInstallLoop
 			}
 			NCCopy.Status.State = success
@@ -333,6 +350,7 @@ nodeInstallLoop:
 			endProcedure <- true
 		case <-endProcedure:
 			log.Println("***************Procedure Terminated***************")
+			t.sendEmail(NCCopy)
 			break nodeInstallLoop
 		case <-time.After(25 * time.Minute):
 			log.Println("***************Timeout***************")
@@ -344,6 +362,7 @@ nodeInstallLoop:
 			if err == nil {
 				NCCopy = NCCopyUpdated
 			}
+			t.sendEmail(NCCopy)
 			break nodeInstallLoop
 		}
 	}
@@ -472,6 +491,7 @@ nodeRecoveryLoop:
 				if err == nil {
 					NCCopy = NCCopyUpdated
 				}
+				t.sendEmail(NCCopy)
 				watchNode.Stop()
 				break nodeRecoveryLoop
 			}
@@ -492,6 +512,7 @@ nodeRecoveryLoop:
 			establishConnection <- true
 		case <-endProcedure:
 			log.Println("***************Procedure Terminated***************")
+			t.sendEmail(NCCopy)
 			watchNode.Stop()
 			break nodeRecoveryLoop
 		case <-time.After(25 * time.Minute):
@@ -504,6 +525,7 @@ nodeRecoveryLoop:
 			if err == nil {
 				NCCopy = NCCopyUpdated
 			}
+			t.sendEmail(NCCopy)
 			watchNode.Stop()
 			break nodeRecoveryLoop
 		}
@@ -860,4 +882,14 @@ func getRecordType(ip string) string {
 		}
 	}
 	return ""
+}
+
+// To check whether user is holder of a role
+func containsRole(roles []string, value string) bool {
+	for _, ele := range roles {
+		if strings.ToLower(value) == strings.ToLower(ele) {
+			return true
+		}
+	}
+	return false
 }

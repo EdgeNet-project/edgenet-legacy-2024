@@ -84,7 +84,7 @@ func CreateToken(clientset clientset.Interface, duration time.Duration, hostname
 		}
 	}
 
-	joinCommand := fmt.Sprintf("kubeadm join %s --token %s --discovery-token-ca-cert-hash %s --cri-socket /var/run/docker.sock", server, tokens[0].Token.String(), CA)
+	joinCommand := fmt.Sprintf("kubeadm join %s --token %s --discovery-token-ca-cert-hash %s", server, tokens[0].Token.String(), CA)
 	return joinCommand, nil
 }
 
