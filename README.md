@@ -8,6 +8,11 @@ that are scattered across the internet, rather than to just one or a small numbe
 The code that we are developing here is in production powering [the EdgeNet testbed](http://www.edge-net.org/),
 on which researchers worldwide conduct experiments in distributed systems and internet measurements.
 
+## Support
+
+To chat with a member of the EdgeNet team live, please [open our tawk.to window](https://tawk.to/edgenet).
+
+
 ## Contributing
 
 We invite you to contribute to this free open-source software (FOSS) initiative.
