@@ -25,7 +25,6 @@ import (
 	"edgenet/pkg/authorization"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/mailer"
-	"edgenet/pkg/registration"
 
 	log "github.com/Sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -83,17 +82,12 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		if URRCopy.Status.Expires == nil {
-			// Create a user-specific secret to keep the password safe
-			passwordSecret := registration.CreateSecretByPassword(URRCopy)
-			// Update the password field as the secret's name for later use
-			URRCopy.Spec.Password = passwordSecret
-			URRCopyUpdated, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Update(URRCopy)
 			// Run timeout goroutine
-			go t.runApprovalTimeout(URRCopyUpdated)
-			defer t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopyUpdated.GetNamespace()).UpdateStatus(URRCopyUpdated)
-			URRCopyUpdated.Status.Approved = false
+			go t.runApprovalTimeout(URRCopy)
+			defer t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(URRCopy)
+			URRCopy.Status.Approved = false
 			// Set the approval timeout which is 72 hours
-			URRCopyUpdated.Status.Expires = &metav1.Time{
+			URRCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(72 * time.Hour),
 			}
 			// The section below is a part of the method which provides email verification
@@ -101,7 +95,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			// registration object creates an email verification object with a name which is
 			// this email verification code. Only who knows the authority and the email verification
 			// code can manipulate that object by using a public token.
-			URROwnerReferences := t.setOwnerReferences(URRCopyUpdated)
+			URROwnerReferences := t.setOwnerReferences(URRCopy)
 			emailVerificationCode := "bs" + generateRandomString(16)
 			emailVerification := apps_v1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: URROwnerReferences}}
 			emailVerification.SetName(emailVerificationCode)
@@ -112,9 +106,9 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				// Set the HTML template variables
 				contentData := mailer.VerifyContentData{}
 				contentData.CommonData.Authority = URROwnerNamespace.Labels["authority-name"]
-				contentData.CommonData.Username = URRCopyUpdated.GetName()
-				contentData.CommonData.Name = fmt.Sprintf("%s %s", URRCopyUpdated.Spec.FirstName, URRCopyUpdated.Spec.LastName)
-				contentData.CommonData.Email = []string{URRCopyUpdated.Spec.Email}
+				contentData.CommonData.Username = URRCopy.GetName()
+				contentData.CommonData.Name = fmt.Sprintf("%s %s", URRCopy.Spec.FirstName, URRCopy.Spec.LastName)
+				contentData.CommonData.Email = []string{URRCopy.Spec.Email}
 				contentData.Code = emailVerificationCode
 				mailer.Send("user-email-verification", contentData)
 			}
@@ -147,18 +141,9 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 				user.Spec.Email = URRCopy.Spec.Email
 				user.Spec.FirstName = URRCopy.Spec.FirstName
 				user.Spec.LastName = URRCopy.Spec.LastName
-				user.Spec.Password = URRCopy.Spec.Password
 				user.Spec.Roles = URRCopy.Spec.Roles
 				user.Spec.URL = URRCopy.Spec.URL
-				userCreated, _ := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Create(user.DeepCopy())
-
-				// Add the user created as an owner reference to password secret since the user registration object will be removed
-				passwordSecret, _ := t.clientset.CoreV1().Secrets(URRCopy.GetNamespace()).Get(fmt.Sprintf("%s-pass", URRCopy.GetName()), metav1.GetOptions{})
-				newSecretRef := *metav1.NewControllerRef(userCreated, apps_v1alpha.SchemeGroupVersion.WithKind("User"))
-				takeControl := false
-				newSecretRef.Controller = &takeControl
-				passwordSecret.OwnerReferences = append(passwordSecret.OwnerReferences, newSecretRef)
-				t.clientset.CoreV1().Secrets(URRCopy.GetNamespace()).Update(passwordSecret)
+				t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Create(user.DeepCopy())
 			}
 			t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})
 		}

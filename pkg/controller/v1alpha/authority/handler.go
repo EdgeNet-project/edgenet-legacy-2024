@@ -18,9 +18,7 @@ package authority
 
 import (
 	"fmt"
-	"math/rand"
 	"strings"
-	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
@@ -142,7 +140,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				user.Spec.Email = authorityCopy.Spec.Contact.Email
 				user.Spec.FirstName = authorityCopy.Spec.Contact.FirstName
 				user.Spec.LastName = authorityCopy.Spec.Contact.LastName
-				user.Spec.Password = generateRandomString(10)
 				user.Spec.Roles = []string{"Admin"}
 				t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", authorityCopy.GetName())).Create(user.DeepCopy())
 			}
@@ -234,16 +231,4 @@ func (t *Handler) setNamespaceOwnerReferences(namespace *corev1.Namespace) []met
 	newNamespaceRef.Controller = &takeControl
 	namespaceOwnerReferences := []metav1.OwnerReference{newNamespaceRef}
 	return namespaceOwnerReferences
-}
-
-// generateRandomString to have a unique string
-func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
-
-	b := make([]rune, n)
-	rand.Seed(time.Now().UnixNano())
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }

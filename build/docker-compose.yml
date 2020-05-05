@@ -93,17 +93,6 @@ services:
       - ~/.kube/:/root/.kube/
       - ../config/:/root/config/
       - ../assets/templates/:/root/assets/templates/
-  edgenet-login:
-    container_name: edgenet-login
-    restart: always
-    build:
-      context: ../
-      dockerfile: ./build/login/Dockerfile
-    image: edgenet-login:v1.0.0
-    volumes:
-      - ~/.kube/:/root/.kube/
-      - ../config/:/root/config/
-      - ../assets/templates/:/root/assets/templates/
   edgenet-emailverification:
     container_name: edgenet-emailverification
     restart: always

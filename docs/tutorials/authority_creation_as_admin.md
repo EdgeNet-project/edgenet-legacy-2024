@@ -24,7 +24,7 @@ metadata:
 spec:
   fullname: <your authority name, e.g. Sorbonne University>
   shortname: <your authority shortname, e.g. SU>
-  url: <your authority webauthority, e.g. http://www.sorbonne-universite.fr/>
+  url: <your authority website, e.g. http://www.sorbonne-universite.fr/>
   address: <your authority address, e.g. 21 rue de l’École de médecine 75006 Paris>
   contact:
     username: <your username>

@@ -53,10 +53,9 @@ type informerevent struct {
 
 // This contains the fields to check whether they are updated
 type fields struct {
-	active   bool
-	aup      bool
-	password bool
-	roles    bool
+	active bool
+	aup    bool
+	roles  bool
 }
 
 // Constant variables for events
@@ -101,16 +100,12 @@ func Start() {
 			// Find out whether the fields updated
 			event.updated.active = false
 			event.updated.aup = false
-			event.updated.password = false
 			event.updated.roles = false
 			if oldObj.(*apps_v1alpha.User).Status.Active != newObj.(*apps_v1alpha.User).Status.Active {
 				event.updated.active = true
 			}
 			if oldObj.(*apps_v1alpha.User).Status.AUP != newObj.(*apps_v1alpha.User).Status.AUP {
 				event.updated.aup = true
-			}
-			if oldObj.(*apps_v1alpha.User).Spec.Password != newObj.(*apps_v1alpha.User).Spec.Password {
-				event.updated.password = true
 			}
 			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.User).Spec.Roles, newObj.(*apps_v1alpha.User).Spec.Roles) {
 				event.updated.roles = true

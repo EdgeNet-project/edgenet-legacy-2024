@@ -42,14 +42,6 @@ type EmailVerificationListerExpansion interface{}
 // EmailVerificationNamespaceLister.
 type EmailVerificationNamespaceListerExpansion interface{}
 
-// LoginListerExpansion allows custom methods to be added to
-// LoginLister.
-type LoginListerExpansion interface{}
-
-// LoginNamespaceListerExpansion allows custom methods to be added to
-// LoginNamespaceLister.
-type LoginNamespaceListerExpansion interface{}
-
 // NodeContributionListerExpansion allows custom methods to be added to
 // NodeContributionLister.
 type NodeContributionListerExpansion interface{}

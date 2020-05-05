@@ -32,7 +32,6 @@ type AppsV1alphaInterface interface {
 	AuthoritiesGetter
 	AuthorityRequestsGetter
 	EmailVerificationsGetter
-	LoginsGetter
 	NodeContributionsGetter
 	SelectiveDeploymentsGetter
 	SlicesGetter
@@ -60,10 +59,6 @@ func (c *AppsV1alphaClient) AuthorityRequests() AuthorityRequestInterface {
 
 func (c *AppsV1alphaClient) EmailVerifications(namespace string) EmailVerificationInterface {
 	return newEmailVerifications(c, namespace)
-}
-
-func (c *AppsV1alphaClient) Logins(namespace string) LoginInterface {
-	return newLogins(c, namespace)
 }
 
 func (c *AppsV1alphaClient) NodeContributions(namespace string) NodeContributionInterface {

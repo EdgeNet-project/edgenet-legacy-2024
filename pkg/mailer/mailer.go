@@ -63,12 +63,6 @@ type MultiProviderData struct {
 	Message    []string
 }
 
-// LoginContentData to set the login-specific variables
-type LoginContentData struct {
-	CommonData commonData
-	Token      string
-}
-
 // VerifyContentData to set the verification-specific variables
 type VerifyContentData struct {
 	CommonData commonData
@@ -111,8 +105,6 @@ func Send(subject string, contentData interface{}) {
 	to := []string{}
 	var body bytes.Buffer
 	switch subject {
-	case "login":
-		to, body = setLoginContent(contentData, smtpServer.From)
 	case "user-email-verification":
 		to, body = setUserEmailVerificationContent(contentData, smtpServer.From)
 	case "user-email-verified-alert":
@@ -225,34 +217,6 @@ func setCommonEmailHeaders(subject string, from string, to []string, delimiter s
 	//body.Write([]byte(fmt.Sprintf("Subject: %s\n%s\n\n", subject, headers)))
 	body.Write([]byte(headers))
 	return body
-}
-
-// setLoginContent to create an email body related to the user login activity
-func setLoginContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
-	loginData := contentData.(LoginContentData)
-	// This represents receivers' email addresses
-	to := loginData.CommonData.Email
-	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/web-token.html")
-	delimiter := generateRandomString(10)
-	body := setCommonEmailHeaders("[EdgeNet] Logged In - Web Token Delivery", from, to, delimiter)
-	t.Execute(&body, loginData)
-
-	headers := fmt.Sprintf("--%s\r\n", delimiter)
-	headers += "Content-Type: text/plain; charset=\"utf-8\"\r\n"
-	headers += "Content-Transfer-Encoding: base64\r\n"
-	headers += "Content-Disposition: attachment;filename=\"edgenet-web-kubeconfig.cfg\"\r\n"
-	// Read the kubeconfig file created for web authentication
-	// It will be in the attachment of email
-	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet-authority-%s-%s-webauth.cfg", loginData.CommonData.Authority,
-		loginData.CommonData.Username))
-	if fileErr != nil {
-		log.Panic(fileErr)
-	}
-	attachment := "\r\n" + base64.StdEncoding.EncodeToString(rawFile)
-	body.Write([]byte(fmt.Sprintf("%s%s\r\n\r\n--%s--", headers, attachment, delimiter)))
-
-	return to, body
 }
 
 // setNodeContributionContent to create an email body related to the node contribution notification

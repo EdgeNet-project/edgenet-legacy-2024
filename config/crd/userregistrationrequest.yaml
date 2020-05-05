@@ -56,7 +56,6 @@ spec:
             - firstname
             - lastname
             - email
-            - password
             - roles
           properties:
             firstname:
@@ -66,10 +65,6 @@ spec:
             email:
               type: string
               format: email
-            password:
-              type: string
-              format: password
-              description: Secret
             roles:
               type: array
               items:

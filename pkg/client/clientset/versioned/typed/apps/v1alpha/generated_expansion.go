@@ -26,8 +26,6 @@ type AuthorityRequestExpansion interface{}
 
 type EmailVerificationExpansion interface{}
 
-type LoginExpansion interface{}
-
 type NodeContributionExpansion interface{}
 
 type SelectiveDeploymentExpansion interface{}

@@ -45,10 +45,6 @@ func (c *FakeAppsV1alpha) EmailVerifications(namespace string) v1alpha.EmailVeri
 	return &FakeEmailVerifications{c, namespace}
 }
 
-func (c *FakeAppsV1alpha) Logins(namespace string) v1alpha.LoginInterface {
-	return &FakeLogins{c, namespace}
-}
-
 func (c *FakeAppsV1alpha) NodeContributions(namespace string) v1alpha.NodeContributionInterface {
 	return &FakeNodeContributions{c, namespace}
 }

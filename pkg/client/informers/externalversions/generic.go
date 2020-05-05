@@ -61,8 +61,6 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().AuthorityRequests().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("emailverifications"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().EmailVerifications().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("logins"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Logins().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("nodecontributions"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().NodeContributions().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("selectivedeployments"):

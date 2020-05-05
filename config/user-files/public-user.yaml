@@ -10,7 +10,7 @@ metadata:
   name: public-user
 rules:
 - apiGroups: ["apps.edgenet.io"]
-  resources: ["authorityrequests", "userregistrationrequests", "logins"]
+  resources: ["authorityrequests", "userregistrationrequests"]
   verbs: ["create"]
 - apiGroups: ["apps.edgenet.io"]
   resources: ["emailverifications"]

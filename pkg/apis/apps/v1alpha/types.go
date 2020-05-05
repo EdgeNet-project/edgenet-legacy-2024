@@ -286,7 +286,6 @@ type UserSpec struct {
 	FirstName string   `json:"firstname"`
 	LastName  string   `json:"lastname"`
 	Email     string   `json:"email"`
-	Password  string   `json:"password"`
 	Roles     []string `json:"roles"`
 	URL       string   `json:"url"`
 	Bio       string   `json:"bio"`
@@ -294,9 +293,8 @@ type UserSpec struct {
 
 // UserStatus is the status for a User resource
 type UserStatus struct {
-	Active  bool `json:"active"`
-	AUP     bool `json:"aup"`
-	WebAuth bool `json:"webauth"`
+	Active bool `json:"active"`
+	AUP    bool `json:"aup"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -330,7 +328,6 @@ type UserRegistrationRequestSpec struct {
 	FirstName string   `json:"firstname"`
 	LastName  string   `json:"lastname"`
 	Email     string   `json:"email"`
-	Password  string   `json:"password"`
 	Roles     []string `json:"roles"`
 	URL       string   `json:"url"`
 	Bio       string   `json:"bio"`
@@ -393,43 +390,6 @@ type AcceptableUsePolicyList struct {
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Login describes a Login resource
-type Login struct {
-	// TypeMeta is the metadata for the resource, like kind and apiversion
-	meta_v1.TypeMeta `json:",inline"`
-	// ObjectMeta contains the metadata for the particular object, including
-	meta_v1.ObjectMeta `json:"metadata,omitempty"`
-
-	// Spec is the login resource spec
-	Spec LoginSpec `json:"spec"`
-	// Status is the login resource status
-	Status LoginStatus `json:"status,omitempty"`
-}
-
-// LoginSpec is the spec for a Login resource
-type LoginSpec struct {
-	Password string `json:"password"`
-}
-
-// LoginStatus is the status for a Login resource
-type LoginStatus struct {
-	Renew   bool          `json:"renew"`
-	Expires *meta_v1.Time `json:"expires"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// LoginList is a list of Login resources
-type LoginList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
-
-	Items []Login `json:"items"`
-}
-
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // EmailVerification describes a EmailVerification resource
 type EmailVerification struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
@@ -439,7 +399,7 @@ type EmailVerification struct {
 
 	// Spec is the emailverification resource spec
 	Spec EmailVerificationSpec `json:"spec"`
-	// Status is the login resource status
+	// Status is the emailverification resource status
 	Status EmailVerificationStatus `json:"status,omitempty"`
 }
 
@@ -450,7 +410,7 @@ type EmailVerificationSpec struct {
 	Verified   bool   `json:"verified"`
 }
 
-// EmailVerificationStatus is the status for a Login resource
+// EmailVerificationStatus is the status for a EmailVerification resource
 type EmailVerificationStatus struct {
 	Renew   bool          `json:"renew"`
 	Expires *meta_v1.Time `json:"expires"`
@@ -478,7 +438,7 @@ type NodeContribution struct {
 
 	// Spec is the nodecontribution resource spec
 	Spec NodeContributionSpec `json:"spec"`
-	// Status is the login resource status
+	// Status is the nodecontribution resource status
 	Status NodeContributionStatus `json:"status,omitempty"`
 }
 

@@ -93,8 +93,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Create(userAUP)
 			// Create user-specific roles regarding the resources of authority, users, and acceptableusepolicies
 			policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"authorities"}, ResourceNames: []string{userOwnerNamespace.Labels["authority-name"]},
-				Verbs: []string{"get"}}, {APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"get"}},
-				{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"logins"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"*"}}}
+				Verbs: []string{"get"}}, {APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"get"}}}
 			userRole := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("user-%s", userCopy.GetName()), OwnerReferences: userOwnerReferences},
 				Rules: policyRule}
 			_, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(userRole)
@@ -110,21 +109,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			if err != nil {
 				log.Infof("Couldn't create user-aup-%s role: %s", userCopy.GetName(), err)
 			}
-
-			// Check if the password has been replaced by a secret already
-			_, err = t.clientset.CoreV1().Secrets(userCopy.GetNamespace()).Get(userCopy.Spec.Password, metav1.GetOptions{})
-			if err != nil {
-				// Create a user-specific secret to keep the password safe
-				passwordSecret := registration.CreateSecretByPassword(userCopy)
-				// Update the password field as the secret's name for later use
-				userCopy.Spec.Password = passwordSecret
-				userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
-				if err == nil {
-					// To manipulate the object later
-					userCopy = userCopyUpdated
-				}
-			}
-
 			// Activate user
 			defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
 			userCopy.Status.Active = true
@@ -197,19 +181,6 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	}
 	if userOwnerAuthority.Status.Enabled {
 		if userCopy.Status.Active && userCopy.Status.AUP {
-			// To update the secret of password
-			if fieldUpdated.password {
-				_, err := t.clientset.CoreV1().Secrets(userCopy.GetNamespace()).Get(userCopy.Spec.Password, metav1.GetOptions{})
-				if err != nil {
-					t.clientset.CoreV1().Secrets(userCopy.GetNamespace()).Delete(fmt.Sprintf("%s-pass", userCopy.GetName()), &metav1.DeleteOptions{})
-					passwordSecret := registration.CreateSecretByPassword(userCopy)
-					userCopy.Spec.Password = passwordSecret
-					userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
-					if err == nil {
-						userCopy = userCopyUpdated
-					}
-				}
-			}
 			// To manipulate role bindings according to the changes
 			if fieldUpdated.active || fieldUpdated.aup || fieldUpdated.roles {
 				slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(metav1.ListOptions{})
@@ -288,7 +259,7 @@ func (t *Handler) deleteRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 	deletionLoop := func(roleBindings *rbacv1.RoleBindingList) {
 		for _, roleBindingRow := range roleBindings.Items {
 			for _, roleBindingSubject := range roleBindingRow.Subjects {
-				if roleBindingSubject.Kind == "ServiceAccount" && (roleBindingSubject.Name == userCopy.GetName() || roleBindingSubject.Name == fmt.Sprintf("%s-webauth", userCopy.GetName())) &&
+				if roleBindingSubject.Kind == "ServiceAccount" && (roleBindingSubject.Name == userCopy.GetName()) &&
 					roleBindingSubject.Namespace == userCopy.GetNamespace() {
 					t.clientset.RbacV1().RoleBindings(roleBindingRow.GetNamespace()).Delete(roleBindingRow.GetName(), &metav1.DeleteOptions{})
 					break
@@ -331,10 +302,6 @@ func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) {
 		roleName := fmt.Sprintf("user-aup-%s", userCopy.GetName())
 		roleRef := rbacv1.RoleRef{Kind: "Role", Name: roleName}
 		rbSubjects := []rbacv1.Subject{{Kind: "ServiceAccount", Name: userCopy.GetName(), Namespace: userCopy.GetNamespace()}}
-		if userCopy.Status.WebAuth {
-			rbSubjectWebAuth := rbacv1.Subject{Kind: "ServiceAccount", Name: fmt.Sprintf("%s-webauth", userCopy.GetName()), Namespace: userCopy.GetNamespace()}
-			rbSubjects = append(rbSubjects, rbSubjectWebAuth)
-		}
 		roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: userCopy.GetNamespace(), Name: fmt.Sprintf("%s-%s", userCopy.GetNamespace(), roleName)},
 			Subjects: rbSubjects, RoleRef: roleRef}
 		// When a user is deleted, the owner references feature allows the related role binding to be automatically removed

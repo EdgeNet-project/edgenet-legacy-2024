@@ -55,7 +55,7 @@
               <p>You will use an EdgeNet public kubeconfig file to make your registration request.</p>
               <h3 id="create-a-request">Create a request</h3>
               <p>In the first place, you need to create a user registration object according to your
-              information. This object must include username consisting of <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/names/">allowed characters</a>, the namespace of the authority, which is a combination of <strong>&quot;authority&quot;</strong> prefix and authority nickname, you want yourself to register in, firstname, lastname, email, password, and roles. Here is an example:</p>
+              information. This object must include username consisting of <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/names/">allowed characters</a>, the namespace of the authority, which is a combination of <strong>&quot;authority&quot;</strong> prefix and authority nickname, you want yourself to register in, firstname, lastname, email, and roles. Here is an example:</p>
               <pre class="pre"><code class="lang-yaml">apiVersion: apps.edgenet.io/v1alpha
 kind: UserRegistrationRequest
 metadata:
@@ -65,7 +65,6 @@ spec:
   firstname: &lt;your firstname&gt;
   lastname: &lt;your lastname&gt;
   email: &lt;your email address&gt;
-  password: &lt;your password at least base64 encoded&gt;
   roles: [User]</code></pre>
               <pre class="pre"><code>kubectl create -f ./userregistrationrequest.yaml --kubeconfig ./public-user.cfg</code></pre>
               <h3 id="email-verification">Email verification</h3>

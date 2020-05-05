@@ -13,7 +13,7 @@ You will use an EdgeNet public kubeconfig file to make your registration request
 
 ### Create a request
 In the first place, you need to create a user registration object according to your
-information. This object must include username consisting of [allowed characters](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/), the namespace of the authority, which is a combination of **"authority"** prefix and authority nickname, you want yourself to register in, firstname, lastname, email, password, and roles. Here is an example:
+information. This object must include username consisting of [allowed characters](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/), the namespace of the authority, which is a combination of **"authority"** prefix and authority nickname, you want yourself to register in, firstname, lastname, email, and roles. Here is an example:
 
 ```yaml
 apiVersion: apps.edgenet.io/v1alpha
@@ -25,7 +25,6 @@ spec:
   firstname: <your firstname>
   lastname: <your lastname>
   email: <your email address>
-  password: <your password at least base64 encoded>
   roles: [User]
 ```
 

@@ -59,8 +59,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&UserRegistrationRequestList{},
 		&AcceptableUsePolicy{},
 		&AcceptableUsePolicyList{},
-		&Login{},
-		&LoginList{},
 		&EmailVerification{},
 		&EmailVerificationList{},
 		&Slice{},

@@ -32,8 +32,6 @@ type Interface interface {
 	AuthorityRequests() AuthorityRequestInformer
 	// EmailVerifications returns a EmailVerificationInformer.
 	EmailVerifications() EmailVerificationInformer
-	// Logins returns a LoginInformer.
-	Logins() LoginInformer
 	// NodeContributions returns a NodeContributionInformer.
 	NodeContributions() NodeContributionInformer
 	// SelectiveDeployments returns a SelectiveDeploymentInformer.
@@ -77,11 +75,6 @@ func (v *version) AuthorityRequests() AuthorityRequestInformer {
 // EmailVerifications returns a EmailVerificationInformer.
 func (v *version) EmailVerifications() EmailVerificationInformer {
 	return &emailVerificationInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
-// Logins returns a LoginInformer.
-func (v *version) Logins() LoginInformer {
-	return &loginInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // NodeContributions returns a NodeContributionInformer.
