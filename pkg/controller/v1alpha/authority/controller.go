@@ -20,16 +20,15 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"reflect"
 	"syscall"
 	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
 	appsinformer_v1 "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
 
 	log "github.com/Sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -55,6 +54,8 @@ type informerevent struct {
 const create = "create"
 const update = "update"
 const delete = "delete"
+const failure = "Failure"
+const success = "Established"
 
 // Start function is entry point of the controller
 func Start() {
@@ -92,13 +93,11 @@ func Start() {
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.Authority).Status, newObj.(*apps_v1alpha.Authority).Status) {
-				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
-				event.function = update
-				log.Infof("Update authority: %s", event.key)
-				if err == nil {
-					queue.Add(event)
-				}
+			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
+			event.function = update
+			log.Infof("Update authority: %s", event.key)
+			if err == nil {
+				queue.Add(event)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
@@ -129,6 +128,16 @@ func Start() {
 	_, err = clientset.RbacV1().ClusterRoles().Create(authorityRole)
 	if err != nil {
 		log.Infof("Couldn't create authority-admin cluster role: %s", err)
+		if errors.IsAlreadyExists(err) {
+			authorityClusterRole, err := clientset.RbacV1().ClusterRoles().Get(authorityRole.GetName(), metav1.GetOptions{})
+			if err == nil {
+				authorityClusterRole.Rules = policyRule
+				_, err = clientset.RbacV1().ClusterRoles().Update(authorityClusterRole)
+				if err == nil {
+					log.Infoln("Authority-admin cluster role updated")
+				}
+			}
+		}
 	}
 	// Authority Manager
 	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"userregistrationrequests", "userregistrationrequests/status",
@@ -139,6 +148,16 @@ func Start() {
 	_, err = clientset.RbacV1().ClusterRoles().Create(authorityRole)
 	if err != nil {
 		log.Infof("Couldn't create authority-manager cluster role: %s", err)
+		if errors.IsAlreadyExists(err) {
+			authorityClusterRole, err := clientset.RbacV1().ClusterRoles().Get(authorityRole.GetName(), metav1.GetOptions{})
+			if err == nil {
+				authorityClusterRole.Rules = policyRule
+				_, err = clientset.RbacV1().ClusterRoles().Update(authorityClusterRole)
+				if err == nil {
+					log.Infoln("Authority-manager cluster role updated")
+				}
+			}
+		}
 	}
 	// Authority Tech
 	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"nodecontributions"}, Verbs: []string{"*"}}}
@@ -147,6 +166,16 @@ func Start() {
 	_, err = clientset.RbacV1().ClusterRoles().Create(authorityRole)
 	if err != nil {
 		log.Infof("Couldn't create authority-tech cluster role: %s", err)
+		if errors.IsAlreadyExists(err) {
+			authorityClusterRole, err := clientset.RbacV1().ClusterRoles().Get(authorityRole.GetName(), metav1.GetOptions{})
+			if err == nil {
+				authorityClusterRole.Rules = policyRule
+				_, err = clientset.RbacV1().ClusterRoles().Update(authorityClusterRole)
+				if err == nil {
+					log.Infoln("Authority-tech cluster role updated")
+				}
+			}
+		}
 	}
 	// Authority User
 	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "teams", "nodecontributions"}, Verbs: []string{"get", "list"}}}
@@ -155,6 +184,16 @@ func Start() {
 	_, err = clientset.RbacV1().ClusterRoles().Create(authorityRole)
 	if err != nil {
 		log.Infof("Couldn't create authority-user cluster role: %s", err)
+		if errors.IsAlreadyExists(err) {
+			authorityClusterRole, err := clientset.RbacV1().ClusterRoles().Get(authorityRole.GetName(), metav1.GetOptions{})
+			if err == nil {
+				authorityClusterRole.Rules = policyRule
+				_, err = clientset.RbacV1().ClusterRoles().Update(authorityClusterRole)
+				if err == nil {
+					log.Infoln("Authority-user cluster role updated")
+				}
+			}
+		}
 	}
 
 	// A channel to terminate elegantly

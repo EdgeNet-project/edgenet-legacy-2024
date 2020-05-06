@@ -69,6 +69,12 @@ type VerifyContentData struct {
 	Code       string
 }
 
+// ValidationFailureContentData to set the failure-specific variables
+type ValidationFailureContentData struct {
+	Kind string
+	Name string
+}
+
 // smtpServer implementation
 type smtpServer struct {
 	Host     string `yaml:"host"`
@@ -129,6 +135,9 @@ func Send(subject string, contentData interface{}) {
 		to, body = setTeamContent(contentData, smtpServer.From, subject)
 	case "node-contribution-successful", "node-contribution-failure", "node-contribution-failure-support":
 		to, body = setNodeContributionContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
+	case "authority-validation-failure-name", "authority-validation-failure-email", "authority-email-verification-malfunction",
+		"authority-creation-failure":
+		to, body = setAuthorityFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	}
 
 	// Create a new Client connected to the SMTP server
@@ -219,6 +228,24 @@ func setCommonEmailHeaders(subject string, from string, to []string, delimiter s
 	return body
 }
 
+// setAuthorityFailureContent to create an email body related to failures during authority creation
+func setAuthorityFailureContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
+	NCData := contentData.(CommonContentData)
+	// The HTML template
+	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	delimiter := ""
+	title := "[EdgeNet Admin] Authority Establishment Failure"
+	if subject == "authority-validation-failure-name" || subject == "authority-validation-failure-email" {
+		title = "[EdgeNet] Authority Establishment Failure"
+		// This represents receivers' email addresses
+		to = NCData.CommonData.Email
+	}
+	body := setCommonEmailHeaders(title, from, to, delimiter)
+	t.Execute(&body, NCData)
+
+	return to, body
+}
+
 // setNodeContributionContent to create an email body related to the node contribution notification
 func setNodeContributionContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
 	NCData := contentData.(MultiProviderData)
@@ -235,7 +262,7 @@ func setNodeContributionContent(contentData interface{}, from string, to []strin
 		to = NCData.CommonData.Email
 		title = "[EdgeNet] Node Contribution - Failed"
 	case "node-contribution-failure-support":
-		title = "[EdgeNet] Node Contribution - Failure"
+		title = "[EdgeNet Admin] Node Contribution - Failure"
 	}
 	body := setCommonEmailHeaders(title, from, to, delimiter)
 	t.Execute(&body, NCData)
@@ -371,7 +398,7 @@ func setAuthorityVerifiedAlertContent(contentData interface{}, from string, to [
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verified-alert.html")
 	delimiter := ""
-	body := setCommonEmailHeaders("[EdgeNet] Authority Request - Email Verified", from, to, delimiter)
+	body := setCommonEmailHeaders("[EdgeNet Admin] Authority Request - Email Verified", from, to, delimiter)
 	t.Execute(&body, alertData)
 
 	return to, body

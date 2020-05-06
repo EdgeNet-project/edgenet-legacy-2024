@@ -122,7 +122,9 @@ type Contact struct {
 
 // AuthorityStatus is the status for a Authority resource
 type AuthorityStatus struct {
-	Enabled bool `json:"enabled"`
+	Enabled bool     `json:"enabled"`
+	State   string   `json:"state"`
+	Message []string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -166,6 +168,8 @@ type AuthorityRequestStatus struct {
 	EmailVerify bool          `json:"emailverify"`
 	Approved    bool          `json:"approved"`
 	Expires     *meta_v1.Time `json:"expires"`
+	State       string        `json:"state"`
+	Message     []string      `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

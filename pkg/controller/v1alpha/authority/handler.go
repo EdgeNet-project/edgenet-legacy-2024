@@ -18,6 +18,7 @@ package authority
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
@@ -28,6 +29,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -93,67 +95,15 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	// Create a copy of the authority object to make changes on it
 	authorityCopy := obj.(*apps_v1alpha.Authority).DeepCopy()
 	// Check if the email address of user is already taken
-	exist := t.checkDuplicateObject(authorityCopy)
-	if exist {
-		// If it is already taken, remove the authority object
-		t.edgenetClientset.AppsV1alpha().Authorities().Delete(authorityCopy.GetName(), &metav1.DeleteOptions{})
+	exists, message := t.checkDuplicateObject(authorityCopy)
+	if exists {
+		authorityCopy.Status.State = failure
+		authorityCopy.Status.Message = []string{message}
+		authorityCopy.Status.Enabled = false
+		t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
 		return
 	}
-	if authorityCopy.GetGeneration() == 1 && !authorityCopy.Status.Enabled {
-		// If the service restarts, it creates all objects again
-		// Because of that, this section covers a variety of possibilities
-		_, err := t.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("authority-%s", authorityCopy.GetName()), metav1.GetOptions{})
-		if err != nil {
-			// Create a cluster role to be used by authority users
-			policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"authorities"}, ResourceNames: []string{authorityCopy.GetName()}, Verbs: []string{"get"}}}
-			authorityRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", authorityCopy.GetName())}, Rules: policyRule}
-			_, err := t.clientset.RbacV1().ClusterRoles().Create(authorityRole)
-			if err != nil {
-				log.Infof("Couldn't create authority-%s role: %s", authorityCopy.GetName(), err)
-			}
-			// Automatically create a namespace to host users, slices, and teams
-			// When a authority is deleted, the owner references feature allows the namespace to be automatically removed
-			authorityOwnerReferences := t.setOwnerReferences(authorityCopy)
-			// Every namespace of a authority has the prefix as "authority" to provide singularity
-			authorityChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", authorityCopy.GetName()), OwnerReferences: authorityOwnerReferences}}
-			// Namespace labels indicate this namespace created by a authority, not by a team or slice
-			namespaceLabels := map[string]string{"owner": "authority", "owner-name": authorityCopy.GetName(), "authority-name": authorityCopy.GetName()}
-			authorityChildNamespace.SetLabels(namespaceLabels)
-			authorityChildNamespaceCreated, _ := t.clientset.CoreV1().Namespaces().Create(authorityChildNamespace)
-			// Create the resource quota to ban users from using this namespace for their applications
-			t.clientset.CoreV1().ResourceQuotas(authorityChildNamespaceCreated.GetName()).Create(t.resourceQuota)
-
-			childNamespaceOwnerReferences := t.setNamespaceOwnerReferences(authorityChildNamespaceCreated)
-			authorityCopy.ObjectMeta.OwnerReferences = childNamespaceOwnerReferences
-			authorityCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Authorities().Update(authorityCopy)
-			if err == nil {
-				// To manipulate the object later
-				authorityCopy = authorityCopyUpdated
-			}
-			// Automatically enable authority and update authority status
-			authorityCopy.Status.Enabled = true
-			enableAuthorityAdmin := func() {
-				t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
-				// Create a user as admin on authority
-				user := apps_v1alpha.User{}
-				user.SetName(strings.ToLower(authorityCopy.Spec.Contact.Username))
-				user.Spec.Email = authorityCopy.Spec.Contact.Email
-				user.Spec.FirstName = authorityCopy.Spec.Contact.FirstName
-				user.Spec.LastName = authorityCopy.Spec.Contact.LastName
-				user.Spec.Roles = []string{"Admin"}
-				t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", authorityCopy.GetName())).Create(user.DeepCopy())
-			}
-			defer enableAuthorityAdmin()
-
-			// Set the HTML template variables
-			contentData := mailer.CommonContentData{}
-			contentData.CommonData.Authority = authorityCopy.GetName()
-			contentData.CommonData.Username = authorityCopy.Spec.Contact.Username
-			contentData.CommonData.Name = fmt.Sprintf("%s %s", authorityCopy.Spec.Contact.FirstName, authorityCopy.Spec.Contact.LastName)
-			contentData.CommonData.Email = []string{authorityCopy.Spec.Contact.Email}
-			mailer.Send("authority-creation-successful", contentData)
-		}
-	}
+	authorityCopy = t.authorityPreparation(authorityCopy)
 }
 
 // ObjectUpdated is called when an object is updated
@@ -161,6 +111,19 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	log.Info("AuthorityHandler.ObjectUpdated")
 	// Create a copy of the authority object to make changes on it
 	authorityCopy := obj.(*apps_v1alpha.Authority).DeepCopy()
+	// Check if the email address of user is already taken
+	exists, message := t.checkDuplicateObject(authorityCopy)
+	if exists {
+		authorityCopy.Status.State = failure
+		authorityCopy.Status.Message = []string{message}
+		authorityCopy.Status.Enabled = false
+		authorityCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
+		if err == nil {
+			authorityCopy = authorityCopyUpdated
+		}
+	} else {
+		authorityCopy = t.authorityPreparation(authorityCopy)
+	}
 	// Check whether the authority disabled
 	if authorityCopy.Status.Enabled == false {
 		// Delete all RoleBindings, Teams, and Slices in the namespace of authority
@@ -184,9 +147,87 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// Delete or disable nodes added by authority, TBD.
 }
 
+// authorityPreparation basically generates a namespace and creates authority-admin
+func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *apps_v1alpha.Authority {
+	// If the service restarts, it creates all objects again
+	// Because of that, this section covers a variety of possibilities
+	_, err := t.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("authority-%s", authorityCopy.GetName()), metav1.GetOptions{})
+	if err != nil {
+		// Create a cluster role to be used by authority users
+		policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"authorities"}, ResourceNames: []string{authorityCopy.GetName()}, Verbs: []string{"get"}}}
+		authorityRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", authorityCopy.GetName())}, Rules: policyRule}
+		_, err := t.clientset.RbacV1().ClusterRoles().Create(authorityRole)
+		if err != nil {
+			log.Infof("Couldn't create authority-%s role: %s", authorityCopy.GetName(), err)
+			log.Infoln(errors.IsAlreadyExists(err))
+			if errors.IsAlreadyExists(err) {
+				authorityClusterRole, err := t.clientset.RbacV1().ClusterRoles().Get(authorityRole.GetName(), metav1.GetOptions{})
+				if err == nil {
+					authorityClusterRole.Rules = policyRule
+					_, err = t.clientset.RbacV1().ClusterRoles().Update(authorityClusterRole)
+					if err == nil {
+						log.Infof("Authority-%s cluster role updated", authorityCopy.GetName())
+					}
+				}
+			}
+		}
+		// Automatically create a namespace to host users, slices, and teams
+		// When a authority is deleted, the owner references feature allows the namespace to be automatically removed
+		authorityOwnerReferences := t.setOwnerReferences(authorityCopy)
+		// Every namespace of a authority has the prefix as "authority" to provide singularity
+		authorityChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", authorityCopy.GetName()), OwnerReferences: authorityOwnerReferences}}
+		// Namespace labels indicate this namespace created by a authority, not by a team or slice
+		namespaceLabels := map[string]string{"owner": "authority", "owner-name": authorityCopy.GetName(), "authority-name": authorityCopy.GetName()}
+		authorityChildNamespace.SetLabels(namespaceLabels)
+		authorityChildNamespaceCreated, _ := t.clientset.CoreV1().Namespaces().Create(authorityChildNamespace)
+		// Create the resource quota to ban users from using this namespace for their applications
+		_, err = t.clientset.CoreV1().ResourceQuotas(authorityChildNamespaceCreated.GetName()).Create(t.resourceQuota)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			log.Infof("Couldn't create resource quota in %s: %s", authorityCopy.GetName(), err)
+		}
+		childNamespaceOwnerReferences := t.setNamespaceOwnerReferences(authorityChildNamespaceCreated)
+		authorityCopy.ObjectMeta.OwnerReferences = childNamespaceOwnerReferences
+		authorityCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Authorities().Update(authorityCopy)
+		if err == nil {
+			// To manipulate the object later
+			authorityCopy = authorityCopyUpdated
+		}
+		// Automatically enable authority and update authority status
+		authorityCopy.Status.Enabled = true
+		authorityCopy.Status.State = success
+		authorityCopy.Status.Message = []string{"Authority successfully established"}
+		enableAuthorityAdmin := func() {
+			t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
+			// Create a user as admin on authority
+			user := apps_v1alpha.User{}
+			user.SetName(strings.ToLower(authorityCopy.Spec.Contact.Username))
+			user.Spec.Email = authorityCopy.Spec.Contact.Email
+			user.Spec.FirstName = authorityCopy.Spec.Contact.FirstName
+			user.Spec.LastName = authorityCopy.Spec.Contact.LastName
+			user.Spec.Roles = []string{"Admin"}
+			t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", authorityCopy.GetName())).Create(user.DeepCopy())
+		}
+		defer enableAuthorityAdmin()
+		t.sendEmail(authorityCopy, "authority-creation-successful")
+	}
+	return authorityCopy
+}
+
+// sendEmail to send notification to participants
+func (t *Handler) sendEmail(authorityCopy *apps_v1alpha.Authority, subject string) {
+	// Set the HTML template variables
+	contentData := mailer.CommonContentData{}
+	contentData.CommonData.Authority = authorityCopy.GetName()
+	contentData.CommonData.Username = authorityCopy.Spec.Contact.Username
+	contentData.CommonData.Name = fmt.Sprintf("%s %s", authorityCopy.Spec.Contact.FirstName, authorityCopy.Spec.Contact.LastName)
+	contentData.CommonData.Email = []string{authorityCopy.Spec.Contact.Email}
+	mailer.Send(subject, contentData)
+}
+
 // checkDuplicateObject checks whether a user exists with the same email address
-func (t *Handler) checkDuplicateObject(authorityCopy *apps_v1alpha.Authority) bool {
-	exist := false
+func (t *Handler) checkDuplicateObject(authorityCopy *apps_v1alpha.Authority) (bool, string) {
+	exists := false
+	var message string
 	// To check email address
 	userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
 	for _, userRow := range userRaw.Items {
@@ -194,22 +235,33 @@ func (t *Handler) checkDuplicateObject(authorityCopy *apps_v1alpha.Authority) bo
 			if userRow.GetNamespace() == fmt.Sprintf("authority-%s", authorityCopy.GetName()) && userRow.GetName() == strings.ToLower(authorityCopy.Spec.Contact.Username) {
 				continue
 			}
-			exist = true
+			exists = true
+			message = fmt.Sprintf("Email address, %s, already exists for another user account", authorityCopy.Spec.Contact.Email)
 			break
 		}
 	}
-	if !exist {
-		// Delete the authority requests which have duplicate values, if any
+	if !exists {
+		// Update the authority requests that have duplicate values, if any
 		authorityRequestRaw, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{})
 		for _, authorityRequestRow := range authorityRequestRaw.Items {
-			if authorityRequestRow.GetName() == authorityCopy.GetName() || authorityRequestRow.Spec.Contact.Email == authorityCopy.Spec.Contact.Email ||
-				authorityRequestRow.Spec.Contact.Username == authorityCopy.Spec.Contact.Username {
-				t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(authorityRequestRow.GetName(), &metav1.DeleteOptions{})
+			if authorityRequestRow.Status.State == success {
+				if authorityRequestRow.GetName() == authorityCopy.GetName() {
+					message = fmt.Sprintf("Authority name, %s, is already taken", authorityCopy.GetName())
+					authorityRequestRow.Status.State = failure
+					authorityRequestRow.Status.Message = []string{message}
+					t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(authorityRequestRow.DeepCopy())
+				} else if authorityRequestRow.Spec.Contact.Email == authorityCopy.Spec.Contact.Email {
+					message = fmt.Sprintf("Email address, %s, has already been used in another authority request", authorityCopy.Spec.Contact.Email)
+					authorityRequestRow.Status.State = failure
+					authorityRequestRow.Status.Message = []string{message}
+					t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(authorityRequestRow.DeepCopy())
+				}
 			}
 		}
+	} else if exists && !reflect.DeepEqual(authorityCopy.Status.Message, message) {
+		t.sendEmail(authorityCopy, "authority-validation-failure-email")
 	}
-	// Mail notification, TBD
-	return exist
+	return exists, message
 }
 
 // setOwnerReferences returns the authority as owner

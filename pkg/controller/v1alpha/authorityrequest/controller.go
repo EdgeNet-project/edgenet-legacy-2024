@@ -20,11 +20,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"reflect"
 	"syscall"
 	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
 	appsinformer_v1 "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
 
@@ -53,6 +51,9 @@ type informerevent struct {
 const create = "create"
 const update = "update"
 const delete = "delete"
+const failure = "Failure"
+const issue = "Malfunction"
+const success = "Successful"
 
 // Start function is entry point of the controller
 func Start() {
@@ -85,13 +86,11 @@ func Start() {
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.AuthorityRequest).Status, newObj.(*apps_v1alpha.AuthorityRequest).Status) {
-				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
-				event.function = update
-				log.Infof("Update authorityrequest: %s", event.key)
-				if err == nil {
-					queue.Add(event)
-				}
+			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
+			event.function = update
+			log.Infof("Update authorityrequest: %s", event.key)
+			if err == nil {
+				queue.Add(event)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
