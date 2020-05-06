@@ -33,4 +33,6 @@ Our web presence should consist of:
       * the [list of open issues](https://github.com/EdgeNet-project/edgenet/issues)
       * the [project milestones](https://github.com/EdgeNet-project/edgenet/milestones)
 1. API documentation for developers [on Postman](https://documenter.getpostman.com/view/7656709/SzYT4gRL?version=latest)
+1. code documentation for developers
+   * (TO BE PUT IN PLACE)
 1. a live chat page for both users and developers at [https://tawk.to/edgenet](https://tawk.to/edgenet)
