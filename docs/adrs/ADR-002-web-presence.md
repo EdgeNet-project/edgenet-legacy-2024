@@ -16,10 +16,10 @@ EdgeNet is visible in a number of ways via the web. We aim to inventory these an
 
 Our web presence should consist of:
 1. a public website for users of the testbed
-   * at http://www.edge-net.org/ (TO BE SWITCHED TO HTTPS)
+   * at https://www.edge-net.org/
    * source at [edgenet/website](../../website) in the project's GitHub repository (see below)
 1. the Kubernetes console for users of the testbed
-   * at https://headnode.edge-net.org/
+   * at https://dashboard.edge-net.org/
    * the API endpoint for ``kubectl`` commands is the same server, on another port number: https://51.75.127.152:6443
 1. a web console for non-Kubernetes users of the testbed
    * (TO BE PUT IN PLACE)

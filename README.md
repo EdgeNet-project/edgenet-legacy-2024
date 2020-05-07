@@ -5,7 +5,7 @@
 EdgeNet is Kubernetes adapted for the network edge. It allows you to deploy applications to hundreds of nodes
 that are scattered across the internet, rather than to just one or a small number of centralized datacenters.
 
-The code that we are developing here is in production powering [the EdgeNet testbed](http://www.edge-net.org/),
+The code that we are developing here is in production powering [the EdgeNet testbed](https://www.edge-net.org/),
 on which researchers worldwide conduct experiments in distributed systems and internet measurements.
 
 ## Support
