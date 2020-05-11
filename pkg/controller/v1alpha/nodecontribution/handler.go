@@ -262,7 +262,13 @@ func (t *Handler) runSetupProcedure(addr, nodeName, recordType string, config *s
 	dnsConfiguration := make(chan bool, 1)
 	installation := make(chan bool, 1)
 	nodePatch := make(chan bool, 1)
-
+	// Set the status as recovering
+	NCCopy.Status.State = inprogress
+	NCCopy.Status.Message = append(NCCopy.Status.Message, "Installation procedure has started")
+	NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
+	if err == nil {
+		NCCopy = NCCopyUpdated
+	}
 	// Start DNS configuration of `edge-net.io`
 	dnsConfiguration <- true
 	// This statement to organize tasks and put a general timeout on

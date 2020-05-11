@@ -65,7 +65,7 @@ type patchByBoolValue struct {
 }
 
 // Constant variables for events
-const inprogress = "Installing"
+const inprogress = "In Progress"
 const recover = "Recovering"
 const failure = "Failure"
 const incomplete = "Halting"
