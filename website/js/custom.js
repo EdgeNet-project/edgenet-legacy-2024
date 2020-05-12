@@ -35,7 +35,7 @@
   function getNodeList()
   {
       $.ajax({
-        url: "https://headnode.edge-net.org:6443/api/v1/nodes",
+        url: "https://apiserver.edge-net.org/api/v1/nodes",
         type: "GET",
         contentType: "json",
         beforeSend: function (xhr) {

@@ -34,7 +34,7 @@ If you do not already have ``kubectl``, you will need to install it on your syst
 
 An EdgeNet authority request is a Kubernetes object, and to manipulate objects on a Kubernetes system you need a kubeconfig file. EdgeNet provides a public kubeconfig file that anyone can use for the prupose of creating authority requests.
 
-This public kubeconfig file is available here: [http://edge-net.org/downloads/config/public.cfg](http://edge-net.org/downloads/config/public.cfg). In what follows, we will assume that it is saved in your working directory on your system as ``./public.cfg``.
+This public kubeconfig file is available here: [https://edge-net.org/downloads/config/public.cfg](https://edge-net.org/downloads/config/public.cfg). In what follows, we will assume that it is saved in your working directory on your system as ``./public.cfg``.
 
 The public file does not allow any actions beyond the creation of an authority request and the use of the one-time code to confirm the request. Once the request goes through, you will be provided with another kubeconfig file that is specific to you and that will allow you to carry out adminstrative actions having to do with your authority, as well as to use EdgeNet as an ordinary user.
 
