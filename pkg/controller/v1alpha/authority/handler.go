@@ -94,7 +94,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	log.Info("AuthorityHandler.ObjectCreated")
 	// Create a copy of the authority object to make changes on it
 	authorityCopy := obj.(*apps_v1alpha.Authority).DeepCopy()
-	// Check if the email address of user is already taken
+	// Check if the email address is already taken
 	exists, message := t.checkDuplicateObject(authorityCopy)
 	if exists {
 		authorityCopy.Status.State = failure
@@ -111,7 +111,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	log.Info("AuthorityHandler.ObjectUpdated")
 	// Create a copy of the authority object to make changes on it
 	authorityCopy := obj.(*apps_v1alpha.Authority).DeepCopy()
-	// Check if the email address of user is already taken
+	// Check if the email address is already taken
 	exists, message := t.checkDuplicateObject(authorityCopy)
 	if exists {
 		authorityCopy.Status.State = failure
@@ -194,7 +194,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		}
 		// Automatically enable authority and update authority status
 		authorityCopy.Status.Enabled = true
-		authorityCopy.Status.State = success
+		authorityCopy.Status.State = established
 		authorityCopy.Status.Message = []string{"Authority successfully established"}
 		enableAuthorityAdmin := func() {
 			t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
@@ -245,16 +245,8 @@ func (t *Handler) checkDuplicateObject(authorityCopy *apps_v1alpha.Authority) (b
 		authorityRequestRaw, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{})
 		for _, authorityRequestRow := range authorityRequestRaw.Items {
 			if authorityRequestRow.Status.State == success {
-				if authorityRequestRow.GetName() == authorityCopy.GetName() {
-					message = fmt.Sprintf("Authority name, %s, is already taken", authorityCopy.GetName())
-					authorityRequestRow.Status.State = failure
-					authorityRequestRow.Status.Message = []string{message}
-					t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(authorityRequestRow.DeepCopy())
-				} else if authorityRequestRow.Spec.Contact.Email == authorityCopy.Spec.Contact.Email {
-					message = fmt.Sprintf("Email address, %s, has already been used in another authority request", authorityCopy.Spec.Contact.Email)
-					authorityRequestRow.Status.State = failure
-					authorityRequestRow.Status.Message = []string{message}
-					t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(authorityRequestRow.DeepCopy())
+				if authorityRequestRow.GetName() == authorityCopy.GetName() || authorityRequestRow.Spec.Contact.Email == authorityCopy.Spec.Contact.Email {
+					t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(authorityRequestRow.GetName(), &metav1.DeleteOptions{})
 				}
 			}
 		}

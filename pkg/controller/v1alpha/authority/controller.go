@@ -55,7 +55,8 @@ const create = "create"
 const update = "update"
 const delete = "delete"
 const failure = "Failure"
-const success = "Established"
+const success = "Successful"
+const established = "Established"
 
 // Start function is entry point of the controller
 func Start() {

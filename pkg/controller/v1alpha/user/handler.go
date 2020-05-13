@@ -18,6 +18,7 @@ package user
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -69,15 +71,17 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	log.Info("UserHandler.ObjectCreated")
 	// Create a copy of the user object to make changes on it
 	userCopy := obj.(*apps_v1alpha.User).DeepCopy()
-	// Check if the email address is already taken
-	emailExists := t.checkDuplicateObject(userCopy)
-	if emailExists {
-		// If it is already taken, remove the user registration request object
-		t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Delete(userCopy.GetName(), &metav1.DeleteOptions{})
-		return
-	}
 	// Find the authority from the namespace in which the object is
 	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
+	// Check if the email address is already taken
+	emailExists, message := t.checkDuplicateObject(userCopy, userOwnerNamespace.Labels["authority-name"])
+	if emailExists {
+		userCopy.Status.State = failure
+		userCopy.Status.Message = []string{message}
+		userCopy.Status.Active = false
+		t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+		return
+	}
 	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	// Check if the authority is active
 	if userOwnerAuthority.Status.Enabled == true && userCopy.GetGeneration() == 1 {
@@ -99,6 +103,17 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			_, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(userRole)
 			if err != nil {
 				log.Infof("Couldn't create user-%s role: %s", userCopy.GetName(), err)
+				log.Infoln(errors.IsAlreadyExists(err))
+				if errors.IsAlreadyExists(err) {
+					currentUserRole, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Get(userRole.GetName(), metav1.GetOptions{})
+					if err == nil {
+						currentUserRole.Rules = policyRule
+						_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Update(currentUserRole)
+						if err == nil {
+							log.Infof("User-%s role updated", userCopy.GetName())
+						}
+					}
+				}
 			}
 			// Create a dedicated role to allow the user access to accept/reject AUP, even if the AUP is rejected
 			policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"acceptableusepolicies", "acceptableusepolicies/status"}, ResourceNames: []string{userCopy.GetName()},
@@ -108,6 +123,17 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(userRole)
 			if err != nil {
 				log.Infof("Couldn't create user-aup-%s role: %s", userCopy.GetName(), err)
+				log.Infoln(errors.IsAlreadyExists(err))
+				if errors.IsAlreadyExists(err) {
+					currentUserRole, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Get(userRole.GetName(), metav1.GetOptions{})
+					if err == nil {
+						currentUserRole.Rules = policyRule
+						_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Update(currentUserRole)
+						if err == nil {
+							log.Infof("User-aup-%s role updated", userCopy.GetName())
+						}
+					}
+				}
 			}
 			// Activate user
 			defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
@@ -117,17 +143,14 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			_, err = registration.CreateServiceAccount(userCopy, "main")
 			if err != nil {
 				log.Println(err.Error())
+				userCopy.Status.State = failure
+				userCopy.Status.Message = []string{fmt.Sprintf("Service account creation failed for user %s", userCopy.GetName())}
+				t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-serviceaccount-failure")
+				return
 			}
 			// This function collects the bearer token from the created service account to form kubeconfig file and send it by email
 			makeConfigAvailable := func() {
-				for range time.Tick(30 * time.Second) {
-					serviceAccount, _ := t.clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
-					if len(serviceAccount.Secrets) > 0 {
-						registration.CreateConfig(serviceAccount)
-						break
-					}
-				}
-
 			checkTokenTimer:
 				for {
 					select {
@@ -137,17 +160,14 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 						if len(serviceAccount.Secrets) > 0 {
 							// Create kubeconfig file according to the web service account
 							registration.CreateConfig(serviceAccount)
-							// Set the HTML template variables
-							contentData := mailer.CommonContentData{}
-							contentData.CommonData.Authority = userOwnerNamespace.Labels["authority-name"]
-							contentData.CommonData.Username = userCopy.GetName()
-							contentData.CommonData.Name = fmt.Sprintf("%s %s", userCopy.Spec.FirstName, userCopy.Spec.LastName)
-							contentData.CommonData.Email = []string{userCopy.Spec.Email}
-							mailer.Send("user-registration-successful", contentData)
+							t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-registration-successful")
 							break checkTokenTimer
 						}
 					case <-time.After(15 * time.Minute):
-						// Mail notification, TBD
+						userCopy.Status.State = failure
+						userCopy.Status.Message = []string{fmt.Sprintf("Kubeconfig file generation failed for user %s", userCopy.GetName())}
+						t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+						t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-kubeconfig-failure")
 						break checkTokenTimer
 					}
 				}
@@ -166,6 +186,15 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	// Create a copy of the user object to make changes on it
 	userCopy := obj.(*apps_v1alpha.User).DeepCopy()
 	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
+	// Check if the email address is already taken
+	emailExists, message := t.checkDuplicateObject(userCopy, userOwnerNamespace.Labels["authority-name"])
+	if emailExists {
+		userCopy.Status.State = failure
+		userCopy.Status.Message = []string{message}
+		userCopy.Status.Active = false
+		t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+		return
+	}
 	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	fieldUpdated := updated.(fields)
 	// Security check to prevent any kind of manipulation on the AUP
@@ -307,22 +336,38 @@ func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) {
 		// When a user is deleted, the owner references feature allows the related role binding to be automatically removed
 		userOwnerReferences := t.setOwnerReferences(userCopy)
 		roleBind.ObjectMeta.OwnerReferences = userOwnerReferences
-		t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Create(roleBind)
+		_, err = t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Create(roleBind)
+		if err != nil {
+			log.Infof("Couldn't create user-aup-%s role: %s", userCopy.GetName(), err)
+		}
 	}
 }
 
+// sendEmail to send notification to participants
+func (t *Handler) sendEmail(userCopy *apps_v1alpha.User, authorityName, subject string) {
+	// Set the HTML template variables
+	contentData := mailer.CommonContentData{}
+	contentData.CommonData.Authority = authorityName
+	contentData.CommonData.Username = userCopy.GetName()
+	contentData.CommonData.Name = fmt.Sprintf("%s %s", userCopy.Spec.FirstName, userCopy.Spec.LastName)
+	contentData.CommonData.Email = []string{userCopy.Spec.Email}
+	mailer.Send(subject, contentData)
+}
+
 // checkDuplicateObject checks whether a user exists with the same username or email address
-func (t *Handler) checkDuplicateObject(userCopy *apps_v1alpha.User) bool {
-	exist := false
+func (t *Handler) checkDuplicateObject(userCopy *apps_v1alpha.User, authorityName string) (bool, string) {
+	exists := false
+	var message string
 	// To check email address
 	userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
 	for _, userRow := range userRaw.Items {
 		if userRow.Spec.Email == userCopy.Spec.Email && userRow.GetUID() != userCopy.GetUID() {
-			exist = true
+			exists = true
+			message = fmt.Sprintf("Email address, %s, already exists for another user account", userCopy.Spec.Email)
 			break
 		}
 	}
-	if !exist {
+	if !exists {
 		// Delete the user registration requests which have duplicate values, if any
 		URRRaw, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests("").List(metav1.ListOptions{})
 		for _, URRRow := range URRRaw.Items {
@@ -337,9 +382,10 @@ func (t *Handler) checkDuplicateObject(userCopy *apps_v1alpha.User) bool {
 				t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRRow.GetNamespace()).Delete(URRRow.GetName(), &metav1.DeleteOptions{})
 			}
 		}
+	} else if exists && !reflect.DeepEqual(userCopy.Status.Message, message) {
+		t.sendEmail(userCopy, authorityName, "user-validation-failure")
 	}
-	// Mail notification, TBD
-	return exist
+	return exists, message
 }
 
 // setOwnerReferences puts the user as owner

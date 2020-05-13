@@ -297,8 +297,10 @@ type UserSpec struct {
 
 // UserStatus is the status for a User resource
 type UserStatus struct {
-	Active bool `json:"active"`
-	AUP    bool `json:"aup"`
+	Active  bool     `json:"active"`
+	AUP     bool     `json:"aup"`
+	State   string   `json:"state"`
+	Message []string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -342,6 +344,8 @@ type UserRegistrationRequestStatus struct {
 	EmailVerify bool          `json:"emailverify"`
 	Approved    bool          `json:"approved"`
 	Expires     *meta_v1.Time `json:"expires"`
+	State       string        `json:"state"`
+	Message     []string      `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -418,6 +422,8 @@ type EmailVerificationSpec struct {
 type EmailVerificationStatus struct {
 	Renew   bool          `json:"renew"`
 	Expires *meta_v1.Time `json:"expires"`
+	State   string        `json:"state"`
+	Message []string      `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

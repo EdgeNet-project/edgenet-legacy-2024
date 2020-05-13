@@ -146,6 +146,7 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// Mail notification, TBD
 }
 
+// setEmailVerification to provide one-time code for verification
 func (t *Handler) setEmailVerification(authorityRequestCopy *apps_v1alpha.AuthorityRequest) *apps_v1alpha.AuthorityRequest {
 	// The section below is a part of the method which provides email verification
 	// Email verification code is a security point for email verification. The user
