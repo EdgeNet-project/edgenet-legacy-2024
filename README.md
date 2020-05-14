@@ -17,11 +17,15 @@ To chat with a member of the EdgeNet team live, please [open our tawk.to window]
 
 The EdgeNet software is free and open source; we invite you to contribute.
 
-Please take a look at our [project backlog](https://github.com/orgs/EdgeNet-project/projects/2) to see if
-there are issues that interest you. Or suggest your own.
+To get a sense of where we are heading, please see our list of
+[milestones](https://github.com/EdgeNet-project/edgenet/milestones).
+We follow an agile development approach, with two week sprints, each one leading to a new production version of the 
+code. Our current sprint is one of the milestones, and you can see more near-term issues in our 
+[project backlog](https://github.com/orgs/EdgeNet-project/projects/2).
+You can pick one of these to work on, or suggest your own.
 
-We are currently rolling out new code on a two week cycle. Take a look at our current sprint in the list of
-[milestones](https://github.com/EdgeNet-project/edgenet/milestones) to see what we are working on now.
+To start work, clone the latest release branch. When you have something you would like us to look at,
+please create a pull request for @bsenel to review.
 
 ## Repository layout
 
