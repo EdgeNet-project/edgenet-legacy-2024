@@ -121,7 +121,11 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	fieldUpdated := updated.(fields)
 	if fieldUpdated.kind || fieldUpdated.identifier {
 		t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(EVCopy.GetName(), &metav1.DeleteOptions{})
-		t.sendEmail("authority-email-verification-dubious", EVCopy.Spec.Identifier, EVCopy.GetNamespace(), "", "")
+		if strings.ToLower(EVCopy.Spec.Kind) == "authority" {
+			t.sendEmail("authority-email-verification-dubious", EVCopy.Spec.Identifier, EVCopy.GetNamespace(), "", "")
+		} else if strings.ToLower(EVCopy.Spec.Kind) == "user" {
+			t.sendEmail("user-email-verification-dubious", EVCopy.Spec.Identifier, EVCopy.GetNamespace(), "", "")
+		}
 		return
 	}
 	EVOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(EVCopy.GetNamespace(), metav1.GetOptions{})

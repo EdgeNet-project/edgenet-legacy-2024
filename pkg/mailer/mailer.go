@@ -136,8 +136,11 @@ func Send(subject string, contentData interface{}) {
 	case "node-contribution-successful", "node-contribution-failure", "node-contribution-failure-support":
 		to, body = setNodeContributionContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	case "authority-validation-failure-name", "authority-validation-failure-email", "authority-email-verification-malfunction",
-		"authority-creation-failure":
+		"authority-creation-failure", "authority-email-verification-dubious":
 		to, body = setAuthorityFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
+	case "user-validation-failure", "user-email-verification-malfunction", "user-creation-failure", "user-serviceaccount-failure",
+		"user-kubeconfig-failure", "user-email-verification-dubious":
+		to, body = setUserFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	}
 
 	// Create a new Client connected to the SMTP server
@@ -226,6 +229,24 @@ func setCommonEmailHeaders(subject string, from string, to []string, delimiter s
 	//body.Write([]byte(fmt.Sprintf("Subject: %s\n%s\n\n", subject, headers)))
 	body.Write([]byte(headers))
 	return body
+}
+
+// setUserFailureContent to create an email body related to failures during user creation
+func setUserFailureContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
+	NCData := contentData.(CommonContentData)
+	// The HTML template
+	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	delimiter := ""
+	title := "[EdgeNet Admin] User Creation Failure"
+	if subject == "user-validation-failure" || subject == "user-creation-failure" {
+		title = "[EdgeNet] User Creation Failure"
+		// This represents receivers' email addresses
+		to = NCData.CommonData.Email
+	}
+	body := setCommonEmailHeaders(title, from, to, delimiter)
+	t.Execute(&body, NCData)
+
+	return to, body
 }
 
 // setAuthorityFailureContent to create an email body related to failures during authority creation

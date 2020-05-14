@@ -205,7 +205,12 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 			user.Spec.FirstName = authorityCopy.Spec.Contact.FirstName
 			user.Spec.LastName = authorityCopy.Spec.Contact.LastName
 			user.Spec.Roles = []string{"Admin"}
-			t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", authorityCopy.GetName())).Create(user.DeepCopy())
+			_, err = t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", authorityCopy.GetName())).Create(user.DeepCopy())
+			if err != nil {
+				t.sendEmail(authorityCopy, "user-creation-failure")
+				authorityCopy.Status.State = failure
+				authorityCopy.Status.Message = append(authorityCopy.Status.Message, []string{"User creation failed", err.Error()}...)
+			}
 		}
 		defer enableAuthorityAdmin()
 		t.sendEmail(authorityCopy, "authority-creation-successful")
