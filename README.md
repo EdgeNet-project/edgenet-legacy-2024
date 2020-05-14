@@ -2,23 +2,32 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/EdgeNet-project/edgenet)](https://goreportcard.com/report/github.com/EdgeNet-project/edgenet)
 
-EdgeNet is Kubernetes adapted for the network edge. It allows you to deploy applications to hundreds of nodes 
+EdgeNet is Kubernetes adapted for the network edge. It allows you to deploy applications to hundreds of nodes
 that are scattered across the internet, rather than to just one or a small number of centralized datacenters.
 
-The code that we are developing here is in production powering [the EdgeNet testbed](http://www.edge-net.org/),
+The code that we are developing here is in production powering [the EdgeNet testbed](https://www.edge-net.org/),
 on which researchers worldwide conduct experiments in distributed systems and internet measurements.
+
+## Support
+
+To chat with a member of the EdgeNet team live, please [open our tawk.to window](https://tawk.to/edgenet).
+
 
 ## Contributing
 
-We invite you to contribute to this free open-source software (FOSS) initiative.
+The EdgeNet software is free and open source; we invite you to contribute.
 
-Please take a look at our [project backlog](https://github.com/orgs/EdgeNet-project/projects/2) to see if 
-there are issues that interest you. Or suggest your own.
+To get a sense of where we are heading, please see our list of
+[milestones](https://github.com/EdgeNet-project/edgenet/milestones).
+We follow an agile development approach, with two week sprints, each one leading to a new production version of the 
+code. Our current sprint is one of the milestones, and you can see more near-term issues in our 
+[project backlog](https://github.com/orgs/EdgeNet-project/projects/2).
+You can pick one of these to work on, or suggest your own.
 
-We are currently rolling out new code on a two week cycle. Take a look at our current sprint in the list of
-[milestones](https://github.com/EdgeNet-project/edgenet/milestones) to see what we are working on now.
+To start work, clone the latest release branch. When you have something you would like us to look at,
+please create a pull request for @bsenel to review.
 
 ## Repository layout
 
 If you are familiar with the [Standard Go Project Layout](https://github.com/golang-standards/project-layout) used
-by other Kubernetes-related projects, you will be able to navigate around this project easily.
+by other Kubernetes-related projects, you will easily be able to navigate this repository.
