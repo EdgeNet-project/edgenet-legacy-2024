@@ -40,6 +40,8 @@ type Interface interface {
 	Slices() SliceInformer
 	// Teams returns a TeamInformer.
 	Teams() TeamInformer
+	// TotalResourceQuotas returns a TotalResourceQuotaInformer.
+	TotalResourceQuotas() TotalResourceQuotaInformer
 	// Users returns a UserInformer.
 	Users() UserInformer
 	// UserRegistrationRequests returns a UserRegistrationRequestInformer.
@@ -95,6 +97,11 @@ func (v *version) Slices() SliceInformer {
 // Teams returns a TeamInformer.
 func (v *version) Teams() TeamInformer {
 	return &teamInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// TotalResourceQuotas returns a TotalResourceQuotaInformer.
+func (v *version) TotalResourceQuotas() TotalResourceQuotaInformer {
+	return &totalResourceQuotaInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // Users returns a UserInformer.

@@ -34,6 +34,8 @@ type SliceExpansion interface{}
 
 type TeamExpansion interface{}
 
+type TotalResourceQuotaExpansion interface{}
+
 type UserExpansion interface{}
 
 type UserRegistrationRequestExpansion interface{}

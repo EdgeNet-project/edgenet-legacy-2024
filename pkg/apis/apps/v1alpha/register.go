@@ -67,6 +67,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&TeamList{},
 		&NodeContribution{},
 		&NodeContributionList{},
+		&TotalResourceQuota{},
+		&TotalResourceQuotaList{},
 	)
 
 	// Register the type in the scheme
