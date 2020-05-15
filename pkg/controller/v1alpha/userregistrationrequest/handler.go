@@ -134,7 +134,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 				if err == nil {
 					t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})
 				} else {
-					t.sendEmail(URRCopy, "", "", "user-creation-failure")
+					t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "", "user-creation-failure")
 					statusChange = true
 					URRCopy.Status.State = failure
 					URRCopy.Status.Message = []string{"User creation failed", err.Error()}
@@ -192,12 +192,20 @@ func (t *Handler) setEmailVerification(URRCopy *apps_v1alpha.UserRegistrationReq
 // sendEmail to send notification to participants
 func (t *Handler) sendEmail(URRCopy *apps_v1alpha.UserRegistrationRequest, authorityName, emailVerificationCode, subject string) {
 	// Set the HTML template variables
-	contentData := mailer.VerifyContentData{}
-	contentData.CommonData.Authority = authorityName
-	contentData.CommonData.Username = URRCopy.GetName()
-	contentData.CommonData.Name = fmt.Sprintf("%s %s", URRCopy.Spec.FirstName, URRCopy.Spec.LastName)
-	contentData.CommonData.Email = []string{URRCopy.Spec.Email}
-	contentData.Code = emailVerificationCode
+	var contentData interface{}
+	var collective = mailer.CommonContentData{}
+	collective.CommonData.Authority = authorityName
+	collective.CommonData.Username = URRCopy.GetName()
+	collective.CommonData.Name = fmt.Sprintf("%s %s", URRCopy.Spec.FirstName, URRCopy.Spec.LastName)
+	collective.CommonData.Email = []string{URRCopy.Spec.Email}
+	if emailVerificationCode != "" {
+		verifyContent := mailer.VerifyContentData{}
+		verifyContent.Code = emailVerificationCode
+		verifyContent.CommonData = collective.CommonData
+		contentData = verifyContent
+	} else {
+		contentData = collective
+	}
 	mailer.Send(subject, contentData)
 }
 
@@ -295,33 +303,35 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 				break
 			}
 		}
-	} else {
-		message = append(message, fmt.Sprintf("Username, %s, already exists for another user account", URRCopy.Spec.Email))
-		exists = true
-	}
-
-	if !exists {
-		// To check email address
-		URRRaw, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests("").List(metav1.ListOptions{})
-		for _, URRRow := range URRRaw.Items {
-			if URRRow.Spec.Email == URRCopy.Spec.Email && URRRow.GetUID() != URRCopy.GetUID() {
-				exists = true
-				message = append(message, fmt.Sprintf("Email address, %s, already exists for another user registration request", URRCopy.Spec.Email))
-			}
-		}
 		if !exists {
-			// To check email address given at authorityRequest
-			authorityRequestRaw, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{})
-			for _, authorityRequestRow := range authorityRequestRaw.Items {
-				if authorityRequestRow.Spec.Contact.Email == URRCopy.Spec.Email {
+			// To check email address
+			URRRaw, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests("").List(metav1.ListOptions{})
+			for _, URRRow := range URRRaw.Items {
+				if URRRow.Spec.Email == URRCopy.Spec.Email && URRRow.GetUID() != URRCopy.GetUID() {
 					exists = true
-					message = append(message, fmt.Sprintf("Email address, %s, already exists for another authority request", URRCopy.Spec.Email))
+					message = append(message, fmt.Sprintf("Email address, %s, already exists for another user registration request", URRCopy.Spec.Email))
+				}
+			}
+			if !exists {
+				// To check email address given at authorityRequest
+				authorityRequestRaw, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{})
+				for _, authorityRequestRow := range authorityRequestRaw.Items {
+					if authorityRequestRow.Spec.Contact.Email == URRCopy.Spec.Email {
+						exists = true
+						message = append(message, fmt.Sprintf("Email address, %s, already exists for another authority request", URRCopy.Spec.Email))
+					}
 				}
 			}
 		}
-	}
-	if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
-		t.sendEmail(URRCopy, authorityName, "", "user-validation-failure")
+		if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
+			t.sendEmail(URRCopy, authorityName, "", "user-validation-failure-email")
+		}
+	} else {
+		exists = true
+		message = append(message, fmt.Sprintf("Username, %s, already exists for another user account", URRCopy.GetName()))
+		if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
+			t.sendEmail(URRCopy, authorityName, "", "user-validation-failure-name")
+		}
 	}
 	return exists, message
 }
