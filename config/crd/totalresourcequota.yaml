@@ -43,26 +43,24 @@ spec:
             spec:
               type: object
               required:
-                - default
+                - claim
+                - enabled
               properties:
-                default:
-                  type: object
-                  required:
-                    - cpu
-                    - memory
-                  properties:
-                    cpu:
-                      type: string
-                    memory:
-                      type: string
-                custom:
+                claim:
                   type: array
                   items:
                     type: object
                     required:
+                      - name
                       - cpu
                       - memory
                     properties:
+                      name:
+                        type: string
+                        enum:
+                          - Default
+                          - Privilege
+                          - Reward
                       cpu:
                         type: string
                       memory:
@@ -70,35 +68,29 @@ spec:
                       expires:
                         type: string
                         format: date
-                contribution:
+                drop:
                   type: array
                   items:
                     type: object
                     required:
-                      - node
+                      - name
+                      - cpu
+                      - memory
                     properties:
-                      node:
+                      name:
                         type: string
+                        enum:
+                          - Equilibrate
+                          - Temporary
                       cpu:
                         type: string
                       memory:
                         type: string
-                      reward:
-                        type: object
-                        required:
-                          - status
-                          - cpu
-                          - memory
-                        properties:
-                          status:
-                            type: string
-                            enum:
-                              - Active
-                              - Deactive
-                          cpu:
-                            type: string
-                          memory:
-                            type: string
+                      expires:
+                        type: string
+                        format: date
+                enabled:
+                  type: boolean
   scope: Cluster
   names:
     plural: totalresourcequotas
