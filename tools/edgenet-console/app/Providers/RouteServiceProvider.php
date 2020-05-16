@@ -44,6 +44,8 @@ class RouteServiceProvider extends ServiceProvider
     {
         $this->mapApiRoutes();
 
+        $this->mapK8sRoutes();
+
         $this->mapWebRoutes();
 
         //
@@ -76,5 +78,20 @@ class RouteServiceProvider extends ServiceProvider
             ->middleware('api')
             ->namespace($this->namespace . '\Api')
             ->group(base_path('routes/api.php'));
+    }
+
+    /**
+     * Define the "k8s" routes for the application.
+     *
+     * These routes are typically stateless.
+     *
+     * @return void
+     */
+    protected function mapK8sRoutes()
+    {
+        Route::prefix('k8s')
+            ->middleware('k8s')
+            ->namespace($this->namespace . '\K8s')
+            ->group(base_path('routes/k8s.php'));
     }
 }
