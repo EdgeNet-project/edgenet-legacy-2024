@@ -1,42 +1,46 @@
 import React from "react";
 import ReactDOM from "react-dom";
-import { BrowserRouter as Router, Route, Switch, Redirect } from "react-router-dom";
-import { Grommet, Box } from "grommet";
+import { Console, Routes } from "./core";
+import { Server } from "grommet-icons";
+
 import theme from "./theme";
 
-import { UserProvider } from "./components/user";
-import { Authenticated, Anonymous } from "./components/user/access";
-import { LoginForm } from "./panels/login";
-import NavigationPanel from "./panels/NavigationPanel";
-import RegistrationPanel from "./panels/RegistrationPanel";
-import EmailVerificationPanel from "./panels/EmailVerificationPanel";
+
+const menu = [
+    {
+        label: 'Nodes',
+        path: '/nodes',
+        icon: <Server />,
+        resource: 'nodes'
+    },
+
+];
+
+const resources = [
+        {
+            name: 'nodes',
+            api: {
+                type: 'k8s',
+                url: '/api/v1/nodes',
+                server: 'http://192.168.10.8'
+            },
+            media: [],
+        },
+
+    ]
+
+const config = {
+    resources: resources,
+
+};
 
 
-const EdgenetConsole = () =>
-    <Grommet theme={theme}>
-        <Router>
-            <UserProvider>
-                <Authenticated>
-                    <NavigationPanel>
-                            <Switch>
-                                <Redirect exact path="/" to="/user/profile" />
-                            </Switch>
-                    </NavigationPanel>
-                </Authenticated>
-
-                <Anonymous>
-                    <Switch>
-                        <Route path="/signup" component={RegistrationPanel} />
-                        <Route path="/verify/:token?" component={EmailVerificationPanel} />
-                        <Route component={LoginForm} />
-                    </Switch>
-                </Anonymous>
-
-            </UserProvider>
-        </Router>
-    </Grommet>;
-
-const dom = document.getElementById('edgenet-console');
+const dom = document.getElementById('application');
 if (dom) {
-    ReactDOM.render(<EdgenetConsole />, dom);
+    ReactDOM.render(
+        <Console resources={resources}>
+            <Routes menu={menu} theme={theme} />
+        </Console>,
+        dom
+    );
 }
