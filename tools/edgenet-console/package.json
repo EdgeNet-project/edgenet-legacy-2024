@@ -12,9 +12,9 @@
     "devDependencies": {
         "@babel/preset-react": "^7.0.0",
         "axios": "^0.19",
-        "bootstrap": "^4.0.0",
+        "bootstrap": "^4.5.0",
         "cross-env": "^7.0",
-        "jquery": "^3.2",
+        "jquery": "^3.5.1",
         "laravel-mix": "^5.0.1",
         "lodash": "^4.17.13",
         "popper.js": "^1.12",
@@ -25,12 +25,14 @@
         "sass-loader": "^8.0.0"
     },
     "dependencies": {
+        "filesize": "^6.1.0",
         "flag-icon-css": "^3.4.6",
         "grommet": "^2.13.0",
         "grommet-icons": "^4.4.0",
+        "moment": "^2.25.3",
         "react-localization": "^1.0.15",
-        "react-router": "^5.1.2",
-        "react-router-dom": "^5.1.2",
+        "react-router": "^5.2.0",
+        "react-router-dom": "^5.2.0",
         "styled-components": "^5.1.0"
     }
 }
