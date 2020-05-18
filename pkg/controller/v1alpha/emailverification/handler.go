@@ -117,6 +117,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	log.Info("EVHandler.ObjectUpdated")
 	// Create a copy of the email verification object to make changes on it
 	EVCopy := obj.(*apps_v1alpha.EmailVerification).DeepCopy()
+	EVOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(EVCopy.GetNamespace(), metav1.GetOptions{})
 	// Security check to prevent any kind of manipulation on the email verification
 	fieldUpdated := updated.(fields)
 	if fieldUpdated.kind || fieldUpdated.identifier {
@@ -124,11 +125,10 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 		if strings.ToLower(EVCopy.Spec.Kind) == "authority" {
 			t.sendEmail("authority-email-verification-dubious", EVCopy.Spec.Identifier, EVCopy.GetNamespace(), "", "")
 		} else if strings.ToLower(EVCopy.Spec.Kind) == "user" {
-			t.sendEmail("user-email-verification-dubious", EVCopy.Spec.Identifier, EVCopy.GetNamespace(), "", "")
+			t.sendEmail("user-email-verification-dubious", EVOwnerNamespace.Labels["authority-name"], EVCopy.GetNamespace(), EVCopy.Spec.Identifier, "")
 		}
 		return
 	}
-	EVOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(EVCopy.GetNamespace(), metav1.GetOptions{})
 	var authorityEnabled bool
 	if EVOwnerNamespace.GetName() == "registration" {
 		authorityEnabled = true

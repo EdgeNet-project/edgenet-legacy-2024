@@ -318,6 +318,11 @@ hr {
   border-radius: 2px;
 }
 
+.image.logo {
+  width:231px;
+  height:66px;
+}
+
 .adaptive-image {
   background-position: center;
   background-repeat: no-repeat;
