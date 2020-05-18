@@ -14,6 +14,10 @@ use Illuminate\Http\Request;
 |
 */
 
+Route::get('/password/reset/{token?}', function () {
+    return view('console');
+})->where('token', '.*');
+
 Auth::routes();
 
 Route::get('/{any?}', function () {
