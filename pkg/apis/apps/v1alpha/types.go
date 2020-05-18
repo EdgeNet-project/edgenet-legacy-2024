@@ -503,9 +503,9 @@ type TotalResourceQuota struct {
 
 // TotalResourceQuotaSpec is the spec for a total resouce quota resource
 type TotalResourceQuotaSpec struct {
-	Claim   TotalResourceDetails `json:"claim"`
-	Drop    TotalResourceDetails `json:"drop"`
-	Enabled bool                 `json:"enabled"`
+	Claim   []TotalResourceDetails `json:"claim"`
+	Drop    []TotalResourceDetails `json:"drop"`
+	Enabled bool                   `json:"enabled"`
 }
 
 // TotalResourceDetails indicates resources to add or remove, and how long they will remain

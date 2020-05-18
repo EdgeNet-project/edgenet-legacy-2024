@@ -51,8 +51,8 @@ type informerevent struct {
 const create = "create"
 const update = "update"
 const delete = "delete"
-const failure = "Failure"
-const established = "Established"
+const failure = "Pulled off"
+const success = "Applied"
 
 // Start function is entry point of the controller
 func Start() {
