@@ -192,6 +192,17 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 			// To manipulate the object later
 			authorityCopy = authorityCopyUpdated
 		}
+		// Set a total resource quota
+		authorityTRQ := apps_v1alpha.TotalResourceQuota{}
+		authorityTRQClaim := apps_v1alpha.TotalResourceDetails{}
+		authorityTRQClaim.Name = "Default"
+		authorityTRQClaim.CPU = "12000m"
+		authorityTRQClaim.Memory = "12288Mi"
+		authorityTRQ.Spec.Claim = append(authorityTRQ.Spec.Claim, authorityTRQClaim)
+		_, err = t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Create(authorityTRQ.DeepCopy())
+		if err != nil {
+			log.Infof("Couldn't create total resource quota in %s: %s", authorityCopy.GetName(), err)
+		}
 		// Automatically enable authority and update authority status
 		authorityCopy.Status.Enabled = true
 		authorityCopy.Status.State = established
