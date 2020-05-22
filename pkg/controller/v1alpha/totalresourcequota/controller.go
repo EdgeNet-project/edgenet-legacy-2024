@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"edgenet/pkg/apis/apps/v1alpha"
+	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
 	appsinformer_v1 "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
 	"edgenet/pkg/node"
@@ -52,6 +53,12 @@ type controller struct {
 type informerevent struct {
 	key      string
 	function string
+	change   fields
+}
+
+// This contains the fields to check whether they are updated
+type fields struct {
+	expiry bool
 }
 
 // Constant variables for events
@@ -102,6 +109,11 @@ func Start() {
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 			event.function = update
+			oldExists := CheckExpiryDate(oldObj.(*apps_v1alpha.TotalResourceQuota))
+			newExists := CheckExpiryDate(newObj.(*apps_v1alpha.TotalResourceQuota))
+			if oldExists == false && newExists == true {
+				event.change.expiry = true
+			}
 			log.Infof("Update TRQ: %s", event.key)
 			if err == nil {
 				queue.Add(event)
@@ -370,7 +382,7 @@ func (c *controller) processNextItem() bool {
 		} else if event.(informerevent).function == update {
 			log.Println(event.(informerevent).key)
 			c.logger.Infof("Controller.processNextItem: object updated detected: %s", keyRaw)
-			c.handler.ObjectUpdated(item)
+			c.handler.ObjectUpdated(item, event.(informerevent).change)
 		}
 	}
 	c.queue.Forget(event.(informerevent).key)

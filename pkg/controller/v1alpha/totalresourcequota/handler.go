@@ -17,12 +17,13 @@ limitations under the License.
 package totalresourcequota
 
 import (
+	"fmt"
+	"time"
+
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/mailer"
-	"fmt"
-	"time"
 
 	log "github.com/Sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -35,7 +36,7 @@ import (
 type HandlerInterface interface {
 	Init() error
 	ObjectCreated(obj interface{})
-	ObjectUpdated(obj interface{})
+	ObjectUpdated(obj, updated interface{})
 	ObjectDeleted(obj interface{})
 }
 
@@ -76,35 +77,21 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	if TRQAuthority.Status.Enabled && TRQCopy.Spec.Enabled {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
-		TRQCopy, CPUQuota, MemoryQuota := t.calculateTotalQuota(TRQCopy)
-		TRQCopyUpdated, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Update(TRQCopy)
-		if err == nil {
-			TRQCopy = TRQCopyUpdated
+		TRQCopy = t.resourceConsumptionControl(TRQCopy)
+		if TRQCopy.Status.Exceeded {
+			TRQCopy = t.balanceResourceConsumption(TRQCopy)
 		}
-		consumedCPU, consumedMemory := t.calculateConsumedResources(TRQCopy)
-		TRQCopy = t.checkResourceBalance(TRQCopy, CPUQuota, MemoryQuota, consumedCPU, consumedMemory)
+		exists := CheckExpiryDate(TRQCopy)
+		if exists {
+			go t.runTimeout(TRQCopy)
+		}
 	} else {
-		TRQCopy.Status.State = failure
-		if !TRQAuthority.Status.Enabled {
-			TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Authority disabled")
-		}
-		if !TRQAuthority.Status.Enabled {
-			TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Total resource quota disabled")
-		}
-		// Delete all Slices of authority
-		t.edgenetClientset.AppsV1alpha().Slices(TRQCopy.GetNamespace()).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
-		teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(TRQCopy.GetNamespace()).List(metav1.ListOptions{})
-		if len(teamsRaw.Items) != 0 {
-			for _, teamRow := range teamsRaw.Items {
-				teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", teamRow.GetNamespace(), teamRow.GetName())
-				t.edgenetClientset.AppsV1alpha().Slices(teamChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
-			}
-		}
+		t.prohibitResourceUsage(TRQCopy, TRQAuthority)
 	}
 }
 
 // ObjectUpdated is called when an object is updated
-func (t *Handler) ObjectUpdated(obj interface{}) {
+func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	log.Info("TotalResourceQuotaHandler.ObjectUpdated")
 	// Create a copy of the TRQ object to make changes on it
 	TRQCopy := obj.(*apps_v1alpha.TotalResourceQuota).DeepCopy()
@@ -112,34 +99,20 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	// Find the authority from the namespace in which the object is
 	TRQNamespace, _ := t.clientset.CoreV1().Namespaces().Get(TRQCopy.GetNamespace(), metav1.GetOptions{})
 	TRQAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(TRQNamespace.Labels["authority-name"], metav1.GetOptions{})
+	fieldUpdated := updated.(fields)
 	// Check if the authority is active
 	if TRQAuthority.Status.Enabled && TRQCopy.Spec.Enabled {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
-		TRQCopy, CPUQuota, MemoryQuota := t.calculateTotalQuota(TRQCopy)
-		TRQCopyUpdated, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Update(TRQCopy)
-		if err == nil {
-			TRQCopy = TRQCopyUpdated
+		TRQCopy = t.resourceConsumptionControl(TRQCopy)
+		if TRQCopy.Status.Exceeded {
+			TRQCopy = t.balanceResourceConsumption(TRQCopy)
 		}
-		consumedCPU, consumedMemory := t.calculateConsumedResources(TRQCopy)
-		TRQCopy = t.checkResourceBalance(TRQCopy, CPUQuota, MemoryQuota, consumedCPU, consumedMemory)
+		if fieldUpdated.expiry {
+			go t.runTimeout(TRQCopy)
+		}
 	} else {
-		TRQCopy.Status.State = failure
-		if !TRQAuthority.Status.Enabled {
-			TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Authority disabled")
-		}
-		if !TRQAuthority.Status.Enabled {
-			TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Total resource quota disabled")
-		}
-		// Delete all Slices of authority
-		t.edgenetClientset.AppsV1alpha().Slices(TRQCopy.GetNamespace()).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
-		teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(TRQCopy.GetNamespace()).List(metav1.ListOptions{})
-		if len(teamsRaw.Items) != 0 {
-			for _, teamRow := range teamsRaw.Items {
-				teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", teamRow.GetNamespace(), teamRow.GetName())
-				t.edgenetClientset.AppsV1alpha().Slices(teamChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
-			}
-		}
+		t.prohibitResourceUsage(TRQCopy, TRQAuthority)
 	}
 }
 
@@ -157,8 +130,82 @@ func (t *Handler) sendEmail(TRQCopy *apps_v1alpha.TotalResourceQuota, subject st
 	mailer.Send(subject, contentData)
 }
 
+func (t *Handler) resourceConsumptionControl(TRQCopy *apps_v1alpha.TotalResourceQuota) *apps_v1alpha.TotalResourceQuota {
+	TRQCopy, CPUQuota, MemoryQuota := calculateTotalQuota(TRQCopy)
+	TRQCopyUpdated, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Update(TRQCopy)
+	if err == nil {
+		TRQCopy = TRQCopyUpdated
+	}
+	consumedCPU, consumedMemory := t.calculateConsumedResources(TRQCopy)
+	TRQCopy = checkResourceBalance(TRQCopy, CPUQuota, MemoryQuota, consumedCPU, consumedMemory)
+	TRQCopyUpdated, err = t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().UpdateStatus(TRQCopy)
+	if err == nil {
+		TRQCopy = TRQCopyUpdated
+	}
+	return TRQCopy
+}
+
+func (t *Handler) prohibitResourceUsage(TRQCopy *apps_v1alpha.TotalResourceQuota, TRQAuthority *apps_v1alpha.Authority) {
+	TRQCopy.Status.State = failure
+	if !TRQAuthority.Status.Enabled {
+		TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Authority disabled")
+	}
+	if !TRQAuthority.Status.Enabled {
+		TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Total resource quota disabled")
+	}
+	// Delete all slices of authority
+	t.edgenetClientset.AppsV1alpha().Slices(TRQCopy.GetNamespace()).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
+	teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(TRQCopy.GetNamespace()).List(metav1.ListOptions{})
+	if len(teamsRaw.Items) != 0 {
+		for _, teamRow := range teamsRaw.Items {
+			teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", teamRow.GetNamespace(), teamRow.GetName())
+			t.edgenetClientset.AppsV1alpha().Slices(teamChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
+		}
+	}
+}
+
+func (t *Handler) balanceResourceConsumption(TRQCopy *apps_v1alpha.TotalResourceQuota) *apps_v1alpha.TotalResourceQuota {
+	var oldestDate metav1.Time
+	var oldestSlice apps_v1alpha.Slice
+	slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(TRQCopy.GetNamespace()).List(metav1.ListOptions{})
+	if len(slicesRaw.Items) != 0 {
+		for i, sliceRow := range slicesRaw.Items {
+			if i == 0 {
+				oldestDate = sliceRow.GetCreationTimestamp()
+				oldestSlice = sliceRow
+			} else if i != 0 {
+				if oldestDate.Sub(sliceRow.GetCreationTimestamp().Time) <= 0 {
+					oldestDate = sliceRow.GetCreationTimestamp()
+					oldestSlice = sliceRow
+				}
+			}
+		}
+	}
+	teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(TRQCopy.GetNamespace()).List(metav1.ListOptions{})
+	if len(teamsRaw.Items) != 0 {
+		for _, teamRow := range teamsRaw.Items {
+			teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", TRQCopy.GetNamespace(), teamRow.GetName())
+			slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(teamChildNamespaceStr).List(metav1.ListOptions{})
+			if len(slicesRaw.Items) != 0 {
+				for _, sliceRow := range slicesRaw.Items {
+					if oldestDate.Sub(sliceRow.GetCreationTimestamp().Time) <= 0 {
+						oldestDate = sliceRow.GetCreationTimestamp()
+						oldestSlice = sliceRow
+					}
+				}
+			}
+		}
+	}
+	t.edgenetClientset.AppsV1alpha().Slices(oldestSlice.GetNamespace()).Delete(oldestSlice.GetName(), &metav1.DeleteOptions{})
+	TRQCopy = t.resourceConsumptionControl(TRQCopy)
+	if TRQCopy.Status.Exceeded {
+		TRQCopy = t.balanceResourceConsumption(TRQCopy)
+	}
+	return TRQCopy
+}
+
 // calculateTotalQuota to
-func (t *Handler) calculateTotalQuota(TRQCopy *apps_v1alpha.TotalResourceQuota) (*apps_v1alpha.TotalResourceQuota, int64, int64) {
+func calculateTotalQuota(TRQCopy *apps_v1alpha.TotalResourceQuota) (*apps_v1alpha.TotalResourceQuota, int64, int64) {
 	var CPUQuota int64
 	var memoryQuota int64
 	claimSlice := TRQCopy.Spec.Claim
@@ -215,7 +262,7 @@ func (t *Handler) calculateConsumedResources(TRQCopy *apps_v1alpha.TotalResource
 }
 
 // checkResourceBalance to
-func (t *Handler) checkResourceBalance(TRQCopy *apps_v1alpha.TotalResourceQuota,
+func checkResourceBalance(TRQCopy *apps_v1alpha.TotalResourceQuota,
 	CPUQuota, memoryQuota, consumedCPU, consumedMemory int64) *apps_v1alpha.TotalResourceQuota {
 	if CPUQuota < consumedCPU || memoryQuota < consumedMemory {
 		TRQCopy.Status.Exceeded = true
@@ -225,8 +272,110 @@ func (t *Handler) checkResourceBalance(TRQCopy *apps_v1alpha.TotalResourceQuota,
 	return TRQCopy
 }
 
+// runTimeout puts a procedure in place to remove claims and drops after the timeout
+func (t *Handler) runTimeout(TRQCopy *apps_v1alpha.TotalResourceQuota) {
+	timeoutRenewed := make(chan bool, 1)
+	terminated := make(chan bool, 1)
+	var timeout <-chan time.Time
+	timeout = time.After(time.Until(getClosestExpiryDate(TRQCopy)))
+	closeChannels := func() {
+		close(timeoutRenewed)
+		close(terminated)
+	}
+
+	// Watch the events of total resource quota object
+	watchTRQ, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Watch(metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", TRQCopy.GetName())})
+	if err == nil {
+		go func() {
+			// Get events from watch interface
+			for TRQEvent := range watchTRQ.ResultChan() {
+				// Get updated slice object
+				updatedTRQ, status := TRQEvent.Object.(*apps_v1alpha.TotalResourceQuota)
+				if status {
+					if TRQEvent.Type == "DELETED" {
+						terminated <- true
+						continue
+					}
+					TRQCopy = updatedTRQ
+					exists := CheckExpiryDate(TRQCopy)
+					if exists {
+						timeout = time.After(time.Until(getClosestExpiryDate(TRQCopy)))
+						timeoutRenewed <- true
+					} else {
+						terminated <- true
+					}
+				}
+			}
+		}()
+	} else {
+		// In case of any malfunction of watching total resource quota objects,
+		// there is a timeout at 72 hours
+		timeout = time.After(72 * time.Hour)
+	}
+
+	// Infinite loop
+timeoutLoop:
+	for {
+		// Wait on multiple channel operations
+	timeoutOptions:
+		select {
+		case <-timeoutRenewed:
+			break timeoutOptions
+		case <-timeout:
+			TRQCopy = t.resourceConsumptionControl(TRQCopy)
+			if TRQCopy.Status.Exceeded {
+				TRQCopy = t.balanceResourceConsumption(TRQCopy)
+			}
+			exists := CheckExpiryDate(TRQCopy)
+			if !exists {
+				terminated <- true
+			}
+			break timeoutOptions
+		case <-terminated:
+			watchTRQ.Stop()
+			closeChannels()
+			break timeoutLoop
+		}
+	}
+}
+
 func percentage(value1, value2 int64) float64 {
 	var percentage float64
 	percentage = float64(value1) / float64(value2)
 	return percentage
+}
+
+// CheckExpiryDate to checker whether there is a item with expiry date
+func CheckExpiryDate(TRQCopy *apps_v1alpha.TotalResourceQuota) bool {
+	exists := false
+	for _, claim := range TRQCopy.Spec.Claim {
+		if claim.Expires.Time.Sub(time.Now()) >= 0 {
+			exists = true
+		}
+	}
+	for _, drop := range TRQCopy.Spec.Drop {
+		if drop.Expires.Time.Sub(time.Now()) >= 0 {
+			exists = true
+		}
+	}
+	return exists
+}
+
+func getClosestExpiryDate(TRQCopy *apps_v1alpha.TotalResourceQuota) time.Time {
+	var closestDate *metav1.Time
+	for i, claim := range TRQCopy.Spec.Claim {
+		if i == 0 {
+			closestDate = claim.Expires
+		} else if i != 0 {
+			if closestDate.Sub(claim.Expires.Time) >= 0 {
+				closestDate = claim.Expires
+			}
+		}
+	}
+	for _, drop := range TRQCopy.Spec.Drop {
+		if closestDate.Sub(drop.Expires.Time) >= 0 {
+			closestDate = drop.Expires
+		}
+	}
+	return closestDate.Time
 }
