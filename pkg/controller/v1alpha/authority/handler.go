@@ -194,6 +194,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		}
 		// Set a total resource quota
 		authorityTRQ := apps_v1alpha.TotalResourceQuota{}
+		authorityTRQ.SetName(authorityCopy.GetName())
 		authorityTRQClaim := apps_v1alpha.TotalResourceDetails{}
 		authorityTRQClaim.Name = "Default"
 		authorityTRQClaim.CPU = "12000m"
