@@ -238,6 +238,7 @@ func (t *Handler) createTotalResourceQuota(authorityCopy *apps_v1alpha.Authority
 		authorityTRQClaim.CPU = "12000m"
 		authorityTRQClaim.Memory = "12288Mi"
 		authorityTRQ.Spec.Claim = append(authorityTRQ.Spec.Claim, authorityTRQClaim)
+		authorityTRQ.Spec.Enabled = true
 		_, err = t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Create(authorityTRQ.DeepCopy())
 		if err != nil {
 			log.Infof("Couldn't create total resource quota in %s: %s", authorityCopy.GetName(), err)
