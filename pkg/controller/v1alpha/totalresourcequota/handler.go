@@ -71,8 +71,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	TRQCopy := obj.(*apps_v1alpha.TotalResourceQuota).DeepCopy()
 	defer t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().UpdateStatus(TRQCopy)
 	// Find the authority from the namespace in which the object is
-	TRQNamespace, _ := t.clientset.CoreV1().Namespaces().Get(TRQCopy.GetNamespace(), metav1.GetOptions{})
-	TRQAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(TRQNamespace.Labels["authority-name"], metav1.GetOptions{})
+	TRQAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(TRQCopy.GetName(), metav1.GetOptions{})
 	// Check if the authority is active
 	if TRQAuthority.Status.Enabled && TRQCopy.Spec.Enabled {
 		// If the service restarts, it creates all objects again
@@ -97,8 +96,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	TRQCopy := obj.(*apps_v1alpha.TotalResourceQuota).DeepCopy()
 	defer t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().UpdateStatus(TRQCopy)
 	// Find the authority from the namespace in which the object is
-	TRQNamespace, _ := t.clientset.CoreV1().Namespaces().Get(TRQCopy.GetNamespace(), metav1.GetOptions{})
-	TRQAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(TRQNamespace.Labels["authority-name"], metav1.GetOptions{})
+	TRQAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(TRQCopy.GetName(), metav1.GetOptions{})
 	fieldUpdated := updated.(fields)
 	// Check if the authority is active
 	if TRQAuthority.Status.Enabled && TRQCopy.Spec.Enabled {
@@ -135,12 +133,16 @@ func (t *Handler) resourceConsumptionControl(TRQCopy *apps_v1alpha.TotalResource
 	TRQCopyUpdated, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Update(TRQCopy)
 	if err == nil {
 		TRQCopy = TRQCopyUpdated
+	} else {
+		log.Infof("Couldn't update total resource quota in %s: %s", TRQCopy.GetName(), err)
 	}
 	consumedCPU, consumedMemory := t.calculateConsumedResources(TRQCopy)
 	TRQCopy = checkResourceBalance(TRQCopy, CPUQuota, MemoryQuota, consumedCPU, consumedMemory)
 	TRQCopyUpdated, err = t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().UpdateStatus(TRQCopy)
 	if err == nil {
 		TRQCopy = TRQCopyUpdated
+	} else {
+		log.Infof("Couldn't update the status of total resource quota in %s: %s", TRQCopy.GetName(), err)
 	}
 	return TRQCopy
 }
@@ -212,7 +214,7 @@ func calculateTotalQuota(TRQCopy *apps_v1alpha.TotalResourceQuota) (*apps_v1alph
 	dropSlice := TRQCopy.Spec.Drop
 	j := 0
 	for _, claim := range TRQCopy.Spec.Claim {
-		if claim.Expires.Time.Sub(time.Now()) >= 0 {
+		if claim.Expires == nil || (claim.Expires != nil && claim.Expires.Time.Sub(time.Now()) >= 0) {
 			CPUResource := resource.MustParse(claim.CPU)
 			CPUQuota += CPUResource.Value()
 			memoryResource := resource.MustParse(claim.Memory)
@@ -226,7 +228,7 @@ func calculateTotalQuota(TRQCopy *apps_v1alpha.TotalResourceQuota) (*apps_v1alph
 	TRQCopy.Spec.Claim = claimSlice
 	j = 0
 	for _, drop := range TRQCopy.Spec.Drop {
-		if drop.Expires.Time.Sub(time.Now()) >= 0 {
+		if drop.Expires == nil || (drop.Expires != nil && drop.Expires.Time.Sub(time.Now()) >= 0) {
 			CPUResource := resource.MustParse(drop.CPU)
 			CPUQuota -= CPUResource.Value()
 			memoryResource := resource.MustParse(drop.Memory)
