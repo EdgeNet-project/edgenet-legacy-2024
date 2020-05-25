@@ -138,7 +138,7 @@ func Send(subject string, contentData interface{}) {
 	case "authority-validation-failure-name", "authority-validation-failure-email", "authority-email-verification-malfunction",
 		"authority-creation-failure", "authority-email-verification-dubious":
 		to, body = setAuthorityFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
-	case "user-validation-failure", "user-email-verification-malfunction", "user-creation-failure", "user-serviceaccount-failure",
+	case "user-validation-failure-name", "user-validation-failure-email", "user-email-verification-malfunction", "user-creation-failure", "user-serviceaccount-failure",
 		"user-kubeconfig-failure", "user-email-verification-dubious":
 		to, body = setUserFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	}
@@ -238,7 +238,8 @@ func setUserFailureContent(contentData interface{}, from string, to []string, su
 	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
 	delimiter := ""
 	title := "[EdgeNet Admin] User Creation Failure"
-	if subject == "user-validation-failure" || subject == "user-creation-failure" {
+	if subject == "user-validation-failure-name" || subject == "user-validation-failure-email" ||
+		subject == "user-creation-failure" {
 		title = "[EdgeNet] User Creation Failure"
 		// This represents receivers' email addresses
 		to = NCData.CommonData.Email

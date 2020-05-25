@@ -1,22 +1,6 @@
 version: '3.1'
 
 services:
-  edgenet-headnode:
-    container_name: edgenet-headnode
-    restart: always
-    build:
-      context: ../
-      dockerfile: ./build/daemons/Dockerfile
-    image: edgenet-headnode:v1.0.0
-    volumes:
-      - /etc/kubernetes/:/etc/kubernetes/
-      - ~/.kube/:/root/.kube/
-      - ../config/:/root/config/
-      - ../assets/certs:/root/assets/certs
-      - ../assets/kubeconfigs:/root/assets/kubeconfigs
-    ports:
-      - 8181
-    network_mode: host
   edgenet-nodelabeler:
     container_name: edgenet-nodelabeler
     restart: always
