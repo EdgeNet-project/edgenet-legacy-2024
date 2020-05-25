@@ -129,7 +129,7 @@ func Send(subject string, contentData interface{}) {
 		to, body = setAUPRenewalContent(contentData, smtpServer.From)
 	case "acceptable-use-policy-expired":
 		to, body = setAUPExpiredContent(contentData, smtpServer.From)
-	case "slice-creation", "slice-removal", "slice-reminder", "slice-deletion", "slice-crash":
+	case "slice-creation", "slice-removal", "slice-reminder", "slice-deletion", "slice-crash", "slice-total-quota-exceeded":
 		to, body = setSliceContent(contentData, smtpServer.From, subject)
 	case "team-creation", "team-removal", "team-deletion", "team-crash":
 		to, body = setTeamContent(contentData, smtpServer.From, subject)
@@ -336,6 +336,8 @@ func setSliceContent(contentData interface{}, from, subject string) ([]string, b
 		title = "[EdgeNet] Slice deleted"
 	case "slice-crash":
 		title = "[EdgeNet] Slice creation failed"
+	case "slice-total-quota-exceeded":
+		title = "[EdgeNet] Slice could not be created"
 	}
 	body := setCommonEmailHeaders(title, from, to, delimiter)
 	t.Execute(&body, sliceData)

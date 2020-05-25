@@ -272,6 +272,23 @@ func checkResourceBalance(TRQCopy *apps_v1alpha.TotalResourceQuota,
 	return TRQCopy
 }
 
+// CheckResourceAvailability to
+func (t *Handler) CheckResourceAvailability(TRQCopy *apps_v1alpha.TotalResourceQuota, CPUDemand int64, memoryDemand int64) bool {
+	TRQCopy, CPUQuota, MemoryQuota := calculateTotalQuota(TRQCopy)
+	TRQCopyUpdated, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Update(TRQCopy)
+	if err == nil {
+		TRQCopy = TRQCopyUpdated
+	}
+	consumedCPU, consumedMemory := t.calculateConsumedResources(TRQCopy)
+	consumedCPU += CPUDemand
+	consumedMemory += memoryDemand
+	TRQCopy = checkResourceBalance(TRQCopy, CPUQuota, MemoryQuota, consumedCPU, consumedMemory)
+	if !TRQCopy.Status.Exceeded {
+		t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().UpdateStatus(TRQCopy)
+	}
+	return !TRQCopy.Status.Exceeded
+}
+
 // runTimeout puts a procedure in place to remove claims and drops after the timeout
 func (t *Handler) runTimeout(TRQCopy *apps_v1alpha.TotalResourceQuota) {
 	timeoutRenewed := make(chan bool, 1)
