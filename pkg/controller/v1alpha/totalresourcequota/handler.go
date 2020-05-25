@@ -366,12 +366,12 @@ func percentage(value1, value2 int64) float64 {
 func CheckExpiryDate(TRQCopy *apps_v1alpha.TotalResourceQuota) bool {
 	exists := false
 	for _, claim := range TRQCopy.Spec.Claim {
-		if claim.Expires.Time.Sub(time.Now()) >= 0 {
+		if claim.Expires != nil && claim.Expires.Time.Sub(time.Now()) >= 0 {
 			exists = true
 		}
 	}
 	for _, drop := range TRQCopy.Spec.Drop {
-		if drop.Expires.Time.Sub(time.Now()) >= 0 {
+		if drop.Expires != nil && drop.Expires.Time.Sub(time.Now()) >= 0 {
 			exists = true
 		}
 	}
@@ -382,16 +382,22 @@ func getClosestExpiryDate(TRQCopy *apps_v1alpha.TotalResourceQuota) time.Time {
 	var closestDate *metav1.Time
 	for i, claim := range TRQCopy.Spec.Claim {
 		if i == 0 {
-			closestDate = claim.Expires
-		} else if i != 0 {
-			if closestDate.Sub(claim.Expires.Time) >= 0 {
+			if claim.Expires != nil {
 				closestDate = claim.Expires
+			}
+		} else if i != 0 {
+			if claim.Expires != nil {
+				if closestDate.Sub(claim.Expires.Time) >= 0 {
+					closestDate = claim.Expires
+				}
 			}
 		}
 	}
 	for _, drop := range TRQCopy.Spec.Drop {
-		if closestDate.Sub(drop.Expires.Time) >= 0 {
-			closestDate = drop.Expires
+		if drop.Expires != nil {
+			if closestDate.Sub(drop.Expires.Time) >= 0 {
+				closestDate = drop.Expires
+			}
 		}
 	}
 	return closestDate.Time
