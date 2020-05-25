@@ -25,6 +25,7 @@ import (
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
 	"edgenet/pkg/client/clientset/versioned"
+	"edgenet/pkg/controller/v1alpha/totalresourcequota"
 	"edgenet/pkg/mailer"
 	"edgenet/pkg/registration"
 
@@ -104,6 +105,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	// Find the authority from the namespace in which the object is
 	sliceOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(sliceCopy.GetNamespace(), metav1.GetOptions{})
 	sliceOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(sliceOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	sliceChildNamespaceStr := fmt.Sprintf("%s-slice-%s", sliceCopy.GetNamespace(), sliceCopy.GetName())
 	// The section below checks whether the slice belongs to a team or directly to a authority. After then, set the value as enabled
 	// if the authority and the team (if it is an owner) enabled.
 	var sliceOwnerEnabled bool
@@ -122,28 +124,34 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		if sliceCopy.Status.Expires == nil {
-			// When a slice is deleted, the owner references feature allows the namespace to be automatically removed. Additionally,
-			// when all users who participate in the slice are disabled, the slice is automatically removed because of the owner references.
-			// Each namespace created by slices have an indicator as "slice" to provide singularity
-			sliceChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-slice-%s", sliceCopy.GetNamespace(), sliceCopy.GetName())}}
-			// Namespace labels indicate this namespace created by a slice, not by a authority or team
-			namespaceLabels := map[string]string{"owner": "slice", "owner-name": sliceCopy.GetName(), "authority-name": sliceOwnerNamespace.Labels["authority-name"]}
-			sliceChildNamespace.SetLabels(namespaceLabels)
-			sliceChildNamespaceCreated, err := t.clientset.CoreV1().Namespaces().Create(sliceChildNamespace)
-			if err == nil {
-				// Create rolebindings according to the users who participate in the slice and are authority-admin and managers of the authority
-				t.runUserInteractions(sliceCopy, sliceChildNamespaceCreated.GetName(), sliceOwnerNamespace.Labels["authority-name"],
-					sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-creation", true)
-				// To set constraints in the slice namespace and to update the expiration date of slice
-				sliceCopy = t.setConstrainsByProfile(sliceChildNamespaceCreated.GetName(), sliceCopy)
-				sliceOwnerReferences := t.setOwnerReferences(sliceChildNamespaceCreated)
-				sliceCopy.ObjectMeta.OwnerReferences = sliceOwnerReferences
-				t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Update(sliceCopy)
-			} else {
-				t.runUserInteractions(sliceCopy, sliceChildNamespaceCreated.GetName(), sliceOwnerNamespace.Labels["authority-name"],
-					sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-crash", true)
-				t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Delete(sliceCopy.GetName(), &metav1.DeleteOptions{})
-				return
+			resourcesAvailability := t.checkResourcesAvailabilityForSlice(sliceCopy, sliceOwnerNamespace.Labels["authority-name"])
+			if resourcesAvailability {
+				// When a slice is deleted, the owner references feature allows the namespace to be automatically removed. Additionally,
+				// when all users who participate in the slice are disabled, the slice is automatically removed because of the owner references.
+				// Each namespace created by slices have an indicator as "slice" to provide singularity
+				sliceChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: sliceChildNamespaceStr}}
+				// Namespace labels indicate this namespace created by a slice, not by a authority or team
+				namespaceLabels := map[string]string{"owner": "slice", "owner-name": sliceCopy.GetName(), "authority-name": sliceOwnerNamespace.Labels["authority-name"]}
+				sliceChildNamespace.SetLabels(namespaceLabels)
+				sliceChildNamespaceCreated, err := t.clientset.CoreV1().Namespaces().Create(sliceChildNamespace)
+				if err == nil {
+					// Create rolebindings according to the users who participate in the slice and are authority-admin and managers of the authority
+					t.runUserInteractions(sliceCopy, sliceChildNamespaceCreated.GetName(), sliceOwnerNamespace.Labels["authority-name"],
+						sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-creation", true)
+					// To set constraints in the slice namespace and to update the expiration date of slice
+					sliceCopy = t.setConstrainsByProfile(sliceChildNamespaceCreated.GetName(), sliceCopy)
+					sliceOwnerReferences := t.setOwnerReferences(sliceChildNamespaceCreated)
+					sliceCopy.ObjectMeta.OwnerReferences = sliceOwnerReferences
+					t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Update(sliceCopy)
+				} else {
+					t.runUserInteractions(sliceCopy, sliceChildNamespaceCreated.GetName(), sliceOwnerNamespace.Labels["authority-name"],
+						sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-crash", true)
+					t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Delete(sliceCopy.GetName(), &metav1.DeleteOptions{})
+					return
+				}
+			} else if !resourcesAvailability {
+				log.Printf("Total resource quota exceeded for %s, %s couldn't be generated", sliceOwnerNamespace.Labels["authority-name"], sliceCopy.GetName())
+				t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"], sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-total-quota-exceeded", false)
 			}
 		}
 		// Run timeout goroutine
@@ -201,7 +209,13 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			}
 		}
 		// If the slice renewed or its profile updated
-		if sliceCopy.Status.Renew || fieldUpdated.profile {
+		if sliceCopy.Status.Renew || fieldUpdated.profile.status {
+			if fieldUpdated.profile.status {
+				resourcesAvailability := t.checkResourcesAvailabilityForSlice(sliceCopy, sliceOwnerNamespace.Labels["authority-name"])
+				if !resourcesAvailability {
+					sliceCopy.Spec.Profile = fieldUpdated.profile.old
+				}
+			}
 			// Delete all existing resource quotas in the slice (child) namespace
 			t.clientset.CoreV1().ResourceQuotas(sliceChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
 			t.setConstrainsByProfile(sliceChildNamespaceStr, sliceCopy)
@@ -215,6 +229,23 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 func (t *Handler) ObjectDeleted(obj interface{}) {
 	log.Info("SliceHandler.ObjectDeleted")
 	// Mail notification, TBD
+}
+
+func (t *Handler) checkResourcesAvailabilityForSlice(sliceCopy *apps_v1alpha.Slice, authorityName string) bool {
+	available := false
+	TRQCopy, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(authorityName, metav1.GetOptions{})
+	if err == nil {
+		TRQHandler := totalresourcequota.Handler{}
+		switch sliceCopy.Spec.Profile {
+		case "Low":
+			available = TRQHandler.CheckResourceAvailability(TRQCopy, t.lowResourceQuota.Spec.Hard.Cpu().Value(), t.lowResourceQuota.Spec.Hard.Memory().Value())
+		case "Medium":
+			available = TRQHandler.CheckResourceAvailability(TRQCopy, t.medResourceQuota.Spec.Hard.Cpu().Value(), t.medResourceQuota.Spec.Hard.Memory().Value())
+		case "High":
+			available = TRQHandler.CheckResourceAvailability(TRQCopy, t.highResourceQuota.Spec.Hard.Cpu().Value(), t.highResourceQuota.Spec.Hard.Memory().Value())
+		}
+	}
+	return available
 }
 
 // setConstrainsByProfile allocates the resources corresponding to the slice profile and defines the expiration date

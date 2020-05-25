@@ -61,6 +61,10 @@ func (c *FakeAppsV1alpha) Teams(namespace string) v1alpha.TeamInterface {
 	return &FakeTeams{c, namespace}
 }
 
+func (c *FakeAppsV1alpha) TotalResourceQuotas() v1alpha.TotalResourceQuotaInterface {
+	return &FakeTotalResourceQuotas{c}
+}
+
 func (c *FakeAppsV1alpha) Users(namespace string) v1alpha.UserInterface {
 	return &FakeUsers{c, namespace}
 }

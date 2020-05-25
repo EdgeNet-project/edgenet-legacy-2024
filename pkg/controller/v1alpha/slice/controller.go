@@ -55,7 +55,7 @@ type informerevent struct {
 
 // This contains the fields to check whether they are updated
 type fields struct {
-	profile bool
+	profile profileData
 	users   userData
 }
 
@@ -63,6 +63,11 @@ type userData struct {
 	status  bool
 	deleted string
 	added   string
+}
+
+type profileData struct {
+	status bool
+	old    string
 }
 
 // Constant variables for events
@@ -110,12 +115,14 @@ func Start() {
 			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 			event.function = update
 			// Find out whether the fields updated
-			event.change.profile = false
+			event.change.profile.status = false
+			event.change.profile.old = ""
 			event.change.users.status = false
 			event.change.users.deleted = ""
 			event.change.users.added = ""
 			if oldObj.(*apps_v1alpha.Slice).Spec.Profile != newObj.(*apps_v1alpha.Slice).Spec.Profile {
-				event.change.profile = true
+				event.change.profile.status = true
+				event.change.profile.old = oldObj.(*apps_v1alpha.Slice).Spec.Profile
 			}
 			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.Slice).Spec.Users, newObj.(*apps_v1alpha.Slice).Spec.Users) {
 				event.change.users.status = true

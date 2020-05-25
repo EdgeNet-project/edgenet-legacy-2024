@@ -483,3 +483,59 @@ type NodeContributionList struct {
 
 	Items []NodeContribution `json:"items"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// TotalResourceQuota describes a total resouce quota resource
+type TotalResourceQuota struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	meta_v1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the totalresourcequota resource spec
+	Spec TotalResourceQuotaSpec `json:"spec"`
+	// Status is the totalresourcequota resource status
+	Status TotalResourceQuotaStatus `json:"status,omitempty"`
+}
+
+// TotalResourceQuotaSpec is the spec for a total resouce quota resource
+type TotalResourceQuotaSpec struct {
+	Claim   []TotalResourceDetails `json:"claim"`
+	Drop    []TotalResourceDetails `json:"drop"`
+	Enabled bool                   `json:"enabled"`
+}
+
+// TotalResourceDetails indicates resources to add or remove, and how long they will remain
+type TotalResourceDetails struct {
+	Name    string        `json:"name"`
+	CPU     string        `json:"cpu"`
+	Memory  string        `json:"memory"`
+	Expires *meta_v1.Time `json:"expires"`
+}
+
+// TotalResourceQuotaStatus is the status for a total resouce quota resource
+type TotalResourceQuotaStatus struct {
+	Exceeded bool              `json:"exceeded"`
+	Used     TotalResourceUsed `json:"used"`
+	State    string            `json:"state"`
+	Message  []string          `json:"message"`
+}
+
+// TotalResourceUsed presents the usage of total resource quota
+type TotalResourceUsed struct {
+	CPU    string `json:"cpu"`
+	Memory string `json:"memory"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// TotalResourceQuotaList is a list of total resouce quota resources
+type TotalResourceQuotaList struct {
+	meta_v1.TypeMeta `json:",inline"`
+	meta_v1.ListMeta `json:"metadata"`
+
+	Items []TotalResourceQuota `json:"items"`
+}

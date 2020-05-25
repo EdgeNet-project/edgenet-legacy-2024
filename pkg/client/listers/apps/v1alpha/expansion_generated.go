@@ -74,6 +74,10 @@ type TeamListerExpansion interface{}
 // TeamNamespaceLister.
 type TeamNamespaceListerExpansion interface{}
 
+// TotalResourceQuotaListerExpansion allows custom methods to be added to
+// TotalResourceQuotaLister.
+type TotalResourceQuotaListerExpansion interface{}
+
 // UserListerExpansion allows custom methods to be added to
 // UserLister.
 type UserListerExpansion interface{}

@@ -125,3 +125,15 @@ services:
       - ~/.ssh/:/root/.ssh/
       - ../config/:/root/config/
       - ../assets/templates/:/root/assets/templates/
+  edgenet-totalresourcequota:
+    container_name: edgenet-totalresourcequota
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/totalresourcequota/Dockerfile
+    image: edgenet-totalresourcequota:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+      - ../config/:/root/config/
+      - ../assets/kubeconfigs:/root/assets/kubeconfigs
+      - ../assets/templates/:/root/assets/templates/

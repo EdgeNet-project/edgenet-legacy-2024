@@ -36,6 +36,7 @@ type AppsV1alphaInterface interface {
 	SelectiveDeploymentsGetter
 	SlicesGetter
 	TeamsGetter
+	TotalResourceQuotasGetter
 	UsersGetter
 	UserRegistrationRequestsGetter
 }
@@ -75,6 +76,10 @@ func (c *AppsV1alphaClient) Slices(namespace string) SliceInterface {
 
 func (c *AppsV1alphaClient) Teams(namespace string) TeamInterface {
 	return newTeams(c, namespace)
+}
+
+func (c *AppsV1alphaClient) TotalResourceQuotas() TotalResourceQuotaInterface {
+	return newTotalResourceQuotas(c)
 }
 
 func (c *AppsV1alphaClient) Users(namespace string) UserInterface {

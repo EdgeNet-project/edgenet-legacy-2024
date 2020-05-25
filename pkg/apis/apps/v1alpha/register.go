@@ -43,7 +43,6 @@ func Resource(resource string) schema.GroupResource {
 }
 
 // addKnownTypes adds our types to the API scheme by registering
-// SelectiveDeployment and SelectiveDeploymentList
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(
 		SchemeGroupVersion,
@@ -67,6 +66,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&TeamList{},
 		&NodeContribution{},
 		&NodeContributionList{},
+		&TotalResourceQuota{},
+		&TotalResourceQuotaList{},
 	)
 
 	// Register the type in the scheme
