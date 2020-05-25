@@ -227,7 +227,25 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		defer enableAuthorityAdmin()
 		t.sendEmail(authorityCopy, "authority-creation-successful")
 	} else if err == nil {
-		_, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(authorityCopy.GetName(), metav1.GetOptions{})
+		// Create a cluster role to be used by authority users
+		policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"authorities", "totalresourcequotas"}, ResourceNames: []string{authorityCopy.GetName()}, Verbs: []string{"get"}}}
+		authorityRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", authorityCopy.GetName())}, Rules: policyRule}
+		_, err := t.clientset.RbacV1().ClusterRoles().Create(authorityRole)
+		if err != nil {
+			log.Infof("Couldn't create authority-%s role: %s", authorityCopy.GetName(), err)
+			log.Infoln(errors.IsAlreadyExists(err))
+			if errors.IsAlreadyExists(err) {
+				authorityClusterRole, err := t.clientset.RbacV1().ClusterRoles().Get(authorityRole.GetName(), metav1.GetOptions{})
+				if err == nil {
+					authorityClusterRole.Rules = policyRule
+					_, err = t.clientset.RbacV1().ClusterRoles().Update(authorityClusterRole)
+					if err == nil {
+						log.Infof("Authority-%s cluster role updated", authorityCopy.GetName())
+					}
+				}
+			}
+		}
+		_, err = t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(authorityCopy.GetName(), metav1.GetOptions{})
 		if err != nil {
 			// Set a total resource quota
 			authorityTRQ := apps_v1alpha.TotalResourceQuota{}
