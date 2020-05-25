@@ -154,7 +154,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 	_, err := t.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("authority-%s", authorityCopy.GetName()), metav1.GetOptions{})
 	if err != nil {
 		// Create a cluster role to be used by authority users
-		policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"authorities"}, ResourceNames: []string{authorityCopy.GetName()}, Verbs: []string{"get"}}}
+		policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"authorities", "totalresourcequotas"}, ResourceNames: []string{authorityCopy.GetName()}, Verbs: []string{"get"}}}
 		authorityRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", authorityCopy.GetName())}, Rules: policyRule}
 		_, err := t.clientset.RbacV1().ClusterRoles().Create(authorityRole)
 		if err != nil {
