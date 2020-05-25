@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"syscall"
 	"time"
 
@@ -43,10 +44,11 @@ import (
 
 // The main structure of controller
 type controller struct {
-	logger   *log.Entry
-	queue    workqueue.RateLimitingInterface
-	informer cache.SharedIndexInformer
-	handler  HandlerInterface
+	logger       *log.Entry
+	queue        workqueue.RateLimitingInterface
+	informer     cache.SharedIndexInformer
+	nodeInformer cache.SharedIndexInformer
+	handler      HandlerInterface
 }
 
 // The main structure of informerEvent
@@ -59,6 +61,7 @@ type informerevent struct {
 // This contains the fields to check whether they are updated
 type fields struct {
 	expiry bool
+	spec   bool
 }
 
 // Constant variables for events
@@ -109,10 +112,15 @@ func Start() {
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 			event.function = update
+			event.change.expiry = false
+			event.change.spec = false
 			oldExists := CheckExpiryDate(oldObj.(*apps_v1alpha.TotalResourceQuota))
 			newExists := CheckExpiryDate(newObj.(*apps_v1alpha.TotalResourceQuota))
 			if oldExists == false && newExists == true {
 				event.change.expiry = true
+			}
+			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.TotalResourceQuota), newObj.(*apps_v1alpha.TotalResourceQuota)) {
+				event.change.spec = true
 			}
 			log.Infof("Update TRQ: %s", event.key)
 			if err == nil {
@@ -130,7 +138,7 @@ func Start() {
 			}
 		},
 	})
-	// The selectivedeployment resources are reconfigured according to node events in this section
+	// The total resource quota objects are reconfigured according to node events in this section
 	nodeInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			// The main purpose of listing is to attach geo labels to whole nodes at the beginning
@@ -294,10 +302,11 @@ func Start() {
 		},
 	})
 	controller := controller{
-		logger:   log.NewEntry(log.New()),
-		informer: informer,
-		queue:    queue,
-		handler:  TRQHandler,
+		logger:       log.NewEntry(log.New()),
+		informer:     informer,
+		nodeInformer: nodeInformer,
+		queue:        queue,
+		handler:      TRQHandler,
 	}
 
 	// A channel to terminate elegantly
@@ -322,9 +331,10 @@ func (c *controller) run(stopCh <-chan struct{}) {
 	c.handler.Init()
 	// Run the informer to list and watch resources
 	go c.informer.Run(stopCh)
+	go c.nodeInformer.Run(stopCh)
 
 	// Synchronization to settle resources one
-	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced) {
+	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced, c.nodeInformer.HasSynced) {
 		utilruntime.HandleError(fmt.Errorf("Error syncing cache"))
 		return
 	}

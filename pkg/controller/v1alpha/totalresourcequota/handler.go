@@ -100,14 +100,14 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	fieldUpdated := updated.(fields)
 	// Check if the authority is active
 	if TRQAuthority.Status.Enabled && TRQCopy.Spec.Enabled {
-		// If the service restarts, it creates all objects again
-		// Because of that, this section covers a variety of possibilities
-		TRQCopy = t.resourceConsumptionControl(TRQCopy)
-		if TRQCopy.Status.Exceeded {
-			TRQCopy = t.balanceResourceConsumption(TRQCopy)
-		}
-		if fieldUpdated.expiry {
-			go t.runTimeout(TRQCopy)
+		if fieldUpdated.spec {
+			TRQCopy = t.resourceConsumptionControl(TRQCopy)
+			if TRQCopy.Status.Exceeded {
+				TRQCopy = t.balanceResourceConsumption(TRQCopy)
+			}
+			if fieldUpdated.expiry {
+				go t.runTimeout(TRQCopy)
+			}
 		}
 	} else {
 		t.prohibitResourceUsage(TRQCopy, TRQAuthority)
@@ -133,8 +133,12 @@ func (t *Handler) resourceConsumptionControl(TRQCopy *apps_v1alpha.TotalResource
 	TRQCopyUpdated, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Update(TRQCopy)
 	if err == nil {
 		TRQCopy = TRQCopyUpdated
+		TRQCopy.Status.State = success
+		TRQCopy.Status.Message = []string{"Total resource quota applied"}
 	} else {
 		log.Infof("Couldn't update total resource quota in %s: %s", TRQCopy.GetName(), err)
+		TRQCopy.Status.State = failure
+		TRQCopy.Status.Message = []string{"Total resource quota couldn't be applied"}
 	}
 	consumedCPU, consumedMemory := t.calculateConsumedResources(TRQCopy)
 	TRQCopy = checkResourceBalance(TRQCopy, CPUQuota, MemoryQuota, consumedCPU, consumedMemory)
@@ -148,7 +152,10 @@ func (t *Handler) resourceConsumptionControl(TRQCopy *apps_v1alpha.TotalResource
 }
 
 func (t *Handler) prohibitResourceUsage(TRQCopy *apps_v1alpha.TotalResourceQuota, TRQAuthority *apps_v1alpha.Authority) {
-	TRQCopy.Status.State = failure
+	if TRQCopy.Status.State != failure {
+		TRQCopy.Status.State = failure
+		TRQCopy.Status.Message = []string{}
+	}
 	if !TRQAuthority.Status.Enabled {
 		TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Authority disabled")
 	}
@@ -212,34 +219,38 @@ func calculateTotalQuota(TRQCopy *apps_v1alpha.TotalResourceQuota) (*apps_v1alph
 	var memoryQuota int64
 	claimSlice := TRQCopy.Spec.Claim
 	dropSlice := TRQCopy.Spec.Drop
-	j := 0
-	for _, claim := range TRQCopy.Spec.Claim {
-		if claim.Expires == nil || (claim.Expires != nil && claim.Expires.Time.Sub(time.Now()) >= 0) {
-			CPUResource := resource.MustParse(claim.CPU)
-			CPUQuota += CPUResource.Value()
-			memoryResource := resource.MustParse(claim.Memory)
-			memoryQuota += memoryResource.Value()
-		} else {
-			claimSlice = append(claimSlice[:j], claimSlice[j+1:]...)
-			j--
+	if len(TRQCopy.Spec.Claim) > 0 {
+		j := 0
+		for _, claim := range TRQCopy.Spec.Claim {
+			if claim.Expires == nil || (claim.Expires != nil && claim.Expires.Time.Sub(time.Now()) >= 0) {
+				CPUResource := resource.MustParse(claim.CPU)
+				CPUQuota += CPUResource.Value()
+				memoryResource := resource.MustParse(claim.Memory)
+				memoryQuota += memoryResource.Value()
+			} else {
+				claimSlice = append(claimSlice[:j], claimSlice[j+1:]...)
+				j--
+			}
+			j++
 		}
-		j++
+		TRQCopy.Spec.Claim = claimSlice
 	}
-	TRQCopy.Spec.Claim = claimSlice
-	j = 0
-	for _, drop := range TRQCopy.Spec.Drop {
-		if drop.Expires == nil || (drop.Expires != nil && drop.Expires.Time.Sub(time.Now()) >= 0) {
-			CPUResource := resource.MustParse(drop.CPU)
-			CPUQuota -= CPUResource.Value()
-			memoryResource := resource.MustParse(drop.Memory)
-			memoryQuota -= memoryResource.Value()
-		} else {
-			dropSlice = append(dropSlice[:j], dropSlice[j+1:]...)
-			j--
+	if len(TRQCopy.Spec.Drop) > 0 {
+		j := 0
+		for _, drop := range TRQCopy.Spec.Drop {
+			if drop.Expires == nil || (drop.Expires != nil && drop.Expires.Time.Sub(time.Now()) >= 0) {
+				CPUResource := resource.MustParse(drop.CPU)
+				CPUQuota -= CPUResource.Value()
+				memoryResource := resource.MustParse(drop.Memory)
+				memoryQuota -= memoryResource.Value()
+			} else {
+				dropSlice = append(dropSlice[:j], dropSlice[j+1:]...)
+				j--
+			}
+			j++
 		}
-		j++
+		TRQCopy.Spec.Drop = dropSlice
 	}
-	TRQCopy.Spec.Drop = dropSlice
 	return TRQCopy, CPUQuota, memoryQuota
 }
 

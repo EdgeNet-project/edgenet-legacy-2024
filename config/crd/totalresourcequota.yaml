@@ -27,10 +27,10 @@ spec:
       subresources:
         status: {}
       additionalPrinterColumns:
-        - name: CPU Usage
+        - name: CPU Usage (%)
           type: string
           jsonPath: .status.used.cpu
-        - name: Memory Usage
+        - name: Memory Usage (%)
           type: string
           jsonPath: .status.used.memory
         - name: Age
@@ -93,6 +93,25 @@ spec:
                         format: date
                 enabled:
                   type: boolean
+            status:
+              type: object
+              properties:
+                exceeded:
+                  type: boolean
+                used:
+                  type: object
+                  properties:
+                    cpu:
+                      type: string
+                    memory:
+                      type: string
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
   scope: Cluster
   names:
     plural: totalresourcequotas
