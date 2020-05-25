@@ -68,8 +68,10 @@ spec:
                       expires:
                         type: string
                         format: date
+                        nullable: true
                 drop:
                   type: array
+                  nullable: true
                   items:
                     type: object
                     required:
