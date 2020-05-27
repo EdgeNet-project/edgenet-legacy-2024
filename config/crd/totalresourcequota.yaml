@@ -28,10 +28,10 @@ spec:
         status: {}
       additionalPrinterColumns:
         - name: CPU Usage (%)
-          type: string
+          type: integer
           jsonPath: .status.used.cpu
         - name: Memory Usage (%)
-          type: string
+          type: integer
           jsonPath: .status.used.memory
         - name: Age
           type: date
@@ -102,9 +102,9 @@ spec:
                   type: object
                   properties:
                     cpu:
-                      type: string
+                      type: number
                     memory:
-                      type: string
+                      type: number
                 state:
                   type: string
                 message:

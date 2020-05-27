@@ -18,6 +18,7 @@ package totalresourcequota
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
@@ -69,22 +70,27 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	log.Info("TotalResourceQuotaHandler.ObjectCreated")
 	// Create a copy of the TRQ object to make changes on it
 	TRQCopy := obj.(*apps_v1alpha.TotalResourceQuota).DeepCopy()
-	defer t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().UpdateStatus(TRQCopy)
 	// Find the authority from the namespace in which the object is
 	TRQAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(TRQCopy.GetName(), metav1.GetOptions{})
 	// Check if the authority is active
 	if TRQAuthority.Status.Enabled && TRQCopy.Spec.Enabled {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
-		TRQCopy = t.resourceConsumptionControl(TRQCopy)
+		TRQCopy.Status.State = success
+		TRQCopy.Status.Message = []string{"Total resource quota created"}
+		// Check the total resource consumption in authority
+		TRQCopy, _ = t.ResourceConsumptionControl(TRQCopy, 0, 0)
+		// If they reached the limit, remove some slices randomly
 		if TRQCopy.Status.Exceeded {
 			TRQCopy = t.balanceResourceConsumption(TRQCopy)
 		}
+		// Run timeout function if there is a claim or drop with an expiry date
 		exists := CheckExpiryDate(TRQCopy)
 		if exists {
 			go t.runTimeout(TRQCopy)
 		}
 	} else {
+		// Block the authority to prevent using the cluster resources
 		t.prohibitResourceUsage(TRQCopy, TRQAuthority)
 	}
 }
@@ -94,14 +100,14 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	log.Info("TotalResourceQuotaHandler.ObjectUpdated")
 	// Create a copy of the TRQ object to make changes on it
 	TRQCopy := obj.(*apps_v1alpha.TotalResourceQuota).DeepCopy()
-	defer t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().UpdateStatus(TRQCopy)
 	// Find the authority from the namespace in which the object is
 	TRQAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(TRQCopy.GetName(), metav1.GetOptions{})
 	fieldUpdated := updated.(fields)
 	// Check if the authority is active
 	if TRQAuthority.Status.Enabled && TRQCopy.Spec.Enabled {
+		// Start procedures if the spec changes
 		if fieldUpdated.spec {
-			TRQCopy = t.resourceConsumptionControl(TRQCopy)
+			TRQCopy, _ = t.ResourceConsumptionControl(TRQCopy, 0, 0)
 			if TRQCopy.Status.Exceeded {
 				TRQCopy = t.balanceResourceConsumption(TRQCopy)
 			}
@@ -117,40 +123,28 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 // ObjectDeleted is called when an object is deleted
 func (t *Handler) ObjectDeleted(obj interface{}) {
 	log.Info("TotalResourceQuotaHandler.ObjectDeleted")
-	// Delete or disable nodes added by TRQ, TBD.
+	// Delete or disable slices added by authority, TBD.
 }
 
-// sendEmail to send notification to cluster admins
-func (t *Handler) sendEmail(TRQCopy *apps_v1alpha.TotalResourceQuota, subject string) {
-	// Set the HTML template variables
-	contentData := mailer.CommonContentData{}
-	contentData.CommonData.Authority = TRQCopy.GetName()
-	mailer.Send(subject, contentData)
-}
-
-func (t *Handler) resourceConsumptionControl(TRQCopy *apps_v1alpha.TotalResourceQuota) *apps_v1alpha.TotalResourceQuota {
-	TRQCopy, CPUQuota, MemoryQuota := calculateTotalQuota(TRQCopy)
-	TRQCopyUpdated, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Update(TRQCopy)
-	if err == nil {
-		TRQCopy = TRQCopyUpdated
-		TRQCopy.Status.State = success
-		TRQCopy.Status.Message = []string{"Total resource quota applied"}
-	} else {
-		log.Infof("Couldn't update total resource quota in %s: %s", TRQCopy.GetName(), err)
-		TRQCopy.Status.State = failure
-		TRQCopy.Status.Message = []string{"Total resource quota couldn't be applied"}
+// sendEmail to send notification to participants
+func (t *Handler) sendEmail(sliceUsername, sliceUserAuthority, sliceAuthority, sliceOwnerNamespace, sliceName, sliceNamespace, subject string) {
+	user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", sliceUserAuthority)).Get(sliceUsername, metav1.GetOptions{})
+	if err == nil && user.Status.Active && user.Status.AUP {
+		// Set the HTML template variables
+		contentData := mailer.ResourceAllocationData{}
+		contentData.CommonData.Authority = sliceUserAuthority
+		contentData.CommonData.Username = sliceUsername
+		contentData.CommonData.Name = fmt.Sprintf("%s %s", user.Spec.FirstName, user.Spec.LastName)
+		contentData.CommonData.Email = []string{user.Spec.Email}
+		contentData.Authority = sliceAuthority
+		contentData.Name = sliceName
+		contentData.OwnerNamespace = sliceOwnerNamespace
+		contentData.ChildNamespace = sliceNamespace
+		mailer.Send(subject, contentData)
 	}
-	consumedCPU, consumedMemory := t.calculateConsumedResources(TRQCopy)
-	TRQCopy = checkResourceBalance(TRQCopy, CPUQuota, MemoryQuota, consumedCPU, consumedMemory)
-	TRQCopyUpdated, err = t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().UpdateStatus(TRQCopy)
-	if err == nil {
-		TRQCopy = TRQCopyUpdated
-	} else {
-		log.Infof("Couldn't update the status of total resource quota in %s: %s", TRQCopy.GetName(), err)
-	}
-	return TRQCopy
 }
 
+// prohibitResourceUsage deletes all slices in authority and sets a status message
 func (t *Handler) prohibitResourceUsage(TRQCopy *apps_v1alpha.TotalResourceQuota, TRQAuthority *apps_v1alpha.Authority) {
 	if TRQCopy.Status.State != failure {
 		TRQCopy.Status.State = failure
@@ -163,8 +157,8 @@ func (t *Handler) prohibitResourceUsage(TRQCopy *apps_v1alpha.TotalResourceQuota
 		TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Total resource quota disabled")
 	}
 	// Delete all slices of authority
-	t.edgenetClientset.AppsV1alpha().Slices(TRQCopy.GetNamespace()).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
-	teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(TRQCopy.GetNamespace()).List(metav1.ListOptions{})
+	t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", TRQCopy.GetName())).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
+	teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", TRQCopy.GetName())).List(metav1.ListOptions{})
 	if len(teamsRaw.Items) != 0 {
 		for _, teamRow := range teamsRaw.Items {
 			teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", teamRow.GetNamespace(), teamRow.GetName())
@@ -173,10 +167,187 @@ func (t *Handler) prohibitResourceUsage(TRQCopy *apps_v1alpha.TotalResourceQuota
 	}
 }
 
+// CheckExpiryDate to checker whether there is an item with expiry date
+func CheckExpiryDate(TRQCopy *apps_v1alpha.TotalResourceQuota) bool {
+	exists := false
+	for _, claim := range TRQCopy.Spec.Claim {
+		if claim.Expires != nil && claim.Expires.Time.Sub(time.Now()) >= 0 {
+			exists = true
+		}
+	}
+	for _, drop := range TRQCopy.Spec.Drop {
+		if drop.Expires != nil && drop.Expires.Time.Sub(time.Now()) >= 0 {
+			exists = true
+		}
+	}
+	return exists
+}
+
+// ResourceConsumptionControl both calculates the total resource quota and the total consumption in the authority.
+// Additionally, when a Slice created it comes along with a resource consumption demand. This function also allows us
+// to compare free resources with demands as well.
+func (t *Handler) ResourceConsumptionControl(TRQCopy *apps_v1alpha.TotalResourceQuota, CPUDemand int64, memoryDemand int64) (*apps_v1alpha.TotalResourceQuota, bool) {
+	// Find out the total resource quota by taking claims and drops into account
+	TRQCopy, CPUQuota, MemoryQuota := t.calculateTotalQuota(TRQCopy)
+	// Get the total consumption that all Slices do in authority
+	consumedCPU, consumedMemory := t.calculateConsumedResources(TRQCopy)
+	consumedCPU += CPUDemand
+	consumedMemory += memoryDemand
+	demand := false
+	if CPUDemand != 0 || memoryDemand != 0 {
+		demand = true
+	}
+	// Compare the consumption with the total resource quota
+	TRQCopy, quotaExceeded := t.checkResourceBalance(TRQCopy, CPUQuota, MemoryQuota, consumedCPU, consumedMemory, demand)
+	return TRQCopy, quotaExceeded
+}
+
+// calculateTotalQuota adds the resources defined in claims, and subtracts those in drops to calculate the total resource quota.
+// Moreover, the function checkes whether any claim or drop has an expiry date and updates the object if exists.
+func (t *Handler) calculateTotalQuota(TRQCopy *apps_v1alpha.TotalResourceQuota) (*apps_v1alpha.TotalResourceQuota, int64, int64) {
+	var CPUQuota int64
+	var memoryQuota int64
+	// To make comparison
+	oldTRQCopy := TRQCopy.DeepCopy()
+	// claimSlice to be manipulated
+	claimSlice := TRQCopy.Spec.Claim
+	// dropSlice to be manipulated
+	dropSlice := TRQCopy.Spec.Drop
+	if len(TRQCopy.Spec.Claim) > 0 {
+		j := 0
+		for _, claim := range TRQCopy.Spec.Claim {
+			if claim.Expires == nil || (claim.Expires != nil && claim.Expires.Time.Sub(time.Now()) >= 0) {
+				CPUResource := resource.MustParse(claim.CPU)
+				CPUQuota += CPUResource.Value()
+				memoryResource := resource.MustParse(claim.Memory)
+				memoryQuota += memoryResource.Value()
+			} else {
+				// Remove the item from claims if the expiry date has run out
+				claimSlice = append(claimSlice[:j], claimSlice[j+1:]...)
+				j--
+			}
+			j++
+		}
+		// Sync the claims
+		TRQCopy.Spec.Claim = claimSlice
+	}
+	if len(TRQCopy.Spec.Drop) > 0 {
+		j := 0
+		for _, drop := range TRQCopy.Spec.Drop {
+			if drop.Expires == nil || (drop.Expires != nil && drop.Expires.Time.Sub(time.Now()) >= 0) {
+				CPUResource := resource.MustParse(drop.CPU)
+				CPUQuota -= CPUResource.Value()
+				memoryResource := resource.MustParse(drop.Memory)
+				memoryQuota -= memoryResource.Value()
+			} else {
+				// Remove the item from drops if the expiry date has run out
+				dropSlice = append(dropSlice[:j], dropSlice[j+1:]...)
+				j--
+			}
+			j++
+		}
+		// Sync the drops
+		TRQCopy.Spec.Drop = dropSlice
+	}
+	// Check if there is an update
+	if !reflect.DeepEqual(oldTRQCopy, TRQCopy) {
+		TRQCopyUpdated, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Update(TRQCopy)
+		if err == nil {
+			TRQCopy = TRQCopyUpdated
+			TRQCopy.Status.State = success
+			TRQCopy.Status.Message = []string{"Total resource quota applied"}
+		} else {
+			log.Infof("Couldn't update total resource quota in %s: %s", TRQCopy.GetName(), err)
+			TRQCopy.Status.State = failure
+			TRQCopy.Status.Message = []string{"Total resource quota couldn't be applied"}
+		}
+	}
+	return TRQCopy, CPUQuota, memoryQuota
+}
+
+// calculateConsumedResources looks out for slices in authority and teams to determine the total consumption
+func (t *Handler) calculateConsumedResources(TRQCopy *apps_v1alpha.TotalResourceQuota) (int64, int64) {
+	var consumedCPU int64
+	var consumedMemory int64
+	slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", TRQCopy.GetName())).List(metav1.ListOptions{})
+	if len(slicesRaw.Items) != 0 {
+		for _, slicesRow := range slicesRaw.Items {
+			sliceChildNamespaceStr := fmt.Sprintf("%s-slice-%s", slicesRow.GetNamespace(), slicesRow.GetName())
+			// Check out the resource quotas in the slice namespace rather than the slice profile
+			resourceQuotasRaw, _ := t.clientset.CoreV1().ResourceQuotas(sliceChildNamespaceStr).List(metav1.ListOptions{})
+			if len(resourceQuotasRaw.Items) != 0 {
+				for _, resourceQuotasRow := range resourceQuotasRaw.Items {
+					consumedCPU += resourceQuotasRow.Spec.Hard.Cpu().Value()
+					consumedMemory += resourceQuotasRow.Spec.Hard.Memory().Value()
+				}
+			}
+		}
+	}
+	teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", TRQCopy.GetName())).List(metav1.ListOptions{})
+	if len(teamsRaw.Items) != 0 {
+		for _, teamRow := range teamsRaw.Items {
+			teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", teamRow.GetNamespace(), teamRow.GetName())
+			slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(teamChildNamespaceStr).List(metav1.ListOptions{})
+			if len(slicesRaw.Items) != 0 {
+				for _, slicesRow := range slicesRaw.Items {
+					sliceChildNamespaceStr := fmt.Sprintf("%s-slice-%s", slicesRow.GetNamespace(), slicesRow.GetName())
+					resourceQuotasRaw, _ := t.clientset.CoreV1().ResourceQuotas(sliceChildNamespaceStr).List(metav1.ListOptions{})
+					if len(resourceQuotasRaw.Items) != 0 {
+						for _, resourceQuotasRow := range resourceQuotasRaw.Items {
+							consumedCPU += resourceQuotasRow.Spec.Hard.Cpu().Value()
+							consumedMemory += resourceQuotasRow.Spec.Hard.Memory().Value()
+						}
+					}
+				}
+			}
+		}
+	}
+	return consumedCPU, consumedMemory
+}
+
+// checkResourceBalance compares the total resource quota with the total consumption to detect if there is an overusing of resources
+func (t *Handler) checkResourceBalance(TRQCopy *apps_v1alpha.TotalResourceQuota,
+	CPUQuota, memoryQuota, consumedCPU, consumedMemory int64, resourceDemand bool) (*apps_v1alpha.TotalResourceQuota, bool) {
+	log.Println("checkResourceBalance")
+	log.Printf("Quota = CPU: %d, Memory: %d - Consumed = CPU: %d, Memory: %d", CPUQuota, memoryQuota, consumedCPU, consumedMemory)
+	// To be compared
+	oldTRQCopy := TRQCopy.DeepCopy()
+	// Check CPU and memory usage separately
+	quotaExceeded := false
+	if CPUQuota < consumedCPU || memoryQuota < consumedMemory {
+		quotaExceeded = true
+	}
+	// Set the status
+	TRQCopy.Status.Exceeded = quotaExceeded
+	TRQCopy.Status.Used.CPU = percentage(consumedCPU, CPUQuota)
+	TRQCopy.Status.Used.Memory = percentage(consumedMemory, memoryQuota)
+	// Check if there is an update
+	if !reflect.DeepEqual(oldTRQCopy, TRQCopy) {
+		// If there is a resource request causing the quota to be exceeded, skip this section.
+		// The slice demanding resource will be removed.
+		if (!TRQCopy.Status.Exceeded && resourceDemand) || !resourceDemand {
+			TRQCopyUpdated, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().UpdateStatus(TRQCopy)
+			log.Println(err)
+			if err == nil {
+				TRQCopy = TRQCopyUpdated
+			} else {
+				log.Infof("Couldn't update the status of total resource quota in %s: %s", TRQCopy.GetName(), err)
+			}
+		} else {
+			// Replace with the old version since the process is canceled
+			TRQCopy.Status = oldTRQCopy.Status
+		}
+	}
+	return TRQCopy, quotaExceeded
+}
+
+// balanceResourceConsumption determines the slice to be removed by picking the oldest one
 func (t *Handler) balanceResourceConsumption(TRQCopy *apps_v1alpha.TotalResourceQuota) *apps_v1alpha.TotalResourceQuota {
 	var oldestDate metav1.Time
 	var oldestSlice apps_v1alpha.Slice
-	slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(TRQCopy.GetNamespace()).List(metav1.ListOptions{})
+	log.Println("balanceResourceConsumption")
+	// Get the oldest slice in the authority namespace
+	slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", TRQCopy.GetName())).List(metav1.ListOptions{})
 	if len(slicesRaw.Items) != 0 {
 		for i, sliceRow := range slicesRaw.Items {
 			if i == 0 {
@@ -190,10 +361,11 @@ func (t *Handler) balanceResourceConsumption(TRQCopy *apps_v1alpha.TotalResource
 			}
 		}
 	}
-	teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(TRQCopy.GetNamespace()).List(metav1.ListOptions{})
+	// Get the oldest slice in the team namespaces
+	teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", TRQCopy.GetName())).List(metav1.ListOptions{})
 	if len(teamsRaw.Items) != 0 {
 		for _, teamRow := range teamsRaw.Items {
-			teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", TRQCopy.GetNamespace(), teamRow.GetName())
+			teamChildNamespaceStr := fmt.Sprintf("authority-%s-team-%s", TRQCopy.GetName(), teamRow.GetName())
 			slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(teamChildNamespaceStr).List(metav1.ListOptions{})
 			if len(slicesRaw.Items) != 0 {
 				for _, sliceRow := range slicesRaw.Items {
@@ -205,101 +377,19 @@ func (t *Handler) balanceResourceConsumption(TRQCopy *apps_v1alpha.TotalResource
 			}
 		}
 	}
+	// Delete the oldest slice and send a notification email
 	t.edgenetClientset.AppsV1alpha().Slices(oldestSlice.GetNamespace()).Delete(oldestSlice.GetName(), &metav1.DeleteOptions{})
-	TRQCopy = t.resourceConsumptionControl(TRQCopy)
+	sliceChildNamespaceStr := fmt.Sprintf("%s-slice-%s", oldestSlice.GetNamespace(), oldestSlice.GetName())
+	for _, sliceUser := range oldestSlice.Spec.Users {
+		t.sendEmail(sliceUser.Username, sliceUser.Authority, TRQCopy.GetName(), oldestSlice.GetNamespace(), oldestSlice.GetName(), sliceChildNamespaceStr, "slice-total-quota-exceeded")
+	}
+	// Check out the balance again
+	TRQCopy, _ = t.ResourceConsumptionControl(TRQCopy, 0, 0)
+	// Run the procedure again if the consumption still reaches the quota limit
 	if TRQCopy.Status.Exceeded {
 		TRQCopy = t.balanceResourceConsumption(TRQCopy)
 	}
 	return TRQCopy
-}
-
-// calculateTotalQuota to
-func calculateTotalQuota(TRQCopy *apps_v1alpha.TotalResourceQuota) (*apps_v1alpha.TotalResourceQuota, int64, int64) {
-	var CPUQuota int64
-	var memoryQuota int64
-	claimSlice := TRQCopy.Spec.Claim
-	dropSlice := TRQCopy.Spec.Drop
-	if len(TRQCopy.Spec.Claim) > 0 {
-		j := 0
-		for _, claim := range TRQCopy.Spec.Claim {
-			if claim.Expires == nil || (claim.Expires != nil && claim.Expires.Time.Sub(time.Now()) >= 0) {
-				CPUResource := resource.MustParse(claim.CPU)
-				CPUQuota += CPUResource.Value()
-				memoryResource := resource.MustParse(claim.Memory)
-				memoryQuota += memoryResource.Value()
-			} else {
-				claimSlice = append(claimSlice[:j], claimSlice[j+1:]...)
-				j--
-			}
-			j++
-		}
-		TRQCopy.Spec.Claim = claimSlice
-	}
-	if len(TRQCopy.Spec.Drop) > 0 {
-		j := 0
-		for _, drop := range TRQCopy.Spec.Drop {
-			if drop.Expires == nil || (drop.Expires != nil && drop.Expires.Time.Sub(time.Now()) >= 0) {
-				CPUResource := resource.MustParse(drop.CPU)
-				CPUQuota -= CPUResource.Value()
-				memoryResource := resource.MustParse(drop.Memory)
-				memoryQuota -= memoryResource.Value()
-			} else {
-				dropSlice = append(dropSlice[:j], dropSlice[j+1:]...)
-				j--
-			}
-			j++
-		}
-		TRQCopy.Spec.Drop = dropSlice
-	}
-	return TRQCopy, CPUQuota, memoryQuota
-}
-
-// calculateConsumedResources to
-func (t *Handler) calculateConsumedResources(TRQCopy *apps_v1alpha.TotalResourceQuota) (int64, int64) {
-	var consumedCPU int64
-	var consumedMemory int64
-	slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(TRQCopy.GetNamespace()).List(metav1.ListOptions{})
-	if len(slicesRaw.Items) != 0 {
-		for _, slicesRow := range slicesRaw.Items {
-			sliceChildNamespaceStr := fmt.Sprintf("%s-slice-%s", slicesRow.GetNamespace(), slicesRow.GetName())
-			resourceQuotasRaw, _ := t.clientset.CoreV1().ResourceQuotas(sliceChildNamespaceStr).List(metav1.ListOptions{})
-			if len(resourceQuotasRaw.Items) != 0 {
-				for _, resourceQuotasRow := range resourceQuotasRaw.Items {
-					consumedCPU += resourceQuotasRow.Spec.Hard.Cpu().Value()
-					consumedMemory += resourceQuotasRow.Spec.Hard.Memory().Value()
-				}
-			}
-		}
-	}
-	return consumedCPU, consumedMemory
-}
-
-// checkResourceBalance to
-func checkResourceBalance(TRQCopy *apps_v1alpha.TotalResourceQuota,
-	CPUQuota, memoryQuota, consumedCPU, consumedMemory int64) *apps_v1alpha.TotalResourceQuota {
-	if CPUQuota < consumedCPU || memoryQuota < consumedMemory {
-		TRQCopy.Status.Exceeded = true
-	}
-	TRQCopy.Status.Used.CPU = fmt.Sprintf("%.2f", percentage(consumedCPU, CPUQuota))
-	TRQCopy.Status.Used.Memory = fmt.Sprintf("%.2f", percentage(consumedMemory, memoryQuota))
-	return TRQCopy
-}
-
-// CheckResourceAvailability to
-func (t *Handler) CheckResourceAvailability(TRQCopy *apps_v1alpha.TotalResourceQuota, CPUDemand int64, memoryDemand int64) bool {
-	TRQCopy, CPUQuota, MemoryQuota := calculateTotalQuota(TRQCopy)
-	TRQCopyUpdated, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Update(TRQCopy)
-	if err == nil {
-		TRQCopy = TRQCopyUpdated
-	}
-	consumedCPU, consumedMemory := t.calculateConsumedResources(TRQCopy)
-	consumedCPU += CPUDemand
-	consumedMemory += memoryDemand
-	TRQCopy = checkResourceBalance(TRQCopy, CPUQuota, MemoryQuota, consumedCPU, consumedMemory)
-	if !TRQCopy.Status.Exceeded {
-		t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().UpdateStatus(TRQCopy)
-	}
-	return !TRQCopy.Status.Exceeded
 }
 
 // runTimeout puts a procedure in place to remove claims and drops after the timeout
@@ -352,7 +442,7 @@ timeoutLoop:
 		case <-timeoutRenewed:
 			break timeoutOptions
 		case <-timeout:
-			TRQCopy = t.resourceConsumptionControl(TRQCopy)
+			TRQCopy, _ = t.ResourceConsumptionControl(TRQCopy, 0, 0)
 			if TRQCopy.Status.Exceeded {
 				TRQCopy = t.balanceResourceConsumption(TRQCopy)
 			}
@@ -369,28 +459,7 @@ timeoutLoop:
 	}
 }
 
-func percentage(value1, value2 int64) float64 {
-	var percentage float64
-	percentage = float64(value1) / float64(value2)
-	return percentage
-}
-
-// CheckExpiryDate to checker whether there is a item with expiry date
-func CheckExpiryDate(TRQCopy *apps_v1alpha.TotalResourceQuota) bool {
-	exists := false
-	for _, claim := range TRQCopy.Spec.Claim {
-		if claim.Expires != nil && claim.Expires.Time.Sub(time.Now()) >= 0 {
-			exists = true
-		}
-	}
-	for _, drop := range TRQCopy.Spec.Drop {
-		if drop.Expires != nil && drop.Expires.Time.Sub(time.Now()) >= 0 {
-			exists = true
-		}
-	}
-	return exists
-}
-
+// getClosestExpiryDate determines the item, a claim or a drop, having the closest expiry date
 func getClosestExpiryDate(TRQCopy *apps_v1alpha.TotalResourceQuota) time.Time {
 	var closestDate *metav1.Time
 	for i, claim := range TRQCopy.Spec.Claim {
@@ -414,4 +483,11 @@ func getClosestExpiryDate(TRQCopy *apps_v1alpha.TotalResourceQuota) time.Time {
 		}
 	}
 	return closestDate.Time
+}
+
+// percentage to give a overview of resource consumption
+func percentage(value1, value2 int64) float64 {
+	var percentage float64
+	percentage = float64(value1) / float64(value2) * 100
+	return percentage
 }

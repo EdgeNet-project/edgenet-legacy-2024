@@ -526,8 +526,8 @@ type TotalResourceQuotaStatus struct {
 
 // TotalResourceUsed presents the usage of total resource quota
 type TotalResourceUsed struct {
-	CPU    string `json:"cpu"`
-	Memory string `json:"memory"`
+	CPU    float64 `json:"cpu"`
+	Memory float64 `json:"memory"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

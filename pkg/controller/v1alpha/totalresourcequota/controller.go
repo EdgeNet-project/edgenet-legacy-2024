@@ -119,7 +119,7 @@ func Start() {
 			if oldExists == false && newExists == true {
 				event.change.expiry = true
 			}
-			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.TotalResourceQuota), newObj.(*apps_v1alpha.TotalResourceQuota)) {
+			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.TotalResourceQuota).Spec, newObj.(*apps_v1alpha.TotalResourceQuota).Spec) {
 				event.change.spec = true
 			}
 			log.Infof("Update TRQ: %s", event.key)

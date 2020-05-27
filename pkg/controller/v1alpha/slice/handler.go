@@ -152,6 +152,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			} else if !resourcesAvailability {
 				log.Printf("Total resource quota exceeded for %s, %s couldn't be generated", sliceOwnerNamespace.Labels["authority-name"], sliceCopy.GetName())
 				t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"], sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-total-quota-exceeded", false)
+				t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Delete(sliceCopy.GetName(), &metav1.DeleteOptions{})
 			}
 		}
 		// Run timeout goroutine
@@ -210,14 +211,18 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 		}
 		// If the slice renewed or its profile updated
 		if sliceCopy.Status.Renew || fieldUpdated.profile.status {
+			// Delete all existing resource quotas in the slice (child) namespace
+			t.clientset.CoreV1().ResourceQuotas(sliceChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
 			if fieldUpdated.profile.status {
 				resourcesAvailability := t.checkResourcesAvailabilityForSlice(sliceCopy, sliceOwnerNamespace.Labels["authority-name"])
 				if !resourcesAvailability {
 					sliceCopy.Spec.Profile = fieldUpdated.profile.old
+					sliceCopyUpdate, err := t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Update(sliceCopy)
+					if err == nil {
+						sliceCopy = sliceCopyUpdate
+					}
 				}
 			}
-			// Delete all existing resource quotas in the slice (child) namespace
-			t.clientset.CoreV1().ResourceQuotas(sliceChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
 			t.setConstrainsByProfile(sliceChildNamespaceStr, sliceCopy)
 		}
 	} else {
@@ -232,20 +237,23 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 func (t *Handler) checkResourcesAvailabilityForSlice(sliceCopy *apps_v1alpha.Slice, authorityName string) bool {
-	available := false
 	TRQCopy, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(authorityName, metav1.GetOptions{})
+	quotaExceeded := true
 	if err == nil {
 		TRQHandler := totalresourcequota.Handler{}
-		switch sliceCopy.Spec.Profile {
-		case "Low":
-			available = TRQHandler.CheckResourceAvailability(TRQCopy, t.lowResourceQuota.Spec.Hard.Cpu().Value(), t.lowResourceQuota.Spec.Hard.Memory().Value())
-		case "Medium":
-			available = TRQHandler.CheckResourceAvailability(TRQCopy, t.medResourceQuota.Spec.Hard.Cpu().Value(), t.medResourceQuota.Spec.Hard.Memory().Value())
-		case "High":
-			available = TRQHandler.CheckResourceAvailability(TRQCopy, t.highResourceQuota.Spec.Hard.Cpu().Value(), t.highResourceQuota.Spec.Hard.Memory().Value())
+		err = TRQHandler.Init()
+		if err == nil {
+			switch sliceCopy.Spec.Profile {
+			case "Low":
+				_, quotaExceeded = TRQHandler.ResourceConsumptionControl(TRQCopy, t.lowResourceQuota.Spec.Hard.Cpu().Value(), t.lowResourceQuota.Spec.Hard.Memory().Value())
+			case "Medium":
+				_, quotaExceeded = TRQHandler.ResourceConsumptionControl(TRQCopy, t.medResourceQuota.Spec.Hard.Cpu().Value(), t.medResourceQuota.Spec.Hard.Memory().Value())
+			case "High":
+				_, quotaExceeded = TRQHandler.ResourceConsumptionControl(TRQCopy, t.highResourceQuota.Spec.Hard.Cpu().Value(), t.highResourceQuota.Spec.Hard.Memory().Value())
+			}
 		}
 	}
-	return available
+	return !quotaExceeded
 }
 
 // setConstrainsByProfile allocates the resources corresponding to the slice profile and defines the expiration date
@@ -431,6 +439,14 @@ timeoutLoop:
 			sliceChildNamespaceStr := fmt.Sprintf("%s-slice-%s", sliceCopy.GetNamespace(), sliceCopy.GetName())
 			t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"], sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-deletion", false)
 			t.clientset.CoreV1().Namespaces().Delete(sliceChildNamespaceStr, &metav1.DeleteOptions{})
+			TRQCopy, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(sliceOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+			if err == nil {
+				TRQHandler := totalresourcequota.Handler{}
+				err = TRQHandler.Init()
+				if err == nil {
+					TRQHandler.ResourceConsumptionControl(TRQCopy, 0, 0)
+				}
+			}
 			closeChannels()
 			break timeoutLoop
 		}

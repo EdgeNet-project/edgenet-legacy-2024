@@ -236,7 +236,7 @@ func (t *Handler) createTotalResourceQuota(authorityCopy *apps_v1alpha.Authority
 		authorityTRQClaim := apps_v1alpha.TotalResourceDetails{}
 		authorityTRQClaim.Name = "Default"
 		authorityTRQClaim.CPU = "12000m"
-		authorityTRQClaim.Memory = "12288Mi"
+		authorityTRQClaim.Memory = "12Gi"
 		authorityTRQ.Spec.Claim = append(authorityTRQ.Spec.Claim, authorityTRQClaim)
 		authorityTRQ.Spec.Enabled = true
 		_, err = t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Create(authorityTRQ.DeepCopy())
