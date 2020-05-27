@@ -56,6 +56,7 @@ type fields struct {
 	active bool
 	aup    bool
 	roles  bool
+	email  bool
 }
 
 // Constant variables for events
@@ -103,6 +104,7 @@ func Start() {
 			event.updated.active = false
 			event.updated.aup = false
 			event.updated.roles = false
+			event.updated.email = false
 			if oldObj.(*apps_v1alpha.User).Status.Active != newObj.(*apps_v1alpha.User).Status.Active {
 				event.updated.active = true
 			}
@@ -111,6 +113,9 @@ func Start() {
 			}
 			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.User).Spec.Roles, newObj.(*apps_v1alpha.User).Spec.Roles) {
 				event.updated.roles = true
+			}
+			if oldObj.(*apps_v1alpha.User).Spec.Email != newObj.(*apps_v1alpha.User).Spec.Email {
+				event.updated.email = true
 			}
 			log.Infof("Update user: %s", event.key)
 			if err == nil {

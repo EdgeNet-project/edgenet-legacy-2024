@@ -111,10 +111,10 @@ func Send(subject string, contentData interface{}) {
 	to := []string{}
 	var body bytes.Buffer
 	switch subject {
-	case "user-email-verification":
-		to, body = setUserEmailVerificationContent(contentData, smtpServer.From)
-	case "user-email-verified-alert":
-		to, body = setUserVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To})
+	case "user-email-verification", "user-email-verification-update":
+		to, body = setUserEmailVerificationContent(contentData, smtpServer.From, subject)
+	case "user-email-verified-alert", "user-email-verified-notification":
+		to, body = setUserVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	case "user-registration-successful":
 		to, body = setUserRegistrationContent(contentData, smtpServer.From)
 	case "authority-email-verification":
@@ -408,7 +408,7 @@ func setAuthorityEmailVerificationContent(contentData interface{}, from string) 
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verify.html")
+	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verification.html")
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] Authority Registration Request - Do You Confirm?", from, to, delimiter)
 	t.Execute(&body, verificationData)
@@ -457,28 +457,35 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 }
 
 // setUserEmailVerificationContent to create an email body related to the email verification
-func setUserEmailVerificationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+func setUserEmailVerificationContent(contentData interface{}, from, subject string) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/user-email-verify.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
 	delimiter := ""
-	body := setCommonEmailHeaders("[EdgeNet] Signed Up - Email Verification", from, to, delimiter)
+	title := "[EdgeNet] Email Verification"
+	switch subject {
+	case "user-email-verification":
+		title = "[EdgeNet] Signed Up - Email Verification"
+	case "user-email-verification-update":
+		title = "[EdgeNet] User Updated - Email Verification"
+	}
+	body := setCommonEmailHeaders(title, from, to, delimiter)
 	t.Execute(&body, verificationData)
 
 	return to, body
 }
 
 // setUserVerifiedAlertContent to create an email body related to the email verified alert
-func setUserVerifiedAlertContent(contentData interface{}, from string, to []string) ([]string, bytes.Buffer) {
+func setUserVerifiedAlertContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
 	alertData := contentData.(CommonContentData)
 	// This represents receivers' email addresses
 	if len(alertData.CommonData.Email) > 0 {
 		to = alertData.CommonData.Email
 	}
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/user-email-verified-alert.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] User Email Verified", from, to, delimiter)
 	t.Execute(&body, alertData)

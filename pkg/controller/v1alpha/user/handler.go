@@ -18,6 +18,7 @@ package user
 
 import (
 	"fmt"
+	"math/rand"
 	"reflect"
 	"strings"
 	"time"
@@ -146,7 +147,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				userCopy.Status.State = failure
 				userCopy.Status.Message = []string{fmt.Sprintf("Service account creation failed for user %s", userCopy.GetName())}
 				t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
-				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-serviceaccount-failure")
+				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "", "user-serviceaccount-failure")
 				return
 			}
 			// This function collects the bearer token from the created service account to form kubeconfig file and send it by email
@@ -160,14 +161,14 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 						if len(serviceAccount.Secrets) > 0 {
 							// Create kubeconfig file according to the web service account
 							registration.CreateConfig(serviceAccount)
-							t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-registration-successful")
+							t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "", "user-registration-successful")
 							break checkTokenTimer
 						}
 					case <-time.After(15 * time.Minute):
 						userCopy.Status.State = failure
 						userCopy.Status.Message = []string{fmt.Sprintf("Kubeconfig file generation failed for user %s", userCopy.GetName())}
 						t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
-						t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-kubeconfig-failure")
+						t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "", "user-kubeconfig-failure")
 						break checkTokenTimer
 					}
 				}
@@ -209,6 +210,15 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 		}
 	}
 	if userOwnerAuthority.Status.Enabled {
+		if fieldUpdated.email {
+			userCopy.Status.Active = false
+			userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+			if err == nil {
+				userCopy = userCopyUpdated
+			}
+			t.setEmailVerification(userCopy, userOwnerNamespace.Labels["authority-name"])
+		}
+
 		if userCopy.Status.Active && userCopy.Status.AUP {
 			// To manipulate role bindings according to the changes
 			if fieldUpdated.active || fieldUpdated.aup || fieldUpdated.roles {
@@ -244,6 +254,27 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 func (t *Handler) ObjectDeleted(obj interface{}) {
 	log.Info("UserHandler.ObjectDeleted")
 	// Mail notification, TBD
+}
+
+// setEmailVerification to provide one-time code for verification
+func (t *Handler) setEmailVerification(userCopy *apps_v1alpha.User, authorityName string) {
+	// The section below is a part of the method which provides email verification
+	// Email verification code is a security point for email verification. The user
+	// object creates an email verification object with a name which is
+	// this email verification code. Only who knows the authority and the email verification
+	// code can manipulate that object by using a public token.
+	userOwnerReferences := t.setOwnerReferences(userCopy)
+	emailVerificationCode := "bs" + generateRandomString(16)
+	emailVerification := apps_v1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: userOwnerReferences}}
+	emailVerification.SetName(emailVerificationCode)
+	emailVerification.Spec.Kind = "Email"
+	emailVerification.Spec.Identifier = userCopy.GetName()
+	_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(userCopy.GetNamespace()).Create(emailVerification.DeepCopy())
+	if err == nil {
+		t.sendEmail(userCopy, authorityName, emailVerificationCode, "user-email-verification-update")
+	} else {
+		t.sendEmail(userCopy, authorityName, emailVerificationCode, "user-email-verification-update-malfunction")
+	}
 }
 
 // createRoleBindings creates user role bindings according to the roles
@@ -344,13 +375,22 @@ func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) {
 }
 
 // sendEmail to send notification to participants
-func (t *Handler) sendEmail(userCopy *apps_v1alpha.User, authorityName, subject string) {
+func (t *Handler) sendEmail(userCopy *apps_v1alpha.User, authorityName, emailVerificationCode, subject string) {
 	// Set the HTML template variables
-	contentData := mailer.CommonContentData{}
-	contentData.CommonData.Authority = authorityName
-	contentData.CommonData.Username = userCopy.GetName()
-	contentData.CommonData.Name = fmt.Sprintf("%s %s", userCopy.Spec.FirstName, userCopy.Spec.LastName)
-	contentData.CommonData.Email = []string{userCopy.Spec.Email}
+	var contentData interface{}
+	var collective = mailer.CommonContentData{}
+	collective.CommonData.Authority = authorityName
+	collective.CommonData.Username = userCopy.GetName()
+	collective.CommonData.Name = fmt.Sprintf("%s %s", userCopy.Spec.FirstName, userCopy.Spec.LastName)
+	collective.CommonData.Email = []string{userCopy.Spec.Email}
+	if subject == "user-email-verification-update" {
+		verifyContent := mailer.VerifyContentData{}
+		verifyContent.Code = emailVerificationCode
+		verifyContent.CommonData = collective.CommonData
+		contentData = verifyContent
+	} else {
+		contentData = collective
+	}
 	mailer.Send(subject, contentData)
 }
 
@@ -383,7 +423,7 @@ func (t *Handler) checkDuplicateObject(userCopy *apps_v1alpha.User, authorityNam
 			}
 		}
 	} else if exists && !reflect.DeepEqual(userCopy.Status.Message, message) {
-		t.sendEmail(userCopy, authorityName, "user-validation-failure")
+		t.sendEmail(userCopy, authorityName, "", "user-validation-failure")
 	}
 	return exists, message
 }
@@ -406,4 +446,16 @@ func containsRole(roles []string, value string) bool {
 		}
 	}
 	return false
+}
+
+// generateRandomString to have a unique string
+func generateRandomString(n int) string {
+	var letter = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+
+	b := make([]rune, n)
+	rand.Seed(time.Now().UnixNano())
+	for i := range b {
+		b[i] = letter[rand.Intn(len(letter))]
+	}
+	return string(b)
 }

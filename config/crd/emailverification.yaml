@@ -54,6 +54,7 @@ spec:
               enum:
                 - Authority
                 - User
+                - Email
             identifier:
               type: string
             verified:
