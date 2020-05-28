@@ -215,6 +215,9 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
 			if err == nil {
 				userCopy = userCopyUpdated
+			} else {
+				log.Infof("Couldn't deactivate user %s in %s: %s", userCopy.GetName(), userCopy.GetNamespace(), err)
+				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "", "user-deactivation-failure")
 			}
 			t.setEmailVerification(userCopy, userOwnerNamespace.Labels["authority-name"])
 		}
@@ -273,7 +276,7 @@ func (t *Handler) setEmailVerification(userCopy *apps_v1alpha.User, authorityNam
 	if err == nil {
 		t.sendEmail(userCopy, authorityName, emailVerificationCode, "user-email-verification-update")
 	} else {
-		t.sendEmail(userCopy, authorityName, emailVerificationCode, "user-email-verification-update-malfunction")
+		t.sendEmail(userCopy, authorityName, "", "user-email-verification-update-malfunction")
 	}
 }
 
