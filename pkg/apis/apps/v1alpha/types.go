@@ -107,7 +107,7 @@ type AuthoritySpec struct {
 	FullName  string  `json:"fullname"`
 	ShortName string  `json:"shortname"`
 	URL       string  `json:"url"`
-	Address   string  `json:"address"`
+	Address   Address `json:"address"`
 	Contact   Contact `json:"contact"`
 }
 
@@ -118,6 +118,15 @@ type Contact struct {
 	LastName  string `json:"lastname"`
 	Email     string `json:"email"`
 	Phone     string `json:"phone"`
+}
+
+// Address
+type Address struct {
+	Street  string `json:"street"`
+	ZIP     string `json:"zip"`
+	City    string `json:"city"`
+	Region  string `json:"region"`
+	Country string `json:"country"`
 }
 
 // AuthorityStatus is the status for a Authority resource
@@ -159,7 +168,7 @@ type AuthorityRequestSpec struct {
 	FullName  string  `json:"fullname"`
 	ShortName string  `json:"shortname"`
 	URL       string  `json:"url"`
-	Address   string  `json:"address"`
+	Address   Address `json:"address"`
 	Contact   Contact `json:"contact"`
 }
 

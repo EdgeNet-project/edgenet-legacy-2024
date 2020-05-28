@@ -6,7 +6,12 @@ spec:
   fullname: Sorbonne University
   shortname: SU
   url: http://www.sorbonne-universite.fr/
-  address: 21 rue de l’École de médecine 75006 Paris
+  address:
+    street: 4 place Jussieu, boite 169
+    zip: "75005"
+    city: Paris
+    region: Île-de-France
+    country: France
   contact:
     username: usersu
     firstname: Firstname

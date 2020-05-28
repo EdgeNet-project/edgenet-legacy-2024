@@ -45,13 +45,18 @@ The [``.yaml`` format](https://kubernetes.io/docs/concepts/overview/working-with
 - the **full name** of the authority, which is a human-readable name
 - the **short name** of the authority, which is also human-readable, and can be the same as the full name, or a shorter name, in case the full name is long
 - the **URL** of the authority; this should be a web page from your institution that confirms your role as a bona fide researcher
-- the **postal address** of the authority
+- the **postal address** of the authority; the information provided for this person consists of:
+  - a **street** address
+  - a **ZIP** code/postal code
+  - a **city** name
+  - a **region**, or state name (not mandatory)
+  - a **country** name
 - the **contact person** who is the responsible for this authority; this is the authority's first administrator, who is typically yourself; the information provided for this person consists of:
   - a **username** that will be used by the EdgeNet system; it must follow [Kubernetes' rules for names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/); note that usernames need only be distinct within an authority
   - a **first name** (human readable)
   - a **last name** (human readable)
   - an **e-mail address**, which should be an institutional e-mail address
-  - a **phone number**, which should be in qutoation marks, start with the country code using the plus notation, and not contain any spaces or other formatting
+  - a **phone number**, which should be in quotation marks, start with the country code using the plus notation, and not contain any spaces or other formatting
 
 In what follows, we will assume that this file is saved in your working directory on your system as ``./authorityrequest.yaml``.
 
@@ -65,7 +70,12 @@ spec:
   fullname: Laboratoire LIP6-CNRS
   shortname: lip6
   url: https://www.lip6.fr/recherche/team_membres.php?acronyme=NPA
-  address: 4 place Jussieu, boite 169, 75005 Paris, France
+  address:
+    street: 4 place Jussieu, boite 169
+    zip: "75005"
+    city: Paris
+    region: Île-de-France
+    country: France
   contact:
     username: timurfriedman
     firstname: Timur

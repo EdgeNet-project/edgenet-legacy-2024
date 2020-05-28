@@ -25,7 +25,12 @@ spec:
   fullname: <your authority name, e.g. Sorbonne University>
   shortname: <your authority shortname, e.g. SU>
   url: <your authority website, e.g. http://www.sorbonne-universite.fr/>
-  address: <your authority address, e.g. 21 rue de l’École de médecine 75006 Paris>
+  address:
+    street: 4 place Jussieu, boite 169
+    zip: "75005"
+    city: Paris
+    region: Île-de-France
+    country: France
   contact:
     username: <your username>
     firstname: <your firstname>

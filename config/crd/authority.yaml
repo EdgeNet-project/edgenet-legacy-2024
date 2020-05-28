@@ -11,77 +11,114 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: authorities.apps.edgenet.io
 spec:
   group: apps.edgenet.io
-  version: v1alpha
+  # list of versions supported by this CustomResourceDefinition
+  versions:
+    - name: v1alpha
+      # Each version can be enabled/disabled by Served flag.
+      served: true
+      # One and only one version must be marked as the storage version.
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Official Name
+          type: string
+          jsonPath: .spec.fullname
+        - name: Short Name
+          type: string
+          jsonPath: .spec.shortname
+        - name: URL
+          type: string
+          jsonPath: .spec.url
+        - name: City
+          type: string
+          jsonPath: .spec.address.city
+        - name: Country
+          type: string
+          jsonPath: .spec.address.country
+        - name: Enabled
+          type: boolean
+          jsonPath: .status.enabled
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - fullname
+                - shortname
+                - url
+                - address
+                - contact
+              properties:
+                fullname:
+                  type: string
+                shortname:
+                  type: string
+                url:
+                  type: string
+                address:
+                  type: object
+                  required:
+                    - street
+                    - zip
+                    - city
+                    - country
+                  properties:
+                    street:
+                      type: string
+                    zip:
+                      type: string
+                    city:
+                      type: string
+                    region:
+                      type: string
+                      description: region or state
+                    country:
+                      type: string
+                contact:
+                  type: object
+                  required:
+                    - username
+                    - firstname
+                    - lastname
+                    - email
+                    - phone
+                  properties:
+                    username:
+                      type: string
+                      pattern: "^[a-z0-9]*$"
+                    firstname:
+                      type: string
+                    lastname:
+                      type: string
+                    email:
+                      type: string
+                    phone:
+                      type: string
+            status:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                state:
+                  type: string
+                message:
+                  type: array
+                  items:
+                    type: string
   scope: Cluster
-  subresources:
-    status: {}
   names:
     plural: authorities
     singular: authority
     kind: Authority
-  additionalPrinterColumns:
-    - name: Official Name
-      type: string
-      JSONPath: .spec.fullname
-    - name: Short Name
-      type: string
-      JSONPath: .spec.shortname
-    - name: URL
-      type: string
-      JSONPath: .spec.url
-    - name: Address
-      type: string
-      JSONPath: .spec.address
-    - name: Enabled
-      type: boolean
-      JSONPath: .status.enabled
-    - name: Age
-      type: date
-      JSONPath: .metadata.creationTimestamp
-  validation:
-    openAPIV3Schema:
-      required:
-        - spec
-      properties:
-        spec:
-          required:
-            - fullname
-            - shortname
-            - url
-            - address
-            - contact
-          properties:
-            fullname:
-              type: string
-            shortname:
-              type: string
-            url:
-              type: string
-            address:
-              type: string
-            contact:
-              type: object
-              required:
-                - username
-                - firstname
-                - lastname
-                - email
-                - phone
-              properties:
-                username:
-                  type: string
-                  pattern: "^[a-z0-9]*$"
-                firstname:
-                  type: string
-                lastname:
-                  type: string
-                email:
-                  type: string
-                phone:
-                  type: string
