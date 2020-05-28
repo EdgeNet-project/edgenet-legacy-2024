@@ -129,8 +129,9 @@ func Send(subject string, contentData interface{}) {
 		to, body = setAUPRenewalContent(contentData, smtpServer.From)
 	case "acceptable-use-policy-expired":
 		to, body = setAUPExpiredContent(contentData, smtpServer.From)
-	case "slice-creation", "slice-removal", "slice-reminder", "slice-deletion", "slice-crash", "slice-total-quota-exceeded":
-		to, body = setSliceContent(contentData, smtpServer.From, subject)
+	case "slice-creation", "slice-removal", "slice-reminder", "slice-deletion", "slice-crash", "slice-total-quota-exceeded", "slice-lack-of-quota",
+		"slice-deletion-failed", "slice-collection-deletion-failed":
+		to, body = setSliceContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	case "team-creation", "team-removal", "team-deletion", "team-crash":
 		to, body = setTeamContent(contentData, smtpServer.From, subject)
 	case "node-contribution-successful", "node-contribution-failure", "node-contribution-failure-support":
@@ -318,27 +319,37 @@ func setTeamContent(contentData interface{}, from, subject string) ([]string, by
 }
 
 // setSliceContent to create an email body related to the slice emails
-func setSliceContent(contentData interface{}, from, subject string) ([]string, bytes.Buffer) {
+func setSliceContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
 	sliceData := contentData.(ResourceAllocationData)
-	// This represents receivers' email addresses
-	to := sliceData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
 	delimiter := ""
 	title := "[EdgeNet] Slice event"
 	switch subject {
 	case "slice-creation":
+		// This represents receivers' email addresses
+		to = sliceData.CommonData.Email
 		title = "[EdgeNet] Slice invitation"
 	case "slice-removal":
+		to = sliceData.CommonData.Email
 		title = "[EdgeNet] Slice farewell message"
 	case "slice-reminder":
+		to = sliceData.CommonData.Email
 		title = "[EdgeNet] Slice renewal reminder"
 	case "slice-deletion":
+		to = sliceData.CommonData.Email
 		title = "[EdgeNet] Slice deleted"
 	case "slice-crash":
+		to = sliceData.CommonData.Email
 		title = "[EdgeNet] Slice creation failed"
 	case "slice-total-quota-exceeded":
+		to = sliceData.CommonData.Email
 		title = "[EdgeNet] Slice could not be created"
+	case "slice-lack-of-quota":
+		to = sliceData.CommonData.Email
+		title = "[EdgeNet] Slice profile could not be changed"
+	case "slice-deletion-failed", "slice-collection-deletion-failed":
+		title = "[EdgeNet] Slice deletion failed"
 	}
 	body := setCommonEmailHeaders(title, from, to, delimiter)
 	t.Execute(&body, sliceData)

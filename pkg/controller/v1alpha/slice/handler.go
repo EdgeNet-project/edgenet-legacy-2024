@@ -220,6 +220,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 					sliceCopyUpdate, err := t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Update(sliceCopy)
 					if err == nil {
 						sliceCopy = sliceCopyUpdate
+						t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"], sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-lack-of-quota", false)
 					}
 				}
 			}
