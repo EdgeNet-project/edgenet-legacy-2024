@@ -63,6 +63,19 @@ type patchByBoolValue struct {
 	Path  string `json:"path"`
 	Value bool   `json:"value"`
 }
+type patchByOwnerReferenceValue struct {
+	Op    string                `json:"op"`
+	Path  string                `json:"path"`
+	Value []patchOwnerReference `json:"value"`
+}
+type patchOwnerReference struct {
+	APIVersion         string `json:"apiVersion"`
+	BlockOwnerDeletion bool   `json:"blockOwnerDeletion"`
+	Controller         bool   `json:"controller"`
+	Kind               string `json:"kind"`
+	Name               string `json:"name"`
+	UID                string `json:"uid"`
+}
 
 // Constant variables for events
 const inprogress = "In Progress"

@@ -169,7 +169,7 @@ func Start() {
 						TRQCopy, err := edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(owner.Name, metav1.GetOptions{})
 						if err == nil {
 							exists := false
-							CPUAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Cpu().Value())*1.3), resource.BinarySI).DeepCopy()
+							CPUAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
 							memoryAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Memory().Value())*1.3), resource.BinarySI).DeepCopy()
 							claims := TRQCopy.Spec.Claim
 							for i, claimRow := range TRQCopy.Spec.Claim {
@@ -179,8 +179,8 @@ func Start() {
 									rewardedCPU.Add(CPUAward)
 									rewardedMemory := resource.MustParse(claimRow.Memory)
 									rewardedMemory.Add(memoryAward)
-									claimRow.CPU = CPUAward.String()
-									claimRow.Memory = memoryAward.String()
+									claimRow.CPU = rewardedCPU.String()
+									claimRow.Memory = rewardedMemory.String()
 									claims = append(claims[:i], claims[i+1:]...)
 									claims = append(claims, claimRow)
 								}
@@ -212,7 +212,7 @@ func Start() {
 						TRQCopy, err := edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(owner.Name, metav1.GetOptions{})
 						if err == nil {
 							exists := false
-							CPUAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Cpu().Value())*1.3), resource.BinarySI).DeepCopy()
+							CPUAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
 							memoryAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Memory().Value())*1.3), resource.BinarySI).DeepCopy()
 							claims := TRQCopy.Spec.Claim
 							for i, claimRow := range TRQCopy.Spec.Claim {
@@ -222,8 +222,8 @@ func Start() {
 									rewardedCPU.Add(CPUAward)
 									rewardedMemory := resource.MustParse(claimRow.Memory)
 									rewardedMemory.Add(memoryAward)
-									claimRow.CPU = CPUAward.String()
-									claimRow.Memory = memoryAward.String()
+									claimRow.CPU = rewardedCPU.String()
+									claimRow.Memory = rewardedMemory.String()
 									claims = append(claims[:i], claims[i+1:]...)
 									claims = append(claims, claimRow)
 								}
@@ -247,7 +247,7 @@ func Start() {
 					if owner.Kind == "Authority" {
 						TRQCopy, err := edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(owner.Name, metav1.GetOptions{})
 						if err == nil {
-							CPUAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Cpu().Value())*1.3), resource.BinarySI).DeepCopy()
+							CPUAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
 							memoryAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Memory().Value())*1.3), resource.BinarySI).DeepCopy()
 							claims := TRQCopy.Spec.Claim
 							for i, claimRow := range TRQCopy.Spec.Claim {
@@ -256,8 +256,8 @@ func Start() {
 									rewardedCPU.Sub(CPUAward)
 									rewardedMemory := resource.MustParse(claimRow.Memory)
 									rewardedMemory.Sub(memoryAward)
-									claimRow.CPU = CPUAward.String()
-									claimRow.Memory = memoryAward.String()
+									claimRow.CPU = rewardedCPU.String()
+									claimRow.Memory = rewardedMemory.String()
 									claims = append(claims[:i], claims[i+1:]...)
 									claims = append(claims, claimRow)
 								}
@@ -278,7 +278,7 @@ func Start() {
 					if owner.Kind == "Authority" {
 						TRQCopy, err := edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(owner.Name, metav1.GetOptions{})
 						if err == nil {
-							CPUAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Cpu().Value())*1.3), resource.BinarySI).DeepCopy()
+							CPUAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
 							memoryAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Memory().Value())*1.3), resource.BinarySI).DeepCopy()
 							claims := TRQCopy.Spec.Claim
 							for i, claimRow := range TRQCopy.Spec.Claim {
@@ -287,8 +287,8 @@ func Start() {
 									rewardedCPU.Sub(CPUAward)
 									rewardedMemory := resource.MustParse(claimRow.Memory)
 									rewardedMemory.Sub(memoryAward)
-									claimRow.CPU = CPUAward.String()
-									claimRow.Memory = memoryAward.String()
+									claimRow.CPU = rewardedCPU.String()
+									claimRow.Memory = rewardedMemory.String()
 									claims = append(claims[:i], claims[i+1:]...)
 									claims = append(claims, claimRow)
 								}

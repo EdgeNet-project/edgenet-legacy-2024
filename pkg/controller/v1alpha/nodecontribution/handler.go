@@ -138,7 +138,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		} else {
 			// There isn't any node corresponding to the node contribution
 			log.Println("NODE NOT FOUND")
-			go t.runSetupProcedure(addr, nodeName, recordType, config, NCCopy)
+			go t.runSetupProcedure(NCOwnerNamespace.Labels["authority-name"], addr, nodeName, recordType, config, NCCopy)
 		}
 	} else {
 		log.Println("AUTHORITY NOT ENABLED")
@@ -201,7 +201,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 			}
 		} else {
 			log.Println("NODE NOT FOUND")
-			go t.runSetupProcedure(addr, nodeName, recordType, config, NCCopy)
+			go t.runSetupProcedure(NCOwnerNamespace.Labels["authority-name"], addr, nodeName, recordType, config, NCCopy)
 		}
 	} else {
 		log.Println("AUTHORITY NOT ENABLED")
@@ -255,7 +255,7 @@ func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) {
 }
 
 // runSetupProcedure installs necessary packages from scratch and makes the node join into the cluster
-func (t *Handler) runSetupProcedure(addr, nodeName, recordType string, config *ssh.ClientConfig,
+func (t *Handler) runSetupProcedure(authorityName, addr, nodeName, recordType string, config *ssh.ClientConfig,
 	NCCopy *apps_v1alpha.NodeContribution) {
 	// Steps in the procedure
 	endProcedure := make(chan bool, 1)
@@ -342,12 +342,24 @@ nodeInstallLoop:
 		case <-nodePatch:
 			log.Println("***************Node Patch***************")
 			// Set the node as schedulable or unschedulable according to the node contribution
+			patchStatus := true
 			err := t.setNodeScheduling(nodeName, !NCCopy.Spec.Enabled)
 			if err != nil {
 				NCCopy.Status.State = incomplete
-				NCCopy.Status.Message = append(NCCopy.Status.Message, "Node patch failed")
+				NCCopy.Status.Message = append(NCCopy.Status.Message, "Scheduling configuration failed")
 				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 				t.sendEmail(NCCopy)
+				patchStatus = false
+			}
+			err = t.setAuthorityAsOwnerReference(authorityName, nodeName)
+			if err != nil {
+				NCCopy.Status.State = incomplete
+				NCCopy.Status.Message = append(NCCopy.Status.Message, "Setting owner reference failed")
+				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
+				t.sendEmail(NCCopy)
+				patchStatus = false
+			}
+			if patchStatus {
 				break nodeInstallLoop
 			}
 			NCCopy.Status.State = success
@@ -541,15 +553,58 @@ nodeRecoveryLoop:
 	}
 }
 
+// setAuthorityAsOwnerReference puts the authority as owner into the node
+func (t *Handler) setAuthorityAsOwnerReference(authorityName, nodeName string) error {
+	// Create a patch slice and initialize it to the size of 1
+	// Append the data existing in the label map to the slice
+	authorityCopy, err := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityName, metav1.GetOptions{})
+	if err == nil {
+		nodePatchOwnerReference := patchOwnerReference{}
+		nodePatchOwnerReference.APIVersion = "apps.edgenet.io/v1alpha"
+		nodePatchOwnerReference.BlockOwnerDeletion = true
+		nodePatchOwnerReference.Controller = false
+		nodePatchOwnerReference.Kind = "Authority"
+		nodePatchOwnerReference.Name = authorityCopy.GetName()
+		nodePatchOwnerReference.UID = string(authorityCopy.GetUID())
+		nodePatchOwnerReferences := append([]patchOwnerReference{}, nodePatchOwnerReference)
+		NCOwnerNamespace, err := t.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("authority-%s", authorityName), metav1.GetOptions{})
+		if err == nil {
+			nodePatchOwnerReference = patchOwnerReference{}
+			nodePatchOwnerReference.APIVersion = "apps.edgenet.io/v1alpha"
+			nodePatchOwnerReference.BlockOwnerDeletion = true
+			nodePatchOwnerReference.Controller = false
+			nodePatchOwnerReference.Kind = "Namespace"
+			nodePatchOwnerReference.Name = NCOwnerNamespace.GetName()
+			nodePatchOwnerReference.UID = string(NCOwnerNamespace.GetUID())
+			nodePatchOwnerReferences = append(nodePatchOwnerReferences, nodePatchOwnerReference)
+		} else {
+			log.Printf("Node %s patch, namespace, failed in %s at node contribution", nodeName, authorityName)
+		}
+		nodePatchArr := make([]interface{}, 1)
+		nodePatch := patchByOwnerReferenceValue{}
+		nodePatch.Op = "add"
+		nodePatch.Path = "/metadata/ownerReferences"
+		nodePatch.Value = nodePatchOwnerReferences
+		nodePatchArr[0] = nodePatch
+		nodePatchJSON, _ := json.Marshal(nodePatchArr)
+		// Patch the nodes with the arguments:
+		// hostname, patch type, and patch data
+		_, err = t.clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
+	} else {
+		log.Printf("Node %s patch, authority, failed in %s at node contribution", nodeName, authorityName)
+	}
+	return err
+}
+
 // setNodeScheduling syncs the node with the node contribution
 func (t *Handler) setNodeScheduling(nodeName string, unschedulable bool) error {
 	// Create a patch slice and initialize it to the size of 1
 	nodePatchArr := make([]interface{}, 1)
-	nodePatchByBool := patchByBoolValue{}
-	nodePatchByBool.Op = "replace"
-	nodePatchByBool.Path = "/spec/unschedulable"
-	nodePatchByBool.Value = unschedulable
-	nodePatchArr[0] = nodePatchByBool
+	nodePatch := patchByBoolValue{}
+	nodePatch.Op = "replace"
+	nodePatch.Path = "/spec/unschedulable"
+	nodePatch.Value = unschedulable
+	nodePatchArr[0] = nodePatch
 	nodePatchJSON, _ := json.Marshal(nodePatchArr)
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
