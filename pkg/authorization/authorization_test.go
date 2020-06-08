@@ -16,13 +16,13 @@ func TestHomeDir(t *testing.T) {
 }
 
 func TestSetKubeConfig(t *testing.T) {
-SetKubeConfig()
-var r string
-flag.StringVar(&r, "r", filepath.Join(homeDir(), ".kube", "config"), "")
-if(kubeconfig != "" && kubeconfig != r){
-	t.Fatal("Error, another path has been detected")
+	SetKubeConfig()
+	var r string
+	flag.StringVar(&r, "r", filepath.Join(homeDir(), ".kube", "config"), "")
+		if(kubeconfig != "" && kubeconfig != r){
+			t.Fatal("Error, another path has been detected")
 }
-flag.Parse()
+	flag.Parse()
 }
 
 
