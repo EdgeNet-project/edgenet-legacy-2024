@@ -220,18 +220,3 @@ func TestGetConditionReadyStatus(t *testing.T){
   }
 
 }
-
-func TestGetStatusList(t *testing.T){
-	node1 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-4", UID: "04"},
-                        Status: corev1.NodeStatus{Addresses:[]corev1.NodeAddress{{Address:"192.168.0.4", Type:"InternalIP"},{Address:"10.0.0.4", Type:"ExternalIP"}},
-                        Conditions:[]corev1.NodeCondition{{Status:"", Type: "Ready"},}},
-                        }  
-  client := testclient.NewSimpleClientset(&node1)
-  var dat []interface{}
-  if err := json.Unmarshal(GetStatusList(client), &dat); err != nil {
-       panic(err)
-   }
-  fmt.Printf("%v", dat)
-
-}
-
