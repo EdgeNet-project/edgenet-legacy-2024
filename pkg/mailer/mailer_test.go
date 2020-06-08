@@ -33,13 +33,3 @@ func TestGenerateRandomString(t *testing.T) {
 	}
 }
 }
-/*
-func TestSetCommonEmailHeaders(t *testing.T){
-	
- 	setCommonEmailHeaders("sujet", "meli", []string{"samia"}, "delimiter")
- 
-}
-*/
-
-
-
