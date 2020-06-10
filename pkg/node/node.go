@@ -312,7 +312,7 @@ func GetList() []string {
 }
 
 // GetStatusList uses clientset to get node list of the cluster that contains Ready State info
-func GetStatusList() []byte {
+func GetStatusList(clientset kubernetes.Interface) []byte {
 	type nodeStatus struct {
 		Node       string   `json:"node"`
 		Ready      string   `json:"ready"`
