@@ -11,7 +11,7 @@ import ResourceList from "./ResourceList";
 // import ResourceView from "./ResourceView";
 //
 // import {Related} from "../form";
-import {ForgotPasswordView, LoginView, ResetPasswordView} from "../auth/views";
+import {ForgotPasswordView, LoginView, ResetPasswordView, SignupView} from "../auth/views";
 
 const Routes = ({menu, theme}) =>
     <Grommet full theme={theme}>
@@ -36,12 +36,15 @@ const Routes = ({menu, theme}) =>
                 <Guest>
                     <Switch>
                         <Route exact path="/password/reset">
-                            <ForgotPasswordView/>
+                            <ForgotPasswordView />
                         </Route>
                         <Route path="/password/reset/:token"
                                render={({match}) => <ResetPasswordView token={match.params.token}/>}/>
-                        <Route path="/">
-                            <LoginView/>
+                       <Route path="/signup">
+                           <SignupView />
+                       </Route>
+                       <Route path="/">
+                            <LoginView />
                         </Route>
                     </Switch>
                 </Guest>

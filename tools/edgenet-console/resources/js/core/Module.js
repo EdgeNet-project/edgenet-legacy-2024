@@ -1,5 +1,11 @@
 import React, {Suspense} from "react";
 
+const ModuleNotFount = ({err}) =>
+    <div>Not found <br/>{err}</div>;
+
+const ModuleLoading = () =>
+    <div>Loading...</div>;
+
 const Module = ({type, resource}) => {
 
 
@@ -8,14 +14,13 @@ const Module = ({type, resource}) => {
     const Component = React.lazy(() =>
         import('../modules/' + resource.api.type + '/' + type)
             .catch((err) => ({ default: () => {
-                    console.log(err);
-                    return <div>Not found</div>
+                    return <ModuleNotFount error={err} />
                 }
             }))
     );
 
     return (
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={<ModuleLoading />}>
             <Component resource={resource} />
         </Suspense>
     )

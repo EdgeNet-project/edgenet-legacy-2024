@@ -43,6 +43,12 @@ class LoginView extends React.Component {
                         </Box>
                         <Button type="submit" primary label="Log in" disabled={loading} />
                     </Box>
+                    <Box direction="row" gap="small" border={{side:'top',color:'brand',size:'small'}} pad={{top:'medium'}}>
+                        <Text>
+                        You don't have an account?
+                        </Text>
+                        <Link to="/signup">Signup</Link>
+                    </Box>
                     {message && <Text color="status-critical">{message}</Text>}
                 </Box>
             </Form>
