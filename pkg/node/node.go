@@ -20,6 +20,8 @@ limitations under the License.
 package node
 
 import (
+	"edgenet/pkg/authorization"
+	"edgenet/pkg/node/infrastructure"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -27,9 +29,8 @@ import (
 	"net"
 	"strings"
 	"time"
+
 	"k8s.io/client-go/kubernetes"
-	"edgenet/pkg/authorization"
-	"edgenet/pkg/node/infrastructure"
 
 	namecheap "github.com/billputer/go-namecheap"
 	geoip2 "github.com/oschwald/geoip2-golang"
@@ -89,12 +90,12 @@ func Boundbox(points [][]float64) []float64 {
 }
 
 // setNodeLabels uses client-go to patch nodes by processing a labels map
-func setNodeLabels(hostname string, labels map[string]string) bool {
-	clientset, err := authorization.CreateClientSet()
+func setNodeLabels(hostname string, labels map[string]string, clientset kubernetes.Interface) bool {
+	/* clientset, err := authorization.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
-	}
+	} */
 	// Create a patch slice and initialize it to the label size
 	nodePatchArr := make([]patchStringValue, len(labels))
 	nodePatch := patchStringValue{}
@@ -108,9 +109,9 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 		row++
 	}
 	nodesJSON, _ := json.Marshal(nodePatchArr)
-
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
+	var err error
 	_, err = clientset.CoreV1().Nodes().Patch(hostname, types.JSONPatchType, nodesJSON)
 	if err != nil {
 		log.Println(err.Error())
@@ -120,7 +121,7 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 }
 
 // GetGeolocationByIP return geolabels by taking advantage of GeoLite database
-func GetGeolocationByIP(hostname string, ipStr string) bool {
+func GetGeolocationByIP(hostname string, ipStr string, clientset kubernetes.Interface) bool {
 	// Parse IP address
 	ip := net.ParseIP(ipStr)
 	// Open GeoLite database
@@ -231,8 +232,8 @@ func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
 }
 
 // CreateJoinToken generates token to be used on adding a node onto the cluster
-func CreateJoinToken(ttl string, hostname string , clientset kubernetes.Interface) string {
-	
+func CreateJoinToken(ttl string, hostname string, clientset kubernetes.Interface) string {
+
 	duration, _ := time.ParseDuration(ttl)
 	token, err := infrastructure.CreateToken(clientset, duration, hostname)
 	if err != nil {
@@ -244,7 +245,6 @@ func CreateJoinToken(ttl string, hostname string , clientset kubernetes.Interfac
 
 // GetList uses clientset to get node list of the cluster
 func GetList(clientset kubernetes.Interface) []string {
-	
 
 	nodesRaw, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
@@ -344,7 +344,7 @@ func GetConditionReadyStatus(node *corev1.Node) string {
 
 // getNodeByHostname uses clientset to get namespace requested
 func getNodeByHostname(hostname string, clientset kubernetes.Interface) (string, error) {
-	
+
 	// Examples for error handling:
 	// - Use helper functions like e.g. errors.IsNotFound()
 	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
