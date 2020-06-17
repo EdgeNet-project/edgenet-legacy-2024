@@ -171,7 +171,7 @@ func GetGeolocationByIP(hostname string, ipStr string, clientset kubernetes.Inte
 	}
 
 	// Attach geolabels to the node
-	result := setNodeLabels(hostname, geoLabels)
+	result := setNodeLabels(hostname, geoLabels, clientset)
 	// If the result is different than the expected, return false
 	// The expected result is having a different longitude and latitude than zero
 	// Zero value typically means there isn't any result meaningful
