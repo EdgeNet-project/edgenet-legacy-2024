@@ -79,6 +79,7 @@ func Boundbox(points [][]float64) []float64 {
 	var maxY float64 = math.MaxFloat64
 
 	for _, coordinates := range points {
+		fmt.Printf("cordinates=%v", coordinates)
 		minX = math.Min(minX, coordinates[0])
 		maxX = math.Max(maxX, coordinates[0])
 		minY = math.Min(minY, coordinates[1])
@@ -121,14 +122,14 @@ func setNodeLabels(hostname string, labels map[string]string, clientset kubernet
 }
 
 // GetGeolocationByIP return geolabels by taking advantage of GeoLite database
-func GetGeolocationByIP(hostname string, ipStr string, clientset kubernetes.Interface) bool {
+func GetGeolocationByIP(hostname string, ipStr string, clientset kubernetes.Interface) (bool, map[string]string) {
 	// Parse IP address
 	ip := net.ParseIP(ipStr)
 	// Open GeoLite database
 	db, err := geoip2.Open("../../assets/database/GeoLite2-City/GeoLite2-City.mmdb")
 	if err != nil {
 		log.Fatal(err)
-		return false
+		return false, map[string]string{"": ""}
 	}
 	// Close the database as a final job
 	defer db.Close()
@@ -136,7 +137,7 @@ func GetGeolocationByIP(hostname string, ipStr string, clientset kubernetes.Inte
 	record, err := db.City(ip)
 	if err != nil {
 		log.Fatal(err)
-		return false
+		return false, map[string]string{"": ""}
 	}
 
 	// Patch for being compatible with Kubernetes alphanumeric characters limitations
@@ -176,9 +177,9 @@ func GetGeolocationByIP(hostname string, ipStr string, clientset kubernetes.Inte
 	// The expected result is having a different longitude and latitude than zero
 	// Zero value typically means there isn't any result meaningful
 	if record.Location.Longitude == 0 && record.Location.Latitude == 0 {
-		return false
+		return false, map[string]string{"": ""}
 	}
-	return result
+	return result, geoLabels
 }
 
 // CompareIPAddresses makes a comparison between old and new objects of the node

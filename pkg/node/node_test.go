@@ -1,6 +1,8 @@
 package node
 
 import (
+	"math"
+	"reflect"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -21,7 +23,7 @@ func TestUnique(t *testing.T) {
 	}
 	for _, v := range tests {
 		ret := unique(v.input)
-		ok := Equal(ret, v.expect)
+		ok := reflect.DeepEqual(ret, v.expect)
 		if ok {
 			t.Logf("pass")
 		} else {
@@ -29,16 +31,22 @@ func TestUnique(t *testing.T) {
 		}
 	}
 }
-func Equal(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
+
+func TestBoundbox(t *testing.T) {
+	var tests = []struct {
+		inputPoint  [][]float64
+		expectBound []float64
+	}{
+		{[][]float64{{2.352700, 48.854300}}, []float64{-math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64}},
 	}
-	for i, v := range a {
-		if v != b[i] {
-			return false
+
+	for _, data := range tests {
+		//t.Logf("Tsst, %v", Boundbox(data.inputPoint))
+		if !reflect.DeepEqual(Boundbox(data.inputPoint), data.expectBound) {
+			t.Errorf("fail, get %v, expect %v\n", Boundbox(data.inputPoint), data.expectBound)
 		}
 	}
-	return true
+
 }
 
 func TestSetNodeLabels(t *testing.T) {
@@ -50,8 +58,7 @@ func TestSetNodeLabels(t *testing.T) {
 	}{
 		{clientset: testclient.NewSimpleClientset(&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "node1",
-				Namespace: "",
+				Name: "node1",
 				Labels: map[string]string{
 					"edge-net.io~1continent":   "",
 					"edge-net.io~1country-iso": "",
@@ -83,6 +90,48 @@ func TestSetNodeLabels(t *testing.T) {
 	}
 }
 
+func TestGetGeolocationByIP(t *testing.T) {
+	data := []struct {
+		clientset         kubernetes.Interface
+		hostname          string
+		ipStr             string
+		geoLabelsExpected map[string]string
+		expected          bool
+	}{
+		{clientset: testclient.NewSimpleClientset(&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node1",
+				Labels: map[string]string{
+					"edge-net.io~1continent":   "",
+					"edge-net.io~1country-iso": "",
+					"edge-net.io~1state-iso":   "",
+					"edge-net.io~1city":        "",
+					"edge-net.io~1lon":         "",
+					"edge-net.io~1lat":         "",
+				},
+			},
+		}),
+			hostname: "node1",
+			expected: true,
+			ipStr:    "46.193.66.93",
+			geoLabelsExpected: map[string]string{
+				"edge-net.io~1continent":   "Europe",
+				"edge-net.io~1country-iso": "FR",
+				"edge-net.io~1state-iso":   "IDF",
+				"edge-net.io~1city":        "Paris",
+				"edge-net.io~1lon":         "e2.352700",
+				"edge-net.io~1lat":         "n48.854300",
+			},
+		},
+	}
+	for _, test := range data {
+		if output, outputGeo := GetGeolocationByIP(test.hostname, test.ipStr, test.clientset); (output != test.expected) || (!reflect.DeepEqual(outputGeo, test.geoLabelsExpected)) {
+			t.Error("Error")
+		}
+	}
+
+}
+
 func TestGetList(t *testing.T) {
 	data := []struct {
 		clientset    kubernetes.Interface
@@ -112,7 +161,7 @@ func TestGetList(t *testing.T) {
 			expectedNode: []string{"node3", "node4"},
 		}}
 	for _, single := range data {
-		if !Equal(GetList(single.clientset), single.expectedNode) {
+		if !reflect.DeepEqual(GetList(single.clientset), single.expectedNode) {
 			t.Fatal("error")
 		}
 	}
@@ -184,7 +233,7 @@ func TestGetNodeIPAddresses(t *testing.T) {
 	}
 
 	for _, test := range data {
-		if outputInternal, outputExternal := GetNodeIPAddresses(test.node); !Equal([]string{outputInternal, outputExternal}, test.expectedip) {
+		if outputInternal, outputExternal := GetNodeIPAddresses(test.node); !reflect.DeepEqual([]string{outputInternal, outputExternal}, test.expectedip) {
 			t.Error("error")
 		}
 	}
