@@ -104,7 +104,8 @@ func (g *UserTestGroup) Init() {
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "unittesting",
+			Name:      "unittesting",
+			Namespace: "authority-EdgeNet",
 		},
 		Spec: apps_v1alpha.UserSpec{
 			FirstName: "EdgeNet",
@@ -123,6 +124,7 @@ func (g *UserTestGroup) Init() {
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
+
 }
 
 //TestHandlerInit for handler initialization
@@ -132,6 +134,7 @@ func TestHandlerInit(t *testing.T) {
 	g.Init()
 	// Initialize the handler
 	g.handler.Init(g.client, g.edgenetclient)
+
 	if g.handler.clientset != g.client {
 		t.Error("Kubernetes clientset sync problem")
 	}
@@ -144,7 +147,7 @@ func TestUserCreate(t *testing.T) {
 	g := UserTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 	t.Run("creation of user ", func(t *testing.T) {
 		g.handler.ObjectCreated(g.userObj.DeepCopy())
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("users-%s", g.userObj.GetName())).Get(g.userObj.Spec.FirstName, metav1.GetOptions{})
