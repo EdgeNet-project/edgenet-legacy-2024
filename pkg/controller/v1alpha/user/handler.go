@@ -24,7 +24,6 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/mailer"
 	"edgenet/pkg/registration"
@@ -38,7 +37,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj, updated interface{})
 	ObjectDeleted(obj interface{})
@@ -46,36 +45,31 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("UserHandler.Init")
-	var err error
-	t.clientset, err = authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	return err
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
 func (t *Handler) ObjectCreated(obj interface{}) {
 	log.Info("UserHandler.ObjectCreated")
+
 	// Create a copy of the user object to make changes on it
 	userCopy := obj.(*apps_v1alpha.User).DeepCopy()
 	// Find the authority from the namespace in which the object is
+	fmt.Printf("Check usercopy %v\n", userCopy)
+
 	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
 	// Check if the email address is already taken
+	fmt.Printf("Check userowener %v\n", userOwnerNamespace)
 	emailExists, message := t.checkDuplicateObject(userCopy, userOwnerNamespace.Labels["authority-name"])
+
 	if emailExists {
 		userCopy.Status.State = failure
 		userCopy.Status.Message = []string{message}
@@ -453,12 +447,11 @@ func containsRole(roles []string, value string) bool {
 
 // generateRandomString to have a unique string
 func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+	const letterBytes = "abcdefghijklmnopqrstuvwxyz123456789"
 
-	b := make([]rune, n)
-	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, n)
 	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
 	}
 	return string(b)
 }

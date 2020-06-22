@@ -25,6 +25,8 @@ import (
 	"regexp"
 	"strings"
 
+	"k8s.io/client-go/kubernetes"
+
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
 	custconfig "edgenet/pkg/config"
@@ -194,8 +196,8 @@ func setOwnerReferences(objCopy interface{}) []metav1.OwnerReference {
 // MakeUser generates key and certificate and then set credentials into the config file. As the next step,
 // this function creates user role and role bindings for the namespace. Lastly, this checks the namespace
 // created successfully or not.
-func MakeUser(user string) ([]byte, int) {
-	userNamespace, err := namespace.Create(user)
+func MakeUser(user string, kubernetes kubernetes.Interface) ([]byte, int) {
+	userNamespace, err := namespace.Create(user, kubernetes)
 	if err != nil {
 		log.Printf("Namespace %s couldn't be created.", user)
 		resultMap := map[string]string{"status": "Failure"}
@@ -251,7 +253,7 @@ func MakeUser(user string) ([]byte, int) {
 		return result, 500
 	}
 
-	exist, err := namespace.GetNamespaceByName(user)
+	exist, err := namespace.GetNamespaceByName(user, kubernetes)
 	if err == nil && exist == "true" {
 		resultMap := map[string]string{"status": "Acknowledged"}
 		result, _ := json.Marshal(resultMap)
