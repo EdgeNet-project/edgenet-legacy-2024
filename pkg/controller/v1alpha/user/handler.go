@@ -62,6 +62,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 
 	// Create a copy of the user object to make changes on it
 	userCopy := obj.(*apps_v1alpha.User).DeepCopy()
+
 	// Find the authority from the namespace in which the object is
 	fmt.Printf("Check usercopy %v\n", userCopy)
 

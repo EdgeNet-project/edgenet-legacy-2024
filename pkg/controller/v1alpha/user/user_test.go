@@ -20,10 +20,12 @@ import (
 
 //The main structure of test group
 type UserTestGroup struct {
-	userObj       apps_v1alpha.User
-	client        kubernetes.Interface
-	edgenetclient versioned.Interface
-	handler       Handler
+	authorityObj        apps_v1alpha.Authority
+	authorityRequestObj apps_v1alpha.AuthorityRequest
+	userObj             apps_v1alpha.User
+	client              kubernetes.Interface
+	edgenetclient       versioned.Interface
+	handler             Handler
 }
 
 func TestMain(m *testing.M) {
@@ -35,14 +37,74 @@ func TestMain(m *testing.M) {
 //Init syncs the test group
 func (g *UserTestGroup) Init() {
 
+	authorityObj := apps_v1alpha.Authority{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Authority",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "edgenet",
+		},
+		Spec: apps_v1alpha.AuthoritySpec{
+			FullName:  "EdgeNet",
+			ShortName: "EdgeNet",
+			URL:       "https://www.edge-net.org",
+			Address: apps_v1alpha.Address{
+				City:    "Paris - NY - CA",
+				Country: "France - US",
+				Street:  "4 place Jussieu, boite 169",
+				ZIP:     "75005",
+			},
+			Contact: apps_v1alpha.Contact{
+				Email:     "unittest@edge-net.org",
+				FirstName: "unit",
+				LastName:  "testing",
+				Phone:     "+33NUMBER",
+				Username:  "unittesting",
+			},
+		},
+		Status: apps_v1alpha.AuthorityStatus{
+			Enabled: false,
+		},
+	}
+	authorityRequestObj := apps_v1alpha.AuthorityRequest{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "AuthorityRequest",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "edgenet",
+		},
+		Spec: apps_v1alpha.AuthorityRequestSpec{
+			FullName:  "EdgeNet",
+			ShortName: "EdgeNet",
+			URL:       "https://www.edge-net.org",
+			Address: apps_v1alpha.Address{
+				City:    "Paris",
+				Country: "France",
+				Street:  "4 place Jussieu, boite 169",
+				ZIP:     "75005",
+			},
+			Contact: apps_v1alpha.Contact{
+				Email:     "unittest@edge-net.org",
+				FirstName: "unit",
+				LastName:  "testing",
+				Phone:     "+33NUMBER",
+				Username:  "unittesting",
+			},
+		},
+		Status: apps_v1alpha.AuthorityRequestStatus{
+			State: success,
+		},
+	}
+
 	userObj := apps_v1alpha.User{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "User",
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "unittesting",
-			Namespace: "default",
+			Name: "unittesting",
 		},
 		Spec: apps_v1alpha.UserSpec{
 			FirstName: "EdgeNet",
@@ -56,6 +118,8 @@ func (g *UserTestGroup) Init() {
 		},
 	}
 
+	g.authorityObj = authorityObj
+	g.authorityRequestObj = authorityRequestObj
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
