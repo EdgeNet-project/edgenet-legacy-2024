@@ -1,7 +1,6 @@
 package user
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -10,6 +9,7 @@ import (
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/client/clientset/versioned"
 	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
+	"edgenet/pkg/controller/v1alpha/authority"
 
 	"github.com/Sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -105,7 +105,7 @@ func (g *UserTestGroup) Init() {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "unittesting",
-			Namespace: "authority-EdgeNet",
+			Namespace: "authority-edgenet",
 		},
 		Spec: apps_v1alpha.UserSpec{
 			FirstName: "EdgeNet",
@@ -124,11 +124,16 @@ func (g *UserTestGroup) Init() {
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
+	//invoke ObjectCreated to create namespace
+	authorityHandler := authority.Handler{}
+	authorityHandler.Init(g.client, g.edgenetclient)
+	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 
 }
 
 //TestHandlerInit for handler initialization
 func TestHandlerInit(t *testing.T) {
+
 	//Sync the test group
 	g := UserTestGroup{}
 	g.Init()
@@ -148,11 +153,15 @@ func TestUserCreate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+
 	t.Run("creation of user ", func(t *testing.T) {
+		//user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
+		//t.Logf("User Test= %v\n", user)
+
 		g.handler.ObjectCreated(g.userObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("users-%s", g.userObj.GetName())).Get(g.userObj.Spec.FirstName, metav1.GetOptions{})
-		if user == nil {
-			t.Error("User generation failed")
+		_, err := g.client.RbacV1().Roles(g.userObj.GetNamespace()).Get("Admin", metav1.GetOptions{})
+		if err != nil {
+			t.Errorf("Couldn't create user-%s role: %s", g.userObj.GetName(), err)
 		}
 	})
 }
