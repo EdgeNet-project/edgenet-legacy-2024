@@ -34,6 +34,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	testclient "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/cert"
 	kubeconfigutil "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig"
@@ -195,7 +196,9 @@ func setOwnerReferences(objCopy interface{}) []metav1.OwnerReference {
 // this function creates user role and role bindings for the namespace. Lastly, this checks the namespace
 // created successfully or not.
 func MakeUser(user string) ([]byte, int) {
-	userNamespace, err := namespace.Create(user)
+
+	client := testclient.NewSimpleClientset()
+	userNamespace, err := namespace.Create(user, client)
 	if err != nil {
 		log.Printf("Namespace %s couldn't be created.", user)
 		resultMap := map[string]string{"status": "Failure"}
@@ -251,7 +254,7 @@ func MakeUser(user string) ([]byte, int) {
 		return result, 500
 	}
 
-	exist, err := namespace.GetNamespaceByName(user)
+	exist, err := namespace.GetNamespaceByName(user, client)
 	if err == nil && exist == "true" {
 		resultMap := map[string]string{"status": "Acknowledged"}
 		result, _ := json.Marshal(resultMap)
