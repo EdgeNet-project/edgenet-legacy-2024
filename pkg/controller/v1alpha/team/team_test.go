@@ -10,6 +10,7 @@ import (
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/client/clientset/versioned"
 	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
+	"edgenet/pkg/controller/v1alpha/authority"
 
 	"github.com/Sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,7 +50,7 @@ func (g *TeamTestGroup) Init() {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "edgenet",
-			Namespace: "TeamObj",
+			Namespace: "authority-edgenet",
 		},
 		Spec: apps_v1alpha.TeamSpec{
 			Users: []apps_v1alpha.TeamUsers{
@@ -149,6 +150,10 @@ func (g *TeamTestGroup) Init() {
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
+	//invoke ObjectCreated to create namespace
+	authorityHandler := authority.Handler{}
+	authorityHandler.Init(g.client, g.edgenetclient)
+	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 
 // TestHandlerInit for handler initialization
@@ -181,29 +186,39 @@ func TestTeamCreate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
-	t.Run("creation of user-total resource quota-cluster role", func(t *testing.T) {
+	//"creation of Team total resource quota-cluster role .Team just for now
+	t.Run("creation of Team", func(t *testing.T) {
 		g.handler.ObjectCreated(g.teamObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.teamObj.GetName())).Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
-		if user == nil {
-			t.Error("User generation failed when an authority created")
-		}
 
-		TRQ, _ := g.handler.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(g.authorityObj.GetName(), metav1.GetOptions{})
-		if TRQ == nil {
-			t.Error("Total resource quota cannot be created")
+		team, err := g.edgenetclient.AppsV1alpha().Teams("authority-edgenet").Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
+		if team == nil {
+			t.Error("Team generation failed when an authority created")
 		}
+		if err != nil {
 
-		clusterRole, _ := g.handler.clientset.RbacV1().ClusterRoles().Get(fmt.Sprintf("authority-%s", g.authorityObj.GetName()), metav1.GetOptions{})
-		if clusterRole == nil {
-			t.Error("Cluster role cannot be created")
+			t.Errorf("Couldn't create team, %v", err)
 		}
+		// user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.teamObj.GetName())).Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
+		// if user == nil {
+		// 	t.Error("User generation failed when an authority created")
+		// }
+
+		// TRQ, _ := g.handler.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(g.authorityObj.GetName(), metav1.GetOptions{})
+		// if TRQ == nil {
+		// 	t.Error("Total resource quota cannot be created")
+		// }
+
+		// clusterRole, _ := g.handler.clientset.RbacV1().ClusterRoles().Get(fmt.Sprintf("authority-%s", g.authorityObj.GetName()), metav1.GetOptions{})
+		// if clusterRole == nil {
+		// 	t.Error("Cluster role cannot be created")
+		// }
 	})
 
-	t.Run("check dublicate object", func(t *testing.T) {
+	t.Run("check duplicate object", func(t *testing.T) {
 		// Change the authority object name to make comparison with the user-created above
 		g.authorityObj.Name = "different"
-		g.handler.ObjectCreated(g.authorityObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
+		g.handler.ObjectCreated(g.teamObj.DeepCopy())
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.teamObj.GetName())).Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
 		if user != nil {
 			t.Error("Duplicate value cannot be detected")
 		}
@@ -224,8 +239,8 @@ func TestTeamUpdate(t *testing.T) {
 	field.object.name = "TestName"
 	field.object.ownerNamespace = ""
 	field.object.childNamespace = ""
-	// Invoke ObjectCreated func to create a user
-	g.handler.ObjectCreated(g.authorityObj.DeepCopy())
+	// Invoke ObjectCreated func to create a team
+	g.handler.ObjectCreated(g.teamObj.DeepCopy())
 	// Create another user
 	g.userObj.Spec.Email = "check"
 	g.edgenetclient.AppsV1alpha().Users("default").Create(g.userObj.DeepCopy())
