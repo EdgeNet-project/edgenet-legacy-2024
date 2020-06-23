@@ -186,11 +186,11 @@ func TestTeamCreate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Teams("authority-edgenet").Create(g.teamObj.DeepCopy())
 	//"creation of Team total resource quota-cluster role .Team just for now
 	t.Run("creation of Team", func(t *testing.T) {
-		g.handler.ObjectCreated(g.teamObj.DeepCopy())
 
-		team, err := g.edgenetclient.AppsV1alpha().Teams("authority-edgenet").Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
+		team, err := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.teamObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
 		if team == nil {
 			t.Error("Team generation failed when an authority created")
 		}
@@ -198,6 +198,7 @@ func TestTeamCreate(t *testing.T) {
 
 			t.Errorf("Couldn't create team, %v", err)
 		}
+		g.handler.ObjectCreated(g.teamObj.DeepCopy())
 		// user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.teamObj.GetName())).Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
 		// if user == nil {
 		// 	t.Error("User generation failed when an authority created")
@@ -230,7 +231,8 @@ func TestTeamUpdate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
 	// Create an authority to update later
-	g.edgenetclient.AppsV1alpha().Teams("TeamObj").Create(g.teamObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Teams("authority-edgenet").Create(g.teamObj.DeepCopy())
 	var field fields
 	field.enabled = false
 	field.users.status = false
@@ -246,8 +248,8 @@ func TestTeamUpdate(t *testing.T) {
 	g.edgenetclient.AppsV1alpha().Users("default").Create(g.userObj.DeepCopy())
 	// Use the same email address with the user created above
 	g.authorityObj.Status.Enabled = true
-	g.handler.ObjectUpdated(g.authorityObj.DeepCopy(), field)
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
+	g.handler.ObjectUpdated(g.teamObj.DeepCopy(), field)
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.teamObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
 	if user.Spec.Email == "check" {
 		t.Error("Duplicate value cannot be detected")
 	}
