@@ -25,7 +25,8 @@ const established = "Established"
 
 // The main structure of test group
 type TeamTestGroup struct {
-	authorityObj        apps_v1alpha.Team
+	authorityObj        apps_v1alpha.Authority
+	teamObj             apps_v1alpha.Team
 	authorityRequestObj apps_v1alpha.AuthorityRequest
 	userObj             apps_v1alpha.User
 	client              kubernetes.Interface
@@ -60,6 +61,36 @@ func (g *TeamTestGroup) Init() {
 			Description: "This is a test description",
 		},
 		Status: apps_v1alpha.TeamStatus{
+			Enabled: false,
+		},
+	}
+	authorityObj := apps_v1alpha.Authority{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Authority",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "edgenet",
+		},
+		Spec: apps_v1alpha.AuthoritySpec{
+			FullName:  "EdgeNet",
+			ShortName: "EdgeNet",
+			URL:       "https://www.edge-net.org",
+			Address: apps_v1alpha.Address{
+				City:    "Paris - NY - CA",
+				Country: "France - US",
+				Street:  "4 place Jussieu, boite 169",
+				ZIP:     "75005",
+			},
+			Contact: apps_v1alpha.Contact{
+				Email:     "unittest@edge-net.org",
+				FirstName: "unit",
+				LastName:  "testing",
+				Phone:     "+33NUMBER",
+				Username:  "unittesting",
+			},
+		},
+		Status: apps_v1alpha.AuthorityStatus{
 			Enabled: false,
 		},
 	}
@@ -112,7 +143,8 @@ func (g *TeamTestGroup) Init() {
 			Active: true,
 		},
 	}
-	g.authorityObj = teamObj
+	g.authorityObj = authorityObj
+	g.teamObj = teamObj
 	g.authorityRequestObj = authorityRequestObj
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
@@ -148,10 +180,10 @@ func TestTeamCreate(t *testing.T) {
 	g := TeamTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 	t.Run("creation of user-total resource quota-cluster role", func(t *testing.T) {
-		g.handler.ObjectCreated(g.authorityObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Users[0].Username, metav1.GetOptions{})
+		g.handler.ObjectCreated(g.teamObj.DeepCopy())
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.teamObj.GetName())).Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
 		if user == nil {
 			t.Error("User generation failed when an authority created")
 		}
@@ -171,7 +203,7 @@ func TestTeamCreate(t *testing.T) {
 		// Change the authority object name to make comparison with the user-created above
 		g.authorityObj.Name = "different"
 		g.handler.ObjectCreated(g.authorityObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Users[0].Username, metav1.GetOptions{})
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
 		if user != nil {
 			t.Error("Duplicate value cannot be detected")
 		}
@@ -183,7 +215,7 @@ func TestTeamUpdate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
 	// Create an authority to update later
-	g.edgenetclient.AppsV1alpha().Teams("TeamObj").Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Teams("TeamObj").Create(g.teamObj.DeepCopy())
 	var field fields
 	field.enabled = false
 	field.users.status = false
@@ -200,7 +232,7 @@ func TestTeamUpdate(t *testing.T) {
 	// Use the same email address with the user created above
 	g.authorityObj.Status.Enabled = true
 	g.handler.ObjectUpdated(g.authorityObj.DeepCopy(), field)
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Users[0].Username, metav1.GetOptions{})
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
 	if user.Spec.Email == "check" {
 		t.Error("Duplicate value cannot be detected")
 	}
