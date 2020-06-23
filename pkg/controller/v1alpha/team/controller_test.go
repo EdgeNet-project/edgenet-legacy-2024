@@ -13,17 +13,17 @@ func TestStartController(t *testing.T) {
 	// Run controller in a goroutine
 	go Start(g.client, g.edgenetclient)
 	// Create an authority
-	g.edgenetclient.AppsV1alpha().Teams("TeamObj").Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Teams("TeamObj").Create(g.teamObj.DeepCopy())
 	// Wait for the status update of the created object
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
-	authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityObj.GetName(), metav1.GetOptions{})
+	authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.teamObj.GetName(), metav1.GetOptions{})
 	if !authority.Status.Enabled {
 		t.Error("Add func of event handler doesn't work properly")
 	}
 	// Update an authority
-	g.authorityObj.Spec.Users[0].Username = "test"
-	g.edgenetclient.AppsV1alpha().Teams("TeamObj").Update(g.authorityObj.DeepCopy())
+	g.teamObj.Spec.Users[0].Username = "test"
+	g.edgenetclient.AppsV1alpha().Teams("TeamObj").Update(g.teamObj.DeepCopy())
 	authority, _ = g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityObj.GetName(), metav1.GetOptions{})
 	if authority.Spec.FullName != "test" {
 		t.Error("Update func of event handler doesn't work properly")
