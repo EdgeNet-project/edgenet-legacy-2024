@@ -68,7 +68,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 
 	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
 	// Check if the email address is already taken
-	fmt.Printf("Check userowener %v\n", userOwnerNamespace)
+	fmt.Printf("Check userOwnerNamespace=\n\n %v\n\n", userOwnerNamespace)
 	emailExists, message := t.checkDuplicateObject(userCopy, userOwnerNamespace.Labels["authority-name"])
 
 	if emailExists {
@@ -81,6 +81,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	// Check if the authority is active
 	if userOwnerAuthority.Status.Enabled == true && userCopy.GetGeneration() == 1 {
+
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		_, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
@@ -448,11 +449,12 @@ func containsRole(roles []string, value string) bool {
 
 // generateRandomString to have a unique string
 func generateRandomString(n int) string {
-	const letterBytes = "abcdefghijklmnopqrstuvwxyz123456789"
+	var letter = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 
-	b := make([]byte, n)
+	b := make([]rune, n)
+	rand.Seed(time.Now().UnixNano())
 	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+		b[i] = letter[rand.Intn(len(letter))]
 	}
 	return string(b)
 }

@@ -1,10 +1,12 @@
 package user
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"testing"
+	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/client/clientset/versioned"
@@ -124,7 +126,7 @@ func (g *UserTestGroup) Init() {
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
-	//invoke ObjectCreated to create namespace
+	//invoke authority ObjectCreated to create namespace
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
@@ -155,20 +157,71 @@ func TestUserCreate(t *testing.T) {
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 
 	t.Run("creation of user ", func(t *testing.T) {
-		//user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
+		if user == nil {
+			t.Error("User generation failed when an authority created")
+		}
 		//t.Logf("User Test= %v\n", user)
-
 		g.handler.ObjectCreated(g.userObj.DeepCopy())
-		_, err := g.client.RbacV1().Roles(g.userObj.GetNamespace()).Get("Admin", metav1.GetOptions{})
+		//_, err := g.client.RbacV1().Roles(g.userObj.GetNamespace()).Get(fmt.Sprintf("user-%s", g.userObj.GetName()), metav1.GetOptions{})
+
+		/* _, err := g.handler.clientset.RbacV1().Roles(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(fmt.Sprintf("user-%s", g.userObj.GetName()), metav1.GetOptions{})
 		if err != nil {
-			t.Errorf("Couldn't create user-%s role: %s", g.userObj.GetName(), err)
+			t.Error("user role failed", err)
+		} */
+		clusterRole, _ := g.handler.clientset.RbacV1().ClusterRoles().Get(fmt.Sprintf("authority-%s", g.authorityObj.GetName()), metav1.GetOptions{})
+		if clusterRole == nil {
+			t.Error("role cannot be created")
 		}
 	})
+
+	t.Run("check dublicate object", func(t *testing.T) {
+		// Change the user object name to make comparison with the user-created above
+		g.userObj.Name = "different"
+		g.handler.ObjectCreated(g.userObj.DeepCopy())
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
+		if user != nil {
+			t.Error("Duplicate value cannot be detected")
+		}
+	})
+}
+
+func TestUserUpdate(t *testing.T) {
+	g := UserTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	//Creating 2 different Users
+	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+	g.handler.ObjectCreated(g.userObj.DeepCopy())
+	g.userObj.Name = "different"
+	g.userObj.Spec.Email = "unittest@edge-net.org"
+	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+	g.handler.ObjectCreated(g.userObj.DeepCopy())
+	status, err := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).List(metav1.ListOptions{})
+	t.Logf("status %v", status)
+	t.Logf("err %v", err)
+	//Creating UpdateObject second expected type field (Field)
+	var field fields
+	field.active = false
+	field.aup = false
+	field.roles = false
+	field.email = true
+	g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
+
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
+	if user.Spec.Email == "unittest@edge-net.org" {
+		t.Error("Duplicate value cannot be detected")
+	}
+	if user.Spec.Email != "different" {
+		t.Errorf("Update Failed: Email = %v\n", user.Spec.Email)
+	}
 }
 
 func TestGenerateRandomString(t *testing.T) {
 	for i := 1; i < 5; i++ {
 		origin := generateRandomString(16)
+		time.Sleep(1 * time.Second)
 		test := generateRandomString(16)
 		if origin == test {
 			t.Error("User GenerateRadnomString failed")
