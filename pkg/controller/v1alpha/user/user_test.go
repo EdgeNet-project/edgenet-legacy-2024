@@ -106,7 +106,7 @@ func (g *UserTestGroup) Init() {
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "unittesting",
+			Name:       "unittestingObj",
 			Namespace:  "authority-edgenet",
 			UID:        "TestUID",
 			Generation: 1,
@@ -115,7 +115,7 @@ func (g *UserTestGroup) Init() {
 			FirstName: "EdgeNet",
 			LastName:  "EdgeNet",
 			Roles:     []string{"Admin"},
-			Email:     "unittest@edge-net.org",
+			Email:     "unittestObj",
 		},
 		Status: apps_v1alpha.UserStatus{
 			State:  success,
@@ -157,59 +157,70 @@ func TestUserCreate(t *testing.T) {
 
 	t.Run("creation of user authority", func(t *testing.T) {
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
+		t.Logf("\nuser_Authority: = %v\n", user)
 		if user == nil {
-			t.Error("User generation failed when an authority created")
+			t.Error("\nUser generation failed when an authority created\n")
 		}
 	})
-	t.Run("creation of user", func(t *testing.T) {
+	t.Run("creation of user\n", func(t *testing.T) {
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 		g.handler.ObjectCreated(g.userObj.DeepCopy())
-		status, err := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).List(metav1.ListOptions{})
-		t.Logf("\nstatusSS= %v\n", status)
-		t.Logf("\nerrRR= %v\n", err)
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
+		t.Logf("\nuser_User: = %v\n", user)
 		if user == nil {
-			t.Error("User creation failed")
+			t.Error("\nUser creation failed\n")
 		}
 	})
 	t.Run("check dublicate object", func(t *testing.T) {
 		// Change the user object name to make comparison with the user-created above
 		g.userObj.Name = "different"
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 		g.handler.ObjectCreated(g.userObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
+		user, err := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
+		t.Logf("\nuserDuplicated:\n USER: %v \n ERROR: \n %v\n", user, err)
 		if user != nil {
 			t.Error("Duplicate value cannot be detected")
 		}
 	})
+
+	status, err := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).List(metav1.ListOptions{})
+	t.Logf("\nstatusSS= %v\n", status)
+	t.Logf("\nerrRR= %v\n", err)
 }
 
 func TestUserUpdate(t *testing.T) {
 	g := UserTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-
+	//creating namespace + user
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-
+	//creating another user
 	g.userObj.Name = "different"
-	g.userObj.Spec.Email = "check"
+	g.userObj.Spec.Email = "check@check.com"
+	g.userObj.UID = "difUID"
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
-
+	//changing the user email as the same as the authority default created user
 	g.userObj.Spec.Email = "unittest@edge-net.org"
 	var field fields
 	field.active = false
 	field.aup = false
 	field.roles = false
 	field.email = true
+
 	g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
-	user, err2 := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
-	if user.Spec.Email == "unittest@edge-net.org" {
-		t.Error("Duplicate value cannot be detected\n")
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
+	if user.Status.Message == nil {
+		t.Error("Duplicate value cannot be detected")
 	}
-	t.Logf("ERR= %v\n", err2)
-	status, err := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).List(metav1.ListOptions{})
-	t.Logf("status= %v\n", status)
-	t.Logf("err= %v\n", err)
+	if user.Status.Active {
+		t.Error("User cannot be deactivated")
+	}
+
+	//status, err := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).List(metav1.ListOptions{})
+	//t.Logf("status= %v\n", status)
+	//t.Logf("err= %v\n", err)
 }
 
 func TestDuplicateValue(t *testing.T) {

@@ -58,17 +58,17 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 
 // ObjectCreated is called when an object is created
 func (t *Handler) ObjectCreated(obj interface{}) {
-	log.Info("UserHandler.ObjectCreated")
+	log.Info("\nUserHandler.ObjectCreated\n")
 
 	// Create a copy of the user object to make changes on it
 	userCopy := obj.(*apps_v1alpha.User).DeepCopy()
 
 	// Find the authority from the namespace in which the object is
-	fmt.Printf("Check usercopy %v\n", userCopy)
+	fmt.Printf("\nCheck usercopy %v\n", userCopy)
 
 	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
 	// Check if the email address is already taken
-	fmt.Printf("Check userOwnerNamespace=\n\n %v\n\n", userOwnerNamespace)
+	fmt.Printf("\nCheck userOwnerNamespace= %v\n\n", userOwnerNamespace)
 	emailExists, message := t.checkDuplicateObject(userCopy, userOwnerNamespace.Labels["authority-name"])
 
 	if emailExists {
@@ -80,7 +80,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	}
 	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	// Check if the authority is active
-	fmt.Printf("Status = %v,  Gernaration=%v", userOwnerAuthority.Status.Enabled, userCopy.GetGeneration())
+	fmt.Printf("\nStatus = %v,  Gernaration=%v\n", userOwnerAuthority.Status.Enabled, userCopy.GetGeneration())
 	if userOwnerAuthority.Status.Enabled == true && userCopy.GetGeneration() == 1 {
 
 		// If the service restarts, it creates all objects again
