@@ -14,7 +14,7 @@ To chat with a member of the EdgeNet team live, please [open our tawk.to window]
 
 ## Architecture and code layout
 
-EdgeNet extends Kubernetes in the areas of multitenancy, user management, multiprovider support, and the ability to make selective deployments. This is described in the [architecture document](https://github.com/EdgeNet-project/edgenet/docs/architecture).
+EdgeNet extends Kubernetes in the areas of multitenancy, user management, multiprovider support, and the ability to make selective deployments. This is described in the [architecture document](https://github.com/EdgeNet-project/edgenet/tree/release-1.0-documentation/docs/architecture).
 
 If you are familiar with the [Standard Go Project Layout](https://github.com/golang-standards/project-layout) used
 by other Kubernetes-related projects, you will easily be able to navigate this repository.
@@ -23,7 +23,7 @@ by other Kubernetes-related projects, you will easily be able to navigate this r
 
 The EdgeNet software is free and open source; we invite you to contribute.
 
-A good way to start familiarizing yourself with the code is to help us write unit tests. Take a look at the [architecture document](https://github.com/EdgeNet-project/edgenet/docs/architecture) and follow the links to individual code files, and dig in!
+A good way to start familiarizing yourself with the code is to help us write unit tests. Take a look at the [architecture document](https://github.com/EdgeNet-project/edgenet/tree/release-1.0-documentation/docs/architecture) and follow the links to individual code files, and dig in!
 
 To get a sense of where we are heading, please see our 
 [planned features board](https://github.com/orgs/EdgeNet-project/projects/1).
