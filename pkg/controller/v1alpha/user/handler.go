@@ -80,6 +80,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	}
 	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	// Check if the authority is active
+	fmt.Printf("Status = %v,  Gernaration=%v", userOwnerAuthority.Status.Enabled, userCopy.GetGeneration())
 	if userOwnerAuthority.Status.Enabled == true && userCopy.GetGeneration() == 1 {
 
 		// If the service restarts, it creates all objects again
