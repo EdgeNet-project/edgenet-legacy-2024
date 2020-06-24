@@ -179,14 +179,6 @@ func Start() {
 	if err != nil {
 		log.Infof("Couldn't create team-admin cluster role: %s", err)
 	}
-	// Authority Manager
-	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "slices/status"}, Verbs: []string{"*"}}}
-	teamRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "team-manager"},
-		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(teamRole)
-	if err != nil {
-		log.Infof("Couldn't create team-manager cluster role: %s", err)
-	}
 	// Authority User
 	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "slices/status"}, Verbs: []string{"*"}}}
 	teamRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "team-user"},

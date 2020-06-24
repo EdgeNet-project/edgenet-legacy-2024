@@ -19,7 +19,6 @@ package slice
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
@@ -135,7 +134,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				sliceChildNamespace.SetLabels(namespaceLabels)
 				sliceChildNamespaceCreated, err := t.clientset.CoreV1().Namespaces().Create(sliceChildNamespace)
 				if err == nil {
-					// Create rolebindings according to the users who participate in the slice and are authority-admin and managers of the authority
+					// Create rolebindings according to the users who participate in the slice and are authority-admin and authorized users of the authority
 					t.runUserInteractions(sliceCopy, sliceChildNamespaceCreated.GetName(), sliceOwnerNamespace.Labels["authority-name"],
 						sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-creation", true)
 					// To set constraints in the slice namespace and to update the expiration date of slice
@@ -307,9 +306,9 @@ func (t *Handler) runUserInteractions(sliceCopy *apps_v1alpha.Slice, sliceChildN
 	// This part for the users who participate in the slice
 	for _, sliceUser := range sliceCopy.Spec.Users {
 		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", sliceUser.Authority)).Get(sliceUser.Username, metav1.GetOptions{})
-		if err == nil && user.Status.Active && user.Status.AUP {
+		if err == nil && user.Spec.Active && user.Status.AUP {
 			if operation == "slice-creation" {
-				registration.CreateRoleBindingsByRoles(user.DeepCopy(), sliceChildNamespaceStr, "Slice")
+				registration.EstablishRoleBindings(user.DeepCopy(), sliceChildNamespaceStr, "Slice")
 			}
 			if !(operation == "slice-creation" && !firstCreation) {
 				t.sendEmail(sliceUser.Username, sliceUser.Authority, ownerAuthority, sliceCopy.GetNamespace(), sliceCopy.GetName(), sliceChildNamespaceStr, operation)
@@ -318,13 +317,14 @@ func (t *Handler) runUserInteractions(sliceCopy *apps_v1alpha.Slice, sliceChildN
 	}
 
 	if !(sliceOwner == "team" && operation != "slice-creation") {
-		// For those who are authority-admin and managers of the authority
+		// For those who are authority-admin and authorized users of the authority
 		userRaw, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", ownerAuthority)).List(metav1.ListOptions{})
 		if err == nil {
 			for _, userRow := range userRaw.Items {
-				if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "admin") || containsRole(userRow.Spec.Roles, "manager")) {
+				if userRow.Spec.Active && userRow.Status.AUP && (userRow.Status.Type == "admin" ||
+					authorization.CheckUserRole(t.clientset, sliceCopy.GetNamespace(), userRow.Spec.Email, "slices", sliceCopy.GetName())) {
 					if operation == "slice-creation" {
-						registration.CreateRoleBindingsByRoles(userRow.DeepCopy(), sliceChildNamespaceStr, "Slice")
+						registration.EstablishRoleBindings(userRow.DeepCopy(), sliceChildNamespaceStr, "Slice")
 						//mailSubject = "creation"
 					}
 					/*if !(operation == "slice-creation" && !firstCreation) && !(operation == "slice-creation" && sliceOwner == "team") {
@@ -349,7 +349,7 @@ func (t *Handler) setOwnerReferences(childNamespace *corev1.Namespace) []metav1.
 // sendEmail to send notification to participants
 func (t *Handler) sendEmail(sliceUsername, sliceUserAuthority, sliceAuthority, sliceOwnerNamespace, sliceName, sliceNamespace, subject string) {
 	user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", sliceUserAuthority)).Get(sliceUsername, metav1.GetOptions{})
-	if err == nil && user.Status.Active && user.Status.AUP {
+	if err == nil && user.Spec.Active && user.Status.AUP {
 		// Set the HTML template variables
 		contentData := mailer.ResourceAllocationData{}
 		contentData.CommonData.Authority = sliceUserAuthority
@@ -452,14 +452,4 @@ timeoutLoop:
 			break timeoutLoop
 		}
 	}
-}
-
-// To check whether user is holder of a role
-func containsRole(roles []string, value string) bool {
-	for _, ele := range roles {
-		if strings.ToLower(value) == strings.ToLower(ele) {
-			return true
-		}
-	}
-	return false
 }

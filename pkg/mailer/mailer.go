@@ -139,7 +139,7 @@ func Send(subject string, contentData interface{}) {
 	case "authority-validation-failure-name", "authority-validation-failure-email", "authority-email-verification-malfunction",
 		"authority-creation-failure", "authority-email-verification-dubious":
 		to, body = setAuthorityFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
-	case "user-validation-failure-name", "user-validation-failure-email", "user-email-verification-malfunction", "user-creation-failure", "user-serviceaccount-failure",
+	case "user-validation-failure-name", "user-validation-failure-email", "user-email-verification-malfunction", "user-creation-failure", "user-cert-failure",
 		"user-kubeconfig-failure", "user-email-verification-dubious", "user-email-verification-update-malfunction", "user-deactivation-failure":
 		to, body = setUserFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	}

@@ -162,7 +162,7 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// Mail notification, TBD
 }
 
-// sendEmail to send notification to authority-admins and managers about email verification
+// sendEmail to send notification to authority-admins and authorized users about email verification
 func (t *Handler) sendEmail(kind, authority, namespace, username, fullname, email string) {
 	// Set the HTML template variables
 	contentData := mailer.CommonContentData{}
@@ -171,13 +171,11 @@ func (t *Handler) sendEmail(kind, authority, namespace, username, fullname, emai
 	contentData.CommonData.Name = fullname
 	contentData.CommonData.Email = []string{}
 	if kind == "user-email-verified-alert" {
-		// Put the email addresses of the authority-admins and managers in the email to be sent list
+		// Put the email addresses of the authority-admins and authorized users in the email to be sent list
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(namespace).List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
-			for _, userRole := range userRow.Spec.Roles {
-				if strings.ToLower(userRole) == "admin" || strings.ToLower(userRole) == "manager" {
-					contentData.CommonData.Email = append(contentData.CommonData.Email, userRow.Spec.Email)
-				}
+			if strings.ToLower(userRow.Status.Type) == "admin" {
+				contentData.CommonData.Email = append(contentData.CommonData.Email, userRow.Spec.Email)
 			}
 		}
 	} else if kind == "user-email-verified-notification" {
@@ -200,14 +198,14 @@ func (t *Handler) objectConfiguration(EVCopy *apps_v1alpha.EmailVerification, au
 		URRObj, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(EVCopy.GetNamespace()).Get(EVCopy.Spec.Identifier, metav1.GetOptions{})
 		URRObj.Status.EmailVerify = true
 		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRObj.GetNamespace()).UpdateStatus(URRObj)
-		// Send email to inform authority-admins and managers
+		// Send email to inform authority-admins and authorized users
 		t.sendEmail("user-email-verified-alert", authorityName, EVCopy.GetNamespace(), EVCopy.Spec.Identifier,
 			fmt.Sprintf("%s %s", URRObj.Spec.FirstName, URRObj.Spec.LastName), "")
 	} else if strings.ToLower(EVCopy.Spec.Kind) == "email" {
 		userObj, _ := t.edgenetClientset.AppsV1alpha().Users(EVCopy.GetNamespace()).Get(EVCopy.Spec.Identifier, metav1.GetOptions{})
-		userObj.Status.Active = true
+		userObj.Spec.Active = true
 		t.edgenetClientset.AppsV1alpha().Users(userObj.GetNamespace()).UpdateStatus(userObj)
-		if containsRole(userObj.Spec.Roles, "admin") {
+		if userObj.Status.Type == "admin" {
 			authorityObj, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityName, metav1.GetOptions{})
 			if authorityObj.Spec.Contact.Username == userObj.GetName() {
 				authorityObj.Spec.Contact.Email = userObj.Spec.Email

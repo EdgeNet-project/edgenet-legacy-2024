@@ -1,0 +1,76 @@
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: rolebindinglimitation
+spec:
+  crd:
+    spec:
+      names:
+        kind: RoleBindingLimitation
+        listKind: RoleBindingLimitationList
+        plural: rolebindinglimitations
+        singular: rolebindinglimitation
+      validation:
+        openAPIV3Schema:
+          properties:
+            spec:
+              required:
+                - roles
+              roles:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - kind
+                    - name
+                  properties:
+                    kind:
+                      type: string
+                    name:
+                      type: array
+                      items:
+                        type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package rolebindinglimitation
+
+        violation[{"msg": msg, "details": {"restricted_kinds": restricted_kinds}}] {
+            restricted_kinds[kind]
+            count(restricted_kinds) > 0
+            not admin
+            msg := sprintf("Kinds shouldn't include prohibited ones in %s namespace: %v", [input.review.object.metadata.namespace, restricted_kinds])
+        }
+
+        violation[{"msg": msg, "details": {"restricted_roles": restricted_names}}] {
+            restricted_names[name]
+            count(restricted_names) > 0
+            not admin
+            msg := sprintf("Role names starting with %v in %s namespace prohibited", [restricted_names, input.review.object.metadata.namespace])
+        }
+
+        admin {
+            "system:masters" == input.review.userInfo.groups[_]
+        }
+
+        restricted_kinds[kind] {
+            kind := input.review.object.roleRef.kind
+            not matches_any(kind)
+        }
+
+        matches_any(kind) {
+            some i
+            param_kind := input.parameters.roles[i].kind
+            kind == param_kind
+        }
+
+        restricted_names[param_name] {
+            some j, k
+            param_name := input.parameters.roles[j].name[k]
+            matches(param_name)
+        }
+
+        matches(param_name) {
+            name := input.review.object.roleRef.name
+            startswith(name, param_name)
+        }

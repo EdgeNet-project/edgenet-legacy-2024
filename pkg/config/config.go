@@ -32,6 +32,7 @@ import (
 
 // A part of the general structure of a kubeconfig file
 type clusterDetails struct {
+	CA     []byte `json:"certificate-authority-data"`
 	Server string `json:"server"`
 }
 type clusters struct {
@@ -75,7 +76,7 @@ func getConfigView() (string, error) {
 	configCmd := cmdconfig.NewCmdConfigView(cmdutil.NewFactory(genericclioptions.NewConfigFlags(false)), streams, pathOptions)
 	// "context" is a global flag, inherited from base kubectl command in the real world
 	configCmd.Flags().String("context", "kubernetes-admin@kubernetes", "The name of the kubeconfig context to use")
-	configCmd.Flags().Parse([]string{"--minify", "--output=json"})
+	configCmd.Flags().Parse([]string{"--minify", "--output=json", "--raw=true"})
 	if err := configCmd.Execute(); err != nil {
 		log.Printf("unexpected error executing command: %v", err)
 		return "", err
@@ -86,17 +87,17 @@ func getConfigView() (string, error) {
 }
 
 // GetClusterServerOfCurrentContext provides cluster and server info of the current context
-func GetClusterServerOfCurrentContext() (string, string, error) {
+func GetClusterServerOfCurrentContext() (string, string, []byte, error) {
 	configStr, err := getConfigView()
 	if err != nil {
 		log.Printf("unexpected error executing command: %v", err)
-		return "", "", err
+		return "", "", nil, err
 	}
 	var configViewDet configView
 	err = json.Unmarshal([]byte(configStr), &configViewDet)
 	if err != nil {
 		log.Printf("unexpected error executing command: %v", err)
-		return "", "", err
+		return "", "", nil, err
 	}
 
 	currentContext := configViewDet.CurrentContext
@@ -104,15 +105,18 @@ func GetClusterServerOfCurrentContext() (string, string, error) {
 	for _, contextRaw := range configViewDet.Contexts {
 		if contextRaw.Name == currentContext {
 			cluster = contextRaw.Context.Cluster
+
 		}
 	}
 	var server string
+	var CA []byte
 	for _, clusterRaw := range configViewDet.Clusters {
 		if clusterRaw.Name == cluster {
 			server = clusterRaw.Cluster.Server
+			CA = clusterRaw.Cluster.CA
 		}
 	}
-	return cluster, server, nil
+	return cluster, server, CA, nil
 }
 
 // GetServerOfCurrentContext provides the server info of the current context
@@ -128,7 +132,6 @@ func GetServerOfCurrentContext() (string, error) {
 		log.Printf("unexpected error executing command: %v", err)
 		return "", err
 	}
-
 	currentContext := configViewDet.CurrentContext
 	var cluster string
 	for _, contextRaw := range configViewDet.Contexts {

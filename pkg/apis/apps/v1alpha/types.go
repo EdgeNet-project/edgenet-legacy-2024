@@ -296,17 +296,17 @@ type User struct {
 
 // UserSpec is the spec for a User resource
 type UserSpec struct {
-	FirstName string   `json:"firstname"`
-	LastName  string   `json:"lastname"`
-	Email     string   `json:"email"`
-	Roles     []string `json:"roles"`
-	URL       string   `json:"url"`
-	Bio       string   `json:"bio"`
+	FirstName string `json:"firstname"`
+	LastName  string `json:"lastname"`
+	Email     string `json:"email"`
+	URL       string `json:"url"`
+	Bio       string `json:"bio"`
+	Active    bool   `json:"active"`
 }
 
 // UserStatus is the status for a User resource
 type UserStatus struct {
-	Active  bool     `json:"active"`
+	Type    string   `json:"type"`
 	AUP     bool     `json:"aup"`
 	State   string   `json:"state"`
 	Message []string `json:"message"`
@@ -340,12 +340,11 @@ type UserRegistrationRequest struct {
 
 // UserRegistrationRequestSpec is the spec for a UserRegistrationRequest resource
 type UserRegistrationRequestSpec struct {
-	FirstName string   `json:"firstname"`
-	LastName  string   `json:"lastname"`
-	Email     string   `json:"email"`
-	Roles     []string `json:"roles"`
-	URL       string   `json:"url"`
-	Bio       string   `json:"bio"`
+	FirstName string `json:"firstname"`
+	LastName  string `json:"lastname"`
+	Email     string `json:"email"`
+	URL       string `json:"url"`
+	Bio       string `json:"bio"`
 }
 
 // UserRegistrationRequestStatus is the status for a UserRegistrationRequest resource

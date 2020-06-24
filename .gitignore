@@ -22,6 +22,8 @@ config/**
 !config/nginx/*_template.conf
 !config/crd
 !config/crd/**
+!config/opa
+!config/opa/**
 
 # assets
 assets/certs/**

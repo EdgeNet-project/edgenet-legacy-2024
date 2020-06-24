@@ -128,8 +128,8 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 				user.Spec.Email = URRCopy.Spec.Email
 				user.Spec.FirstName = URRCopy.Spec.FirstName
 				user.Spec.LastName = URRCopy.Spec.LastName
-				user.Spec.Roles = URRCopy.Spec.Roles
 				user.Spec.URL = URRCopy.Spec.URL
+				user.Spec.Active = true
 				_, err := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Create(user.DeepCopy())
 				if err == nil {
 					t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})

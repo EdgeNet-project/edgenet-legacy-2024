@@ -1,0 +1,24 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: RoleLimitation
+metadata:
+  name: team
+spec:
+  match:
+    namespaceSelector:
+      matchExpressions:
+      - key: owner
+        operator: In
+        values: ["team"]
+    kinds:
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        kinds: ["Role"]
+  parameters:
+    rules:
+      - resource: slices
+        verbs: ["*"]
+      - resource: slices/status
+        verbs: ["*"]
+      - resource: roles
+        verbs: ["*"]
+      - resource: rolebindings
+        verbs: ["*"]

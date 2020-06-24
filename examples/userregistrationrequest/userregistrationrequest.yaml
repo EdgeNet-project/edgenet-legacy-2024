@@ -7,4 +7,3 @@ spec:
   firstname: Firstname
   lastname: Lastname
   email: usersu@lip6.fr
-  roles: [User]

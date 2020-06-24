@@ -19,7 +19,6 @@ package team
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
@@ -140,7 +139,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 		if fieldUpdated.users.status || fieldUpdated.enabled {
 			// Delete all existing role bindings in the team (child) namespace
 			t.clientset.RbacV1().RoleBindings(teamChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
-			// Create rolebindings according to the users who participate in the team and are authority-admin and managers of the authority
+			// Create rolebindings according to the users who participate in the team and are authority-admin and authorized users of the authority
 			t.runUserInteractions(teamCopy, teamChildNamespaceStr, teamOwnerNamespace.Labels["authority-name"], teamOwnerNamespace.Labels["owner"], teamOwnerNamespace.Labels["owner-name"], "team-creation", fieldUpdated.enabled)
 			// Send emails to those who have been added to, or removed from the slice.
 			var deletedUserList []apps_v1alpha.TeamUsers
@@ -189,9 +188,9 @@ func (t *Handler) runUserInteractions(teamCopy *apps_v1alpha.Team, teamChildName
 	// This part creates the rolebindings for the users who participate in the team
 	for _, teamUser := range teamCopy.Spec.Users {
 		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", teamUser.Authority)).Get(teamUser.Username, metav1.GetOptions{})
-		if err == nil && user.Status.Active && user.Status.AUP {
+		if err == nil && user.Spec.Active && user.Status.AUP {
 			if operation == "team-creation" {
-				registration.CreateRoleBindingsByRoles(user.DeepCopy(), teamChildNamespaceStr, "Team")
+				registration.EstablishRoleBindings(user.DeepCopy(), teamChildNamespaceStr, "Team")
 			}
 
 			if !(operation == "team-creation" && !enabled) {
@@ -199,12 +198,13 @@ func (t *Handler) runUserInteractions(teamCopy *apps_v1alpha.Team, teamChildName
 			}
 		}
 	}
-	// To create the rolebindings for the users who are authority-admin and managers of the authority
+	// To create the rolebindings for the users who are authority-admin and authorized users of the authority
 	userRaw, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", ownerAuthority)).List(metav1.ListOptions{})
 	if err == nil {
 		for _, userRow := range userRaw.Items {
-			if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "admin") || containsRole(userRow.Spec.Roles, "manager")) {
-				registration.CreateRoleBindingsByRoles(userRow.DeepCopy(), teamChildNamespaceStr, "Team")
+			if userRow.Spec.Active && userRow.Status.AUP && (userRow.Status.Type == "admin" ||
+				authorization.CheckUserRole(t.clientset, teamCopy.GetNamespace(), userRow.Spec.Email, "teams", teamCopy.GetName())) {
+				registration.EstablishRoleBindings(userRow.DeepCopy(), teamChildNamespaceStr, "Team")
 			}
 		}
 	}
@@ -213,7 +213,7 @@ func (t *Handler) runUserInteractions(teamCopy *apps_v1alpha.Team, teamChildName
 // sendEmail to send notification to participants
 func (t *Handler) sendEmail(teamUsername, teamUserAuthority, teamAuthority, teamOwnerNamespace, teamName, teamChildNamespace, subject string) {
 	user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", teamUserAuthority)).Get(teamUsername, metav1.GetOptions{})
-	if err == nil && user.Status.Active && user.Status.AUP {
+	if err == nil && user.Spec.Active && user.Status.AUP {
 		// Set the HTML template variables
 		contentData := mailer.ResourceAllocationData{}
 		contentData.CommonData.Authority = teamUserAuthority
@@ -234,7 +234,7 @@ func (t *Handler) setOwnerReferences(teamCopy *apps_v1alpha.Team) ([]metav1.Owne
 	ownerReferences := []metav1.OwnerReference{}
 	for _, teamUser := range teamCopy.Spec.Users {
 		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", teamUser.Authority)).Get(teamUser.Username, metav1.GetOptions{})
-		if err == nil && user.Status.Active && user.Status.AUP {
+		if err == nil && user.Spec.Active && user.Status.AUP {
 			newTeamRef := *metav1.NewControllerRef(user.DeepCopy(), apps_v1alpha.SchemeGroupVersion.WithKind("User"))
 			takeControl := false
 			newTeamRef.Controller = &takeControl
@@ -247,14 +247,4 @@ func (t *Handler) setOwnerReferences(teamCopy *apps_v1alpha.Team) ([]metav1.Owne
 	newNamespaceRef.Controller = &takeControl
 	namespaceOwnerReferences := []metav1.OwnerReference{newNamespaceRef}
 	return ownerReferences, namespaceOwnerReferences
-}
-
-// To check whether user is holder of a role
-func containsRole(roles []string, value string) bool {
-	for _, ele := range roles {
-		if strings.ToLower(value) == strings.ToLower(ele) {
-			return true
-		}
-	}
-	return false
 }

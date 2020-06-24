@@ -134,7 +134,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		usersRaw, _ := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", authorityCopy.GetName())).List(metav1.ListOptions{})
 		for _, user := range usersRaw.Items {
 			userCopy := user.DeepCopy()
-			userCopy.Status.Active = false
+			userCopy.Spec.Active = false
 			t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
 			t.clientset.RbacV1().ClusterRoleBindings().Delete(fmt.Sprintf("%s-%s-for-authority", userCopy.GetNamespace(), userCopy.GetName()), &metav1.DeleteOptions{})
 		}
@@ -188,7 +188,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 			user.Spec.Email = authorityCopy.Spec.Contact.Email
 			user.Spec.FirstName = authorityCopy.Spec.Contact.FirstName
 			user.Spec.LastName = authorityCopy.Spec.Contact.LastName
-			user.Spec.Roles = []string{"Admin"}
+			user.Spec.Active = true
 			_, err = t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", authorityCopy.GetName())).Create(user.DeepCopy())
 			if err != nil {
 				t.sendEmail(authorityCopy, "user-creation-failure")

@@ -175,13 +175,6 @@ func Start() {
 	if err != nil {
 		log.Infof("Couldn't create slice-admin cluster role: %s", err)
 	}
-	// Authority Manager
-	sliceRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "slice-manager"},
-		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(sliceRole)
-	if err != nil {
-		log.Infof("Couldn't create slice-manager cluster role: %s", err)
-	}
 	// Authority User
 	sliceRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "slice-user"},
 		Rules: policyRule}

@@ -121,9 +121,10 @@ func Start() {
 
 	// Cluster Roles for Authorities
 	// Authority Admin
-	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users", "users/status", "userregistrationrequests",
+	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users", "userregistrationrequests",
 		"userregistrationrequests/status", "slices", "slices/status", "teams", "teams/status", "nodecontributions"}, Verbs: []string{"*"}},
-		{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"acceptableusepolicies"}, Verbs: []string{"get", "list"}}}
+		{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"acceptableusepolicies"}, Verbs: []string{"get", "list"}},
+		{APIGroups: []string{"rbac.authorization.k8s.io"}, Resources: []string{"roles", "rolebindings"}, Verbs: []string{"*"}}}
 	authorityRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "authority-admin"},
 		Rules: policyRule}
 	_, err = clientset.RbacV1().ClusterRoles().Create(authorityRole)
@@ -136,44 +137,6 @@ func Start() {
 				_, err = clientset.RbacV1().ClusterRoles().Update(authorityClusterRole)
 				if err == nil {
 					log.Infoln("Authority-admin cluster role updated")
-				}
-			}
-		}
-	}
-	// Authority Manager
-	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"userregistrationrequests", "userregistrationrequests/status",
-		"slices", "slices/status", "teams", "teams/status"}, Verbs: []string{"*"}},
-		{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users", "acceptableusepolicies", "nodecontributions"}, Verbs: []string{"get", "list"}}}
-	authorityRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "authority-manager"},
-		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(authorityRole)
-	if err != nil {
-		log.Infof("Couldn't create authority-manager cluster role: %s", err)
-		if errors.IsAlreadyExists(err) {
-			authorityClusterRole, err := clientset.RbacV1().ClusterRoles().Get(authorityRole.GetName(), metav1.GetOptions{})
-			if err == nil {
-				authorityClusterRole.Rules = policyRule
-				_, err = clientset.RbacV1().ClusterRoles().Update(authorityClusterRole)
-				if err == nil {
-					log.Infoln("Authority-manager cluster role updated")
-				}
-			}
-		}
-	}
-	// Authority Tech
-	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"nodecontributions"}, Verbs: []string{"*"}}}
-	authorityRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "authority-tech"},
-		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(authorityRole)
-	if err != nil {
-		log.Infof("Couldn't create authority-tech cluster role: %s", err)
-		if errors.IsAlreadyExists(err) {
-			authorityClusterRole, err := clientset.RbacV1().ClusterRoles().Get(authorityRole.GetName(), metav1.GetOptions{})
-			if err == nil {
-				authorityClusterRole.Rules = policyRule
-				_, err = clientset.RbacV1().ClusterRoles().Update(authorityClusterRole)
-				if err == nil {
-					log.Infoln("Authority-tech cluster role updated")
 				}
 			}
 		}

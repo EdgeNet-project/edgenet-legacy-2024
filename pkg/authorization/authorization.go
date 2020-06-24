@@ -29,6 +29,7 @@ import (
 	"edgenet/pkg/config"
 
 	namecheap "github.com/billputer/go-namecheap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -97,4 +98,39 @@ func CreateNamecheapClient() (*namecheap.Client, error) {
 	}
 	client := namecheap.NewClient(apiuser, apitoken, username)
 	return client, nil
+}
+
+// CheckUserRole returns true if the user is holder of a role
+func CheckUserRole(clientset *kubernetes.Clientset, namespace, email, resource, resourceName string) bool {
+	authorized := false
+	roleBindingRaw, _ := clientset.RbacV1().RoleBindings(namespace).List(metav1.ListOptions{})
+	for _, roleBindingRow := range roleBindingRaw.Items {
+		for _, subject := range roleBindingRow.Subjects {
+			if subject.Kind == "User" && subject.Name == email {
+				if roleBindingRow.RoleRef.Kind == "Role" {
+					role, _ := clientset.RbacV1().Roles(namespace).Get(roleBindingRow.RoleRef.Name, metav1.GetOptions{})
+					for _, rule := range role.Rules {
+						for _, APIGroup := range rule.APIGroups {
+							if APIGroup == "apps.edgenet.io" {
+								for _, ruleResource := range rule.Resources {
+									if ruleResource == resource {
+										if len(rule.ResourceNames) > 0 {
+											for _, ruleResourceName := range rule.ResourceNames {
+												if ruleResourceName == resourceName {
+													authorized = true
+												}
+											}
+										} else {
+											authorized = true
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return authorized
 }

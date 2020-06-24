@@ -224,7 +224,7 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 
 // sendEmail to send notification to participants
 func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) {
-	// For those who are authority-admin and managers of the authority
+	// For those who are authority-admin and authorized users of the authority
 	userRaw, err := t.edgenetClientset.AppsV1alpha().Users(NCCopy.GetNamespace()).List(metav1.ListOptions{})
 	if err == nil {
 		contentData := mailer.MultiProviderData{}
@@ -233,8 +233,8 @@ func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) {
 		contentData.Status = NCCopy.Status.State
 		contentData.Message = NCCopy.Status.Message
 		for _, userRow := range userRaw.Items {
-			if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "admin") || containsRole(userRow.Spec.Roles, "manager")) {
-				if err == nil && userRow.Status.Active && userRow.Status.AUP {
+			if userRow.Spec.Active && userRow.Status.AUP && userRow.Status.Type == "admin" {
+				if err == nil && userRow.Spec.Active && userRow.Status.AUP {
 					// Set the HTML template variables
 					contentData.CommonData.Authority = userRow.GetNamespace()
 					contentData.CommonData.Username = userRow.GetName()
