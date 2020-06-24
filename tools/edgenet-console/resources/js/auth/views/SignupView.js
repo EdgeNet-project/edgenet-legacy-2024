@@ -15,8 +15,11 @@ class SignupView extends React.Component {
             signupAuthority: false,
 
             message: null,
+            error: null,
             loading: false
         }
+
+        this.server = 'https://eapi-test.planet-lab.eu';
 
         this.signupAuthority = this.signupAuthority.bind(this);
         this.getAuthorities = this.getAuthorities.bind(this);
@@ -26,6 +29,63 @@ class SignupView extends React.Component {
 
     componentDidMount() {
         this.getAuthorities()
+    }
+
+    signup({value}) {
+        const { authority } = this.state;
+        console.log(value)
+        if (authority) {
+            this.signupUser(value);
+        } else {
+
+        }
+    }
+
+    createUserName(str) {
+        return str.replace(/[^a-z0-9]+/gi, '').replace(/^-*|-*$/g, '').toLowerCase();
+    }
+
+    signupUser(user) {
+        const { authority } = this.state;
+
+        if (!authority) {
+            return false;
+        }
+
+        this.setState({loading: true},
+            () => axios.post(
+                this.server + '/apis/apps.edgenet.io/v1alpha/namespaces/authority-'+authority+'/userregistrationrequests',
+                {
+                            apiVersion: 'apps.edgenet.io/v1alpha',
+                            kind: 'UserRegistrationRequest',
+                            metadata: {
+                                name: this.createUserName(user.firstname + user.lastname),
+                                namespace: 'authority-' + authority
+                            },
+                            spec: {
+                                firstname: user.firstname,
+                                lastname: user.lastname,
+                                email: user.email,
+                                phone: user.phone,
+                                roles: ['User']
+                            }
+                        },
+            ).then(({data}) => console.log(data))
+                .catch((error) => {
+
+                    if (error.response) {
+                        console.log(error.response.data);
+                    } else if (error.request) {
+                        console.log(error.request);
+                    } else {
+                        console.log('client error');
+                    }
+
+                    this.setState({
+                        error: error.response ? error.response.data : error.request ? error.request : 'client error',
+                    });
+                })
+        )
     }
 
     signupAuthority() {
@@ -41,7 +101,7 @@ class SignupView extends React.Component {
     // https://apiserver.edge-net.org/apis/apps.edgenet.io/v1alpha/authorities
     getAuthorities() {
 // 'https://eapi-test.planet-lab.eu/apis/apps.edgenet.io/v1alpha/authorities'
-        axios.get('https://eapi-test.planet-lab.eu/apis/apps.edgenet.io/v1alpha/authorities',
+        axios.get(this.server+'/apis/apps.edgenet.io/v1alpha/authorities',
             {
                 // withCredentials: true
                 // headers: { Authorization: "Bearer " + anonymous_token }
@@ -57,12 +117,11 @@ class SignupView extends React.Component {
             );
     }
 
-    selectAuthority(value) {
-        console.log(value)
-    }
-
-    signup({value}) {
-        console.log(value)
+    selectAuthority({value}) {
+        this.setState({
+            authority: value,
+            signupAuthority: null
+        })
     }
 
     render() {

@@ -41,6 +41,13 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        'k8s-auth' => [
+            'driver' => 'monthly',
+            'path' => storage_path('logs/k8s-auth.log'),
+            'level' => 'info',
+            'months' => 12,
+        ],
+
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),

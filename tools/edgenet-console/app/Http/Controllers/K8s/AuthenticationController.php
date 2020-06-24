@@ -9,13 +9,14 @@ use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Support\Facades\Log;
 use Auth;
+
 use App\User;
 
 class AuthenticationController extends Controller
 {
     public function authenticate(Request $request)
     {
-        Log::info(var_export($request->all(), true));
+        Log::channel('k8s-auth')->info(var_export($request->all(), true));
 
         $failed = [
             'apiVersion' => 'authentication.k8s.io/v1beta1',
@@ -38,6 +39,7 @@ class AuthenticationController extends Controller
             return response()->json($failed, 401);
         }
 
+        Log::channel('k8s-auth')->info('User ' . $user->name . ' authenticated');
 
         return response()->json(
             [
@@ -46,10 +48,10 @@ class AuthenticationController extends Controller
                 'status' => [
                     'authenticated' => true,
                     'user' => [
-                        'username' => 'readonlyuser',
+                        'username' => 'console',
 //                        'uid' => '42',
                         'groups' => [
-                            'default:readonlyuser'
+//                            'default:readonlyuser'
                         ],
 //                        'extra' => [
 //                            'extrafield1' => [
