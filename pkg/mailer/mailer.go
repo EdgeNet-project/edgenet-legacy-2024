@@ -222,7 +222,7 @@ func setCommonEmailHeaders(subject string, from string, to []string, delimiter s
 		headers += fmt.Sprintf("\r\n--%s\r\n", delimiter)
 	}
 	headers += "Content-Type: text/html; charset=\"utf-8\"\r\n"
-	headers += "Content-Transfer-Encoding: 8bit\r\n"
+	headers += "Content-Transfer-Encoding: 8bit\r\n\r\n"
 	if delimiter != "" {
 		headers += "\r\n"
 	}
