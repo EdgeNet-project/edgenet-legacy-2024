@@ -198,6 +198,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	// Security check to prevent any kind of manipulation on the AUP
 	if fieldUpdated.aup {
 		userAUP, _ := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
+		fmt.Printf("\nUSERAUP_MAIN= %v\n", userAUP)
 		if userAUP.Spec.Accepted != userCopy.Status.AUP {
 			userCopy.Status.AUP = userAUP.Spec.Accepted
 			userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
@@ -257,7 +258,7 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // setEmailVerification to provide one-time code for verification
-func (t *Handler) setEmailVerification(userCopy *apps_v1alpha.User, authorityName string) {
+func (t *Handler) setEmailVerification(userCopy *apps_v1alpha.User, authorityName string) string {
 	// The section below is a part of the method which provides email verification
 	// Email verification code is a security point for email verification. The user
 	// object creates an email verification object with a name which is
@@ -272,8 +273,10 @@ func (t *Handler) setEmailVerification(userCopy *apps_v1alpha.User, authorityNam
 	_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(userCopy.GetNamespace()).Create(emailVerification.DeepCopy())
 	if err == nil {
 		t.sendEmail(userCopy, authorityName, emailVerificationCode, "user-email-verification-update")
+		return emailVerificationCode
 	} else {
 		t.sendEmail(userCopy, authorityName, "", "user-email-verification-update-malfunction")
+		return ""
 	}
 }
 
@@ -354,7 +357,7 @@ func (t *Handler) deleteRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 }
 
 // createAUPRoleBinding links the AUP up with the user
-func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) {
+func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) string {
 	_, err := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Get(fmt.Sprintf("%s-%s", userCopy.GetNamespace(),
 		fmt.Sprintf("user-aup-%s", userCopy.GetName())), metav1.GetOptions{})
 	if err != nil {
@@ -370,8 +373,12 @@ func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) {
 		_, err = t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Create(roleBind)
 		if err != nil {
 			log.Infof("Couldn't create user-aup-%s role: %s", userCopy.GetName(), err)
+			return "Couldn't create user-aup"
 		}
+	} else {
+		return "Couldn't create user-aup"
 	}
+	return ""
 }
 
 // sendEmail to send notification to participants

@@ -112,8 +112,8 @@ func (g *UserTestGroup) Init() {
 			Generation: 1,
 		},
 		Spec: apps_v1alpha.UserSpec{
-			FirstName: "EdgeNet",
-			LastName:  "EdgeNet",
+			FirstName: "EdgeNetFirstName",
+			LastName:  "EdgeNetLastName",
 			Roles:     []string{"Admin"},
 			Email:     "userObj@email.com",
 		},
@@ -187,9 +187,6 @@ func TestUserCreate(t *testing.T) {
 		}
 	})
 
-	//status, err := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).List(metav1.ListOptions{})
-	//t.Logf("\nstatusSS= %v\n", status)
-	//t.Logf("\nerrRR= %v\n", err)
 }
 
 func TestUserUpdate(t *testing.T) {
@@ -199,29 +196,81 @@ func TestUserUpdate(t *testing.T) {
 	//creating authority + user
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
+	g.authorityObj.Status.Enabled = true
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 
-	//creating another user
-	g.userObj.Name = "different"
-	g.userObj.Spec.Email = "check@check.com"
-	g.userObj.UID = "difUID"
-	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
-	//changing the user email as the same as the authority default created user
-	g.userObj.Spec.Email = "unittest@edge-net.org"
-	var field fields
-	field.active = false
-	field.aup = false
-	field.roles = false
-	field.email = true
+	t.Run("Updateing Email and Checking the Duplication", func(t *testing.T) {
+		//creating a user
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		//changing the user email as the same as the authority default created user
+		g.userObj.Spec.Email = "unittest@edge-net.org"
+		var field fields
+		g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
+		if user.Status.Message == nil {
+			t.Error("Duplicate value cannot be detected")
+		}
+		if user.Status.Active {
+			t.Error("User cannot be deactivated")
+		}
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
+	})
+	t.Run("Updating Email", func(t *testing.T) {
+		//creating a user
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		//updateing the email
+		g.userObj.Spec.Email = "NewUserObj@email.com"
+		var field fields
+		field.email = true
+		g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
+		if user.Spec.Email != "NewUserObj@email.com" {
+			t.Error("Updating Email Failed")
+		}
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
+	})
 
-	g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
-	if user.Status.Message == nil {
-		t.Error("Duplicate value cannot be detected")
+	// status, err := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).List(metav1.ListOptions{})
+	// t.Logf("\nstatusSS= %v\n", status)
+	// t.Logf("\nerrRR= %v\n", err)
+}
+
+func TestSetEmailVerification(t *testing.T) {
+	g := UserTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+	//creating authority + user
+	authorityHandler := authority.Handler{}
+	authorityHandler.Init(g.client, g.edgenetclient)
+	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
+	result := g.handler.setEmailVerification(user, fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
+	if result == "" {
+		t.Error("user-email-verification-update-malfunction")
 	}
-	if user.Status.Active {
-		t.Error("User cannot be deactivated")
+}
+
+func TestCreateAUPRoleBinding(t *testing.T) {
+	g := UserTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+	//creating authority + user
+	authorityHandler := authority.Handler{}
+	authorityHandler.Init(g.client, g.edgenetclient)
+	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+
+	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
+	result := g.handler.createAUPRoleBinding(user)
+	if result != "" {
+		t.Error("Create AUPRoleBinding failed")
+		t.Logf("\nFailed result=%v\n", result)
+	} else {
+		t.Logf("\nPassed result=%v\n", result)
 	}
 
 }
