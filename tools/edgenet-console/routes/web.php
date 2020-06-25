@@ -18,7 +18,8 @@ Route::get('/password/reset/{token?}', function () {
     return view('console');
 })->where('token', '.*');
 
-Auth::routes();
+Auth::routes(['register' => false]);
+Route::post('/signup', 'K8s\SignupController@signup');
 
 Route::get('/{any?}', function () {
     return view('console');

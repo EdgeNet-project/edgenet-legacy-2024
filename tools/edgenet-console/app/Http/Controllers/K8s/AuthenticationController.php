@@ -48,7 +48,7 @@ class AuthenticationController extends Controller
                 'status' => [
                     'authenticated' => true,
                     'user' => [
-                        'username' => 'console',
+                        'username' => $user->email,
 //                        'uid' => '42',
                         'groups' => [
 //                            'default:readonlyuser'

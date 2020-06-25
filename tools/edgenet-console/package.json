@@ -21,15 +21,15 @@
         "react": "^16.2.0",
         "react-dom": "^16.2.0",
         "resolve-url-loader": "^3.1.0",
-        "sass": "^1.26.8",
+        "sass": "^1.26.9",
         "sass-loader": "^8.0.0"
     },
     "dependencies": {
         "filesize": "^6.1.0",
         "flag-icon-css": "^3.5.0",
-        "grommet": "^2.13.0",
+        "grommet": "^2.14.0",
         "grommet-icons": "^4.4.0",
-        "moment": "^2.26.0",
+        "moment": "^2.27.0",
         "react-localization": "^1.0.15",
         "react-router": "^5.2.0",
         "react-router-dom": "^5.2.0",

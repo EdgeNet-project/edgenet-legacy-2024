@@ -34,11 +34,31 @@ class SignupView extends React.Component {
     signup({value}) {
         const { authority } = this.state;
         console.log(value)
-        if (authority) {
-            this.signupUser(value);
-        } else {
-
-        }
+        this.setState({
+            loading: true
+        }, () =>
+                axios.post('/signup', {
+                    ...value,
+                    authority: authority
+                })
+                    .then(({data}) => this.setState({
+                        loading: false
+                    }, () => console.log(data)))
+                    .catch(error => {
+                        this.setState({
+                            loading:false,
+                            message: error.message
+                        });
+                        if (error.response) {
+                            console.log(error.response.data);
+                        } else if (error.request) {
+                            console.log(error.request);
+                        } else {
+                            console.log('client error');
+                            console.log(error);
+                        }
+                    })
+        );
     }
 
     createUserName(str) {
@@ -67,7 +87,7 @@ class SignupView extends React.Component {
                                 lastname: user.lastname,
                                 email: user.email,
                                 phone: user.phone,
-                                roles: ['User']
+                                //roles: ['User']
                             }
                         },
             ).then(({data}) => console.log(data))
@@ -169,14 +189,14 @@ class SignupView extends React.Component {
 
 
                         <Box border={{side:'bottom',color:'brand',size:'small'}}>
-                            <FormField label="Firstname" name="firstname" required validate={{ regexp: /^[a-z]/i }} />
-                            <FormField label="Lastname" name="lastname" required validate={{ regexp: /^[a-z]/i }} />
-                            <FormField label="E-Mail" name="email" required />
-                            <FormField label="Phone" name="phone" required />
+                            <FormField disabled={loading} label="Firstname" name="firstname" required validate={{ regexp: /^[a-z]/i }} />
+                            <FormField disabled={loading} label="Lastname" name="lastname" required validate={{ regexp: /^[a-z]/i }} />
+                            <FormField disabled={loading} label="E-Mail" name="email" required />
+                            <FormField disabled={loading} label="Phone" name="phone" required />
 
                             <Box direction="row" pad={{vertical:'medium'}} justify="between" align="center">
                                 <Link to="/migrate">Migrate my PlanetLab Europe account</Link>
-                                <Button type="submit" primary label="Signup" disabled={loading} />
+                                <Button disabled={loading} type="submit" primary label="Signup" />
                             </Box>
                         </Box>
                         <Box direction="row" >
