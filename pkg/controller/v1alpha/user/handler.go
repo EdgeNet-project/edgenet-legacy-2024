@@ -138,7 +138,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			userCopy.Status.Active = true
 			// Create the main service account for permanent use
 			// In next versions, there will be a method to renew the token of this service account for security
-			_, err = registration.CreateServiceAccount(userCopy, "main")
+			_, err = registration.CreateServiceAccount(userCopy, "main", t.clientset)
 			if err != nil {
 				log.Println(err.Error())
 				userCopy.Status.State = failure
