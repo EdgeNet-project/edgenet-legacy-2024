@@ -175,20 +175,17 @@ func TestUserCreate(t *testing.T) {
 	t.Run("check dublicate object", func(t *testing.T) {
 		// Change the user object name to make comparison with the user-created above
 		g.userObj.Name = "different"
+		g.userObj.UID = "differentUID"
 		//create user
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 		//invoke the ObjectCreated()
 		g.handler.ObjectCreated(g.userObj.DeepCopy())
-		//check if the user created or not
+		//check if the user created successfully or not
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
-		if user != nil {
+		if user.Status.Message == nil {
 			t.Error("Duplicate value cannot be detected")
 		}
-
 	})
-	//t.Logf("\nuserDuplicated:\n USER: %v \n ERROR: \n %v\n", user, err)
-	//status, err := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).List(metav1.ListOptions{})
-	//t.Logf("\nstatusSS= %v\n", status)
 
 	//status, err := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).List(metav1.ListOptions{})
 	//t.Logf("\nstatusSS= %v\n", status)
@@ -199,10 +196,12 @@ func TestUserUpdate(t *testing.T) {
 	g := UserTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	//creating namespace + user
+	//creating authority + user
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+
 	//creating another user
 	g.userObj.Name = "different"
 	g.userObj.Spec.Email = "check@check.com"
