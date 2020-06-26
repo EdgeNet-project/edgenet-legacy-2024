@@ -144,7 +144,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				}
 			}
 			defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
-			if userOwnerAuthority.Spec.Contact.Username == userCopy.GetName() && userOwnerAuthority.Spec.Contact.Email == userCopy.GetName() {
+			if userOwnerAuthority.Spec.Contact.Username == userCopy.GetName() && userOwnerAuthority.Spec.Contact.Email == userCopy.Spec.Email {
 				userCopy.Status.Type = "admin"
 			} else {
 				userCopy.Status.Type = "user"
