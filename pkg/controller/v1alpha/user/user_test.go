@@ -24,6 +24,8 @@ import (
 type UserTestGroup struct {
 	authorityObj        apps_v1alpha.Authority
 	authorityRequestObj apps_v1alpha.AuthorityRequest
+	teamList            apps_v1alpha.TeamList
+	sliceList           apps_v1alpha.SliceList
 	userObj             apps_v1alpha.User
 	client              kubernetes.Interface
 	edgenetclient       versioned.Interface
@@ -99,6 +101,72 @@ func (g *UserTestGroup) Init() {
 			State: success,
 		},
 	}
+	teamList := apps_v1alpha.TeamList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "TeamList",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ListMeta: metav1.ListMeta{
+			SelfLink:        "teamSelfLink",
+			ResourceVersion: "1",
+		},
+		Items: []apps_v1alpha.Team{
+			{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Team",
+					APIVersion: "apps.edgenet.io/v1alpha",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "edgenetTeam",
+				},
+				Spec: apps_v1alpha.TeamSpec{
+					Users: []apps_v1alpha.TeamUsers{
+						{
+							Authority: "authority-edgenet",
+							Username:  "unittestingObj",
+						},
+					},
+					Description: "This is a Teamtest description",
+				},
+				Status: apps_v1alpha.TeamStatus{
+					Enabled: false,
+				},
+			},
+		},
+	}
+	sliceList := apps_v1alpha.SliceList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "SliceList",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ListMeta: metav1.ListMeta{
+			SelfLink:        "sliceSelfLink",
+			ResourceVersion: "1",
+		},
+		Items: []apps_v1alpha.Slice{
+			{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Slice",
+					APIVersion: "apps.edgenet.io/v1alpha",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "edgenetSlice",
+				},
+				Spec: apps_v1alpha.SliceSpec{
+					Users: []apps_v1alpha.SliceUsers{
+						{
+							Authority: "authority-edgenet",
+							Username:  "unittestingObj",
+						},
+					},
+					Description: "This is a Slicetest description",
+				},
+				Status: apps_v1alpha.SliceStatus{
+					Renew: false,
+				},
+			},
+		},
+	}
 
 	userObj := apps_v1alpha.User{
 		TypeMeta: metav1.TypeMeta{
@@ -120,10 +188,13 @@ func (g *UserTestGroup) Init() {
 		Status: apps_v1alpha.UserStatus{
 			State:  success,
 			Active: true,
+			AUP:    true,
 		},
 	}
 	g.authorityObj = authorityObj
 	g.authorityRequestObj = authorityRequestObj
+	g.teamList = teamList
+	g.sliceList = sliceList
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
@@ -230,10 +301,22 @@ func TestUserUpdate(t *testing.T) {
 		}
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
 	})
+	t.Run("Updating role", func(t *testing.T) {
+		//creating a user
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
+		var field fields
+		field.roles = true
+		g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
 
-	// status, err := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).List(metav1.ListOptions{})
-	// t.Logf("\nstatusSS= %v\n", status)
-	// t.Logf("\nerrRR= %v\n", err)
+		roleBindingListOptions := metav1.ListOptions{}
+		roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", user.GetNamespace(), user.GetName())}
+		roleBindings, _ := g.client.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
+
+		if roleBindings.Items == nil {
+			t.Error("RoleBinding Creation failed")
+		}
+	})
 }
 
 func TestSetEmailVerification(t *testing.T) {
@@ -251,6 +334,65 @@ func TestSetEmailVerification(t *testing.T) {
 	if result == "" {
 		t.Error("user-email-verification-update-malfunction")
 	}
+}
+
+func TestCreateRoleBindings(t *testing.T) {
+	g := UserTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+	//creating authority + user
+	authorityHandler := authority.Handler{}
+	authorityHandler.Init(g.client, g.edgenetclient)
+	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	//Creating User from userObj
+	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+	g.handler.ObjectCreated(g.userObj.DeepCopy())
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
+	//invoking createRoleBindings
+	g.handler.createRoleBindings(user, g.sliceList.DeepCopy(), g.teamList.DeepCopy(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
+	//get the list of roleBindings
+	roleBindingListOptions := metav1.ListOptions{}
+	roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", user.GetNamespace(), user.GetName())}
+	roleBindings, _ := g.client.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
+
+	if roleBindings.Items == nil {
+		t.Error("RoleBinding Creation failed")
+	}
+}
+
+func TestDeleteRoleBindings(t *testing.T) {
+	g := UserTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+	//creating authority + user
+	authorityHandler := authority.Handler{}
+	authorityHandler.Init(g.client, g.edgenetclient)
+	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	//Creating User from userObj
+	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+	g.handler.ObjectCreated(g.userObj.DeepCopy())
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
+	//invoking createRoleBindings
+	g.handler.createRoleBindings(user, g.sliceList.DeepCopy(), g.teamList.DeepCopy(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
+	//get the list of roleBindings
+	roleBindingListOptions := metav1.ListOptions{}
+	roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", user.GetNamespace(), user.GetName())}
+	roleBindings, _ := g.client.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
+
+	if roleBindings.Items == nil {
+		t.Error("RoleBinding Creation failed")
+	}
+	g.handler.deleteRoleBindings(user, g.sliceList.DeepCopy(), g.teamList.DeepCopy())
+
+	roleBindingsResult, _ := g.client.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
+	t.Logf("STATUS NEW\n %v\n", roleBindingsResult)
+
+	if roleBindingsResult.Items != nil {
+		t.Error("RoleBinding Creation failed")
+	}
+
 }
 
 func TestCreateAUPRoleBinding(t *testing.T) {

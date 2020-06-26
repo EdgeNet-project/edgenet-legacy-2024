@@ -43,12 +43,8 @@ import (
 )
 
 // CreateSpecificRoleBindings generates role bindings to allow users to access their user objects and the authority to which they belong
-func CreateSpecificRoleBindings(userCopy *apps_v1alpha.User) {
-	clientset, err := authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+func CreateSpecificRoleBindings(userCopy *apps_v1alpha.User, clientset kubernetes.Interface) {
+	var err error
 	// When a user is deleted, the owner references feature allows the related objects to be automatically removed
 	userOwnerReferences := setOwnerReferences(userCopy)
 	// Put the service account dedicated to the user into the role bind subjects
@@ -79,12 +75,8 @@ func CreateSpecificRoleBindings(userCopy *apps_v1alpha.User) {
 }
 
 // CreateRoleBindingsByRoles generates the rolebindings according to user roles in the namespace specified
-func CreateRoleBindingsByRoles(userCopy *apps_v1alpha.User, namespace string, namespaceType string) {
-	clientset, err := authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+func CreateRoleBindingsByRoles(userCopy *apps_v1alpha.User, namespace string, namespaceType string, clientset kubernetes.Interface) {
+	var err error
 	// When a user is deleted, the owner references feature allows the related objects to be automatically removed
 	ownerReferences := setOwnerReferences(userCopy)
 	// Put the service account dedicated to the user into the role bind subjects
