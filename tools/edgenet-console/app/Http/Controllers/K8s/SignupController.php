@@ -3,11 +3,10 @@
 namespace App\Http\Controllers\K8s;
 
 use App\Http\Controllers\Controller;
-use App\Providers\RouteServiceProvider;
 use Illuminate\Auth\Events\Registered;
+use Illuminate\Foundation\Auth\RegistersUsers;
 use Illuminate\Http\Request;
 use GuzzleHttp\Client;
-use GuzzleHttp\Exception\RequestException;
 
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Support\Facades\Hash;
@@ -15,10 +14,11 @@ use Illuminate\Support\Facades\Log;
 use Auth;
 
 use App\User;
-use Illuminate\Support\Facades\Validator;
 
 class SignupController extends Controller
 {
+    use RegistersUsers;
+
     protected $client;
 
     public function __construct(Client $client)
@@ -37,33 +37,48 @@ class SignupController extends Controller
             return response()->json(['message' => 'wrong header accept, json required'], 422);
         }
 
-        Validator::make($request->all(), [
+        $request->validate([
             'firstname' => ['required', 'string', 'max:255'],
             'lastname' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-
-            'authority' => ['required', 'string'],
-
         ]);
 
-        if (!$this->verifyAuthority($request->input('authority'))) {
-            return response()->json(['message' => 'Authority does not exist'], 422);
-        }
 
         if ($this->verifyUser($request->input('email'))) {
             return response()->json(['message' => 'User already registered'], 422);
         }
 
-        return $this->createUser($request->all());
+        if (!$request->input('authority')) {
+            if (!$this->createKubernetesAuthority($request)) {
+                return response()->json(['message' => 'Can\'t create authority (kubernetes)'], 422);
+            }
+        } else {
 
-        //event(new Registered());
+            if (!$this->verifyAuthority($request->input('authority'))) {
+                return response()->json(['message' => 'Authority does not exist'], 422);
+            }
+
+            if (!$this->createKubernetesUser($request)) {
+                return response()->json(['message' => 'Can\'t create user (kubernetes)'], 422);
+            }
+        }
+
+        event(new Registered(
+            $user = User::create([
+                'firstname' => $request->input('firstname'),
+                'lastname' => $request->input('lastname'),
+                'email' => $request->input('email'),
+                'password' => Hash::make($request->input('password')),
+            ])
+        ));
 
         $this->guard()->login($user);
 
         if ($response = $this->registered($request, $user)) {
             return $response;
         }
+
 
         return response()->json([], 201);
     }
@@ -84,44 +99,67 @@ class SignupController extends Controller
         return false;
     }
 
-    protected function createUserss(array $data)
+    protected function createKubernetesAuthority($request)
     {
-        //dd($data);
-        if (!isset($data['authority'])) {
-            // we need authority
-        }
+        $authoritySpec = [
+            'apiVersion' => 'apps.edgenet.io/v1alpha',
+            'kind' => 'AuthorityRequest',
+            'metadata' => [
+                'name' => $this->generatName($request->input('shortname')),
+            ],
+            'spec' => [
+                'fullname' => $request->input('fullname'),
+                'shortname' => $request->input('shortname'),
+                'url' => $request->input('url', '-'),
 
-        $data_authority = $data['authority'];
+                'address' => [
+                    'street' => $request->input('street'),
+                    'zip'  => $request->input('zip'),
+                    'city'  =>  $request->input('city'),
+                    'region'  => $request->input('region', '-'),
+                    'country'  => $request->input('country'),
+                ],
+                'contact' => [
+                    'username' => $this->generatName($request->input('firstname') . $request->input('lastname')),
+                    'firstname' => $request->input('firstname'),
+                    'lastname' => $request->input('lastname'),
+                    'email' => $request->input('email'),
+                    'phone' => $request->input('phone', '-'),
 
-        if (isset($data_authority['id'])) {
-            $authority = Authority::find($data_authority['id']);
-        } else {
-            $authority = Authority::create([
-                'name' => $data_authority['name'],
-                'shortname' => $data_authority['shortname'],
-                'address' => $data_authority['address'],
-                'zipcode' => $data_authority['zipcode'],
-                'city' => $data_authority['city'],
-                'country' => $data_authority['country'],
-                'url' => $data_authority['url'],
-            ]);
-        }
+                ],
+            ],
 
-        return User::create([
-            'firstname' => $data['firstname'],
-            'lastname' => $data['lastname'],
-            'email' => $data['email'],
-            'phone' => $data['phone'],
-            'bio' => $data['bio'],
-            'password' => Hash::make($data['password']),
-            'authority_id' => $authority->id
+        ];
+
+        $url = env('EDGENET_API_SERVER') . '/apis/apps.edgenet.io/v1alpha/authorityrequests';
+
+        $res = $this->client->request('POST', $url, [
+            'headers' => [
+//                'Authorization' => 'Bearer ' . $this->token,
+                'Accept' => 'application/json',
+            ],
+            'verify' => false,
+            //'debug' => true
+            'json' => $authoritySpec,
+            'exceptions' => false
         ]);
+
+        Log::channel('k8s')->info($url);
+        Log::channel('k8s')->info(print_r($authoritySpec, true));
+        Log::channel('k8s')->info($res->getBody());
+
+        if ($res->getStatusCode()) {
+
+        }
+        Log::channel('k8s')->error($res->getStatusCode());
+
+        return true;
     }
 
 
-    private function createUser(array $data)
+    private function createKubernetesUser($request)
     {
-        $namespace = 'authority-' . $data['authority'];
+        $namespace = 'authority-' . $request->input('authority');
 
         $roles = ['User'];
 
@@ -129,16 +167,16 @@ class SignupController extends Controller
             'apiVersion' => 'apps.edgenet.io/v1alpha',
             'kind' => 'UserRegistrationRequest',
             'metadata' => [
-                'name' => $this->generateUsername($data['firstname'] . $data['lastname']),
+                'name' => $this->generatName($request->input('firstname') . $request->input('lastname')),
                 'namespace' => $namespace
             ],
             'spec' => [
-                'firstname' => $data['firstname'],
-                'lastname' => $data['lastname'],
-                'email' => $data['email'],
-                'phone' => isset($data['phone']) ? $data['phone'] : '-',
-                'bio' => isset($data['bio']) ? $data['bio'] : '-',
-                'url' => isset($data['url']) ? $data['url'] : '-',
+                'firstname' => $request->input('firstname'),
+                'lastname' => $request->input('lastname'),
+                'email' => $request->input('email'),
+                'phone' => $request->input('phone', '-'),
+                'bio' => $request->input('bio','-'),
+                'url' => $request->input('url','-'),
                 'roles' => $roles,
                 'password' => ''
             ],
@@ -146,12 +184,11 @@ class SignupController extends Controller
         ];
         //dd($userSpec,config('edgenet.api_prefix_crd') . '/users');
 
-        $url = 'https://eapi-test.planet-lab.eu/apis/apps.edgenet.io/v1alpha/namespaces/'.$namespace.'/userregistrationrequests';
+        $url = env('EDGENET_API_SERVER') . '/apis/apps.edgenet.io/v1alpha/userregistrationrequests';
 
         //return $this->postRequest($url, $userSpec);
 
-        try {
-            return $this->client->request('POST', $url, [
+        $res = $this->client->request('POST', $url, [
                 'headers' => [
 //                'Authorization' => 'Bearer ' . $this->token,
                     'Accept' => 'application/json',
@@ -159,18 +196,18 @@ class SignupController extends Controller
                 'verify' => false,
                 //'debug' => true
                 'json' => $userSpec,
-                'exceptions' => true
+                'exceptions' => false
             ]);
-        } catch (RequestException $e) {
-            return response()->json([
-                'message' => 'An error has occurred',
-                'debug' => $e->getMessage()
-            ], $e->getCode());
-        }
 
+        if ($res->getStatusCode()) {
+
+        }
+        Log::channel('k8s')->error($res->getStatusCode());
+
+        return true;
     }
 
-    private function generateUsername($string)
+    private function generatName($string)
     {
         return preg_replace('/[^a-z0-9]/', '', strtolower(trim($string)));
     }

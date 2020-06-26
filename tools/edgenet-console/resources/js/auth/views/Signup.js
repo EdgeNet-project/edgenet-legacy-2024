@@ -1,18 +1,40 @@
 import React from "react";
-import {Box, Form, Image, Text, FormField, Button, Anchor} from "grommet";
+import {Box, Form, Text, Button, Anchor} from "grommet";
 import {Link} from "react-router-dom";
 import Select from 'react-select';
 import axios from "axios";
 
+import { EdgenetContext } from "../../edgenet";
 import SignupSucces from "./SignupSucces";
+import SignupUser from "./SignupUser";
+import SignupAuthority from "./SignuAuthority";
+import Loading from "./Loading";
+import Header from "./Header";
 
-class SignupView extends React.Component {
+class Signup extends React.Component {
 
     constructor(props) {
         super(props);
         this.state = {
             authorities: [],
 
+            value: {
+                firstname: '',
+                lastname: '',
+                phone: '',
+                email: '',
+                password: '',
+                password_confirmation: '',
+
+                fullname: '',
+                shortname: '',
+                street: '',
+                zip: '',
+                city: '',
+                region: '',
+                country: '',
+                url: ''
+            },
             authority: null,
             signupAuthority: false,
 
@@ -21,8 +43,7 @@ class SignupView extends React.Component {
             loading: false
         }
 
-        this.server = 'https://eapi-test.planet-lab.eu';
-
+        this.handleChange = this.handleChange.bind(this);
         this.signupAuthority = this.signupAuthority.bind(this);
         this.getAuthorities = this.getAuthorities.bind(this);
         this.selectAuthority = this.selectAuthority.bind(this);
@@ -31,6 +52,10 @@ class SignupView extends React.Component {
 
     componentDidMount() {
         this.getAuthorities()
+    }
+
+    handleChange(value) {
+        this.setState({value: value})
     }
 
     signup({value}) {
@@ -64,53 +89,6 @@ class SignupView extends React.Component {
         );
     }
 
-    createUserName(str) {
-        return str.replace(/[^a-z0-9]+/gi, '').replace(/^-*|-*$/g, '').toLowerCase();
-    }
-
-    signupUser(user) {
-        const { authority } = this.state;
-
-        if (!authority) {
-            return false;
-        }
-
-        this.setState({loading: true},
-            () => axios.post(
-                this.server + '/apis/apps.edgenet.io/v1alpha/namespaces/authority-'+authority+'/userregistrationrequests',
-                {
-                            apiVersion: 'apps.edgenet.io/v1alpha',
-                            kind: 'UserRegistrationRequest',
-                            metadata: {
-                                name: this.createUserName(user.firstname + user.lastname),
-                                namespace: 'authority-' + authority
-                            },
-                            spec: {
-                                firstname: user.firstname,
-                                lastname: user.lastname,
-                                email: user.email,
-                                phone: user.phone,
-                                //roles: ['User']
-                            }
-                        },
-            ).then(({data}) => console.log(data))
-                .catch((error) => {
-
-                    if (error.response) {
-                        console.log(error.response.data);
-                    } else if (error.request) {
-                        console.log(error.request);
-                    } else {
-                        console.log('client error');
-                    }
-
-                    this.setState({
-                        error: error.response ? error.response.data : error.request ? error.request : 'client error',
-                    });
-                })
-        )
-    }
-
     signupAuthority() {
         const { signupAuthority } = this.state;
 
@@ -120,15 +98,9 @@ class SignupView extends React.Component {
         })
     }
 
-    //
-    // https://apiserver.edge-net.org/apis/apps.edgenet.io/v1alpha/authorities
     getAuthorities() {
-// 'https://eapi-test.planet-lab.eu/apis/apps.edgenet.io/v1alpha/authorities'
-        axios.get(this.server+'/apis/apps.edgenet.io/v1alpha/authorities',
-            {
-                // withCredentials: true
-                // headers: { Authorization: "Bearer " + anonymous_token }
-            })
+        const { api } = this.context;
+        axios.get(api + '/apis/apps.edgenet.io/v1alpha/authorities')
             .then(({data}) =>
                 this.setState({
                     authorities: data.items.map(item => {
@@ -148,41 +120,25 @@ class SignupView extends React.Component {
     }
 
     render() {
-        const { logo, title } = this.props;
-        const { authorities, authority, signupAuthority, message, loading, success } = this.state;
+        const { value, authorities, authority, signupAuthority, message, loading, success } = this.state;
 
         if (success) {
             return <SignupSucces />;
         }
 
         if (loading) {
-            return <Box>Loading</Box>
+            return <Loading />;
         }
 
         return (
             <Box align="center">
-                <Box gap="small" pad={{vertical:'large'}}>
-                    {logo && <Image style={{maxWidth:'25%',margin:'50px auto'}} src={logo} alt={title} />}
-                    {title ? title : "Signup"}
-                </Box>
-                <Form onSubmit={this.signup}>
+                <Header />
+                <Form onSubmit={this.signup} onChange={this.handleChange} value={value}>
                     <Box gap="medium" alignSelf="center" width="medium" alignContent="center" align="stretch">
-
-
                             <Box border={{side: 'bottom', color: 'brand', size: 'small'}}
-                                 pad={{vertical: 'medium'}} gap="small"
-                            >
+                                 pad={{vertical: 'medium'}} gap="small">
 
-                                {signupAuthority ?
-                                    <Box>
-                                        <Text color="dark-2">
-                                            Please complete with the information of the institution you are part of
-                                        </Text>
-                                        <FormField label="Institution full name" name="fullname" required validate={{ regexp: /^[a-z]/i }} />
-                                        <FormField label="Institution shortname or initials" name="shortname" required validate={{ regexp: /^[a-z]/i }} />
-                                        <FormField label="Address" name="address" required validate={{ regexp: /^[a-z]/i }} />
-                                        <FormField label="Web page" name="url" required validate={{ regexp: /^[a-z]/i }} />
-                                    </Box>
+                                {signupAuthority ? <SignupAuthority />
                                     :
                                     <Select placeholder="Select your institution"
                                             isSearchable={true} isClearable={true}
@@ -200,10 +156,7 @@ class SignupView extends React.Component {
 
 
                         <Box border={{side:'bottom',color:'brand',size:'small'}}>
-                            <FormField label="Firstname" name="firstname" required validate={{ regexp: /^[a-z]/i }} />
-                            <FormField label="Lastname" name="lastname" required validate={{ regexp: /^[a-z]/i }} />
-                            <FormField label="Phone" name="phone" />
-                            <FormField label="E-Mail" name="email" required />
+                            <SignupUser />
 
 
                             <Box direction="row" pad={{vertical:'medium'}} justify="between" align="center">
@@ -222,4 +175,6 @@ class SignupView extends React.Component {
     }
 }
 
-export default SignupView;
+Signup.contextType = EdgenetContext;
+
+export default Signup;

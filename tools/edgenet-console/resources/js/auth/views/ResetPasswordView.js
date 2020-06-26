@@ -4,6 +4,7 @@ import { Box, Text, Button, Image, Form } from 'grommet';
 import { LoginInput, PasswordInput } from '../components';
 
 import { AuthContext } from "../AuthContext";
+import Header from "./Header";
 
 class ResetPasswordView extends React.Component {
 
@@ -34,10 +35,7 @@ class ResetPasswordView extends React.Component {
         return (
             <Form onSubmit={() => resetPassword(email, token, password, password_confirmation)}>
                 <Box gap="medium" align="center" justify="center">
-                    <Box gap="small" margin={{top:"large"}}>
-                        {logo && <Image style={{maxWidth:'25%',margin:'50px auto'}} src={logo} alt={title} />}
-                        {title ? title : "Reset Password"}
-                    </Box>
+                    <Header title="Password reset" />
 
                     <Box gap="small" width="medium">
                         <LoginInput value={email} disabled={loading}

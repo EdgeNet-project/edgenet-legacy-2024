@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import { Console, Routes } from "./core";
+import { Edgenet } from "./edgenet";
 import { Server } from "grommet-icons";
 
 import theme from "./theme";
@@ -38,9 +39,11 @@ const config = {
 const dom = document.getElementById('application');
 if (dom) {
     ReactDOM.render(
-        <Console resources={resources}>
-            <Routes menu={menu} theme={theme} />
-        </Console>,
+        <Edgenet>
+            <Console resources={resources}>
+                <Routes menu={menu} theme={theme} />
+            </Console>
+        </Edgenet>,
         dom
     );
 }

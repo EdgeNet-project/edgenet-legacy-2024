@@ -41,11 +41,11 @@ return [
             'ignore_exceptions' => false,
         ],
 
-        'k8s-auth' => [
-            'driver' => 'monthly',
-            'path' => storage_path('logs/k8s-auth.log'),
+        'k8s' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/k8s.log'),
             'level' => 'info',
-            'months' => 12,
+            'days' => 30,
         ],
 
         'single' => [

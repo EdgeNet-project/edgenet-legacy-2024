@@ -61,8 +61,7 @@ spec:
 ```
 
 
-
-## Console User Admin
+## OLD Console User Admin
 
 Here is the full example with creating admin user and getting token:
 

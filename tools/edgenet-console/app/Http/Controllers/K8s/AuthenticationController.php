@@ -16,7 +16,7 @@ class AuthenticationController extends Controller
 {
     public function authenticate(Request $request)
     {
-        Log::channel('k8s-auth')->info(var_export($request->all(), true));
+        Log::channel('k8s')->info(var_export($request->all(), true));
 
         $failed = [
             'apiVersion' => 'authentication.k8s.io/v1beta1',
@@ -39,7 +39,7 @@ class AuthenticationController extends Controller
             return response()->json($failed, 401);
         }
 
-        Log::channel('k8s-auth')->info('User ' . $user->name . ' authenticated');
+        Log::channel('k8s')->info('User ' . $user->name . ' authenticated');
 
         return response()->json(
             [

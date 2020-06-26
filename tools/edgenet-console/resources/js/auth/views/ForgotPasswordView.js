@@ -4,6 +4,7 @@ import { Box, Text, Button, Image, Form } from 'grommet';
 import { LoginInput } from '../components';
 
 import { AuthContext } from "../AuthContext";
+import Header from "./Header";
 
 class ForgotPasswordView extends React.Component {
 
@@ -18,15 +19,11 @@ class ForgotPasswordView extends React.Component {
     render() {
         const { email } = this.state;
         const { message, loading, sendResetLink } = this.context;
-        const { title, logo } = this.props;
 
         return (
             <Form onSubmit={() => sendResetLink(email)}>
                 <Box gap="medium" align="center" justify="center">
-                    <Box gap="small" margin={{top:"large"}}>
-                        {logo && <Image style={{maxWidth:'25%',margin:'50px auto'}} src={logo} alt={title} />}
-                        {title ? title : "Forgot Password"}
-                    </Box>
+                    <Header title="Password reset" />
 
                     <Box gap="small" width="medium">
                         <LoginInput value={email} disabled={loading}
