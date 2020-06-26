@@ -109,14 +109,14 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	// if the authority and the team (if it is an owner) enabled.
 	var sliceOwnerEnabled bool
 	if sliceOwnerNamespace.Labels["owner"] == "team" {
-		sliceOwnerEnabled = sliceOwnerAuthority.Status.Enabled
+		sliceOwnerEnabled = sliceOwnerAuthority.Spec.Enabled
 		if sliceOwnerEnabled {
 			sliceOwnerTeam, _ := t.edgenetClientset.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", sliceOwnerNamespace.Labels["authority-name"])).
 				Get(sliceOwnerNamespace.Labels["owner-name"], metav1.GetOptions{})
-			sliceOwnerEnabled = sliceOwnerTeam.Status.Enabled
+			sliceOwnerEnabled = sliceOwnerTeam.Spec.Enabled
 		}
 	} else {
-		sliceOwnerEnabled = sliceOwnerAuthority.Status.Enabled
+		sliceOwnerEnabled = sliceOwnerAuthority.Spec.Enabled
 	}
 	// Check if the owner(s) is/are active
 	if sliceOwnerEnabled {
@@ -175,14 +175,14 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	// if the authority and the team (if it is an owner) enabled.
 	var sliceOwnerEnabled bool
 	if sliceOwnerNamespace.Labels["owner"] == "team" {
-		sliceOwnerEnabled = sliceOwnerAuthority.Status.Enabled
+		sliceOwnerEnabled = sliceOwnerAuthority.Spec.Enabled
 		if sliceOwnerEnabled {
 			sliceOwnerTeam, _ := t.edgenetClientset.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", sliceOwnerNamespace.Labels["authority-name"])).
 				Get(sliceOwnerNamespace.Labels["owner-name"], metav1.GetOptions{})
-			sliceOwnerEnabled = sliceOwnerTeam.Status.Enabled
+			sliceOwnerEnabled = sliceOwnerTeam.Spec.Enabled
 		}
 	} else {
-		sliceOwnerEnabled = sliceOwnerAuthority.Status.Enabled
+		sliceOwnerEnabled = sliceOwnerAuthority.Spec.Enabled
 	}
 	// Check if the owner(s) is/are active
 	if sliceOwnerEnabled {
@@ -209,9 +209,16 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			}
 		}
 		// If the slice renewed or its profile updated
-		if sliceCopy.Status.Renew || fieldUpdated.profile.status {
+		if sliceCopy.Spec.Renew || fieldUpdated.profile.status {
 			// Delete all existing resource quotas in the slice (child) namespace
 			t.clientset.CoreV1().ResourceQuotas(sliceChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
+			if sliceCopy.Spec.Renew {
+				sliceCopy.Spec.Renew = false
+				sliceCopyUpdate, err := t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Update(sliceCopy)
+				if err == nil {
+					sliceCopy = sliceCopyUpdate
+				}
+			}
 			if fieldUpdated.profile.status {
 				resourcesAvailability := t.checkResourcesAvailabilityForSlice(sliceCopy, sliceOwnerNamespace.Labels["authority-name"])
 				if !resourcesAvailability {
@@ -261,7 +268,7 @@ func (t *Handler) setConstrainsByProfile(childNamespace string, sliceCopy *apps_
 	switch sliceCopy.Spec.Profile {
 	case "Low":
 		// Set the timeout which is 6 weeks for medium profile slices
-		if sliceCopy.Status.Renew || sliceCopy.Status.Expires == nil {
+		if sliceCopy.Spec.Renew || sliceCopy.Status.Expires == nil {
 			sliceCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(1344 * time.Hour),
 			}
@@ -273,7 +280,7 @@ func (t *Handler) setConstrainsByProfile(childNamespace string, sliceCopy *apps_
 		t.clientset.CoreV1().ResourceQuotas(childNamespace).Create(t.lowResourceQuota)
 	case "Medium":
 		// Set the timeout which is 4 weeks for medium profile slices
-		if sliceCopy.Status.Renew || sliceCopy.Status.Expires == nil {
+		if sliceCopy.Spec.Renew || sliceCopy.Status.Expires == nil {
 			sliceCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(672 * time.Hour),
 			}
@@ -285,7 +292,7 @@ func (t *Handler) setConstrainsByProfile(childNamespace string, sliceCopy *apps_
 		t.clientset.CoreV1().ResourceQuotas(childNamespace).Create(t.medResourceQuota)
 	case "High":
 		// Set the timeout which is 2 weeks for high profile slices
-		if sliceCopy.Status.Renew || sliceCopy.Status.Expires == nil {
+		if sliceCopy.Spec.Renew || sliceCopy.Status.Expires == nil {
 			sliceCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(336 * time.Hour),
 			}
@@ -296,7 +303,6 @@ func (t *Handler) setConstrainsByProfile(childNamespace string, sliceCopy *apps_
 		}
 		t.clientset.CoreV1().ResourceQuotas(childNamespace).Create(t.highResourceQuota)
 	}
-	sliceCopy.Status.Renew = false
 	sliceCopyUpdate, _ := t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).UpdateStatus(sliceCopy)
 	return sliceCopyUpdate
 }

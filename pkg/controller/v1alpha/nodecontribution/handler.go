@@ -99,7 +99,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		nodeName = fmt.Sprintf("%s.edge-net.io", NCCopy.GetName())
 	}
 	NCOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(NCOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
-	authorityEnabled := NCOwnerAuthority.Status.Enabled
+	authorityEnabled := NCOwnerAuthority.Spec.Enabled
 	log.Println("AUTHORITY CHECK")
 	// Check if the authority is active
 	if authorityEnabled {
@@ -169,7 +169,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		authorityEnabled = true
 	} else {
 		NCOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(NCOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
-		authorityEnabled = NCOwnerAuthority.Status.Enabled
+		authorityEnabled = NCOwnerAuthority.Spec.Enabled
 	}
 	log.Println("AUTHORITY CHECK")
 	// Check if the authority is active

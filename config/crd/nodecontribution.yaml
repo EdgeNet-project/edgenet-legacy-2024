@@ -1,4 +1,4 @@
-# Copyright 2019 Sorbonne Université
+# Copyright 2020 Sorbonne Université
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,70 +11,83 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: nodecontributions.apps.edgenet.io
 spec:
   group: apps.edgenet.io
-  version: v1alpha
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Address
+          type: string
+          jsonPath: .spec.host
+        - name: Port
+          type: integer
+          jsonPath: .spec.port
+        - name: Enabled
+          type: boolean
+          jsonPath: .spec.enabled
+        - name: Status
+          type: string
+          jsonPath: .status.state
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - host
+                - port
+                - enabled
+              properties:
+                host:
+                  type: string
+                port:
+                  type: integer
+                  minimum: 1
+                user:
+                  type: string
+                password:
+                  type: string
+                enabled:
+                  type: boolean
+                limitations:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - authority
+                    properties:
+                      authority:
+                        type: string
+                      team:
+                        type: string
+                      slice:
+                        type: string
+            status:
+              type: object
+              properties:
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
   scope: Namespaced
-  subresources:
-    status: {}
   names:
     plural: nodecontributions
     singular: nodecontribution
     kind: NodeContribution
     shortNames:
       - nc
-  additionalPrinterColumns:
-    - name: Address
-      type: string
-      JSONPath: .spec.host
-    - name: Port
-      type: integer
-      JSONPath: .spec.port
-    - name: Enabled
-      type: boolean
-      JSONPath: .spec.enabled
-    - name: Status
-      type: string
-      JSONPath: .status.state
-    - name: Age
-      type: date
-      JSONPath: .metadata.creationTimestamp
-  validation:
-    openAPIV3Schema:
-      required:
-        - spec
-      properties:
-        spec:
-          required:
-            - host
-            - port
-            - enabled
-          properties:
-            host:
-              type: string
-            port:
-              type: integer
-              minimum: 1
-            user:
-              type: string
-            password:
-              type: string
-            enabled:
-              type: boolean
-            limitations:
-              type: array
-              items:
-                type: object
-                required:
-                  - authority
-                properties:
-                  authority:
-                    type: string
-                  team:
-                    type: string
-                  slice:
-                    type: string

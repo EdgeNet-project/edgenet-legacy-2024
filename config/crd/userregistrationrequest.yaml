@@ -11,57 +11,76 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: userregistrationrequests.apps.edgenet.io
 spec:
   group: apps.edgenet.io
-  version: v1alpha
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: "First Name"
+          type: string
+          jsonPath: .spec.firstname
+        - name: "Last Name"
+          type: string
+          jsonPath: .spec.lastname
+        - name: Email
+          type: string
+          jsonPath: .spec.email
+        - name: Expires
+          type: string
+          jsonPath: .status.expires
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - firstname
+                - lastname
+                - email
+              properties:
+                firstname:
+                  type: string
+                lastname:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                url:
+                  type: string
+                bio:
+                  type: string
+                approved:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                emailverified:
+                  type: boolean
+                expires:
+                  type: string
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
   scope: Namespaced
-  subresources:
-    status: {}
   names:
     plural: userregistrationrequests
     singular: userregistrationrequest
     kind: UserRegistrationRequest
     shortNames:
       - urr
-  additionalPrinterColumns:
-    - name: "First Name"
-      type: string
-      JSONPath: .spec.firstname
-    - name: "Last Name"
-      type: string
-      JSONPath: .spec.lastname
-    - name: Email
-      type: string
-      JSONPath: .spec.email
-    - name: Expires
-      type: string
-      JSONPath: .status.expires
-    - name: Age
-      type: date
-      JSONPath: .metadata.creationTimestamp
-  validation:
-    openAPIV3Schema:
-      required:
-        - spec
-      properties:
-        spec:
-          required:
-            - firstname
-            - lastname
-            - email
-          properties:
-            firstname:
-              type: string
-            lastname:
-              type: string
-            email:
-              type: string
-              format: email
-            url:
-              type: string
-            bio:
-              type: string

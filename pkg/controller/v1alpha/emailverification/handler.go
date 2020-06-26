@@ -76,7 +76,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		authorityEnabled = true
 	} else {
 		EVOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(EVOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
-		authorityEnabled = EVOwnerAuthority.Status.Enabled
+		authorityEnabled = EVOwnerAuthority.Spec.Enabled
 	}
 	// Check if the authority is active
 	if authorityEnabled {
@@ -88,9 +88,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			// Run timeout goroutine
 			go t.runVerificationTimeout(EVCopy)
 			defer t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).UpdateStatus(EVCopy)
-			if EVCopy.Status.Renew {
-				EVCopy.Status.Renew = false
-			}
 			// Set the email verification timeout which is 24 hours
 			EVCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(24 * time.Hour),
@@ -99,10 +96,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			// Check if the email verification expired
 			if EVCopy.Status.Expires.Time.Sub(time.Now()) >= 0 {
 				go t.runVerificationTimeout(EVCopy)
-				if EVCopy.Status.Renew {
-					EVCopy.Status.Renew = false
-					t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).UpdateStatus(EVCopy)
-				}
 			} else {
 				t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(EVCopy.GetName(), &metav1.DeleteOptions{})
 			}
@@ -134,22 +127,13 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 		authorityEnabled = true
 	} else {
 		EVOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(EVOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
-		authorityEnabled = EVOwnerAuthority.Status.Enabled
+		authorityEnabled = EVOwnerAuthority.Spec.Enabled
 	}
 	// Check whether the authority enabled
 	if authorityEnabled {
 		// Check whether the email verification is done
 		if EVCopy.Spec.Verified {
 			t.objectConfiguration(EVCopy, EVOwnerNamespace.Labels["authority-name"])
-		} else {
-			defer t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).UpdateStatus(EVCopy)
-			// Extend the expiration date
-			if EVCopy.Status.Renew {
-				EVCopy.Status.Expires = &metav1.Time{
-					Time: time.Now().Add(24 * time.Hour),
-				}
-			}
-			EVCopy.Status.Renew = false
 		}
 	} else {
 		t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(EVCopy.GetName(), &metav1.DeleteOptions{})
@@ -189,14 +173,14 @@ func (t *Handler) objectConfiguration(EVCopy *apps_v1alpha.EmailVerification, au
 	// Update the status of request related to email verification
 	if strings.ToLower(EVCopy.Spec.Kind) == "authority" {
 		SRRObj, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().Get(EVCopy.Spec.Identifier, metav1.GetOptions{})
-		SRRObj.Status.EmailVerify = true
+		SRRObj.Status.EmailVerified = true
 		t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(SRRObj)
 		// Send email to inform admins of the cluster
 		t.sendEmail("authority-email-verified-alert", EVCopy.Spec.Identifier, EVCopy.GetNamespace(), SRRObj.Spec.Contact.Username,
 			fmt.Sprintf("%s %s", SRRObj.Spec.Contact.FirstName, SRRObj.Spec.Contact.LastName), "")
 	} else if strings.ToLower(EVCopy.Spec.Kind) == "user" {
 		URRObj, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(EVCopy.GetNamespace()).Get(EVCopy.Spec.Identifier, metav1.GetOptions{})
-		URRObj.Status.EmailVerify = true
+		URRObj.Status.EmailVerified = true
 		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRObj.GetNamespace()).UpdateStatus(URRObj)
 		// Send email to inform authority-admins and authorized users
 		t.sendEmail("user-email-verified-alert", authorityName, EVCopy.GetNamespace(), EVCopy.Spec.Identifier,

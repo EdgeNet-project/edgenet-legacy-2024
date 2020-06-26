@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Sorbonne Université
+Copyright 2020 Sorbonne Université
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -35,6 +36,7 @@ import (
 	"edgenet/pkg/authorization"
 	custconfig "edgenet/pkg/config"
 
+	yaml "gopkg.in/yaml.v2"
 	"k8s.io/api/certificates/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -46,6 +48,12 @@ import (
 	kubeconfigutil "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig"
 	cmdconfig "k8s.io/kubernetes/pkg/kubectl/cmd/config"
 )
+
+// headnode implementation
+type headnode struct {
+	DNS string `yaml:"dns"`
+	IP  string `yaml:"ip"`
+}
 
 // CreateSpecificRoleBindings generates role bindings to allow users to access their user objects and the authority to which they belong
 func CreateSpecificRoleBindings(userCopy *apps_v1alpha.User) {
@@ -234,8 +242,21 @@ func MakeUser(authority, username, email string, clientset kubernetes.Interface)
 		CommonName:   email,
 		Organization: []string{authority},
 	}
-	dnsSANs := []string{"sandbox1.planet-lab.eu"}
-	ipSANs := []net.IP{net.ParseIP("132.227.123.48")}
+
+	file, err := os.Open("../../config/headnode.yaml")
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+		return nil, nil, err
+	}
+	decoder := yaml.NewDecoder(file)
+	var headnode headnode
+	err = decoder.Decode(&headnode)
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+		return nil, nil, err
+	}
+	dnsSANs := []string{headnode.DNS}
+	ipSANs := []net.IP{net.ParseIP(headnode.IP)}
 
 	csr, _ := cert.MakeCSR(key, &subject, dnsSANs, ipSANs)
 
@@ -290,8 +311,8 @@ check:
 	kcmd := cmdconfig.NewCmdConfigSetAuthInfo(buf, pathOptions)
 	kcmd.SetArgs([]string{email})
 	kcmd.Flags().Parse([]string{
-		fmt.Sprintf("--client-certificate=../../assets/certs/%s.crt", email),
-		fmt.Sprintf("--client-key=../../assets/certs/%s.key", email),
+		fmt.Sprintf("--client-certificate=/var/www/edgenet/assets/certs/%s.crt", email),
+		fmt.Sprintf("--client-key=/var/www/edgenet/assets/certs/%s.key", email),
 	})
 
 	if err := kcmd.Execute(); err != nil {
@@ -314,9 +335,9 @@ func MakeConfig(authority, username, email string, clientCert, clientKey []byte,
 	// Put the collected data into new kubeconfig file
 	newKubeConfig := kubeconfigutil.CreateWithCerts(server, cluster, email, CA, clientKey, clientCert)
 	newKubeConfig.Contexts[newKubeConfig.CurrentContext].Namespace = fmt.Sprintf("authority-%s", authority)
-	kubeconfigutil.WriteToDisk(fmt.Sprintf("../../assets/kubeconfigs/edgenet-%s-%s.cfg", authority, username), newKubeConfig)
+	kubeconfigutil.WriteToDisk(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", authority, username), newKubeConfig)
 	// Check whether the creation process is completed
-	_, err = ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet-%s-%s.cfg", authority, username))
+	_, err = ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", authority, username))
 	if err != nil {
 		log.Println(err)
 		return err

@@ -1,4 +1,4 @@
-# Copyright 2019 Sorbonne Université
+# Copyright 2020 Sorbonne Université
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,66 +11,83 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: slices.apps.edgenet.io
 spec:
   group: apps.edgenet.io
-  version: v1alpha
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Type
+          type: string
+          jsonPath: .spec.type
+        - name: Profile
+          type: string
+          jsonPath: .spec.profile
+        - name: Expires
+          type: string
+          jsonPath: .status.expires
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - type
+                - profile
+                - users
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - Classroom
+                    - Experiment
+                    - Testing
+                    - Development
+                profile:
+                  type: string
+                  enum:
+                    - Low
+                    - Medium
+                    - High
+                users:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      authority:
+                        type: string
+                      username:
+                        type: string
+                  minimum: 1
+                description:
+                  type: string
+                renew:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                expires:
+                  type: string
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
   scope: Namespaced
-  subresources:
-    status: {}
   names:
     plural: slices
     singular: slice
     kind: Slice
-  additionalPrinterColumns:
-    - name: Type
-      type: string
-      JSONPath: .spec.type
-    - name: Profile
-      type: string
-      JSONPath: .spec.profile
-    - name: Expires
-      type: string
-      JSONPath: .status.expires
-    - name: Age
-      type: date
-      JSONPath: .metadata.creationTimestamp
-  validation:
-    openAPIV3Schema:
-      required:
-        - spec
-      properties:
-        spec:
-          required:
-            - type
-            - profile
-            - users
-          properties:
-            type:
-              type: string
-              enum:
-                - Classroom
-                - Experiment
-                - Testing
-                - Development
-            profile:
-              type: string
-              enum:
-                - Low
-                - Medium
-                - High
-            users:
-              type: array
-              items:
-                type: object
-                properties:
-                  authority:
-                    type: string
-                  username:
-                    type: string
-              minimum: 1
-            description:
-              type: string

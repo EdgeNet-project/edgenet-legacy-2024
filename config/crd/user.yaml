@@ -45,8 +45,6 @@ spec:
       schema:
         openAPIV3Schema:
           type: object
-          required:
-            - spec
           properties:
             spec:
               type: object
@@ -54,6 +52,7 @@ spec:
                 - firstname
                 - lastname
                 - email
+                - active
               properties:
                 firstname:
                   type: string
@@ -68,6 +67,20 @@ spec:
                   type: string
                 active:
                   type: boolean
+            status:
+              type: object
+              properties:
+                type:
+                  type: string
+                aup:
+                  type: boolean
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
   scope: Namespaced
   names:
     plural: users

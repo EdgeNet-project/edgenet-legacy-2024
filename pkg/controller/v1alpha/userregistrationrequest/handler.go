@@ -86,14 +86,19 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	}
 	URROwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(URROwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	// Check if the authority is active
-	if URROwnerAuthority.Status.Enabled {
+	if URROwnerAuthority.Spec.Enabled {
+		if URRCopy.Spec.Approved {
+			created := !t.createUser(URRCopy, URROwnerNamespace.Labels["authority-name"])
+			if created {
+				return
+			}
+		}
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		if URRCopy.Status.Expires == nil {
 			// Run timeout goroutine
 			go t.runApprovalTimeout(URRCopy)
 			defer t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(URRCopy)
-			URRCopy.Status.Approved = false
 			// Set the approval timeout which is 72 hours
 			URRCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(72 * time.Hour),
@@ -112,43 +117,26 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	log.Info("URRHandler.ObjectUpdated")
 	// Create a copy of the user registration request object to make changes on it
 	URRCopy := obj.(*apps_v1alpha.UserRegistrationRequest).DeepCopy()
-	statusChange := false
+	changeStatus := false
 	URROwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(URRCopy.GetNamespace(), metav1.GetOptions{})
 	URROwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(URROwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
-	if URROwnerAuthority.Status.Enabled {
+	if URROwnerAuthority.Spec.Enabled {
 		// Check again if the email address is already taken
 		exists, message := t.checkDuplicateObject(URRCopy, URROwnerNamespace.Labels["authority-name"])
 		if !exists {
 			// Check whether the request for user registration approved
-			if URRCopy.Status.Approved {
-				// Create a user on authority
-				user := apps_v1alpha.User{}
-				user.SetName(URRCopy.GetName())
-				user.Spec.Bio = URRCopy.Spec.Bio
-				user.Spec.Email = URRCopy.Spec.Email
-				user.Spec.FirstName = URRCopy.Spec.FirstName
-				user.Spec.LastName = URRCopy.Spec.LastName
-				user.Spec.URL = URRCopy.Spec.URL
-				user.Spec.Active = true
-				_, err := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Create(user.DeepCopy())
-				if err == nil {
-					t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})
-				} else {
-					t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "", "user-creation-failure")
-					statusChange = true
-					URRCopy.Status.State = failure
-					URRCopy.Status.Message = []string{"User creation failed", err.Error()}
-				}
-			} else if !URRCopy.Status.Approved && URRCopy.Status.State == failure {
+			if URRCopy.Spec.Approved {
+				changeStatus = t.createUser(URRCopy, URROwnerNamespace.Labels["authority-name"])
+			} else if !URRCopy.Spec.Approved && URRCopy.Status.State == failure {
 				URRCopy = t.setEmailVerification(URRCopy, URROwnerNamespace.Labels["authority-name"])
-				statusChange = true
+				changeStatus = true
 			}
 		} else if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
 			URRCopy.Status.State = failure
 			URRCopy.Status.Message = message
-			statusChange = true
+			changeStatus = true
 		}
-		if statusChange {
+		if changeStatus {
 			t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(URRCopy)
 		}
 	} else {
@@ -160,6 +148,29 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 func (t *Handler) ObjectDeleted(obj interface{}) {
 	log.Info("URRHandler.ObjectDeleted")
 	// Mail notification, TBD
+}
+
+// Create a user on authority
+func (t *Handler) createUser(URRCopy *apps_v1alpha.UserRegistrationRequest, authorityName string) bool {
+	failed := false
+	user := apps_v1alpha.User{}
+	user.SetName(URRCopy.GetName())
+	user.Spec.Bio = URRCopy.Spec.Bio
+	user.Spec.Email = URRCopy.Spec.Email
+	user.Spec.FirstName = URRCopy.Spec.FirstName
+	user.Spec.LastName = URRCopy.Spec.LastName
+	user.Spec.URL = URRCopy.Spec.URL
+	user.Spec.Active = true
+	_, err := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Create(user.DeepCopy())
+	if err == nil {
+		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})
+	} else {
+		t.sendEmail(URRCopy, authorityName, "", "user-creation-failure")
+		failed = true
+		URRCopy.Status.State = failure
+		URRCopy.Status.Message = []string{"User creation failed", err.Error()}
+	}
+	return failed
 }
 
 // setEmailVerification to provide one-time code for verification
@@ -238,7 +249,7 @@ func (t *Handler) runApprovalTimeout(URRCopy *apps_v1alpha.UserRegistrationReque
 						continue
 					}
 
-					if updatedURR.Status.Approved == true {
+					if updatedURR.Spec.Approved == true {
 						registrationApproved <- true
 						break
 					} else if updatedURR.Status.Expires != nil {

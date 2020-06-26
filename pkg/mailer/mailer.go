@@ -456,7 +456,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 	headers += "Content-Disposition: attachment;filename=\"edgenet-kubeconfig.cfg\"\r\n"
 	// Read the kubeconfig file created for web authentication
 	// It will be in the attachment of email
-	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet-authority-%s-%s.cfg", registrationData.CommonData.Authority,
+	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", registrationData.CommonData.Authority,
 		registrationData.CommonData.Username))
 	if fileErr != nil {
 		log.Panic(fileErr)

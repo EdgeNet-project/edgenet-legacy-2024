@@ -1,4 +1,4 @@
-# Copyright 2019 Sorbonne Université
+# Copyright 2020 Sorbonne Université
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ spec:
           jsonPath: .spec.address.country
         - name: Enabled
           type: boolean
-          jsonPath: .status.enabled
+          jsonPath: .spec.enabled
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -60,6 +60,7 @@ spec:
                 - url
                 - address
                 - contact
+                - enabled
               properties:
                 fullname:
                   type: string
@@ -106,11 +107,11 @@ spec:
                       type: string
                     phone:
                       type: string
+                enabled:
+                  type: boolean
             status:
               type: object
               properties:
-                enabled:
-                  type: boolean
                 state:
                   type: string
                 message:

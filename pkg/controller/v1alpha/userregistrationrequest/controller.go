@@ -20,11 +20,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"reflect"
 	"syscall"
 	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
 	appsinformer_v1 "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
 
@@ -90,13 +88,11 @@ func Start() {
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.UserRegistrationRequest).Status, newObj.(*apps_v1alpha.UserRegistrationRequest).Status) {
-				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
-				event.function = update
-				log.Infof("Update userregistrationrequest: %s", event.key)
-				if err == nil {
-					queue.Add(event)
-				}
+			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
+			event.function = update
+			log.Infof("Update userregistrationrequest: %s", event.key)
+			if err == nil {
+				queue.Add(event)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {

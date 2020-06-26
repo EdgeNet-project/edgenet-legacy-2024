@@ -74,7 +74,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	TRQAuthority, err := t.edgenetClientset.AppsV1alpha().Authorities().Get(TRQCopy.GetName(), metav1.GetOptions{})
 	if err == nil {
 		// Check if the authority is active
-		if TRQAuthority.Status.Enabled && TRQCopy.Spec.Enabled {
+		if TRQAuthority.Spec.Enabled && TRQCopy.Spec.Enabled {
 			// If the service restarts, it creates all objects again
 			// Because of that, this section covers a variety of possibilities
 			TRQCopy.Status.State = success
@@ -109,7 +109,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	if err == nil {
 		fieldUpdated := updated.(fields)
 		// Check if the authority is active
-		if TRQAuthority.Status.Enabled && TRQCopy.Spec.Enabled {
+		if TRQAuthority.Spec.Enabled && TRQCopy.Spec.Enabled {
 			// Start procedures if the spec changes
 			if fieldUpdated.spec {
 				TRQCopy, _ = t.ResourceConsumptionControl(TRQCopy, 0, 0)
@@ -156,10 +156,10 @@ func (t *Handler) prohibitResourceUsage(TRQCopy *apps_v1alpha.TotalResourceQuota
 		TRQCopy.Status.State = failure
 		TRQCopy.Status.Message = []string{}
 	}
-	if !TRQAuthority.Status.Enabled {
+	if !TRQAuthority.Spec.Enabled {
 		TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Authority disabled")
 	}
-	if !TRQAuthority.Status.Enabled {
+	if !TRQAuthority.Spec.Enabled {
 		TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Total resource quota disabled")
 	}
 	// Delete all slices of authority

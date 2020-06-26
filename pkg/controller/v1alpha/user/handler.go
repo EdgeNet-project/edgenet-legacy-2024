@@ -94,7 +94,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		t.clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Delete(userCopy.GetName(), &metav1.DeleteOptions{})
 	}
 	// Check if the authority is active
-	if (userOwnerAuthority.Status.Enabled && userCopy.Spec.Active) || (userOwnerAuthority.Status.Enabled && userCopy.Spec.Active && !errors.IsNotFound(serviceAccountErr)) {
+	if (userOwnerAuthority.Spec.Enabled && userCopy.Spec.Active) || (userOwnerAuthority.Spec.Enabled && userCopy.Spec.Active && !errors.IsNotFound(serviceAccountErr)) {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		_, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
@@ -107,7 +107,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Create(userAUP)
 			// Create user-specific roles regarding the resources of authority, users, and acceptableusepolicies
 			policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"authorities"}, ResourceNames: []string{userOwnerNamespace.Labels["authority-name"]},
-				Verbs: []string{"get"}}, {APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"get"}}}
+				Verbs: []string{"get"}}, {APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"get", "update", "patch"}}}
 			userRole := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("user-%s", userCopy.GetName()), OwnerReferences: userOwnerReferences},
 				Rules: policyRule}
 			_, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(userRole)
@@ -144,6 +144,11 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				}
 			}
 			defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+			if userOwnerAuthority.Spec.Contact.Username == userCopy.GetName() && userOwnerAuthority.Spec.Contact.Email == userCopy.GetName() {
+				userCopy.Status.Type = "admin"
+			} else {
+				userCopy.Status.Type = "user"
+			}
 			// Create the client certs for permanent use
 			// In next versions, there will be a method to renew the certs for security
 			crt, key, err := registration.MakeUser(userOwnerNamespace.Labels["authority-name"], userCopy.GetName(), userCopy.Spec.Email, t.clientset)
@@ -151,7 +156,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				log.Println(err.Error())
 				userCopy.Status.State = failure
 				userCopy.Status.Message = []string{fmt.Sprintf("Client cert generation failed for user %s", userCopy.GetName())}
-				t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
 				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "", "user-cert-failure")
 				return
 			}
@@ -160,15 +164,19 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				log.Println(err.Error())
 				userCopy.Status.State = failure
 				userCopy.Status.Message = []string{fmt.Sprintf("Kubeconfig file creation failed for user %s", userCopy.GetName())}
-				t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
 				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "", "user-kubeconfig-failure")
 			}
 			userCopy.Status.State = success
 			userCopy.Status.Message = []string{"Client cert of the user generated"}
 			t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "", "user-registration-successful")
+
+			slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(metav1.ListOptions{})
+			teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(userCopy.GetNamespace()).List(metav1.ListOptions{})
+			t.createRoleBindings(userCopy, slicesRaw, teamsRaw, userOwnerAuthority.GetName())
+			t.createAUPRoleBinding(userCopy)
 		}
-	} else if userOwnerAuthority.Status.Enabled == false && userCopy.Spec.Active == true {
-		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+	} else if userOwnerAuthority.Spec.Enabled == false && userCopy.Spec.Active == true {
+		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
 		userCopy.Spec.Active = false
 	}
 }
@@ -205,10 +213,10 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			}
 		}
 	}
-	if userOwnerAuthority.Status.Enabled {
+	if userOwnerAuthority.Spec.Enabled {
 		if fieldUpdated.email {
 			userCopy.Spec.Active = false
-			userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+			userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
 			if err == nil {
 				userCopy = userCopyUpdated
 			} else {
@@ -243,8 +251,8 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 				t.createAUPRoleBinding(userCopy)
 			}
 		}
-	} else if userOwnerAuthority.Status.Enabled == false && userCopy.Spec.Active == true {
-		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+	} else if userOwnerAuthority.Spec.Enabled == false && userCopy.Spec.Active == true {
+		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
 		userCopy.Spec.Active = false
 	}
 }

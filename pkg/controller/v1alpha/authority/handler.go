@@ -99,7 +99,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	if exists {
 		authorityCopy.Status.State = failure
 		authorityCopy.Status.Message = []string{message}
-		authorityCopy.Status.Enabled = false
+		authorityCopy.Spec.Enabled = false
 		t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
 		return
 	}
@@ -116,7 +116,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	if exists {
 		authorityCopy.Status.State = failure
 		authorityCopy.Status.Message = []string{message}
-		authorityCopy.Status.Enabled = false
+		authorityCopy.Spec.Enabled = false
 		authorityCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
 		if err == nil {
 			authorityCopy = authorityCopyUpdated
@@ -125,7 +125,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		authorityCopy = t.authorityPreparation(authorityCopy)
 	}
 	// Check whether the authority disabled
-	if authorityCopy.Status.Enabled == false {
+	if authorityCopy.Spec.Enabled == false {
 		// Delete all RoleBindings, Teams, and Slices in the namespace of authority
 		t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", authorityCopy.GetName())).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
 		t.edgenetClientset.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", authorityCopy.GetName())).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
@@ -135,7 +135,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		for _, user := range usersRaw.Items {
 			userCopy := user.DeepCopy()
 			userCopy.Spec.Active = false
-			t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+			t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
 			t.clientset.RbacV1().ClusterRoleBindings().Delete(fmt.Sprintf("%s-%s-for-authority", userCopy.GetNamespace(), userCopy.GetName()), &metav1.DeleteOptions{})
 		}
 	}
@@ -177,7 +177,6 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		}
 		t.createTotalResourceQuota(authorityCopy)
 		// Automatically enable authority and update authority status
-		authorityCopy.Status.Enabled = true
 		authorityCopy.Status.State = established
 		authorityCopy.Status.Message = []string{"Authority successfully established"}
 		enableAuthorityAdmin := func() {

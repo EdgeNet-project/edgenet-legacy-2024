@@ -96,16 +96,11 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	teamOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(teamCopy.GetNamespace(), metav1.GetOptions{})
 	teamOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(teamOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	// Check if the authority is active
-	if teamOwnerAuthority.Status.Enabled && !teamCopy.Status.Enabled {
+	if teamOwnerAuthority.Spec.Enabled && teamCopy.Spec.Enabled {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		_, err := t.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("%s-team-%s", teamCopy.GetNamespace(), teamCopy.GetName()), metav1.GetOptions{})
 		if err != nil {
-			// When a team is deleted, the owner references feature allows the namespace to be automatically removed. Additionally,
-			// when all users who participate in the team are disabled, the team is automatically removed because of the owner references.
-			// Enable the team
-			teamCopy.Status.Enabled = true
-			defer t.edgenetClientset.AppsV1alpha().Teams(teamCopy.GetNamespace()).UpdateStatus(teamCopy)
 			// Each namespace created by teams have an indicator as "team" to provide singularity
 			teamChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-team-%s", teamCopy.GetNamespace(), teamCopy.GetName())}}
 			// Namespace labels indicate this namespace created by a team, not by a authority or slice
@@ -118,8 +113,12 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				t.edgenetClientset.AppsV1alpha().Teams(teamCopy.GetNamespace()).Delete(teamCopy.GetName(), &metav1.DeleteOptions{})
 				return
 			}
+			// Delete all existing role bindings in the team (child) namespace
+			t.clientset.RbacV1().RoleBindings(teamChildNamespaceCreated.GetName()).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
+			// Create rolebindings according to the users who participate in the team and are authority-admin and authorized users of the authority
+			t.runUserInteractions(teamCopy, teamChildNamespaceCreated.GetName(), teamOwnerNamespace.Labels["authority-name"], teamOwnerNamespace.Labels["owner"], teamOwnerNamespace.Labels["owner-name"], "team-creation", true)
 		}
-	} else if !teamOwnerAuthority.Status.Enabled {
+	} else if !teamOwnerAuthority.Spec.Enabled {
 		t.edgenetClientset.AppsV1alpha().Teams(teamCopy.GetNamespace()).Delete(teamCopy.GetName(), &metav1.DeleteOptions{})
 	}
 }
@@ -135,12 +134,12 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", teamCopy.GetNamespace(), teamCopy.GetName())
 	fieldUpdated := updated.(fields)
 	// Check if the authority and team are active
-	if teamOwnerAuthority.Status.Enabled && teamCopy.Status.Enabled {
-		if fieldUpdated.users.status || fieldUpdated.enabled {
+	if teamOwnerAuthority.Spec.Enabled && teamCopy.Spec.Enabled {
+		if fieldUpdated.users.status {
 			// Delete all existing role bindings in the team (child) namespace
 			t.clientset.RbacV1().RoleBindings(teamChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
 			// Create rolebindings according to the users who participate in the team and are authority-admin and authorized users of the authority
-			t.runUserInteractions(teamCopy, teamChildNamespaceStr, teamOwnerNamespace.Labels["authority-name"], teamOwnerNamespace.Labels["owner"], teamOwnerNamespace.Labels["owner-name"], "team-creation", fieldUpdated.enabled)
+			t.runUserInteractions(teamCopy, teamChildNamespaceStr, teamOwnerNamespace.Labels["authority-name"], teamOwnerNamespace.Labels["owner"], teamOwnerNamespace.Labels["owner-name"], "team-creation", false)
 			// Send emails to those who have been added to, or removed from the slice.
 			var deletedUserList []apps_v1alpha.TeamUsers
 			json.Unmarshal([]byte(fieldUpdated.users.deleted), &deletedUserList)
@@ -157,10 +156,10 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 				}
 			}
 		}
-	} else if teamOwnerAuthority.Status.Enabled && !teamCopy.Status.Enabled {
+	} else if teamOwnerAuthority.Spec.Enabled && !teamCopy.Spec.Enabled {
 		t.edgenetClientset.AppsV1alpha().Slices(teamChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
 		t.clientset.RbacV1().RoleBindings(teamChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
-	} else if !teamOwnerAuthority.Status.Enabled {
+	} else if !teamOwnerAuthority.Spec.Enabled {
 		t.edgenetClientset.AppsV1alpha().Teams(teamChildNamespaceStr).Delete(teamCopy.GetName(), &metav1.DeleteOptions{})
 	}
 }

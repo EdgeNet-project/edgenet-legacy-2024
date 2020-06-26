@@ -118,13 +118,9 @@ func Start() {
 			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 			event.function = update
 			// Find out whether the fields updated
-			event.change.enabled = false
 			event.change.users.status = false
 			event.change.users.deleted = ""
 			event.change.users.added = ""
-			if oldObj.(*apps_v1alpha.Team).Status.Enabled != newObj.(*apps_v1alpha.Team).Status.Enabled {
-				event.change.enabled = true
-			}
 			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.Team).Spec.Users, newObj.(*apps_v1alpha.Team).Spec.Users) {
 				event.change.users.status = true
 				sliceDeleted, sliceAdded := dry(oldObj.(*apps_v1alpha.Team).Spec.Users, newObj.(*apps_v1alpha.Team).Spec.Users)
@@ -156,7 +152,7 @@ func Start() {
 			event.change.object.name = obj.(*apps_v1alpha.Team).GetName()
 			event.change.object.ownerNamespace = obj.(*apps_v1alpha.Team).GetNamespace()
 			event.change.object.childNamespace = fmt.Sprintf("%s-team-%s", obj.(*apps_v1alpha.Team).GetNamespace(), obj.(*apps_v1alpha.Team).GetName())
-			event.change.enabled = obj.(*apps_v1alpha.Team).Status.Enabled
+			event.change.enabled = obj.(*apps_v1alpha.Team).Spec.Enabled
 			log.Infof("Delete team: %s", event.key)
 			if err == nil {
 				queue.Add(event)

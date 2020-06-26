@@ -69,7 +69,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	// Create a copy of the authority request object to make changes on it
 	authorityRequestCopy := obj.(*apps_v1alpha.AuthorityRequest).DeepCopy()
 	defer t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(authorityRequestCopy)
-	authorityRequestCopy.Status.Approved = false
 	// Check if the email address of user or authority name is already taken
 	exists, message := t.checkDuplicateObject(authorityRequestCopy)
 	if exists {
@@ -82,6 +81,12 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			Time: time.Now().Add(24 * time.Hour),
 		}
 		return
+	}
+	if authorityRequestCopy.Spec.Approved {
+		created := !t.createAuthority(authorityRequestCopy)
+		if created {
+			return
+		}
 	}
 	// If the service restarts, it creates all objects again
 	// Because of that, this section covers a variety of possibilities
@@ -103,39 +108,23 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	log.Info("authorityRequestHandler.ObjectUpdated")
 	// Create a copy of the authority request object to make changes on it
 	authorityRequestCopy := obj.(*apps_v1alpha.AuthorityRequest).DeepCopy()
-	statusChange := false
+	changeStatus := false
 	// Check if the email address of user or authority name is already taken
 	exists, message := t.checkDuplicateObject(authorityRequestCopy)
 	if !exists {
 		// Check whether the request for authority creation approved
-		if authorityRequestCopy.Status.Approved {
-			// Create a authority on the cluster
-			authority := apps_v1alpha.Authority{}
-			authority.SetName(authorityRequestCopy.GetName())
-			authority.Spec.Address = authorityRequestCopy.Spec.Address
-			authority.Spec.Contact = authorityRequestCopy.Spec.Contact
-			authority.Spec.FullName = authorityRequestCopy.Spec.FullName
-			authority.Spec.ShortName = authorityRequestCopy.Spec.ShortName
-			authority.Spec.URL = authorityRequestCopy.Spec.URL
-			_, err := t.edgenetClientset.AppsV1alpha().Authorities().Create(authority.DeepCopy())
-			if err == nil {
-				t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(authorityRequestCopy.GetName(), &metav1.DeleteOptions{})
-			} else {
-				t.sendEmail(authorityRequestCopy, "", "authority-creation-failure")
-				statusChange = true
-				authorityRequestCopy.Status.State = failure
-				authorityRequestCopy.Status.Message = []string{"Authority establishment failed", err.Error()}
-			}
-		} else if !authorityRequestCopy.Status.Approved && authorityRequestCopy.Status.State == failure {
+		if authorityRequestCopy.Spec.Approved {
+			changeStatus = t.createAuthority(authorityRequestCopy)
+		} else if !authorityRequestCopy.Spec.Approved && authorityRequestCopy.Status.State == failure {
 			authorityRequestCopy = t.setEmailVerification(authorityRequestCopy)
-			statusChange = true
+			changeStatus = true
 		}
 	} else if exists && !reflect.DeepEqual(authorityRequestCopy.Status.Message, message) {
 		authorityRequestCopy.Status.State = failure
 		authorityRequestCopy.Status.Message = message
-		statusChange = true
+		changeStatus = true
 	}
-	if statusChange {
+	if changeStatus {
 		t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(authorityRequestCopy)
 	}
 }
@@ -144,6 +133,29 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 func (t *Handler) ObjectDeleted(obj interface{}) {
 	log.Info("authorityRequestHandler.ObjectDeleted")
 	// Mail notification, TBD
+}
+
+func (t *Handler) createAuthority(authorityRequestCopy *apps_v1alpha.AuthorityRequest) bool {
+	failed := false
+	// Create a authority on the cluster
+	authority := apps_v1alpha.Authority{}
+	authority.SetName(authorityRequestCopy.GetName())
+	authority.Spec.Address = authorityRequestCopy.Spec.Address
+	authority.Spec.Contact = authorityRequestCopy.Spec.Contact
+	authority.Spec.FullName = authorityRequestCopy.Spec.FullName
+	authority.Spec.ShortName = authorityRequestCopy.Spec.ShortName
+	authority.Spec.URL = authorityRequestCopy.Spec.URL
+	authority.Spec.Enabled = true
+	_, err := t.edgenetClientset.AppsV1alpha().Authorities().Create(authority.DeepCopy())
+	if err == nil {
+		t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(authorityRequestCopy.GetName(), &metav1.DeleteOptions{})
+	} else {
+		t.sendEmail(authorityRequestCopy, "", "authority-creation-failure")
+		failed = true
+		authorityRequestCopy.Status.State = failure
+		authorityRequestCopy.Status.Message = []string{"Authority establishment failed", err.Error()}
+	}
+	return failed
 }
 
 // setEmailVerification to provide one-time code for verification
@@ -222,7 +234,7 @@ func (t *Handler) runApprovalTimeout(authorityRequestCopy *apps_v1alpha.Authorit
 						continue
 					}
 
-					if updatedauthorityRequest.Status.Approved == true {
+					if updatedauthorityRequest.Spec.Approved == true {
 						registrationApproved <- true
 						break
 					} else if updatedauthorityRequest.Status.Expires != nil {
