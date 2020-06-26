@@ -32,7 +32,7 @@ edgenet:<user>:<resource>
 For user registration to work we need the anonymous user to have access to the following verbs/resources:
 
 - get/list authorities
-- create authorityregistrationrequests
+- create authorityrequest
 - create userregistrationrequests
 - patch emailverification
 

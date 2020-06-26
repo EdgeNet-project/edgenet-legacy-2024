@@ -1,12 +1,12 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: edgenet:anonymous:authorityregistrationrequests
+  name: edgenet:anonymous:authorityrequest
 subjects:
 - kind: User
   name: system:anonymous
   apiGroup: rbac.authorization.k8s.io
 roleRef:
   kind: ClusterRole
-  name: edgenet:create:authorityregistrationrequests
+  name: edgenet:create:authorityrequest
   apiGroup: rbac.authorization.k8s.io
