@@ -1,0 +1,8 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: edgenet:create:userregistrationrequests
+rules:
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["userregistrationrequests"]
+  verbs: ["create"]
