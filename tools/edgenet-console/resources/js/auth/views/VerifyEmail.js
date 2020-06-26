@@ -5,6 +5,8 @@ import axios from "axios";
 import { EdgenetContext } from "../../edgenet";
 
 import Header from "./Header";
+import Loading from "./Loading";
+import Footer from "./Footer";
 
 const VerifyEmail = () => {
     const { api } = useContext(EdgenetContext)
@@ -18,16 +20,28 @@ const VerifyEmail = () => {
             [{ op: 'replace', path: '/spec/verified', value: true }],
             { headers: { 'Content-Type': 'application/json-patch+json' } }
         )
-            .then(res => console.log(res))
+            .then(res => {
+                setVerified(true)
+                console.log(res)
+            })
             .catch(err => console.log(err.message))
     })
 
-    return (
-        <Box align="center">
-            <Header title="E-Mail verification" />
-            Please wait...
-        </Box>
-    );
+    if (!verified) {
+        return <Loading title="E-Mail verification" />
+    } else {
+        return (
+            <Box align="center">
+                <Header title="E-Mail verification" />
+                <Box pad={{vertical:'medium'}}>
+                    Your email has been verified, Thank you!<br/>
+                    We will review your information and come back to you shortly!
+                </Box>
+                <Footer />
+            </Box>
+        );
+    }
+
 }
 
 export default VerifyEmail;

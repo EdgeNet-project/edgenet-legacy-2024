@@ -10,6 +10,7 @@ import SignupUser from "./SignupUser";
 import SignupAuthority from "./SignuAuthority";
 import Loading from "./Loading";
 import Header from "./Header";
+import Footer from "./Footer";
 
 class Signup extends React.Component {
 
@@ -164,9 +165,7 @@ class Signup extends React.Component {
                                 <Button type="submit" primary label="Signup" />
                             </Box>
                         </Box>
-                        <Box direction="row" >
-                            <Link to="/">Go back</Link>
-                        </Box>
+                        <Footer />
                         {message && <Text color="status-critical">{message}</Text>}
                     </Box>
                 </Form>

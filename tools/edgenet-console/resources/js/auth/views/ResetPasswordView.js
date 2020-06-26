@@ -5,6 +5,7 @@ import { LoginInput, PasswordInput } from '../components';
 
 import { AuthContext } from "../AuthContext";
 import Header from "./Header";
+import Footer from "./Footer";
 
 class ResetPasswordView extends React.Component {
 
@@ -49,6 +50,7 @@ class ResetPasswordView extends React.Component {
                     <Box direction="row">
                         <Button type="submit" primary label="Reset Password" disabled={loading} />
                     </Box>
+                    <Footer />
                     {message && <Text color="status-critical">{message}</Text>}
                 </Box>
             </Form>

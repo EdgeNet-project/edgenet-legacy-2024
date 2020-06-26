@@ -5,6 +5,7 @@ import { LoginInput } from '../components';
 
 import { AuthContext } from "../AuthContext";
 import Header from "./Header";
+import Footer from "./Footer";
 
 class ForgotPasswordView extends React.Component {
 
@@ -33,6 +34,7 @@ class ForgotPasswordView extends React.Component {
                     <Box direction="row">
                         <Button type="submit" primary label="Submit" disabled={loading} />
                     </Box>
+                    <Footer />
                     {message && <Text color="status-critical">{message}</Text>}
                 </Box>
             </Form>

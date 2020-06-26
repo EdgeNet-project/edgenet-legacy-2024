@@ -23,12 +23,7 @@ class SignupController extends Controller
 
     public function __construct(Client $client)
     {
-
-        //$this->api = config('edgenet.api');
-        //$this->token = config('edgenet.token');
         $this->client = $client;
-
-
     }
 
     public function signup(Request $request)
@@ -49,26 +44,43 @@ class SignupController extends Controller
             return response()->json(['message' => 'User already registered'], 422);
         }
 
-        if (!$request->input('authority')) {
-            if (!$this->createKubernetesAuthority($request)) {
+        $authority = $request->input('authority');
+        $username = $this->generatName($request->input('firstname') . $request->input('lastname'));
+
+        if (!$authority) {
+            $request->validate([
+                'fullname' => ['required', 'string', 'max:255'],
+                'shortname' => ['required', 'string', 'max:255'],
+            ]);
+
+            $authority = $this->generatName($request->input('shortname'));
+
+            if (!$this->createKubernetesAuthority($authority, $username, $request)) {
                 return response()->json(['message' => 'Can\'t create authority (kubernetes)'], 422);
             }
         } else {
 
-            if (!$this->verifyAuthority($request->input('authority'))) {
+            if (!$this->verifyAuthority($authority)) {
                 return response()->json(['message' => 'Authority does not exist'], 422);
             }
 
-            if (!$this->createKubernetesUser($request)) {
+            if (!$this->createKubernetesUser($authority, $username, $request)) {
                 return response()->json(['message' => 'Can\'t create user (kubernetes)'], 422);
             }
         }
 
+        /**
+         * Creates local user
+         */
         event(new Registered(
             $user = User::create([
                 'firstname' => $request->input('firstname'),
                 'lastname' => $request->input('lastname'),
                 'email' => $request->input('email'),
+
+                'name' => $username,
+                'namespace' => $authority,
+
                 'password' => Hash::make($request->input('password')),
             ])
         ));
@@ -99,13 +111,13 @@ class SignupController extends Controller
         return false;
     }
 
-    protected function createKubernetesAuthority($request)
+    protected function createKubernetesAuthority($authority, $username, $request)
     {
         $authoritySpec = [
             'apiVersion' => 'apps.edgenet.io/v1alpha',
             'kind' => 'AuthorityRequest',
             'metadata' => [
-                'name' => $this->generatName($request->input('shortname')),
+                'name' => $authority,
             ],
             'spec' => [
                 'fullname' => $request->input('fullname'),
@@ -120,7 +132,7 @@ class SignupController extends Controller
                     'country'  => $request->input('country'),
                 ],
                 'contact' => [
-                    'username' => $this->generatName($request->input('firstname') . $request->input('lastname')),
+                    'username' => $username,
                     'firstname' => $request->input('firstname'),
                     'lastname' => $request->input('lastname'),
                     'email' => $request->input('email'),
@@ -157,9 +169,9 @@ class SignupController extends Controller
     }
 
 
-    private function createKubernetesUser($request)
+    private function createKubernetesUser($authority, $username, $request)
     {
-        $namespace = 'authority-' . $request->input('authority');
+        $namespace = 'authority-' . $authority;
 
         $roles = ['User'];
 
@@ -167,7 +179,7 @@ class SignupController extends Controller
             'apiVersion' => 'apps.edgenet.io/v1alpha',
             'kind' => 'UserRegistrationRequest',
             'metadata' => [
-                'name' => $this->generatName($request->input('firstname') . $request->input('lastname')),
+                'name' => $username,
                 'namespace' => $namespace
             ],
             'spec' => [
@@ -178,7 +190,6 @@ class SignupController extends Controller
                 'bio' => $request->input('bio','-'),
                 'url' => $request->input('url','-'),
                 'roles' => $roles,
-                'password' => ''
             ],
 
         ];
