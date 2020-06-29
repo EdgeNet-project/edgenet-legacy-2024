@@ -61,19 +61,19 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 			"cpu":                           resource.MustParse("5m"),
 			"memory":                        resource.MustParse("1Mi"),
 			"requests.storage":              resource.MustParse("1Mi"),
-			"pods":                          resource.Quantity{Format: "0"},
-			"count/persistentvolumeclaims":  resource.Quantity{Format: "0"},
-			"count/services":                resource.Quantity{Format: "0"},
-			"count/configmaps":              resource.Quantity{Format: "0"},
-			"count/replicationcontrollers":  resource.Quantity{Format: "0"},
-			"count/deployments.apps":        resource.Quantity{Format: "0"},
-			"count/deployments.extensions":  resource.Quantity{Format: "0"},
-			"count/replicasets.apps":        resource.Quantity{Format: "0"},
-			"count/replicasets.extensions":  resource.Quantity{Format: "0"},
-			"count/statefulsets.apps":       resource.Quantity{Format: "0"},
-			"count/statefulsets.extensions": resource.Quantity{Format: "0"},
-			"count/jobs.batch":              resource.Quantity{Format: "0"},
-			"count/cronjobs.batch":          resource.Quantity{Format: "0"},
+			"pods":                          {Format: "0"},
+			"count/persistentvolumeclaims":  {Format: "0"},
+			"count/services":                {Format: "0"},
+			"count/configmaps":              {Format: "0"},
+			"count/replicationcontrollers":  {Format: "0"},
+			"count/deployments.apps":        {Format: "0"},
+			"count/deployments.extensions":  {Format: "0"},
+			"count/replicasets.apps":        {Format: "0"},
+			"count/replicasets.extensions":  {Format: "0"},
+			"count/statefulsets.apps":       {Format: "0"},
+			"count/statefulsets.extensions": {Format: "0"},
+			"count/jobs.batch":              {Format: "0"},
+			"count/cronjobs.batch":          {Format: "0"},
 		},
 	}
 }
@@ -181,7 +181,7 @@ func (t *Handler) runUserInteractions(teamCopy *apps_v1alpha.Team, teamChildName
 		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", teamUser.Authority)).Get(teamUser.Username, metav1.GetOptions{})
 		if err == nil && user.Status.Active && user.Status.AUP {
 			if operation == "team-creation" {
-				registration.CreateRoleBindingsByRoles(user.DeepCopy(), teamChildNamespaceStr, "Team")
+				registration.CreateRoleBindingsByRoles(user.DeepCopy(), teamChildNamespaceStr, "Team", t.clientset)
 			}
 
 			if !(operation == "team-creation" && !enabled) {
@@ -194,7 +194,7 @@ func (t *Handler) runUserInteractions(teamCopy *apps_v1alpha.Team, teamChildName
 	if err == nil {
 		for _, userRow := range userRaw.Items {
 			if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "admin") || containsRole(userRow.Spec.Roles, "manager")) {
-				registration.CreateRoleBindingsByRoles(userRow.DeepCopy(), teamChildNamespaceStr, "Team")
+				registration.CreateRoleBindingsByRoles(userRow.DeepCopy(), teamChildNamespaceStr, "Team", t.clientset)
 			}
 		}
 	}

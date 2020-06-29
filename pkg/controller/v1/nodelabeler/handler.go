@@ -1,6 +1,7 @@
 package nodelabeler
 
 import (
+	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/node"
 
 	log "github.com/Sirupsen/logrus"
@@ -10,21 +11,26 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) error
 	SetNodeGeolocation(obj interface{})
 }
 
 // Handler is a sample implementation of Handler
-type Handler struct{}
+type Handler struct {
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
+}
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) error {
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 	log.Info("Handler.Init")
 	return nil
 }
 
 // SetNodeGeolocation is called when an object is created or updated
-func (t *Handler) SetNodeGeolocation(obj interface{}, clientset kubernetes.Interface) {
+func (t *Handler) SetNodeGeolocation(obj interface{}) {
 	log.Info("Handler.ObjectCreated")
 	// Get internal and external IP addresses of the node
 	internalIP, externalIP := node.GetNodeIPAddresses(obj.(*api_v1.Node))
@@ -32,12 +38,12 @@ func (t *Handler) SetNodeGeolocation(obj interface{}, clientset kubernetes.Inter
 	// Check if the external IP exists to use it in the first place
 	if externalIP != "" {
 		log.Infof("External IP: %s", externalIP)
-		result, _ = node.GetGeolocationByIP(obj.(*api_v1.Node).Name, externalIP, clientset)
+		result, _ = node.GetGeolocationByIP(obj.(*api_v1.Node).Name, externalIP, t.clientset)
 	}
 	// Check if the internal IP exists and
 	// the result of detecting geolocation by external IP is false
 	if internalIP != "" && result == false {
 		log.Infof("Internal IP: %s", internalIP)
-		node.GetGeolocationByIP(obj.(*api_v1.Node).Name, internalIP, clientset)
+		node.GetGeolocationByIP(obj.(*api_v1.Node).Name, internalIP, t.clientset)
 	}
 }
