@@ -243,25 +243,27 @@ func (t *Handler) runApprovalTimeout(URRCopy *apps_v1alpha.UserRegistrationReque
 			for URREvent := range watchURR.ResultChan() {
 				// Get updated user registration request object
 				updatedURR, status := URREvent.Object.(*apps_v1alpha.UserRegistrationRequest)
-				if status {
-					if URREvent.Type == "DELETED" {
-						terminated <- true
-						continue
-					}
-
-					if updatedURR.Spec.Approved == true {
-						registrationApproved <- true
-						break
-					} else if updatedURR.Status.Expires != nil {
-						timeout = time.After(time.Until(updatedURR.Status.Expires.Time))
-						// Check whether expiration date updated
-						if URRCopy.Status.Expires != nil {
-							if URRCopy.Status.Expires.Time != updatedURR.Status.Expires.Time {
-								timeoutRenewed <- true
-							}
-						} else {
-							timeoutRenewed <- true
+				// FieldSelector doesn't work properly, and will be checked in for next releases.
+				if URRCopy.GetUID() == updatedURR.GetUID() {
+					if status {
+						if URREvent.Type == "DELETED" {
+							terminated <- true
+							continue
 						}
+
+						if updatedURR.Spec.Approved == true {
+							registrationApproved <- true
+							break
+						} else if !updatedURR.Spec.Approved && updatedURR.Status.Expires != nil {
+							// Check whether expiration date updated - TBD
+							if updatedURR.Status.Expires.Time.Sub(time.Now()) >= 0 {
+								timeout = time.After(time.Until(updatedURR.Status.Expires.Time))
+								timeoutRenewed <- true
+							} else {
+								terminated <- true
+							}
+						}
+						URRCopy = updatedURR
 					}
 				}
 			}

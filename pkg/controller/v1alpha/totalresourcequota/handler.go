@@ -434,18 +434,20 @@ func (t *Handler) runTimeout(TRQCopy *apps_v1alpha.TotalResourceQuota) {
 			for TRQEvent := range watchTRQ.ResultChan() {
 				// Get updated slice object
 				updatedTRQ, status := TRQEvent.Object.(*apps_v1alpha.TotalResourceQuota)
-				if status {
-					if TRQEvent.Type == "DELETED" {
-						terminated <- true
-						continue
-					}
-					TRQCopy = updatedTRQ
-					exists := CheckExpiryDate(TRQCopy)
-					if exists {
-						timeout = time.After(time.Until(getClosestExpiryDate(TRQCopy)))
-						timeoutRenewed <- true
-					} else {
-						terminated <- true
+				if TRQCopy.GetUID() == updatedTRQ.GetUID() {
+					if status {
+						if TRQEvent.Type == "DELETED" {
+							terminated <- true
+							continue
+						}
+						TRQCopy = updatedTRQ
+						exists := CheckExpiryDate(TRQCopy)
+						if exists {
+							timeout = time.After(time.Until(getClosestExpiryDate(TRQCopy)))
+							timeoutRenewed <- true
+						} else {
+							terminated <- true
+						}
 					}
 				}
 			}

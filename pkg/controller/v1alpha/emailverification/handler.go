@@ -225,27 +225,31 @@ func (t *Handler) runVerificationTimeout(EVCopy *apps_v1alpha.EmailVerification)
 			for EVEvent := range watchEV.ResultChan() {
 				// Get updated email verification object
 				updatedEV, status := EVEvent.Object.(*apps_v1alpha.EmailVerification)
-				if status {
-					if EVEvent.Type == "DELETED" {
-						terminated <- true
-						continue
-					}
+				if EVCopy.GetUID() == updatedEV.GetUID() {
+					if status {
+						if EVEvent.Type == "DELETED" {
+							terminated <- true
+							continue
+						}
 
-					if updatedEV.Status.Expires != nil {
-						// Check whether expiration date updated
-						if EVCopy.Status.Expires != nil && timeout != nil {
-							if EVCopy.Status.Expires.Time == updatedEV.Status.Expires.Time {
-								EVCopy = updatedEV
-								continue
+						if updatedEV.Status.Expires != nil {
+							// Check whether expiration date updated - TBD
+							/*if EVCopy.Status.Expires != nil && timeout != nil {
+								if EVCopy.Status.Expires.Time == updatedEV.Status.Expires.Time {
+									EVCopy = updatedEV
+									continue
+								}
+							}*/
+
+							if updatedEV.Status.Expires.Time.Sub(time.Now()) >= 0 {
+								timeout = time.After(time.Until(updatedEV.Status.Expires.Time))
+								timeoutRenewed <- true
+							} else {
+								terminated <- true
 							}
 						}
-
-						if updatedEV.Status.Expires.Time.Sub(time.Now()) >= 0 {
-							timeout = time.After(time.Until(updatedEV.Status.Expires.Time))
-							timeoutRenewed <- true
-						}
+						EVCopy = updatedEV
 					}
-					EVCopy = updatedEV
 				}
 			}
 		}()

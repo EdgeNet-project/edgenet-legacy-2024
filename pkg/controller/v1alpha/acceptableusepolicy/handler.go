@@ -212,28 +212,32 @@ func (t *Handler) runApprovalTimeout(AUPCopy *apps_v1alpha.AcceptableUsePolicy) 
 			for AUPEvent := range watchAUP.ResultChan() {
 				// Get updated acceptable use policy object
 				updatedAUP, status := AUPEvent.Object.(*apps_v1alpha.AcceptableUsePolicy)
-				if status {
-					if AUPEvent.Type == "DELETED" || !updatedAUP.Spec.Accepted {
-						terminated <- true
-						continue
-					}
+				if AUPCopy.GetUID() == updatedAUP.GetUID() {
+					if status {
+						if AUPEvent.Type == "DELETED" || !updatedAUP.Spec.Accepted {
+							terminated <- true
+							continue
+						}
 
-					if updatedAUP.Status.Expires != nil {
-						// Check whether expiration date updated
-						if AUPCopy.Status.Expires != nil && timeout != nil {
-							if AUPCopy.Status.Expires.Time == updatedAUP.Status.Expires.Time {
-								AUPCopy = updatedAUP
-								continue
+						if updatedAUP.Status.Expires != nil {
+							// Check whether expiration date updated - TBD
+							/*if AUPCopy.Status.Expires != nil && timeout != nil {
+								if AUPCopy.Status.Expires.Time == updatedAUP.Status.Expires.Time {
+									AUPCopy = updatedAUP
+									continue
+								}
+							}*/
+
+							if updatedAUP.Status.Expires.Time.Sub(time.Now()) >= 0 {
+								timeout = time.After(time.Until(updatedAUP.Status.Expires.Time))
+								reminder = time.After(time.Until(updatedAUP.Status.Expires.Time.Add(time.Hour * -168)))
+								timeoutRenewed <- true
+							} else {
+								terminated <- true
 							}
 						}
-
-						if updatedAUP.Status.Expires.Time.Sub(time.Now()) >= 0 {
-							timeout = time.After(time.Until(updatedAUP.Status.Expires.Time))
-							reminder = time.After(time.Until(updatedAUP.Status.Expires.Time.Add(time.Hour * -168)))
-							timeoutRenewed <- true
-						}
+						AUPCopy = updatedAUP
 					}
-					AUPCopy = updatedAUP
 				}
 			}
 		}()

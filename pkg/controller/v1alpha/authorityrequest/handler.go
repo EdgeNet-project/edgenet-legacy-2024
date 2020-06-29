@@ -227,26 +227,27 @@ func (t *Handler) runApprovalTimeout(authorityRequestCopy *apps_v1alpha.Authorit
 			// Get events from watch interface
 			for authorityRequestEvent := range watchauthorityRequest.ResultChan() {
 				// Get updated authority request object
-				updatedauthorityRequest, status := authorityRequestEvent.Object.(*apps_v1alpha.AuthorityRequest)
-				if status {
-					if authorityRequestEvent.Type == "DELETED" {
-						terminated <- true
-						continue
-					}
-
-					if updatedauthorityRequest.Spec.Approved == true {
-						registrationApproved <- true
-						break
-					} else if updatedauthorityRequest.Status.Expires != nil {
-						timeout = time.After(time.Until(updatedauthorityRequest.Status.Expires.Time))
-						// Check whether expiration date updated
-						if authorityRequestCopy.Status.Expires != nil {
-							if authorityRequestCopy.Status.Expires.Time != updatedauthorityRequest.Status.Expires.Time {
-								timeoutRenewed <- true
-							}
-						} else {
-							timeoutRenewed <- true
+				updatedAuthorityRequest, status := authorityRequestEvent.Object.(*apps_v1alpha.AuthorityRequest)
+				if authorityRequestCopy.GetUID() == updatedAuthorityRequest.GetUID() {
+					if status {
+						if authorityRequestEvent.Type == "DELETED" {
+							terminated <- true
+							continue
 						}
+
+						if updatedAuthorityRequest.Spec.Approved == true {
+							registrationApproved <- true
+							break
+						} else if updatedAuthorityRequest.Status.Expires != nil {
+							// Check whether expiration date updated - TBD
+							if updatedAuthorityRequest.Status.Expires.Time.Sub(time.Now()) >= 0 {
+								timeout = time.After(time.Until(updatedAuthorityRequest.Status.Expires.Time))
+								timeoutRenewed <- true
+							} else {
+								terminated <- true
+							}
+						}
+						authorityRequestCopy = updatedAuthorityRequest
 					}
 				}
 			}

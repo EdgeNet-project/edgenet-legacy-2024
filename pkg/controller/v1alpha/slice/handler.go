@@ -393,28 +393,33 @@ func (t *Handler) runTimeout(sliceCopy *apps_v1alpha.Slice) {
 			for SliceEvent := range watchSlice.ResultChan() {
 				// Get updated slice object
 				updatedSlice, status := SliceEvent.Object.(*apps_v1alpha.Slice)
-				if status {
-					if SliceEvent.Type == "DELETED" {
-						terminated <- true
-						continue
-					}
+				// FieldSelector doesn't work properly, and will be checked in for next releases.
+				if sliceCopy.GetUID() == updatedSlice.GetUID() {
+					if status {
+						if SliceEvent.Type == "DELETED" {
+							terminated <- true
+							continue
+						}
 
-					if updatedSlice.Status.Expires != nil {
-						// Check whether expiration date updated
-						if sliceCopy.Status.Expires != nil && timeout != nil {
-							if sliceCopy.Status.Expires.Time == updatedSlice.Status.Expires.Time {
-								sliceCopy = updatedSlice
-								continue
+						if updatedSlice.Status.Expires != nil {
+							// Check whether expiration date updated - TBD
+							/*if sliceCopy.Status.Expires != nil && timeout != nil {
+								if sliceCopy.Status.Expires.Time == updatedSlice.Status.Expires.Time {
+									sliceCopy = updatedSlice
+									continue
+								}
+							}*/
+
+							if updatedSlice.Status.Expires.Time.Sub(time.Now()) >= 0 {
+								timeout = time.After(time.Until(updatedSlice.Status.Expires.Time))
+								reminder = time.After(time.Until(updatedSlice.Status.Expires.Time.Add(time.Hour * -72)))
+								timeoutRenewed <- true
+							} else {
+								terminated <- true
 							}
 						}
-
-						if updatedSlice.Status.Expires.Time.Sub(time.Now()) >= 0 {
-							timeout = time.After(time.Until(updatedSlice.Status.Expires.Time))
-							reminder = time.After(time.Until(updatedSlice.Status.Expires.Time.Add(time.Hour * -72)))
-							timeoutRenewed <- true
-						}
+						sliceCopy = updatedSlice
 					}
-					sliceCopy = updatedSlice
 				}
 			}
 		}()
