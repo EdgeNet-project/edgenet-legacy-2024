@@ -12,6 +12,7 @@ import (
 	"edgenet/pkg/client/clientset/versioned"
 	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
 	"edgenet/pkg/controller/v1alpha/authority"
+	"edgenet/pkg/registration"
 
 	"github.com/Sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,36 +70,6 @@ func (g *UserTestGroup) Init() {
 		},
 		Status: apps_v1alpha.AuthorityStatus{
 			Enabled: false,
-		},
-	}
-	authorityRequestObj := apps_v1alpha.AuthorityRequest{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "AuthorityRequest",
-			APIVersion: "apps.edgenet.io/v1alpha",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "edgenet",
-		},
-		Spec: apps_v1alpha.AuthorityRequestSpec{
-			FullName:  "EdgeNet",
-			ShortName: "EdgeNet",
-			URL:       "https://www.edge-net.org",
-			Address: apps_v1alpha.Address{
-				City:    "Paris",
-				Country: "France",
-				Street:  "4 place Jussieu, boite 169",
-				ZIP:     "75005",
-			},
-			Contact: apps_v1alpha.Contact{
-				Email:     "unittest@edge-net.org",
-				FirstName: "unit",
-				LastName:  "testing",
-				Phone:     "+33NUMBER",
-				Username:  "unittesting",
-			},
-		},
-		Status: apps_v1alpha.AuthorityRequestStatus{
-			State: success,
 		},
 	}
 	teamList := apps_v1alpha.TeamList{
@@ -192,7 +163,6 @@ func (g *UserTestGroup) Init() {
 		},
 	}
 	g.authorityObj = authorityObj
-	g.authorityRequestObj = authorityRequestObj
 	g.teamList = teamList
 	g.sliceList = sliceList
 	g.userObj = userObj
@@ -256,6 +226,17 @@ func TestUserCreate(t *testing.T) {
 		if user.Status.Message == nil {
 			t.Error("Duplicate value cannot be detected")
 		}
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
+	})
+	t.Run("Check service error", func(t *testing.T) {
+		var err error
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
+		_, err = registration.CreateServiceAccount(user, "main", g.client)
+		if err != nil {
+			t.Error("Service account failed")
+		}
+		g.handler.ObjectCreated(g.userObj.DeepCopy())
 	})
 
 }
@@ -311,7 +292,7 @@ func TestUserUpdate(t *testing.T) {
 
 		roleBindingListOptions := metav1.ListOptions{}
 		roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", user.GetNamespace(), user.GetName())}
-		roleBindings, _ := g.client.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
+		roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
 
 		if roleBindings.Items == nil {
 			t.Error("RoleBinding Creation failed")
@@ -354,7 +335,7 @@ func TestCreateRoleBindings(t *testing.T) {
 	//get the list of roleBindings
 	roleBindingListOptions := metav1.ListOptions{}
 	roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", user.GetNamespace(), user.GetName())}
-	roleBindings, _ := g.client.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
+	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
 
 	if roleBindings.Items == nil {
 		t.Error("RoleBinding Creation failed")
@@ -379,14 +360,14 @@ func TestDeleteRoleBindings(t *testing.T) {
 	//get the list of roleBindings
 	roleBindingListOptions := metav1.ListOptions{}
 	roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", user.GetNamespace(), user.GetName())}
-	roleBindings, _ := g.client.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
+	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
 
 	if roleBindings.Items == nil {
 		t.Error("RoleBinding Creation failed")
 	}
 	g.handler.deleteRoleBindings(user, g.sliceList.DeepCopy(), g.teamList.DeepCopy())
 
-	roleBindingsResult, _ := g.client.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
+	roleBindingsResult, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
 	t.Logf("STATUS NEW\n %v\n", roleBindingsResult)
 
 	if roleBindingsResult.Items != nil {

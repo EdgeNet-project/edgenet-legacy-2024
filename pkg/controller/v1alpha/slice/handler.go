@@ -88,7 +88,7 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 }
 
 // ObjectCreated is called when an object is created
-func (t *Handler) ObjectCreated(obj interface{}) {
+func (t *Handler) ObjectCreated(obj interface{}, clientset kubernetes.Interface) {
 	log.Info("SliceHandler.ObjectCreated")
 	// Create a copy of the slice object to make changes on it
 	sliceCopy := obj.(*apps_v1alpha.Slice).DeepCopy()
@@ -127,7 +127,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				if err == nil {
 					// Create rolebindings according to the users who participate in the slice and are authority-admin and managers of the authority
 					t.runUserInteractions(sliceCopy, sliceChildNamespaceCreated.GetName(), sliceOwnerNamespace.Labels["authority-name"],
-						sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-creation", true)
+						sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-creation", true, clientset)
 					// To set constraints in the slice namespace and to update the expiration date of slice
 					sliceCopy = t.setConstrainsByProfile(sliceChildNamespaceCreated.GetName(), sliceCopy)
 					sliceOwnerReferences := t.setOwnerReferences(sliceChildNamespaceCreated)
@@ -135,25 +135,25 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 					t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Update(sliceCopy)
 				} else {
 					t.runUserInteractions(sliceCopy, sliceChildNamespaceCreated.GetName(), sliceOwnerNamespace.Labels["authority-name"],
-						sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-crash", true)
+						sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-crash", true, clientset)
 					t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Delete(sliceCopy.GetName(), &metav1.DeleteOptions{})
 					return
 				}
 			} else if !resourcesAvailability {
 				log.Printf("Total resource quota exceeded for %s, %s couldn't be generated", sliceOwnerNamespace.Labels["authority-name"], sliceCopy.GetName())
-				t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"], sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-total-quota-exceeded", false)
+				t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"], sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-total-quota-exceeded", false, clientset)
 				t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Delete(sliceCopy.GetName(), &metav1.DeleteOptions{})
 			}
 		}
 		// Run timeout goroutine
-		go t.runTimeout(sliceCopy)
+		go t.runTimeout(sliceCopy, clientset)
 	} else {
 		t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Delete(sliceCopy.GetName(), &metav1.DeleteOptions{})
 	}
 }
 
 // ObjectUpdated is called when an object is updated
-func (t *Handler) ObjectUpdated(obj, updated interface{}) {
+func (t *Handler) ObjectUpdated(obj, updated interface{}, clientset kubernetes.Interface) {
 	log.Info("SliceHandler.ObjectUpdated")
 	// Create a copy of the slice object to make changes on it
 	sliceCopy := obj.(*apps_v1alpha.Slice).DeepCopy()
@@ -182,7 +182,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			t.clientset.RbacV1().RoleBindings(sliceChildNamespaceStr).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
 			// Create role bindings in the slice namespace from scratch
 			t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"],
-				sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-creation", false)
+				sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-creation", false, clientset)
 			// Send emails to those who have been added to, or removed from the slice.
 			var deletedUserList []apps_v1alpha.SliceUsers
 			json.Unmarshal([]byte(fieldUpdated.users.deleted), &deletedUserList)
@@ -210,7 +210,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 					sliceCopyUpdate, err := t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Update(sliceCopy)
 					if err == nil {
 						sliceCopy = sliceCopyUpdate
-						t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"], sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-lack-of-quota", false)
+						t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"], sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-lack-of-quota", false, clientset)
 					}
 				}
 			}
@@ -293,13 +293,13 @@ func (t *Handler) setConstrainsByProfile(childNamespace string, sliceCopy *apps_
 }
 
 // runUserInteractions creates user role bindings according to the roles and send emails separately
-func (t *Handler) runUserInteractions(sliceCopy *apps_v1alpha.Slice, sliceChildNamespaceStr, ownerAuthority, sliceOwner, sliceOwnerName, operation string, firstCreation bool) {
+func (t *Handler) runUserInteractions(sliceCopy *apps_v1alpha.Slice, sliceChildNamespaceStr, ownerAuthority, sliceOwner, sliceOwnerName, operation string, firstCreation bool, clientset kubernetes.Interface) {
 	// This part for the users who participate in the slice
 	for _, sliceUser := range sliceCopy.Spec.Users {
 		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", sliceUser.Authority)).Get(sliceUser.Username, metav1.GetOptions{})
 		if err == nil && user.Status.Active && user.Status.AUP {
 			if operation == "slice-creation" {
-				registration.CreateRoleBindingsByRoles(user.DeepCopy(), sliceChildNamespaceStr, "Slice")
+				registration.CreateRoleBindingsByRoles(user.DeepCopy(), sliceChildNamespaceStr, "Slice", clientset)
 			}
 			if !(operation == "slice-creation" && !firstCreation) {
 				t.sendEmail(sliceUser.Username, sliceUser.Authority, ownerAuthority, sliceCopy.GetNamespace(), sliceCopy.GetName(), sliceChildNamespaceStr, operation)
@@ -314,7 +314,7 @@ func (t *Handler) runUserInteractions(sliceCopy *apps_v1alpha.Slice, sliceChildN
 			for _, userRow := range userRaw.Items {
 				if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "admin") || containsRole(userRow.Spec.Roles, "manager")) {
 					if operation == "slice-creation" {
-						registration.CreateRoleBindingsByRoles(userRow.DeepCopy(), sliceChildNamespaceStr, "Slice")
+						registration.CreateRoleBindingsByRoles(userRow.DeepCopy(), sliceChildNamespaceStr, "Slice", clientset)
 						//mailSubject = "creation"
 					}
 					/*if !(operation == "slice-creation" && !firstCreation) && !(operation == "slice-creation" && sliceOwner == "team") {
@@ -355,7 +355,7 @@ func (t *Handler) sendEmail(sliceUsername, sliceUserAuthority, sliceAuthority, s
 }
 
 // runTimeout puts a procedure in place to remove slice after the timeout
-func (t *Handler) runTimeout(sliceCopy *apps_v1alpha.Slice) {
+func (t *Handler) runTimeout(sliceCopy *apps_v1alpha.Slice, clientset kubernetes.Interface) {
 	timeoutRenewed := make(chan bool, 1)
 	terminated := make(chan bool, 1)
 	var timeout <-chan time.Time
@@ -419,7 +419,7 @@ timeoutLoop:
 		case <-reminder:
 			sliceOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(sliceCopy.GetNamespace(), metav1.GetOptions{})
 			sliceChildNamespaceStr := fmt.Sprintf("%s-slice-%s", sliceCopy.GetNamespace(), sliceCopy.GetName())
-			t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"], sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-reminder", false)
+			t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"], sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-reminder", false, clientset)
 			break timeoutOptions
 		case <-timeout:
 			t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Delete(sliceCopy.GetName(), &metav1.DeleteOptions{})
@@ -428,7 +428,7 @@ timeoutLoop:
 			watchSlice.Stop()
 			sliceOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(sliceCopy.GetNamespace(), metav1.GetOptions{})
 			sliceChildNamespaceStr := fmt.Sprintf("%s-slice-%s", sliceCopy.GetNamespace(), sliceCopy.GetName())
-			t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"], sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-deletion", false)
+			t.runUserInteractions(sliceCopy, sliceChildNamespaceStr, sliceOwnerNamespace.Labels["authority-name"], sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-deletion", false, clientset)
 			t.clientset.CoreV1().Namespaces().Delete(sliceChildNamespaceStr, &metav1.DeleteOptions{})
 			TRQCopy, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(sliceOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 			if err == nil {
