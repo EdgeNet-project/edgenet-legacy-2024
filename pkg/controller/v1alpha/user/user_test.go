@@ -229,6 +229,7 @@ func TestUserCreate(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
 	})
 	t.Run("Check service error", func(t *testing.T) {
+		//not working probably :/
 		var err error
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
@@ -331,12 +332,12 @@ func TestCreateRoleBindings(t *testing.T) {
 	g.handler.ObjectCreated(g.userObj.DeepCopy())
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
 	//invoking createRoleBindings
-	g.handler.createRoleBindings(user, g.sliceList.DeepCopy(), g.teamList.DeepCopy(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
+	g.handler.createRoleBindings(user.DeepCopy(), g.sliceList.DeepCopy(), g.teamList.DeepCopy(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
 	//get the list of roleBindings
 	roleBindingListOptions := metav1.ListOptions{}
 	roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", user.GetNamespace(), user.GetName())}
 	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
-
+	t.Logf("RoleBinding= %v", roleBindings)
 	if roleBindings.Items == nil {
 		t.Error("RoleBinding Creation failed")
 	}
