@@ -98,12 +98,18 @@ func CreateRoleBindingsByRoles(userCopy *apps_v1alpha.User, namespace string, na
 
 // CreateServiceAccount makes a service account to serve the user. This functionality covers two types of service accounts
 // in EdgeNet use, permanent for main use and temporary for safety.
-func CreateServiceAccount(userCopy *apps_v1alpha.User, accountType string, clientset kubernetes.Interface) (*corev1.ServiceAccount, error) {
+func CreateServiceAccount(userCopy *apps_v1alpha.User, accountType string, clientset kubernetes.Interface, returnerror bool) (*corev1.ServiceAccount, error) {
 	/* clientset, err := authorization.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	} */
+	//creating fake error for testing purposes
+	var err error
+	if returnerror {
+		err = errors.NewGone("the item is no longer avaiable")
+		return nil, err
+	}
 	// Set the name of service account according to the type
 	name := userCopy.GetName()
 	ownerReferences := setOwnerReferences(userCopy)

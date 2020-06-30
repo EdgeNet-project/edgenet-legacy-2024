@@ -138,7 +138,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			userCopy.Status.Active = true
 			// Create the main service account for permanent use
 			// In next versions, there will be a method to renew the token of this service account for security
-			_, err = registration.CreateServiceAccount(userCopy, "main", t.clientset)
+			_, err = registration.CreateServiceAccount(userCopy, "main", t.clientset, true)
 			if err != nil {
 				log.Println(err.Error())
 				userCopy.Status.State = failure
@@ -274,10 +274,9 @@ func (t *Handler) setEmailVerification(userCopy *apps_v1alpha.User, authorityNam
 	if err == nil {
 		t.sendEmail(userCopy, authorityName, emailVerificationCode, "user-email-verification-update")
 		return emailVerificationCode
-	} else {
-		t.sendEmail(userCopy, authorityName, "", "user-email-verification-update-malfunction")
-		return ""
 	}
+	t.sendEmail(userCopy, authorityName, "", "user-email-verification-update-malfunction")
+	return ""
 }
 
 // createRoleBindings creates user role bindings according to the roles

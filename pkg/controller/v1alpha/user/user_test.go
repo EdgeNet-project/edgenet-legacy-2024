@@ -12,7 +12,6 @@ import (
 	"edgenet/pkg/client/clientset/versioned"
 	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
 	"edgenet/pkg/controller/v1alpha/authority"
-	"edgenet/pkg/registration"
 
 	"github.com/Sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -229,15 +228,12 @@ func TestUserCreate(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
 	})
 	t.Run("Check service error", func(t *testing.T) {
-		//not working probably :/
-		var err error
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
-		_, err = registration.CreateServiceAccount(user, "main", g.client)
-		if err != nil {
-			t.Error("Service account failed")
-		}
 		g.handler.ObjectCreated(g.userObj.DeepCopy())
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
+		if user.Status.State != failure {
+			t.Error("Service account error failed")
+		}
 	})
 
 }
