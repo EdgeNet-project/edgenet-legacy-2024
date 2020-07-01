@@ -36,7 +36,7 @@ const NavigationView = ({children, logo, title, menu = []}) =>
             <Box flex="grow" />
             <Box pad={{vertical: 'medium'}}>
                 <AuthConsumer>
-                    {({user}) => <NavMenu label={user.name} path='/profile' icon={<User/>} />}
+                    {({edgenet}) => <NavMenu label={edgenet.spec.firstname} path='/profile' icon={<User/>} />}
                 </AuthConsumer>
             </Box>
             {/*{menu && <NavigationLayer setClose={() => setMenu(false)} />}*/}
