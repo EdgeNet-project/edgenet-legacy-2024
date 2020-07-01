@@ -10,9 +10,15 @@ class AuthProvider extends React.Component {
         super(props);
         this.state = {
             user: {},
+            edgenet: null,
             message: '',
             loading: true
         };
+
+        this.edgenet_api = document.querySelector('meta[name="k8s-api-server"]')?.getAttribute('content');
+        if (!this.edgenet_api) {
+            throw ('API endpoint configuration not found: a meta tag k8s-api-server with the K8s API server address and port should exist');
+        }
 
         axios.defaults.headers.common = {
             'Accept': 'application/json',
@@ -22,6 +28,7 @@ class AuthProvider extends React.Component {
         this.token = sessionStorage.getItem('api_token');
 
         this.getUser = this.getUser.bind(this);
+        this.getEdgenetUser = this.getEdgenetUser.bind(this);
         this.setUser = this.setUser.bind(this);
         this.login = this.login.bind(this);
         this.logout = this.logout.bind(this);
@@ -65,6 +72,12 @@ class AuthProvider extends React.Component {
             });
     }
 
+    getEdgenetUser() {
+        axios.get(this.edgenet_api + '/apis/apps.edgenet.io/v1alpha/namespaces/authority-cslash/users/ciro')
+            .then(({data}) => this.setState({edgenet: data}))
+            .catch(err => console.log(err));
+    }
+
     setUser(user) {
         if (!user.api_token) {
             this.error('invalid token');
@@ -79,6 +92,7 @@ class AuthProvider extends React.Component {
             user: user,
             loading: false
         }, () => {
+            this.getEdgenetUser();
             this.token = null;
             sessionStorage.setItem('api_token', user.api_token);
         });
@@ -128,8 +142,8 @@ class AuthProvider extends React.Component {
     }
 
     isAuthenticated() {
-        const { user } = this.state;
-        return !!user.api_token;
+        const { user, edgenet } = this.state;
+        return !!user.api_token && edgenet;
     }
 
     isGuest() {
@@ -183,7 +197,7 @@ class AuthProvider extends React.Component {
 
     render() {
         let { children } = this.props;
-        let { user, message, loading } = this.state;
+        let { user, edgenet, message, loading } = this.state;
 
         if (this.token && !this.isAuthenticated()) {
             // checking if token is valid
@@ -193,6 +207,10 @@ class AuthProvider extends React.Component {
         return (
             <AuthContext.Provider value={{
                 user: user,
+                edgenet: edgenet,
+
+                edgenet_api: this.edgenet_api,
+
                 login: this.login,
                 logout: this.logout,
 
@@ -204,6 +222,8 @@ class AuthProvider extends React.Component {
 
                 loading: loading,
                 message: message,
+
+                getEdgenetUser: this.getEdgenetUser
             }}>
                 {children}
             </AuthContext.Provider>
