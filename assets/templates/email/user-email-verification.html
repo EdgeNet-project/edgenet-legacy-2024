@@ -53,8 +53,21 @@
                           </tr>
                         </table>
                         <p><b>If you notice any errors</b>, please simply submit a new registration request with the correct details after the current registration request lapses on its own in 72 hours.</p>
-                        <p>If everything looks to be in order, please confirm your registration request by using the following one-time code: <b>{{.Code}}</b></p>
-                        <p>You can do this with the following <b>kubectl command</b>, presuming that the EdgeNet <a style="color: #3869D4;" href="https://edge-net.org/downloads/config/public.cfg">public kubeconfig file</a> is saved in your working directory on your system as ./public.cfg:</p>
+                        <p>If everything looks to be in order, please confirm your registration request by clicking on the verify button or using the following one-time code: <b>{{.Code}}</b></p>
+                        <table style="width: 100%; margin: 30px auto; padding: 0; -premailer-width: 100%; -premailer-cellpadding: 0; -premailer-cellspacing: 0; text-align: center;" align="center" width="100%">
+                          <tr>
+                            <td style="word-break: break-word;"  align="center">
+                              <table width="100%" border="0">
+                                <tr>
+                                  <td style="word-break: break-word;"  align="center">
+                                    <a style="background-color: #FFCB9A; border-top: 10px solid #FFCB9A; border-right: 18px solid #FFCB9A; border-bottom: 10px solid #FFCB9A; border-left: 18px solid #FFCB9A; display: inline-block; color: #FFF; text-decoration: none; border-radius: 3px; box-shadow: 0 2px 3px rgba(0, 0, 0, 0.16); -webkit-text-size-adjust: none; box-sizing: border-box;" href="{{.URL}}/verify/authority-{{.CommonData.Authority}}/{{.Code}}" target="_blank">Verify</a>
+                                  </td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                        <p>Or you can do this with the following <b>kubectl command</b>, presuming that the EdgeNet <a style="color: #3869D4;" href="https://edge-net.org/downloads/config/public.cfg">public kubeconfig file</a> is saved in your working directory on your system as ./public.cfg:</p>
                         <table style="margin: 0 0 21px;" width="100%">
                           <tr>
                             <td style="word-break: break-word; background-color: #F4F4F7; padding: 16px;">

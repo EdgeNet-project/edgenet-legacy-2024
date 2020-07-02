@@ -67,6 +67,7 @@ type MultiProviderData struct {
 type VerifyContentData struct {
 	CommonData commonData
 	Code       string
+	URL        string
 }
 
 // ValidationFailureContentData to set the failure-specific variables
@@ -83,6 +84,11 @@ type smtpServer struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 	To       string `yaml:"to"`
+}
+
+// console implementation
+type console struct {
+	URL string `yaml:"url"`
 }
 
 // address to get URI of smtp server
@@ -416,6 +422,17 @@ func setAuthorityRequestContent(contentData interface{}, from string) ([]string,
 // setAuthorityEmailVerificationContent to create an email body related to the email verification
 func setAuthorityEmailVerificationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
+	file, err := os.Open("../../config/console.yaml")
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+	}
+	decoder := yaml.NewDecoder(file)
+	var console console
+	err = decoder.Decode(&console)
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+	}
+	verificationData.URL = console.URL
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template
@@ -470,6 +487,17 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 // setUserEmailVerificationContent to create an email body related to the email verification
 func setUserEmailVerificationContent(contentData interface{}, from, subject string) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
+	file, err := os.Open("../../config/console.yaml")
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+	}
+	decoder := yaml.NewDecoder(file)
+	var console console
+	err = decoder.Decode(&console)
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+	}
+	verificationData.URL = console.URL
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template

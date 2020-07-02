@@ -267,14 +267,14 @@ func MakeUser(authority, username, email string, clientset kubernetes.Interface)
 
 	file, err := os.Open("../../config/headnode.yaml")
 	if err != nil {
-		log.Printf("Mailer: unexpected error executing command: %v", err)
+		log.Printf("Registration: unexpected error executing command: %v", err)
 		return nil, nil, err
 	}
 	decoder := yaml.NewDecoder(file)
 	var headnode headnode
 	err = decoder.Decode(&headnode)
 	if err != nil {
-		log.Printf("Mailer: unexpected error executing command: %v", err)
+		log.Printf("Registration: unexpected error executing command: %v", err)
 		return nil, nil, err
 	}
 	dnsSANs := []string{headnode.DNS}
