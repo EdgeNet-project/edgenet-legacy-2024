@@ -25,6 +25,7 @@ import (
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
 	"edgenet/pkg/client/clientset/versioned"
+	"edgenet/pkg/controller/v1alpha/authority"
 	"edgenet/pkg/mailer"
 
 	log "github.com/Sirupsen/logrus"
@@ -83,9 +84,17 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		return
 	}
 	if authorityRequestCopy.Spec.Approved {
-		created := !t.createAuthority(authorityRequestCopy)
-		if created {
-			return
+		authorityHandler := authority.Handler{}
+		err := authorityHandler.Init()
+		if err == nil {
+			created := !authorityHandler.CreateByRequest(authorityRequestCopy)
+			if created {
+				return
+			} else {
+				t.sendEmail(authorityRequestCopy, "", "authority-creation-failure")
+				authorityRequestCopy.Status.State = failure
+				authorityRequestCopy.Status.Message = []string{"Authority establishment failed", err.Error()}
+			}
 		}
 	}
 	// If the service restarts, it creates all objects again

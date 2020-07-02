@@ -24,11 +24,13 @@ import (
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
 	"edgenet/pkg/client/clientset/versioned"
+	"edgenet/pkg/controller/v1alpha/totalresourcequota"
 	"edgenet/pkg/mailer"
+	ns "edgenet/pkg/namespace"
+	"edgenet/pkg/registration"
 
 	log "github.com/Sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -147,13 +149,31 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// Delete or disable nodes added by authority, TBD.
 }
 
+func (t *Handler) CreateByRequest(authorityRequestCopy *apps_v1alpha.AuthorityRequest) bool {
+	failed := false
+	// Create a authority on the cluster
+	authority := apps_v1alpha.Authority{}
+	authority.SetName(authorityRequestCopy.GetName())
+	authority.Spec.Address = authorityRequestCopy.Spec.Address
+	authority.Spec.Contact = authorityRequestCopy.Spec.Contact
+	authority.Spec.FullName = authorityRequestCopy.Spec.FullName
+	authority.Spec.ShortName = authorityRequestCopy.Spec.ShortName
+	authority.Spec.URL = authorityRequestCopy.Spec.URL
+	authority.Spec.Enabled = true
+	_, err := t.edgenetClientset.AppsV1alpha().Authorities().Create(authority.DeepCopy())
+	if err == nil {
+		t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(authorityRequestCopy.GetName(), &metav1.DeleteOptions{})
+	}
+	return failed
+}
+
 // authorityPreparation basically generates a namespace and creates authority-admin
 func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *apps_v1alpha.Authority {
 	// If the service restarts, it creates all objects again
 	// Because of that, this section covers a variety of possibilities
 	_, err := t.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("authority-%s", authorityCopy.GetName()), metav1.GetOptions{})
 	if err != nil {
-		t.setClusterRoles(authorityCopy)
+		registration.SetClusterRoles(t.clientset, authorityCopy)
 		// Automatically create a namespace to host users, slices, and teams
 		// When a authority is deleted, the owner references feature allows the namespace to be automatically removed
 		authorityOwnerReferences := t.setOwnerReferences(authorityCopy)
@@ -168,14 +188,18 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		if err != nil && !errors.IsAlreadyExists(err) {
 			log.Infof("Couldn't create resource quota in %s: %s", authorityCopy.GetName(), err)
 		}
-		childNamespaceOwnerReferences := t.setNamespaceOwnerReferences(authorityChildNamespaceCreated)
+		childNamespaceOwnerReferences := ns.SetAsOwnerReference(authorityChildNamespaceCreated)
 		authorityCopy.ObjectMeta.OwnerReferences = childNamespaceOwnerReferences
 		authorityCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Authorities().Update(authorityCopy)
 		if err == nil {
 			// To manipulate the object later
 			authorityCopy = authorityCopyUpdated
 		}
-		t.createTotalResourceQuota(authorityCopy)
+		TRQHandler := totalresourcequota.Handler{}
+		err = TRQHandler.Init()
+		if err == nil {
+			TRQHandler.Create(authorityCopy.GetName())
+		}
 		// Automatically enable authority and update authority status
 		authorityCopy.Status.State = established
 		authorityCopy.Status.Message = []string{"Authority successfully established"}
@@ -198,51 +222,14 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		defer enableAuthorityAdmin()
 		t.sendEmail(authorityCopy, "authority-creation-successful")
 	} else if err == nil {
-		t.setClusterRoles(authorityCopy)
-		t.createTotalResourceQuota(authorityCopy)
+		registration.SetClusterRoles(t.clientset, authorityCopy)
+		TRQHandler := totalresourcequota.Handler{}
+		err = TRQHandler.Init()
+		if err == nil {
+			TRQHandler.Create(authorityCopy.GetName())
+		}
 	}
 	return authorityCopy
-}
-
-// setClusterRoles create or update the cluster role attached to the authority
-func (t *Handler) setClusterRoles(authorityCopy *apps_v1alpha.Authority) {
-	// Create a cluster role to be used by authority users
-	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"authorities", "totalresourcequotas"}, ResourceNames: []string{authorityCopy.GetName()}, Verbs: []string{"get"}}}
-	authorityRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", authorityCopy.GetName())}, Rules: policyRule}
-	_, err := t.clientset.RbacV1().ClusterRoles().Create(authorityRole)
-	if err != nil {
-		log.Infof("Couldn't create authority-%s role: %s", authorityCopy.GetName(), err)
-		log.Infoln(errors.IsAlreadyExists(err))
-		if errors.IsAlreadyExists(err) {
-			authorityClusterRole, err := t.clientset.RbacV1().ClusterRoles().Get(authorityRole.GetName(), metav1.GetOptions{})
-			if err == nil {
-				authorityClusterRole.Rules = policyRule
-				_, err = t.clientset.RbacV1().ClusterRoles().Update(authorityClusterRole)
-				if err == nil {
-					log.Infof("Authority-%s cluster role updated", authorityCopy.GetName())
-				}
-			}
-		}
-	}
-}
-
-func (t *Handler) createTotalResourceQuota(authorityCopy *apps_v1alpha.Authority) {
-	_, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(authorityCopy.GetName(), metav1.GetOptions{})
-	if err != nil {
-		// Set a total resource quota
-		authorityTRQ := apps_v1alpha.TotalResourceQuota{}
-		authorityTRQ.SetName(authorityCopy.GetName())
-		authorityTRQClaim := apps_v1alpha.TotalResourceDetails{}
-		authorityTRQClaim.Name = "Default"
-		authorityTRQClaim.CPU = "12000m"
-		authorityTRQClaim.Memory = "12Gi"
-		authorityTRQ.Spec.Claim = append(authorityTRQ.Spec.Claim, authorityTRQClaim)
-		authorityTRQ.Spec.Enabled = true
-		_, err = t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Create(authorityTRQ.DeepCopy())
-		if err != nil {
-			log.Infof("Couldn't create total resource quota in %s: %s", authorityCopy.GetName(), err)
-		}
-	}
 }
 
 // sendEmail to send notification to participants
@@ -297,14 +284,4 @@ func (t *Handler) setOwnerReferences(authorityCopy *apps_v1alpha.Authority) []me
 	newAuthorityRef.Controller = &takeControl
 	ownerReferences = append(ownerReferences, newAuthorityRef)
 	return ownerReferences
-}
-
-// setNamespaceOwnerReferences returns the namespace as owner
-func (t *Handler) setNamespaceOwnerReferences(namespace *corev1.Namespace) []metav1.OwnerReference {
-	// The section below makes namespace who created by the authority become the authority owner
-	newNamespaceRef := *metav1.NewControllerRef(namespace, apps_v1alpha.SchemeGroupVersion.WithKind("Namespace"))
-	takeControl := false
-	newNamespaceRef.Controller = &takeControl
-	namespaceOwnerReferences := []metav1.OwnerReference{newNamespaceRef}
-	return namespaceOwnerReferences
 }

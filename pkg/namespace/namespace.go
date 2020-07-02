@@ -22,6 +22,7 @@ import (
 	"edgenet/pkg/authorization"
 
 	apiv1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -121,4 +122,14 @@ func GetNamespaceByName(name string) (string, error) {
 	} else {
 		return "true", nil
 	}
+}
+
+// SetAsOwnerReference returns the namespace as owner
+func SetAsOwnerReference(namespace *corev1.Namespace) []metav1.OwnerReference {
+	// The section below makes namespace the owner
+	newNamespaceRef := *metav1.NewControllerRef(namespace, corev1.SchemeGroupVersion.WithKind("Namespace"))
+	takeControl := false
+	newNamespaceRef.Controller = &takeControl
+	namespaceOwnerReferences := []metav1.OwnerReference{newNamespaceRef}
+	return namespaceOwnerReferences
 }

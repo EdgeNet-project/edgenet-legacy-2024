@@ -55,6 +55,28 @@ type headnode struct {
 	IP  string `yaml:"ip"`
 }
 
+// SetClusterRoles create or update the cluster role attached to the authority
+func SetClusterRoles(clienset kubernetes.Interface, authorityCopy *apps_v1alpha.Authority) {
+	// Create a cluster role to be used by authority users
+	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"authorities", "totalresourcequotas"}, ResourceNames: []string{authorityCopy.GetName()}, Verbs: []string{"get"}}}
+	authorityRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", authorityCopy.GetName())}, Rules: policyRule}
+	_, err := clienset.RbacV1().ClusterRoles().Create(authorityRole)
+	if err != nil {
+		log.Printf("Couldn't create authority-%s role: %s", authorityCopy.GetName(), err)
+		log.Println(errors.IsAlreadyExists(err))
+		if errors.IsAlreadyExists(err) {
+			authorityClusterRole, err := clienset.RbacV1().ClusterRoles().Get(authorityRole.GetName(), metav1.GetOptions{})
+			if err == nil {
+				authorityClusterRole.Rules = policyRule
+				_, err = clienset.RbacV1().ClusterRoles().Update(authorityClusterRole)
+				if err == nil {
+					log.Printf("Authority-%s cluster role updated", authorityCopy.GetName())
+				}
+			}
+		}
+	}
+}
+
 // CreateSpecificRoleBindings generates role bindings to allow users to access their user objects and the authority to which they belong
 func CreateSpecificRoleBindings(userCopy *apps_v1alpha.User) {
 	clientset, err := authorization.CreateClientSet()

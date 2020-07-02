@@ -134,6 +134,26 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// Delete or disable slices added by authority, TBD.
 }
 
+// Create generates a total resource quota with the name provided
+func (t *Handler) Create(name string) {
+	_, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(name, metav1.GetOptions{})
+	if err != nil {
+		// Set a total resource quota
+		TRQ := apps_v1alpha.TotalResourceQuota{}
+		TRQ.SetName(name)
+		claim := apps_v1alpha.TotalResourceDetails{}
+		claim.Name = "Default"
+		claim.CPU = "12000m"
+		claim.Memory = "12Gi"
+		TRQ.Spec.Claim = append(TRQ.Spec.Claim, claim)
+		TRQ.Spec.Enabled = true
+		_, err = t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Create(TRQ.DeepCopy())
+		if err != nil {
+			log.Infof("Couldn't create total resource quota in %s: %s", name, err)
+		}
+	}
+}
+
 // sendEmail to send notification to participants
 func (t *Handler) sendEmail(username, name, email, userAuthority, sliceAuthority, sliceOwnerNamespace, sliceName, sliceNamespace, subject string) {
 	// Set the HTML template variables
