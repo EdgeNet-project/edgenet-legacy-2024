@@ -182,7 +182,7 @@ func (t *Handler) runUserInteractions(teamCopy *apps_v1alpha.Team, teamChildName
 		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", teamUser.Authority)).Get(teamUser.Username, metav1.GetOptions{})
 		if err == nil && user.Status.Active && user.Status.AUP {
 			if operation == "team-creation" {
-				registration.CreateRoleBindingsByRoles(user.DeepCopy(), teamChildNamespaceStr, "Team")
+				registration.CreateRoleBindingsByRoles(user.DeepCopy(), teamChildNamespaceStr, "Team", t.clientset)
 			}
 
 			if !(operation == "team-creation" && !enabled) {
@@ -195,7 +195,7 @@ func (t *Handler) runUserInteractions(teamCopy *apps_v1alpha.Team, teamChildName
 	if err == nil {
 		for _, userRow := range userRaw.Items {
 			if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "admin") || containsRole(userRow.Spec.Roles, "manager")) {
-				registration.CreateRoleBindingsByRoles(userRow.DeepCopy(), teamChildNamespaceStr, "Team")
+				registration.CreateRoleBindingsByRoles(userRow.DeepCopy(), teamChildNamespaceStr, "Team", t.clientset)
 			}
 		}
 	}

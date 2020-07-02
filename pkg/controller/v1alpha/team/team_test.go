@@ -45,20 +45,16 @@ func TestMain(m *testing.M) {
 func (g *TeamTestGroup) Init() {
 	teamObj := apps_v1alpha.Team{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Authority",
+			Kind:       "Team",
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "edgenet",
+			Name:      "edgenetteam",
+			UID:       "edgenetteamUID",
 			Namespace: "authority-edgenet",
 		},
 		Spec: apps_v1alpha.TeamSpec{
-			Users: []apps_v1alpha.TeamUsers{
-				apps_v1alpha.TeamUsers{
-					Authority: "edgenet",
-					Username:  "username",
-				},
-			},
+			Users:       []apps_v1alpha.TeamUsers{},
 			Description: "This is a test description",
 		},
 		Status: apps_v1alpha.TeamStatus{
@@ -131,13 +127,14 @@ func (g *TeamTestGroup) Init() {
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "unittesting",
+			Name:      "user1",
+			Namespace: "authority-edgenet",
 		},
 		Spec: apps_v1alpha.UserSpec{
-			FirstName: "EdgeNet",
-			LastName:  "EdgeNet",
+			FirstName: "user",
+			LastName:  "NAME",
 			Roles:     []string{"Admin"},
-			Email:     "unittest@edge-net.org",
+			Email:     "userName@edge-net.org",
 		},
 		Status: apps_v1alpha.UserStatus{
 			State:  success,
@@ -185,42 +182,30 @@ func TestTeamCreate(t *testing.T) {
 	g := TeamTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
+	// Create Authority namespace
+	authorityHandler := authority.Handler{}
+	authorityHandler.Init(g.client, g.edgenetclient)
+	g.authorityObj.Status.Enabled = true
+	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
+	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
-	g.edgenetclient.AppsV1alpha().Teams("authority-edgenet").Create(g.teamObj.DeepCopy())
-	//"creation of Team total resource quota-cluster role .Team just for now
+	// Create Team
+	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
+	// Creation of Team
 	t.Run("creation of Team", func(t *testing.T) {
-
-		team, err := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.teamObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
+		team, err := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
 		if team == nil {
 			t.Error("Team generation failed when an authority created")
 		}
 		if err != nil {
-
 			t.Errorf("Couldn't create team, %v", err)
 		}
 		g.handler.ObjectCreated(g.teamObj.DeepCopy())
-		// user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.teamObj.GetName())).Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
-		// if user == nil {
-		// 	t.Error("User generation failed when an authority created")
-		// }
-
-		// TRQ, _ := g.handler.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(g.authorityObj.GetName(), metav1.GetOptions{})
-		// if TRQ == nil {
-		// 	t.Error("Total resource quota cannot be created")
-		// }
-
-		// clusterRole, _ := g.handler.clientset.RbacV1().ClusterRoles().Get(fmt.Sprintf("authority-%s", g.authorityObj.GetName()), metav1.GetOptions{})
-		// if clusterRole == nil {
-		// 	t.Error("Cluster role cannot be created")
-		// }
 	})
-
 	t.Run("check duplicate object", func(t *testing.T) {
-		// Change the authority object name to make comparison with the user-created above
-		g.authorityObj.Name = "different"
-		g.handler.ObjectCreated(g.teamObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.teamObj.GetName())).Get(g.teamObj.Spec.Users[0].Username, metav1.GetOptions{})
-		if user != nil {
+		// Create two teams with the same name
+		team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
+		if team != nil {
 			t.Error("Duplicate value cannot be detected")
 		}
 	})
@@ -230,30 +215,48 @@ func TestTeamUpdate(t *testing.T) {
 	g := TeamTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	// Create an authority to update later
+	// Create Authority namespace
+	authorityHandler := authority.Handler{}
+	authorityHandler.Init(g.client, g.edgenetclient)
+	g.authorityObj.Status.Enabled = true
+	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
+	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
-	g.edgenetclient.AppsV1alpha().Teams("authority-edgenet").Create(g.teamObj.DeepCopy())
-	var field fields
-	field.enabled = false
-	field.users.status = false
-	field.users.deleted = ""
-	field.users.added = ""
-	field.object.name = "TestName"
-	field.object.ownerNamespace = ""
-	field.object.childNamespace = ""
+	// Create Team to update later
+	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
 	// Invoke ObjectCreated func to create a team
 	g.handler.ObjectCreated(g.teamObj.DeepCopy())
-	// Create another user
-	g.userObj.Spec.Email = "check"
-	g.edgenetclient.AppsV1alpha().Users("default").Create(g.userObj.DeepCopy())
-	// Use the same email address with the user created above
-	g.authorityObj.Status.Enabled = true
-	g.handler.ObjectUpdated(g.teamObj.DeepCopy(), field)
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.teamObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
-	if user.Spec.Email == "check" {
-		t.Error("Duplicate value cannot be detected")
-	}
-	if user.Status.Active {
-		t.Error("User cannot be deactivated")
-	}
+	// Update of team status
+	t.Run("Update existing team", func(t *testing.T) {
+		g.teamObj.Status.Enabled = true
+		var field fields
+		field.enabled = true
+		g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.teamObj.DeepCopy())
+		g.handler.ObjectUpdated(g.teamObj.DeepCopy(), field)
+		team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
+		if !team.Status.Enabled {
+			t.Error("Failed to update status of team")
+		}
+	})
+	// Add new users to team
+	t.Run("Add new users to team", func(t *testing.T) {
+		g.teamObj.Spec.Users = []apps_v1alpha.TeamUsers{
+			apps_v1alpha.TeamUsers{
+				Authority: g.authorityObj.GetName(),
+				Username:  "user1",
+			},
+		}
+		var field fields
+		field.enabled = true
+		field.users.status = true
+		field.users.added = `[{"Authority": "edgenet", "Username": "user1" }]`
+		g.userObj.Status.Active, g.userObj.Status.AUP = true, true
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.teamObj.DeepCopy())
+		g.handler.ObjectUpdated(g.teamObj.DeepCopy(), field)
+		team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
+		if len(team.Spec.Users) != 1 {
+			t.Error("Failed to add user to team")
+		}
+	})
 }
