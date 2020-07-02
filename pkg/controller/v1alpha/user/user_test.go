@@ -167,11 +167,16 @@ func (g *UserTestGroup) Init() {
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
+	// Invoke authority ObjectCreated to create namespace
+	authorityHandler := authority.Handler{}
+	authorityHandler.Init(g.client, g.edgenetclient)
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 
-//TestHandlerInit for handler initialization
+// TestHandlerInit for handler initialization
 func TestHandlerInit(t *testing.T) {
-	//Sync the test group
+	// Sync the test group
 	g := UserTestGroup{}
 	g.Init()
 	// Initialize the handler
@@ -189,38 +194,30 @@ func TestUserCreate(t *testing.T) {
 	g := UserTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	//invoke authority ObjectCreated to create namespace
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	g.authorityObj.Status.Enabled = true
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 
-	t.Run("creation of user from authority", func(t *testing.T) {
+	t.Run("Creation of user from authority", func(t *testing.T) {
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
-		t.Logf("\nuser_Authority: = %v\n", user)
 		if user == nil {
 			t.Error("\nUser generation failed when an authority created\n")
 		}
 	})
-	t.Run("creation of user\n", func(t *testing.T) {
+	t.Run("Creation of user\n", func(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 		g.handler.ObjectCreated(g.userObj.DeepCopy())
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
-		t.Logf("\nuser_User: = %v\n", user)
 		if user == nil {
 			t.Error("\nUser creation failed\n")
 		}
 	})
-	t.Run("check dublicate object", func(t *testing.T) {
+	t.Run("Check dublicate object", func(t *testing.T) {
 		// Change the user object name to make comparison with the user-created above
 		g.userObj.Name = "different"
 		g.userObj.UID = "differentUID"
-		//create user
+		// Create user
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
-		//invoke the ObjectCreated()
+		// Invoke the ObjectCreated()
 		g.handler.ObjectCreated(g.userObj.DeepCopy())
-		//check if the user created successfully or not
+		// Check if the user created successfully or not
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
 		if user.Status.Message == nil {
 			t.Error("Duplicate value cannot be detected")
@@ -242,17 +239,11 @@ func TestUserUpdate(t *testing.T) {
 	g := UserTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	//creating authority + user
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	g.authorityObj.Status.Enabled = true
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 
-	t.Run("Updateing Email and Checking the Duplication", func(t *testing.T) {
-		//creating a user
+	t.Run("Updating Email and Checking the Duplication", func(t *testing.T) {
+		// Creating a user
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
-		//changing the user email as the same as the authority default created user
+		// Changing the user email as the same as the authority default created user
 		g.userObj.Spec.Email = "unittest@edge-net.org"
 		var field fields
 		g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
@@ -266,9 +257,9 @@ func TestUserUpdate(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
 	})
 	t.Run("Updating Email", func(t *testing.T) {
-		//creating a user
+		// Creating a user
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
-		//updateing the email
+		// Updateing the email
 		g.userObj.Spec.Email = "NewUserObj@email.com"
 		var field fields
 		field.email = true
@@ -280,7 +271,7 @@ func TestUserUpdate(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
 	})
 	t.Run("Updating role", func(t *testing.T) {
-		//creating a user
+		// Creating a user
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
 		var field fields
@@ -301,11 +292,6 @@ func TestSetEmailVerification(t *testing.T) {
 	g := UserTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	//creating authority + user
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 	result := g.handler.setEmailVerification(user, fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
@@ -318,18 +304,13 @@ func TestCreateRoleBindings(t *testing.T) {
 	g := UserTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	//creating authority + user
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
-	//Creating User from userObj
+	// Creating User from userObj
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 	g.handler.ObjectCreated(g.userObj.DeepCopy())
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
-	//invoking createRoleBindings
+	// Invoking createRoleBindings
 	g.handler.createRoleBindings(user.DeepCopy(), g.sliceList.DeepCopy(), g.teamList.DeepCopy(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
-	//get the list of roleBindings
+	// Get the list of roleBindings
 	roleBindingListOptions := metav1.ListOptions{}
 	roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", user.GetNamespace(), user.GetName())}
 	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
@@ -343,30 +324,22 @@ func TestDeleteRoleBindings(t *testing.T) {
 	g := UserTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	//creating authority + user
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
-	//Creating User from userObj
+
+	// Creating User from userObj
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 	g.handler.ObjectCreated(g.userObj.DeepCopy())
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
-	//invoking createRoleBindings
+	// Invoking createRoleBindings
 	g.handler.createRoleBindings(user, g.sliceList.DeepCopy(), g.teamList.DeepCopy(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
-	//get the list of roleBindings
+	// Get the list of roleBindings
 	roleBindingListOptions := metav1.ListOptions{}
 	roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", user.GetNamespace(), user.GetName())}
 	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
-
 	if roleBindings.Items == nil {
 		t.Error("RoleBinding Creation failed")
 	}
 	g.handler.deleteRoleBindings(user, g.sliceList.DeepCopy(), g.teamList.DeepCopy())
-
 	roleBindingsResult, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
-	t.Logf("STATUS NEW\n %v\n", roleBindingsResult)
-
 	if roleBindingsResult.Items != nil {
 		t.Error("RoleBinding Creation failed")
 	}
@@ -377,18 +350,12 @@ func TestCreateAUPRoleBinding(t *testing.T) {
 	g := UserTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	//creating authority + user
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
 	result := g.handler.createAUPRoleBinding(user)
 	if result != "" {
 		t.Error("Create AUPRoleBinding failed")
-		t.Logf("\nFailed result=%v\n", result)
 	} else {
 		t.Logf("\nPassed result=%v\n", result)
 	}
