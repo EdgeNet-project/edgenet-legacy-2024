@@ -150,6 +150,8 @@ func (g *TeamTestGroup) Init() {
 	//invoke ObjectCreated to create namespace
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
+	// Create Authority
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 
@@ -182,13 +184,6 @@ func TestTeamCreate(t *testing.T) {
 	g := TeamTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	// Create Authority namespace
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	g.authorityObj.Status.Enabled = true
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	// Create Authority
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 	// Create Team
 	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
 	// Creation of Team
@@ -215,13 +210,6 @@ func TestTeamUpdate(t *testing.T) {
 	g := TeamTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	// Create Authority namespace
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	g.authorityObj.Status.Enabled = true
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	// Create Authority
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 	// Create Team to update later
 	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
 	// Invoke ObjectCreated func to create a team
@@ -273,13 +261,6 @@ func TestTeamUserOwnerReferences(t *testing.T) {
 	g := TeamTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	// Create Authority namespace
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	g.authorityObj.Status.Enabled = true
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	// Create Authority
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 	g.teamObj.Spec.Users = []apps_v1alpha.TeamUsers{
 		apps_v1alpha.TeamUsers{
 			Authority: g.authorityObj.GetName(),
@@ -306,13 +287,6 @@ func TestTeamDelete(t *testing.T) {
 	g := TeamTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	// Create Authority namespace
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	g.authorityObj.Status.Enabled = true
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	// Create Authority
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 	g.teamObj.Spec.Users = []apps_v1alpha.TeamUsers{
 		apps_v1alpha.TeamUsers{
 			Authority: g.authorityObj.GetName(),
