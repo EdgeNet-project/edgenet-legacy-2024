@@ -272,6 +272,7 @@ func TestTeamUserOwnerReferences(t *testing.T) {
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 	// Creating team with one user
 	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
+	g.handler.ObjectCreated(g.teamObj.DeepCopy())
 	// Sanity check team created
 	team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
 	if team == nil {
@@ -280,6 +281,13 @@ func TestTeamUserOwnerReferences(t *testing.T) {
 	// Setting owner references
 	t.Run("Set Owner references", func(t *testing.T) {
 		g.handler.setOwnerReferences(team)
+		teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())
+		teamChildNamespace, _ := g.client.CoreV1().Namespaces().Get(teamChildNamespaceStr, metav1.GetOptions{})
+		// Verifying team owns child namespace
+		if teamChildNamespace.Labels["owner"] != "team" && teamChildNamespace.Labels["owner-name"] != "edgnetteam" {
+			t.Error("Failed to set team namespace owner references")
+		}
+
 	})
 }
 
