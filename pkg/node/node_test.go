@@ -41,48 +41,6 @@ func Equal(a, b []string) bool {
 	return true
 }
 
-func TestSetNodeLabels(t *testing.T) {
-	data := []struct {
-		clientset      kubernetes.Interface
-		hostname       string
-		labelsExpected map[string]string
-		expected       bool
-	}{
-		{clientset: testclient.NewSimpleClientset(&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "node1",
-				Namespace: "",
-				Labels: map[string]string{
-					"edge-net.io~1continent":   "",
-					"edge-net.io~1country-iso": "",
-					"edge-net.io~1state-iso":   "",
-					"edge-net.io~1city":        "",
-					"edge-net.io~1lon":         "",
-					"edge-net.io~1lat":         "",
-				},
-			},
-		}),
-			hostname: "node1",
-			expected: true,
-			labelsExpected: map[string]string{
-				"edge-net.io~1continent":   "Europe",
-				"edge-net.io~1country-iso": "FR",
-				"edge-net.io~1state-iso":   "IDF",
-				"edge-net.io~1city":        "Paris",
-				"edge-net.io~1lon":         "e2.352700",
-				"edge-net.io~1lat":         "n48.854300",
-			},
-		},
-	}
-
-	for _, test := range data {
-		//t.Logf("TEST, %v #\n %v #\n %v", test.hostname, test.labelsExpected, test.clientset)
-		if output := setNodeLabels(test.hostname, test.labelsExpected, test.clientset); output != test.expected {
-			t.Error("Error")
-		}
-	}
-}
-
 func TestGetList(t *testing.T) {
 	data := []struct {
 		clientset    kubernetes.Interface
@@ -116,68 +74,6 @@ func TestGetList(t *testing.T) {
 			t.Fatal("error")
 		}
 	}
-}
-
-func TestGetGeolocationByIP(t *testing.T) {
-	/* //hostname := "Farhad"
-	ipStr := "46.193.66.93"
-	geoLabelsFirstIP := map[string]string{
-		"edge-net.io~1continent":   "Europe",
-		"edge-net.io~1country-iso": "FR",
-		"edge-net.io~1state-iso":   "IDF",
-		"edge-net.io~1city":        "Paris",
-		"edge-net.io~1lon":         "e2.352700",
-		"edge-net.io~1lat":         "n48.854300",
-	}
-	ip := net.ParseIP(ipStr)
-	db, err := geoip2.Open("../../assets/database/GeoLite2-City/GeoLite2-City.mmdb")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
-	record, err := db.City(ip)
-	if err != nil {
-		log.Fatal(err)
-	}
-	continent := strings.Replace(record.Continent.Names["en"], " ", "_", -1)
-	country := record.Country.IsoCode
-	state := record.Country.IsoCode
-	city := strings.Replace(record.City.Names["en"], " ", "_", -1)
-	var lon string
-	var lat string
-	if record.Location.Longitude >= 0 {
-		lon = fmt.Sprintf("e%.6f", record.Location.Longitude)
-	} else {
-		lon = fmt.Sprintf("w%.6f", record.Location.Longitude)
-	}
-	if record.Location.Latitude >= 0 {
-		lat = fmt.Sprintf("n%.6f", record.Location.Latitude)
-	} else {
-		lat = fmt.Sprintf("s%.6f", record.Location.Latitude)
-	}
-	if len(record.Subdivisions) > 0 {
-		state = record.Subdivisions[0].IsoCode
-	}
-
-	// Create label map to attach to the node
-	geoLabels := map[string]string{
-		"edge-net.io~1continent":   continent,
-		"edge-net.io~1country-iso": country,
-		"edge-net.io~1state-iso":   state,
-		"edge-net.io~1city":        city,
-		"edge-net.io~1lon":         lon,
-		"edge-net.io~1lat":         lat,
-	}
-
-	if setNodeLabels("Farhad", geoLabelsFirstIP) != GetGeolocationByIP("Farhad", ipStr) {
-		t.Logf("Failed it's not equall")
-	}
-
-	// Attach geolabels to the node
-	//result := setNodeLabels(hostname, geoLabels)
-
-	t.Logf("It worked %v\n", record)
-	t.Logf("result %v", geoLabels)*/
 }
 
 func TestGetNodeByHostname(t *testing.T) {
