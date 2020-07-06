@@ -2,14 +2,11 @@ package main
 
 import (
 	"edgenet/pkg/authorization"
-	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/nodecontribution"
 	"log"
-
-	"k8s.io/client-go/kubernetes"
 )
 
-func main(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
+func main() {
 	// Set kubeconfig to be used to create clientsets
 	authorization.SetKubeConfig()
 	clientset, err := authorization.CreateClientSet()
