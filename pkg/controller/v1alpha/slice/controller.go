@@ -229,38 +229,6 @@ func (c *controller) runWorker() {
 	log.Info("runWorker: completed")
 }
 
-// dry function remove the same values of the old and new objects from the old object to have
-// the slice of deleted and added values.
-func dry(oldSlice []apps_v1alpha.SliceUsers, newSlice []apps_v1alpha.SliceUsers) ([]apps_v1alpha.SliceUsers, []apps_v1alpha.SliceUsers) {
-	var deletedSlice []apps_v1alpha.SliceUsers
-	var addedSlice []apps_v1alpha.SliceUsers
-
-	for _, oldValue := range oldSlice {
-		exists := false
-		for _, newValue := range newSlice {
-			if oldValue.Authority == newValue.Authority && oldValue.Username == newValue.Username {
-				exists = true
-			}
-		}
-		if !exists {
-			deletedSlice = append(deletedSlice, apps_v1alpha.SliceUsers{Authority: oldValue.Authority, Username: oldValue.Username})
-		}
-	}
-	for _, newValue := range newSlice {
-		exists := false
-		for _, oldValue := range oldSlice {
-			if newValue.Authority == oldValue.Authority && newValue.Username == oldValue.Username {
-				exists = true
-			}
-		}
-		if !exists {
-			addedSlice = append(addedSlice, apps_v1alpha.SliceUsers{Authority: newValue.Authority, Username: newValue.Username})
-		}
-	}
-
-	return deletedSlice, addedSlice
-}
-
 // This function deals with the queue and sends each item in it to the specified handler to be processed.
 func (c *controller) processNextItem() bool {
 	log.Info("processNextItem: start")

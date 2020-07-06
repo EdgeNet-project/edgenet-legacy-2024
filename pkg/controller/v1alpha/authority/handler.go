@@ -149,21 +149,28 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// Delete or disable nodes added by authority, TBD.
 }
 
-func (t *Handler) CreateByRequest(authorityRequestCopy *apps_v1alpha.AuthorityRequest) bool {
-	failed := false
-	// Create a authority on the cluster
-	authority := apps_v1alpha.Authority{}
-	authority.SetName(authorityRequestCopy.GetName())
-	authority.Spec.Address = authorityRequestCopy.Spec.Address
-	authority.Spec.Contact = authorityRequestCopy.Spec.Contact
-	authority.Spec.FullName = authorityRequestCopy.Spec.FullName
-	authority.Spec.ShortName = authorityRequestCopy.Spec.ShortName
-	authority.Spec.URL = authorityRequestCopy.Spec.URL
-	authority.Spec.Enabled = true
-	_, err := t.edgenetClientset.AppsV1alpha().Authorities().Create(authority.DeepCopy())
-	if err == nil {
-		t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(authorityRequestCopy.GetName(), &metav1.DeleteOptions{})
+// Create function is for being used by other resources to create an authority
+func (t *Handler) Create(obj interface{}) bool {
+	failed := true
+	switch obj.(type) {
+	case *apps_v1alpha.AuthorityRequest:
+		authorityRequestCopy := obj.(*apps_v1alpha.AuthorityRequest).DeepCopy()
+		// Create a authority on the cluster
+		authority := apps_v1alpha.Authority{}
+		authority.SetName(authorityRequestCopy.GetName())
+		authority.Spec.Address = authorityRequestCopy.Spec.Address
+		authority.Spec.Contact = authorityRequestCopy.Spec.Contact
+		authority.Spec.FullName = authorityRequestCopy.Spec.FullName
+		authority.Spec.ShortName = authorityRequestCopy.Spec.ShortName
+		authority.Spec.URL = authorityRequestCopy.Spec.URL
+		authority.Spec.Enabled = true
+		_, err := t.edgenetClientset.AppsV1alpha().Authorities().Create(authority.DeepCopy())
+		if err == nil {
+			failed = false
+			t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(authorityRequestCopy.GetName(), &metav1.DeleteOptions{})
+		}
 	}
+
 	return failed
 }
 
@@ -176,9 +183,9 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		registration.SetClusterRoles(t.clientset, authorityCopy)
 		// Automatically create a namespace to host users, slices, and teams
 		// When a authority is deleted, the owner references feature allows the namespace to be automatically removed
-		authorityOwnerReferences := t.setOwnerReferences(authorityCopy)
+		ownerReferences := SetAsOwnerReference(authorityCopy)
 		// Every namespace of a authority has the prefix as "authority" to provide singularity
-		authorityChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", authorityCopy.GetName()), OwnerReferences: authorityOwnerReferences}}
+		authorityChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", authorityCopy.GetName()), OwnerReferences: ownerReferences}}
 		// Namespace labels indicate this namespace created by a authority, not by a team or slice
 		namespaceLabels := map[string]string{"owner": "authority", "owner-name": authorityCopy.GetName(), "authority-name": authorityCopy.GetName()}
 		authorityChildNamespace.SetLabels(namespaceLabels)
@@ -275,9 +282,9 @@ func (t *Handler) checkDuplicateObject(authorityCopy *apps_v1alpha.Authority) (b
 	return exists, message
 }
 
-// setOwnerReferences returns the authority as owner
-func (t *Handler) setOwnerReferences(authorityCopy *apps_v1alpha.Authority) []metav1.OwnerReference {
-	// The following section makes authority become the namespace owner
+// SetAsOwnerReference returns the authority as owner
+func SetAsOwnerReference(authorityCopy *apps_v1alpha.Authority) []metav1.OwnerReference {
+	// The following section makes authority become the owner
 	ownerReferences := []metav1.OwnerReference{}
 	newAuthorityRef := *metav1.NewControllerRef(authorityCopy, apps_v1alpha.SchemeGroupVersion.WithKind("Authority"))
 	takeControl := false

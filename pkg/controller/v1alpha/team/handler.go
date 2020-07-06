@@ -19,11 +19,14 @@ package team
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
 	"edgenet/pkg/client/clientset/versioned"
+	"edgenet/pkg/controller/v1alpha/user"
 	"edgenet/pkg/mailer"
+	ns "edgenet/pkg/namespace"
 	"edgenet/pkg/registration"
 
 	log "github.com/Sirupsen/logrus"
@@ -117,6 +120,9 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			t.clientset.RbacV1().RoleBindings(teamChildNamespaceCreated.GetName()).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
 			// Create rolebindings according to the users who participate in the team and are authority-admin and authorized users of the authority
 			t.runUserInteractions(teamCopy, teamChildNamespaceCreated.GetName(), teamOwnerNamespace.Labels["authority-name"], teamOwnerNamespace.Labels["owner"], teamOwnerNamespace.Labels["owner-name"], "team-creation", true)
+			ownerReferences := t.getOwnerReferences(teamCopy, teamChildNamespaceCreated)
+			teamCopy.ObjectMeta.OwnerReferences = ownerReferences
+			t.edgenetClientset.AppsV1alpha().Teams(teamCopy.GetNamespace()).Update(teamCopy)
 		}
 	} else if !teamOwnerAuthority.Spec.Enabled {
 		t.edgenetClientset.AppsV1alpha().Teams(teamCopy.GetNamespace()).Delete(teamCopy.GetName(), &metav1.DeleteOptions{})
@@ -227,23 +233,57 @@ func (t *Handler) sendEmail(teamUsername, teamUserAuthority, teamAuthority, team
 	}
 }
 
-// setOwnerReferences returns the users and the team as owners
-func (t *Handler) setOwnerReferences(teamCopy *apps_v1alpha.Team) ([]metav1.OwnerReference, []metav1.OwnerReference) {
+// getOwnerReferences returns the users and the child namespace as owners
+func (t *Handler) getOwnerReferences(teamCopy *apps_v1alpha.Team, namespace *corev1.Namespace) []metav1.OwnerReference {
+	ownerReferences := ns.SetAsOwnerReference(namespace)
 	// The following section makes users who participate in that team become the team owners
-	ownerReferences := []metav1.OwnerReference{}
 	for _, teamUser := range teamCopy.Spec.Users {
-		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", teamUser.Authority)).Get(teamUser.Username, metav1.GetOptions{})
-		if err == nil && user.Spec.Active && user.Status.AUP {
-			newTeamRef := *metav1.NewControllerRef(user.DeepCopy(), apps_v1alpha.SchemeGroupVersion.WithKind("User"))
-			takeControl := false
-			newTeamRef.Controller = &takeControl
-			ownerReferences = append(ownerReferences, newTeamRef)
+		userCopy, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", teamUser.Authority)).Get(teamUser.Username, metav1.GetOptions{})
+		if err == nil && userCopy.Spec.Active && userCopy.Status.AUP {
+			ownerReferences = append(ownerReferences, user.SetAsOwnerReference(userCopy)...)
 		}
 	}
-	// The section below makes team who created the child namespace become the namespace owner
-	newNamespaceRef := *metav1.NewControllerRef(teamCopy, apps_v1alpha.SchemeGroupVersion.WithKind("Team"))
-	takeControl := false
-	newNamespaceRef.Controller = &takeControl
-	namespaceOwnerReferences := []metav1.OwnerReference{newNamespaceRef}
-	return ownerReferences, namespaceOwnerReferences
+	return ownerReferences
+}
+
+// dry function remove the same values of the old and new objects from the old object to have
+// the slice of deleted and added values.
+func dry(oldSlice []apps_v1alpha.TeamUsers, newSlice []apps_v1alpha.TeamUsers) ([]apps_v1alpha.TeamUsers, []apps_v1alpha.TeamUsers) {
+	var deletedSlice []apps_v1alpha.TeamUsers
+	var addedSlice []apps_v1alpha.TeamUsers
+
+	for _, oldValue := range oldSlice {
+		exists := false
+		for _, newValue := range newSlice {
+			if oldValue.Authority == newValue.Authority && oldValue.Username == newValue.Username {
+				exists = true
+			}
+		}
+		if !exists {
+			deletedSlice = append(deletedSlice, apps_v1alpha.TeamUsers{Authority: oldValue.Authority, Username: oldValue.Username})
+		}
+	}
+	for _, newValue := range newSlice {
+		exists := false
+		for _, oldValue := range oldSlice {
+			if newValue.Authority == oldValue.Authority && newValue.Username == oldValue.Username {
+				exists = true
+			}
+		}
+		if !exists {
+			addedSlice = append(addedSlice, apps_v1alpha.TeamUsers{Authority: newValue.Authority, Username: newValue.Username})
+		}
+	}
+
+	return deletedSlice, addedSlice
+}
+
+func generateRandomString(n int) string {
+	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letter[rand.Intn(len(letter))]
+	}
+	return string(b)
 }

@@ -19,6 +19,7 @@ package selectivedeployment
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
@@ -934,4 +935,32 @@ func containsOwnerRef(ownerRefs []metav1.OwnerReference, value metav1.OwnerRefer
 		}
 	}
 	return false
+}
+
+// dry function remove the same values of the old and new objects from the old object to have
+// the slice of deleted values.
+func dry(oldSlice []apps_v1alpha.Controller, newSlice []apps_v1alpha.Controller) []string {
+	var uniqueSlice []string
+	for _, oldValue := range oldSlice {
+		exists := false
+		for _, newValue := range newSlice {
+			if oldValue.Type == newValue.Type && oldValue.Name == newValue.Name {
+				exists = true
+			}
+		}
+		if !exists {
+			uniqueSlice = append(uniqueSlice, fmt.Sprintf("%s?/delta/? %s", oldValue.Type, oldValue.Name))
+		}
+	}
+	return uniqueSlice
+}
+
+func generateRandomString(n int) string {
+	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letter[rand.Intn(len(letter))]
+	}
+	return string(b)
 }

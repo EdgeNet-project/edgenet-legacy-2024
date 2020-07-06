@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 )
 
 // JSON structure of patch operation
@@ -44,6 +45,16 @@ type patchStringValue struct {
 	Op    string `json:"op"`
 	Path  string `json:"path"`
 	Value string `json:"value"`
+}
+type patchByBoolValue struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value bool   `json:"value"`
+}
+type patchByOwnerReferenceValue struct {
+	Op    string                  `json:"op"`
+	Path  string                  `json:"path"`
+	Value []metav1.OwnerReference `json:"value"`
 }
 
 // GeoFence function determines whether the point is inside a polygon by using the crossing number method.
@@ -72,10 +83,10 @@ func GeoFence(boundbox []float64, polygon [][]float64, y float64, x float64) boo
 
 // Boundbox returns a rectangle which created according to the points of the polygon given
 func Boundbox(points [][]float64) []float64 {
-	var minX float64 = -math.MaxFloat64
-	var maxX float64 = math.MaxFloat64
-	var minY float64 = -math.MaxFloat64
-	var maxY float64 = math.MaxFloat64
+	var minX float64 = math.MaxFloat64
+	var maxX float64 = -math.MaxFloat64
+	var minY float64 = math.MaxFloat64
+	var maxY float64 = -math.MaxFloat64
 
 	for _, coordinates := range points {
 		minX = math.Min(minX, coordinates[0])
@@ -86,6 +97,52 @@ func Boundbox(points [][]float64) []float64 {
 
 	bounding := []float64{minX, maxX, minY, maxY}
 	return bounding
+}
+
+// GetKubeletVersion looks at the head node to decide which version of Kubernetes to install
+func GetKubeletVersion(clientset kubernetes.Interface) string {
+	nodeRaw, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master"})
+	if err != nil {
+		log.Println(err.Error())
+	}
+	kubeletVersion := ""
+	for _, nodeRow := range nodeRaw.Items {
+		kubeletVersion = nodeRow.Status.NodeInfo.KubeletVersion
+	}
+	return kubeletVersion
+}
+
+// SetOwnerReferences make the references owner of the node
+func SetOwnerReferences(clientset kubernetes.Interface, nodeName string, ownerReferences []metav1.OwnerReference) error {
+	// Create a patch slice and initialize it to the size of 1
+	// Append the data existing in the label map to the slice
+	nodePatchArr := make([]interface{}, 1)
+	nodePatch := patchByOwnerReferenceValue{}
+	nodePatch.Op = "add"
+	nodePatch.Path = "/metadata/ownerReferences"
+	nodePatch.Value = ownerReferences
+	nodePatchArr[0] = nodePatch
+	nodePatchJSON, _ := json.Marshal(nodePatchArr)
+	// Patch the nodes with the arguments:
+	// hostname, patch type, and patch data
+	_, err := clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
+	return err
+}
+
+// SetNodeScheduling syncs the node with the node contribution
+func SetNodeScheduling(clientset kubernetes.Interface, nodeName string, unschedulable bool) error {
+	// Create a patch slice and initialize it to the size of 1
+	nodePatchArr := make([]interface{}, 1)
+	nodePatch := patchByBoolValue{}
+	nodePatch.Op = "replace"
+	nodePatch.Path = "/spec/unschedulable"
+	nodePatch.Value = unschedulable
+	nodePatchArr[0] = nodePatch
+	nodePatchJSON, _ := json.Marshal(nodePatchArr)
+	// Patch the nodes with the arguments:
+	// hostname, patch type, and patch data
+	_, err := clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
+	return err
 }
 
 // setNodeLabels uses client-go to patch nodes by processing a labels map

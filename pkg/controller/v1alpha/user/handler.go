@@ -18,13 +18,12 @@ package user
 
 import (
 	"fmt"
-	"math/rand"
 	"reflect"
-	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
 	"edgenet/pkg/client/clientset/versioned"
+	"edgenet/pkg/controller/v1alpha/emailverification"
 	"edgenet/pkg/mailer"
 	"edgenet/pkg/registration"
 
@@ -101,7 +100,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		if err != nil || !errors.IsNotFound(serviceAccountErr) {
 			// Automatically creates an acceptable use policy object belonging to the user in the authority namespace
 			// When a user is deleted, the owner references feature allows the related AUP to be automatically removed
-			userOwnerReferences := t.setOwnerReferences(userCopy)
+			userOwnerReferences := SetAsOwnerReference(userCopy)
 			userAUP := &apps_v1alpha.AcceptableUsePolicy{TypeMeta: metav1.TypeMeta{Kind: "AcceptableUsePolicy", APIVersion: "apps.edgenet.io/v1alpha"},
 				ObjectMeta: metav1.ObjectMeta{Name: userCopy.GetName(), OwnerReferences: userOwnerReferences}, Spec: apps_v1alpha.AcceptableUsePolicySpec{Accepted: false}}
 			t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Create(userAUP)
@@ -156,7 +155,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				log.Println(err.Error())
 				userCopy.Status.State = failure
 				userCopy.Status.Message = []string{fmt.Sprintf("Client cert generation failed for user %s", userCopy.GetName())}
-				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "", "user-cert-failure")
+				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-cert-failure")
 				return
 			}
 			err = registration.MakeConfig(userOwnerNamespace.Labels["authority-name"], userCopy.GetName(), userCopy.Spec.Email, crt, key, t.clientset)
@@ -164,11 +163,11 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				log.Println(err.Error())
 				userCopy.Status.State = failure
 				userCopy.Status.Message = []string{fmt.Sprintf("Kubeconfig file creation failed for user %s", userCopy.GetName())}
-				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "", "user-kubeconfig-failure")
+				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-kubeconfig-failure")
 			}
 			userCopy.Status.State = success
 			userCopy.Status.Message = []string{"Client cert of the user generated"}
-			t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "", "user-registration-successful")
+			t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-registration-successful")
 
 			slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(metav1.ListOptions{})
 			teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(userCopy.GetNamespace()).List(metav1.ListOptions{})
@@ -221,9 +220,25 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 				userCopy = userCopyUpdated
 			} else {
 				log.Infof("Couldn't deactivate user %s in %s: %s", userCopy.GetName(), userCopy.GetNamespace(), err)
-				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "", "user-deactivation-failure")
+				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-deactivation-failure")
 			}
-			t.setEmailVerification(userCopy, userOwnerNamespace.Labels["authority-name"])
+			emailVerificationHandler := emailverification.Handler{}
+			err = emailVerificationHandler.Init()
+			if err == nil {
+				created := emailVerificationHandler.Create(userCopy, SetAsOwnerReference(userCopy))
+				if created {
+					// Update the status as successful
+					userCopy.Status.State = success
+					userCopy.Status.Message = []string{"Everything is OK, verification email sent"}
+				} else {
+					userCopy.Status.State = failure
+					userCopy.Status.Message = []string{"Couldn't send verification email"}
+				}
+			}
+			userCopyUpdated, err = t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+			if err == nil {
+				userCopy = userCopyUpdated
+			}
 		}
 
 		if userCopy.Spec.Active && userCopy.Status.AUP {
@@ -263,25 +278,29 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// Mail notification, TBD
 }
 
-// setEmailVerification to provide one-time code for verification
-func (t *Handler) setEmailVerification(userCopy *apps_v1alpha.User, authorityName string) {
-	// The section below is a part of the method which provides email verification
-	// Email verification code is a security point for email verification. The user
-	// object creates an email verification object with a name which is
-	// this email verification code. Only who knows the authority and the email verification
-	// code can manipulate that object by using a public token.
-	userOwnerReferences := t.setOwnerReferences(userCopy)
-	emailVerificationCode := "bs" + generateRandomString(16)
-	emailVerification := apps_v1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: userOwnerReferences}}
-	emailVerification.SetName(emailVerificationCode)
-	emailVerification.Spec.Kind = "Email"
-	emailVerification.Spec.Identifier = userCopy.GetName()
-	_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(userCopy.GetNamespace()).Create(emailVerification.DeepCopy())
-	if err == nil {
-		t.sendEmail(userCopy, authorityName, emailVerificationCode, "user-email-verification-update")
-	} else {
-		t.sendEmail(userCopy, authorityName, "", "user-email-verification-update-malfunction")
+// Create function is for being used by other resources to create an authority
+func (t *Handler) Create(obj interface{}) bool {
+	failed := true
+	switch obj.(type) {
+	case *apps_v1alpha.UserRegistrationRequest:
+		URRCopy := obj.(*apps_v1alpha.UserRegistrationRequest)
+		// Create a user on the cluster
+		user := apps_v1alpha.User{}
+		user.SetName(URRCopy.GetName())
+		user.Spec.Bio = URRCopy.Spec.Bio
+		user.Spec.Email = URRCopy.Spec.Email
+		user.Spec.FirstName = URRCopy.Spec.FirstName
+		user.Spec.LastName = URRCopy.Spec.LastName
+		user.Spec.URL = URRCopy.Spec.URL
+		user.Spec.Active = true
+		_, err := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Create(user.DeepCopy())
+		if err == nil {
+			failed = false
+			t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})
+		}
 	}
+
+	return failed
 }
 
 // createRoleBindings creates user role bindings according to the roles
@@ -374,7 +393,7 @@ func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) {
 		roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: userCopy.GetNamespace(), Name: fmt.Sprintf("%s-%s", userCopy.GetNamespace(), roleName)},
 			Subjects: rbSubjects, RoleRef: roleRef}
 		// When a user is deleted, the owner references feature allows the related role binding to be automatically removed
-		userOwnerReferences := t.setOwnerReferences(userCopy)
+		userOwnerReferences := SetAsOwnerReference(userCopy)
 		roleBind.ObjectMeta.OwnerReferences = userOwnerReferences
 		_, err = t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Create(roleBind)
 		if err != nil {
@@ -395,22 +414,13 @@ func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) {
 }
 
 // sendEmail to send notification to participants
-func (t *Handler) sendEmail(userCopy *apps_v1alpha.User, authorityName, emailVerificationCode, subject string) {
+func (t *Handler) sendEmail(userCopy *apps_v1alpha.User, authorityName, subject string) {
 	// Set the HTML template variables
-	var contentData interface{}
-	var collective = mailer.CommonContentData{}
-	collective.CommonData.Authority = authorityName
-	collective.CommonData.Username = userCopy.GetName()
-	collective.CommonData.Name = fmt.Sprintf("%s %s", userCopy.Spec.FirstName, userCopy.Spec.LastName)
-	collective.CommonData.Email = []string{userCopy.Spec.Email}
-	if subject == "user-email-verification-update" {
-		verifyContent := mailer.VerifyContentData{}
-		verifyContent.Code = emailVerificationCode
-		verifyContent.CommonData = collective.CommonData
-		contentData = verifyContent
-	} else {
-		contentData = collective
-	}
+	contentData := mailer.CommonContentData{}
+	contentData.CommonData.Authority = authorityName
+	contentData.CommonData.Username = userCopy.GetName()
+	contentData.CommonData.Name = fmt.Sprintf("%s %s", userCopy.Spec.FirstName, userCopy.Spec.LastName)
+	contentData.CommonData.Email = []string{userCopy.Spec.Email}
 	mailer.Send(subject, contentData)
 }
 
@@ -443,29 +453,17 @@ func (t *Handler) checkDuplicateObject(userCopy *apps_v1alpha.User, authorityNam
 			}
 		}
 	} else if exists && !reflect.DeepEqual(userCopy.Status.Message, message) {
-		t.sendEmail(userCopy, authorityName, "", "user-validation-failure")
+		t.sendEmail(userCopy, authorityName, "user-validation-failure")
 	}
 	return exists, message
 }
 
-// setOwnerReferences puts the user as owner
-func (t *Handler) setOwnerReferences(userCopy *apps_v1alpha.User) []metav1.OwnerReference {
+// SetAsOwnerReference puts the user as owner
+func SetAsOwnerReference(userCopy *apps_v1alpha.User) []metav1.OwnerReference {
 	ownerReferences := []metav1.OwnerReference{}
 	newUserRef := *metav1.NewControllerRef(userCopy, apps_v1alpha.SchemeGroupVersion.WithKind("User"))
 	takeControl := false
 	newUserRef.Controller = &takeControl
 	ownerReferences = append(ownerReferences, newUserRef)
 	return ownerReferences
-}
-
-// generateRandomString to have a unique string
-func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
-
-	b := make([]rune, n)
-	rand.Seed(time.Now().UnixNano())
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }
