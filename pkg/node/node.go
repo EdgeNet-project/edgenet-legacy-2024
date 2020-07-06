@@ -72,10 +72,10 @@ func GeoFence(boundbox []float64, polygon [][]float64, y float64, x float64) boo
 
 // Boundbox returns a rectangle which created according to the points of the polygon given
 func Boundbox(points [][]float64) []float64 {
-	var minX float64 = -math.MaxFloat64
-	var maxX float64 = math.MaxFloat64
-	var minY float64 = -math.MaxFloat64
-	var maxY float64 = math.MaxFloat64
+	var minX float64 = math.MaxFloat64
+	var maxX float64 = -math.MaxFloat64
+	var minY float64 = math.MaxFloat64
+	var maxY float64 = -math.MaxFloat64
 
 	for _, coordinates := range points {
 		minX = math.Min(minX, coordinates[0])
