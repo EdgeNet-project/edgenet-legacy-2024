@@ -274,12 +274,8 @@ func TestUserUpdate(t *testing.T) {
 		var field fields
 		field.roles = true
 		g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
-
-		roleBindingListOptions := metav1.ListOptions{}
-		roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", user.GetNamespace(), user.GetName())}
-		roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
-
-		if roleBindings.Items == nil {
+		roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(fmt.Sprintf("%s-user-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
+		if roleBindings == nil {
 			t.Error("RoleBinding Creation failed")
 		}
 	})
