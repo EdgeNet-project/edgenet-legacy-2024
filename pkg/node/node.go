@@ -73,10 +73,10 @@ func GeoFence(boundbox []float64, polygon [][]float64, y float64, x float64) boo
 
 // Boundbox returns a rectangle which created according to the points of the polygon given
 func Boundbox(points [][]float64) []float64 {
-	var minX float64 = -math.MaxFloat64
-	var maxX float64 = math.MaxFloat64
-	var minY float64 = -math.MaxFloat64
-	var maxY float64 = math.MaxFloat64
+	var minX float64 = math.MaxFloat64
+	var maxX float64 = -math.MaxFloat64
+	var minY float64 = math.MaxFloat64
+	var maxY float64 = -math.MaxFloat64
 
 	for _, coordinates := range points {
 		fmt.Printf("cordinates=%v", coordinates)
@@ -91,12 +91,12 @@ func Boundbox(points [][]float64) []float64 {
 }
 
 // setNodeLabels uses client-go to patch nodes by processing a labels map
-func setNodeLabels(hostname string, labels map[string]string, clientset kubernetes.Interface) bool {
-	/* clientset, err := authorization.CreateClientSet()
+func setNodeLabels(hostname string, labels map[string]string) bool {
+	clientset, err := authorization.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
-	} */
+	}
 	// Create a patch slice and initialize it to the label size
 	nodePatchArr := make([]patchStringValue, len(labels))
 	nodePatch := patchStringValue{}
@@ -112,7 +112,6 @@ func setNodeLabels(hostname string, labels map[string]string, clientset kubernet
 	nodesJSON, _ := json.Marshal(nodePatchArr)
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
-	var err error
 	_, err = clientset.CoreV1().Nodes().Patch(hostname, types.JSONPatchType, nodesJSON)
 	if err != nil {
 		log.Println(err.Error())
@@ -122,14 +121,14 @@ func setNodeLabels(hostname string, labels map[string]string, clientset kubernet
 }
 
 // GetGeolocationByIP return geolabels by taking advantage of GeoLite database
-func GetGeolocationByIP(hostname string, ipStr string, clientset kubernetes.Interface) (bool, map[string]string) {
+func GetGeolocationByIP(hostname string, ipStr string) bool {
 	// Parse IP address
 	ip := net.ParseIP(ipStr)
 	// Open GeoLite database
 	db, err := geoip2.Open("../../assets/database/GeoLite2-City/GeoLite2-City.mmdb")
 	if err != nil {
 		log.Fatal(err)
-		return false, map[string]string{"": ""}
+		return false
 	}
 	// Close the database as a final job
 	defer db.Close()
@@ -137,7 +136,7 @@ func GetGeolocationByIP(hostname string, ipStr string, clientset kubernetes.Inte
 	record, err := db.City(ip)
 	if err != nil {
 		log.Fatal(err)
-		return false, map[string]string{"": ""}
+		return false
 	}
 
 	// Patch for being compatible with Kubernetes alphanumeric characters limitations
@@ -172,14 +171,14 @@ func GetGeolocationByIP(hostname string, ipStr string, clientset kubernetes.Inte
 	}
 
 	// Attach geolabels to the node
-	result := setNodeLabels(hostname, geoLabels, clientset)
+	result := setNodeLabels(hostname, geoLabels)
 	// If the result is different than the expected, return false
 	// The expected result is having a different longitude and latitude than zero
 	// Zero value typically means there isn't any result meaningful
 	if record.Location.Longitude == 0 && record.Location.Latitude == 0 {
-		return false, map[string]string{"": ""}
+		return false
 	}
-	return result, geoLabels
+	return result
 }
 
 // CompareIPAddresses makes a comparison between old and new objects of the node

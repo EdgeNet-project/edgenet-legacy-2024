@@ -58,17 +58,12 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 
 // ObjectCreated is called when an object is created
 func (t *Handler) ObjectCreated(obj interface{}) {
-	log.Info("\nUserHandler.ObjectCreated\n")
-
+	log.Info("UserHandler.ObjectCreated")
 	// Create a copy of the user object to make changes on it
 	userCopy := obj.(*apps_v1alpha.User).DeepCopy()
-
 	// Find the authority from the namespace in which the object is
-	fmt.Printf("\nCheck usercopy %v\n", userCopy)
-
 	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
 	// Check if the email address is already taken
-	fmt.Printf("\nCheck userOwnerNamespace= %v\n\n", userOwnerNamespace)
 	emailExists, message := t.checkDuplicateObject(userCopy, userOwnerNamespace.Labels["authority-name"])
 
 	if emailExists {
@@ -80,7 +75,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	}
 	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	// Check if the authority is active
-	fmt.Printf("\nStatus = %v,  Gernaration=%v\n", userOwnerAuthority.Status.Enabled, userCopy.GetGeneration())
 	if userOwnerAuthority.Status.Enabled == true && userCopy.GetGeneration() == 1 {
 
 		// If the service restarts, it creates all objects again
@@ -138,7 +132,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			userCopy.Status.Active = true
 			// Create the main service account for permanent use
 			// In next versions, there will be a method to renew the token of this service account for security
-			_, err = registration.CreateServiceAccount(userCopy, "main", t.clientset, true)
+			_, err = registration.CreateServiceAccount(userCopy, "main", t.clientset)
 			if err != nil {
 				log.Println(err.Error())
 				userCopy.Status.State = failure
@@ -258,7 +252,7 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // setEmailVerification to provide one-time code for verification
-func (t *Handler) setEmailVerification(userCopy *apps_v1alpha.User, authorityName string) string {
+func (t *Handler) setEmailVerification(userCopy *apps_v1alpha.User, authorityName string) error {
 	// The section below is a part of the method which provides email verification
 	// Email verification code is a security point for email verification. The user
 	// object creates an email verification object with a name which is
@@ -273,10 +267,10 @@ func (t *Handler) setEmailVerification(userCopy *apps_v1alpha.User, authorityNam
 	_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(userCopy.GetNamespace()).Create(emailVerification.DeepCopy())
 	if err == nil {
 		t.sendEmail(userCopy, authorityName, emailVerificationCode, "user-email-verification-update")
-		return emailVerificationCode
+		return err
 	}
 	t.sendEmail(userCopy, authorityName, "", "user-email-verification-update-malfunction")
-	return ""
+	return err
 }
 
 // createRoleBindings creates user role bindings according to the roles
@@ -356,7 +350,7 @@ func (t *Handler) deleteRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 }
 
 // createAUPRoleBinding links the AUP up with the user
-func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) string {
+func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) error {
 	_, err := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Get(fmt.Sprintf("%s-%s", userCopy.GetNamespace(),
 		fmt.Sprintf("user-aup-%s", userCopy.GetName())), metav1.GetOptions{})
 	if err != nil {
@@ -372,12 +366,12 @@ func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) string {
 		_, err = t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Create(roleBind)
 		if err != nil {
 			log.Infof("Couldn't create user-aup-%s role: %s", userCopy.GetName(), err)
-			return "Couldn't create user-aup"
+			return err
 		}
 	} else {
-		return "Couldn't create user-aup"
+		return err
 	}
-	return ""
+	return err
 }
 
 // sendEmail to send notification to participants

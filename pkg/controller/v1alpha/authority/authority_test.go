@@ -190,9 +190,6 @@ func TestAuthorityUpdate(t *testing.T) {
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 	// Invoke ObjectCreated func to create a user
 	g.handler.ObjectCreated(g.authorityObj.DeepCopy())
-	status, err := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).List(metav1.ListOptions{})
-	t.Logf("status %v", status)
-	t.Logf("err %v", err)
 	// Create another user
 	g.userObj.Spec.Email = "check"
 	g.edgenetclient.AppsV1alpha().Users("default").Create(g.userObj.DeepCopy())

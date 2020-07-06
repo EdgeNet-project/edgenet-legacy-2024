@@ -22,14 +22,13 @@ import (
 
 //The main structure of test group
 type UserTestGroup struct {
-	authorityObj        apps_v1alpha.Authority
-	authorityRequestObj apps_v1alpha.AuthorityRequest
-	teamList            apps_v1alpha.TeamList
-	sliceList           apps_v1alpha.SliceList
-	userObj             apps_v1alpha.User
-	client              kubernetes.Interface
-	edgenetclient       versioned.Interface
-	handler             Handler
+	authorityObj  apps_v1alpha.Authority
+	teamList      apps_v1alpha.TeamList
+	sliceList     apps_v1alpha.SliceList
+	userObj       apps_v1alpha.User
+	client        kubernetes.Interface
+	edgenetclient versioned.Interface
+	handler       Handler
 }
 
 func TestMain(m *testing.M) {
@@ -93,7 +92,7 @@ func (g *UserTestGroup) Init() {
 					Users: []apps_v1alpha.TeamUsers{
 						{
 							Authority: "authority-edgenet",
-							Username:  "unittestingObj",
+							Username:  "unittestingTeamObj",
 						},
 					},
 					Description: "This is a Teamtest description",
@@ -126,7 +125,7 @@ func (g *UserTestGroup) Init() {
 					Users: []apps_v1alpha.SliceUsers{
 						{
 							Authority: "authority-edgenet",
-							Username:  "unittestingObj",
+							Username:  "unittestingSliceObj",
 						},
 					},
 					Description: "This is a Slicetest description",
@@ -208,6 +207,10 @@ func TestUserCreate(t *testing.T) {
 		if user == nil {
 			t.Error("\nUser creation failed\n")
 		}
+		currentUserRole, _ := g.handler.clientset.RbacV1().Roles(user.GetNamespace()).Get(fmt.Sprintf("user-%s", user.GetName()), metav1.GetOptions{})
+		if currentUserRole == nil {
+			t.Error("User role cannot be created")
+		}
 	})
 	t.Run("Check dublicate object", func(t *testing.T) {
 		// Change the user object name to make comparison with the user-created above
@@ -222,15 +225,6 @@ func TestUserCreate(t *testing.T) {
 		if user.Status.Message == nil {
 			t.Error("Duplicate value cannot be detected")
 		}
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
-	})
-	t.Run("Check service error", func(t *testing.T) {
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
-		g.handler.ObjectCreated(g.userObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
-		if user.Status.State != failure {
-			t.Error("Service account error failed")
-		}
 	})
 
 }
@@ -243,6 +237,7 @@ func TestUserUpdate(t *testing.T) {
 	t.Run("Updating Email and Checking the Duplication", func(t *testing.T) {
 		// Creating a user
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		g.handler.ObjectCreated(g.userObj.DeepCopy())
 		// Changing the user email as the same as the authority default created user
 		g.userObj.Spec.Email = "unittest@edge-net.org"
 		var field fields
@@ -259,6 +254,7 @@ func TestUserUpdate(t *testing.T) {
 	t.Run("Updating Email", func(t *testing.T) {
 		// Creating a user
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		g.handler.ObjectCreated(g.userObj.DeepCopy())
 		// Updateing the email
 		g.userObj.Spec.Email = "NewUserObj@email.com"
 		var field fields
@@ -273,6 +269,7 @@ func TestUserUpdate(t *testing.T) {
 	t.Run("Updating role", func(t *testing.T) {
 		// Creating a user
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		g.handler.ObjectCreated(g.userObj.DeepCopy())
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
 		var field fields
 		field.roles = true
@@ -295,7 +292,7 @@ func TestSetEmailVerification(t *testing.T) {
 
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 	result := g.handler.setEmailVerification(user, fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
-	if result == "" {
+	if result != nil {
 		t.Error("user-email-verification-update-malfunction")
 	}
 }
@@ -310,12 +307,9 @@ func TestCreateRoleBindings(t *testing.T) {
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
 	// Invoking createRoleBindings
 	g.handler.createRoleBindings(user.DeepCopy(), g.sliceList.DeepCopy(), g.teamList.DeepCopy(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
-	// Get the list of roleBindings
-	roleBindingListOptions := metav1.ListOptions{}
-	roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", user.GetNamespace(), user.GetName())}
-	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
-	t.Logf("RoleBinding= %v", roleBindings)
-	if roleBindings.Items == nil {
+	// Check the creation of use role Binding
+	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(fmt.Sprintf("%s-user-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
+	if roleBindings == nil {
 		t.Error("RoleBinding Creation failed")
 	}
 }
@@ -331,19 +325,16 @@ func TestDeleteRoleBindings(t *testing.T) {
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
 	// Invoking createRoleBindings
 	g.handler.createRoleBindings(user, g.sliceList.DeepCopy(), g.teamList.DeepCopy(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
-	// Get the list of roleBindings
-	roleBindingListOptions := metav1.ListOptions{}
-	roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", user.GetNamespace(), user.GetName())}
-	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
-	if roleBindings.Items == nil {
+	// Check the creation of use role Binding
+	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(fmt.Sprintf("%s-user-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
+	if roleBindings == nil {
 		t.Error("RoleBinding Creation failed")
 	}
 	g.handler.deleteRoleBindings(user, g.sliceList.DeepCopy(), g.teamList.DeepCopy())
-	roleBindingsResult, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(roleBindingListOptions)
-	if roleBindingsResult.Items != nil {
-		t.Error("RoleBinding Creation failed")
+	roleBindingsResult, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(fmt.Sprintf("%s-user-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
+	if roleBindingsResult != nil {
+		t.Error("RoleBinding Deletion failed")
 	}
-
 }
 
 func TestCreateAUPRoleBinding(t *testing.T) {
@@ -352,20 +343,20 @@ func TestCreateAUPRoleBinding(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetclient)
 
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
-	result := g.handler.createAUPRoleBinding(user)
-	if result != "" {
+	g.handler.ObjectCreated(g.userObj.DeepCopy())
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
+	err := g.handler.createAUPRoleBinding(user)
+	if err != nil {
 		t.Error("Create AUPRoleBinding failed")
 	} else {
-		t.Logf("\nPassed result=%v\n", result)
+		t.Logf("\nPassed result=%v\n", err)
 	}
-
 }
 
 func TestGenerateRandomString(t *testing.T) {
 	for i := 1; i < 5; i++ {
 		origin := generateRandomString(16)
-		time.Sleep(1 * time.Second)
+		time.Sleep(1 * time.Microsecond)
 		test := generateRandomString(16)
 		if origin == test {
 			t.Error("User GenerateRadnomString failed")

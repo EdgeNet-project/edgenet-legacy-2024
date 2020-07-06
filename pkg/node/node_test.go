@@ -1,7 +1,6 @@
 package node
 
 import (
-	"math"
 	"reflect"
 	"testing"
 
@@ -37,96 +36,13 @@ func TestBoundbox(t *testing.T) {
 		inputPoint  [][]float64
 		expectBound []float64
 	}{
-		{[][]float64{{2.352700, 48.854300}}, []float64{-math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64}},
+		{[][]float64{{2.352700, 48.854300}}, []float64{2.3527, 2.3527, 48.8543, 48.8543}},
 	}
 
 	for _, data := range tests {
 		//t.Logf("Tsst, %v", Boundbox(data.inputPoint))
 		if !reflect.DeepEqual(Boundbox(data.inputPoint), data.expectBound) {
 			t.Errorf("fail, get %v, expect %v\n", Boundbox(data.inputPoint), data.expectBound)
-		}
-	}
-
-}
-
-func TestSetNodeLabels(t *testing.T) {
-	data := []struct {
-		clientset      kubernetes.Interface
-		hostname       string
-		labelsExpected map[string]string
-		expected       bool
-	}{
-		{clientset: testclient.NewSimpleClientset(&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node1",
-				Labels: map[string]string{
-					"edge-net.io~1continent":   "",
-					"edge-net.io~1country-iso": "",
-					"edge-net.io~1state-iso":   "",
-					"edge-net.io~1city":        "",
-					"edge-net.io~1lon":         "",
-					"edge-net.io~1lat":         "",
-				},
-			},
-		}),
-			hostname: "node1",
-			expected: true,
-			labelsExpected: map[string]string{
-				"edge-net.io~1continent":   "Europe",
-				"edge-net.io~1country-iso": "FR",
-				"edge-net.io~1state-iso":   "IDF",
-				"edge-net.io~1city":        "Paris",
-				"edge-net.io~1lon":         "e2.352700",
-				"edge-net.io~1lat":         "n48.854300",
-			},
-		},
-	}
-
-	for _, test := range data {
-		//t.Logf("TEST, %v #\n %v #\n %v", test.hostname, test.labelsExpected, test.clientset)
-		if output := setNodeLabels(test.hostname, test.labelsExpected, test.clientset); output != test.expected {
-			t.Error("Error")
-		}
-	}
-}
-
-func TestGetGeolocationByIP(t *testing.T) {
-	data := []struct {
-		clientset         kubernetes.Interface
-		hostname          string
-		ipStr             string
-		geoLabelsExpected map[string]string
-		expected          bool
-	}{
-		{clientset: testclient.NewSimpleClientset(&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node1",
-				Labels: map[string]string{
-					"edge-net.io~1continent":   "",
-					"edge-net.io~1country-iso": "",
-					"edge-net.io~1state-iso":   "",
-					"edge-net.io~1city":        "",
-					"edge-net.io~1lon":         "",
-					"edge-net.io~1lat":         "",
-				},
-			},
-		}),
-			hostname: "node1",
-			expected: true,
-			ipStr:    "46.193.66.93",
-			geoLabelsExpected: map[string]string{
-				"edge-net.io~1continent":   "Europe",
-				"edge-net.io~1country-iso": "FR",
-				"edge-net.io~1state-iso":   "IDF",
-				"edge-net.io~1city":        "Paris",
-				"edge-net.io~1lon":         "e2.352700",
-				"edge-net.io~1lat":         "n48.854300",
-			},
-		},
-	}
-	for _, test := range data {
-		if output, outputGeo := GetGeolocationByIP(test.hostname, test.ipStr, test.clientset); (output != test.expected) || (!reflect.DeepEqual(outputGeo, test.geoLabelsExpected)) {
-			t.Error("Error")
 		}
 	}
 
