@@ -35,7 +35,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj, updated interface{})
 	ObjectDeleted(obj, deleted interface{})
@@ -49,9 +49,8 @@ type Handler struct {
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("TeamHandler.Init")
-	var err error
 	t.clientset = kubernetes
 	t.edgenetClientset = edgenet
 	t.resourceQuota = &corev1.ResourceQuota{}
@@ -76,7 +75,6 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 			"count/cronjobs.batch":          resource.Quantity{Format: "0"},
 		},
 	}
-	return err
 }
 
 // ObjectCreated is called when an object is created

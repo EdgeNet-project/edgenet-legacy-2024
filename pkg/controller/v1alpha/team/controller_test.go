@@ -2,7 +2,6 @@ package team
 
 import (
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/controller/v1alpha/authority"
 	"fmt"
 	"testing"
 	"time"
@@ -13,24 +12,17 @@ import (
 func TestStartController(t *testing.T) {
 	g := TeamTestGroup{}
 	g.Init()
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	g.authorityObj.Status.Enabled = true
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
-
 	// Run the controller in a goroutine
 	go Start(g.client, g.edgenetclient)
 	// Create a team
 	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
-	// g.handler.ObjectCreated(g.teamObj.DeepCopy())
 	// Wait for the status update of created object
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
-	authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityObj.GetName(), metav1.GetOptions{})
-	if !authority.Status.Enabled {
-		t.Error("Add func of event handler authority doesn't work properly")
-	}
+	// authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityObj.GetName(), metav1.GetOptions{})
+	// if !authority.Status.Enabled {
+	// 	t.Error("Add func of event handler authority doesn't work properly")
+	// }
 	team, _ := g.edgenetclient.AppsV1alpha().Teams(g.authorityObj.GetNamespace()).Get(g.teamObj.GetName(), metav1.GetOptions{})
 	if !team.Status.Enabled {
 		t.Error("Add func of event handler authority doesn't work properly")

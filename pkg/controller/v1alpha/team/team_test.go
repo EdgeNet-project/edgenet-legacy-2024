@@ -11,6 +11,7 @@ import (
 	"edgenet/pkg/client/clientset/versioned"
 	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
 	"edgenet/pkg/controller/v1alpha/authority"
+	"edgenet/pkg/controller/v1alpha/user"
 
 	"github.com/Sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,9 +21,7 @@ import (
 )
 
 // Constant variables for events
-const failure = "Failure"
 const success = "Successful"
-const established = "Established"
 
 // The main structure of test group
 type TeamTestGroup struct {
@@ -91,36 +90,6 @@ func (g *TeamTestGroup) Init() {
 			Enabled: false,
 		},
 	}
-	authorityRequestObj := apps_v1alpha.AuthorityRequest{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "AuthorityRequest",
-			APIVersion: "apps.edgenet.io/v1alpha",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "edgenet",
-		},
-		Spec: apps_v1alpha.AuthorityRequestSpec{
-			FullName:  "EdgeNet",
-			ShortName: "EdgeNet",
-			URL:       "https://www.edge-net.org",
-			Address: apps_v1alpha.Address{
-				City:    "Paris",
-				Country: "France",
-				Street:  "4 place Jussieu, boite 169",
-				ZIP:     "75005",
-			},
-			Contact: apps_v1alpha.Contact{
-				Email:     "unittest@edge-net.org",
-				FirstName: "unit",
-				LastName:  "testing",
-				Phone:     "+33NUMBER",
-				Username:  "unittesting",
-			},
-		},
-		Status: apps_v1alpha.AuthorityRequestStatus{
-			State: success,
-		},
-	}
 	userObj := apps_v1alpha.User{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "User",
@@ -143,7 +112,6 @@ func (g *TeamTestGroup) Init() {
 	}
 	g.authorityObj = authorityObj
 	g.teamObj = teamObj
-	g.authorityRequestObj = authorityRequestObj
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
@@ -186,20 +154,26 @@ func TestTeamCreate(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetclient)
 	// Create Team
 	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
+	g.handler.ObjectCreated(g.teamObj.DeepCopy())
 	// Creation of Team
 	t.Run("creation of Team", func(t *testing.T) {
-		team, err := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
+		team, err := g.handler.edgenetClientset.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
 		if team == nil {
 			t.Error("Failed to create new Team when an authority created")
 		}
 		if err != nil {
 			t.Errorf("Failed to create new team, %v", err)
 		}
-		g.handler.ObjectCreated(g.teamObj.DeepCopy())
+		teamChildNamespace, _ := g.handler.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName()), metav1.GetOptions{})
+		if teamChildNamespace == nil {
+			t.Errorf("Failed to create team child namespace")
+		}
 	})
 	t.Run("check duplicate object", func(t *testing.T) {
 		// Create two teams with the same name
 		team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
+		g.handler.ObjectCreated(g.teamObj.DeepCopy())
+
 		if team != nil {
 			t.Error("Duplicate value cannot be detected")
 		}
@@ -210,6 +184,8 @@ func TestTeamUpdate(t *testing.T) {
 	g := TeamTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
+	userHandler := user.Handler{}
+	userHandler.Init(g.client, g.edgenetclient)
 	// Create Team to update later
 	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
 	// Invoke ObjectCreated func to create a team
@@ -217,7 +193,7 @@ func TestTeamUpdate(t *testing.T) {
 	// Update of team status
 	t.Run("Update existing team", func(t *testing.T) {
 		// Building field parameter
-		g.teamObj.Status.Enabled = true
+		g.teamObj.Status.Enabled = false
 		var field fields
 		field.enabled = true
 		// Requesting server to Update internal representation of team
@@ -226,9 +202,15 @@ func TestTeamUpdate(t *testing.T) {
 		g.handler.ObjectUpdated(g.teamObj.DeepCopy(), field)
 		// Verifying Team status is enabled in server's representation of team
 		team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
-		if !team.Status.Enabled {
+		if team.Status.Enabled {
 			t.Error("Failed to update status of team")
 		}
+		// Re-enable team for futher tests
+		g.teamObj.Status.Enabled = true
+		// Requesting server to Update internal representation of team
+		g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.teamObj.DeepCopy())
+		// Invoking ObjectUpdated to send emails to users added or removed from team
+		g.handler.ObjectUpdated(g.teamObj.DeepCopy(), field)
 	})
 	// Add new users to team
 	t.Run("Add new users to team", func(t *testing.T) {
@@ -245,14 +227,17 @@ func TestTeamUpdate(t *testing.T) {
 		g.userObj.Status.Active, g.userObj.Status.AUP = true, true
 		// Creating User before updating requesting server to update internal representation of team
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		userHandler.ObjectCreated(g.userObj.DeepCopy())
 		// Requesting server to update internal representation of team
 		g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.teamObj.DeepCopy())
 		// Invoking ObjectUpdated to send emails to users removed or added to team
 		g.handler.ObjectUpdated(g.teamObj.DeepCopy(), field)
-		// Verifying server's representation of team contains users
-		team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
-		if len(team.Spec.Users) != 1 {
-			t.Error("Failed to add user to team")
+		// Check user rolebinding in team child namespace
+		user, _ := g.handler.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get("user1", metav1.GetOptions{})
+		roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())).Get(fmt.Sprintf("%s-%s-team-%s", user.GetNamespace(), user.GetName(), "admin"), metav1.GetOptions{})
+		// Verifying server created rolebinding for new user in team's child namespace
+		if roleBindings == nil {
+			t.Error("Failed to create Rolebinding for user in team child namespace")
 		}
 	})
 }
@@ -324,6 +309,10 @@ func TestTeamDelete(t *testing.T) {
 				t.Error("Failed to delete users in team")
 			}
 			t.Error("Failed to delete new test team")
+		}
+		teamChildNamespace, _ := g.client.CoreV1().Namespaces().Get(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName()), metav1.GetOptions{})
+		if teamChildNamespace != nil {
+			t.Error("Failed to delete Team child namespace")
 		}
 	})
 }
