@@ -25,13 +25,12 @@ const success = "Successful"
 
 // The main structure of test group
 type TeamTestGroup struct {
-	authorityObj        apps_v1alpha.Authority
-	teamObj             apps_v1alpha.Team
-	authorityRequestObj apps_v1alpha.AuthorityRequest
-	userObj             apps_v1alpha.User
-	client              kubernetes.Interface
-	edgenetclient       versioned.Interface
-	handler             Handler
+	authorityObj  apps_v1alpha.Authority
+	teamObj       apps_v1alpha.Team
+	userObj       apps_v1alpha.User
+	client        kubernetes.Interface
+	edgenetclient versioned.Interface
+	handler       Handler
 }
 
 func TestMain(m *testing.M) {
