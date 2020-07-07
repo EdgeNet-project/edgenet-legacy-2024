@@ -41,12 +41,12 @@ func TestSend(t *testing.T) {
 
 	// Initializing temporary test objects
 	var smtpServer smtpServer
-	smtpServer.From = "yy@xx.fr"
-	smtpServer.Host = "zz.xx.fr"
-	smtpServer.Password = "aa"
-	smtpServer.Port = "587"
-	smtpServer.To = "yyz@xx.fr"
-	smtpServer.Username = "yy"
+	smtpServer.From = "support@planet-lab.eu"
+	smtpServer.Host = "smtp.mailtrap.io"
+	smtpServer.Password = "8260a9b6047ac5"
+	smtpServer.Port = "2525"
+	smtpServer.To = "support@planet-lab.eu"
+	smtpServer.Username = "35372f352f7f11"
 
 	contentData := CommonContentData{}
 	contentData.CommonData.Authority = "TESTAUTHORITY"
@@ -87,6 +87,9 @@ func TestSend(t *testing.T) {
 	for _, subject = range subjects {
 		switch subject {
 		case "user-email-verification", "user-email-verification-update":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, verifyContentData)
+			})
 			_, body = setUserEmailVerificationContent(verifyContentData, smtpServer.From, subject)
 			bodyString := body.String()
 			fmt.Printf(bodyString)
@@ -101,6 +104,9 @@ func TestSend(t *testing.T) {
 			}
 
 		case "user-email-verified-alert", "user-email-verified-notification":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, contentData)
+			})
 			_, body = setUserVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 			bodyString := body.String()
 			if !strings.Contains(bodyString, contentData.CommonData.Authority) {
@@ -124,7 +130,9 @@ func TestSend(t *testing.T) {
 			defer file.Close()
 			defer os.Remove(fmt.Sprintf("../../assets/kubeconfigs/edgenet-authority-%s-%s.cfg", contentData.CommonData.Authority,
 				contentData.CommonData.Username))
-
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, contentData)
+			})
 			_, body = setUserRegistrationContent(contentData, smtpServer.From)
 			bodyString := body.String()
 			if !strings.Contains(bodyString, contentData.CommonData.Authority) {
@@ -138,6 +146,9 @@ func TestSend(t *testing.T) {
 			}
 
 		case "authority-email-verification":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, verifyContentData)
+			})
 			_, body = setAuthorityEmailVerificationContent(verifyContentData, smtpServer.From)
 			bodyString := body.String()
 			if !strings.Contains(bodyString, verifyContentData.CommonData.Authority) {
@@ -154,6 +165,9 @@ func TestSend(t *testing.T) {
 			}
 
 		case "authority-email-verified-alert":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, contentData)
+			})
 			_, body = setAuthorityVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To})
 			bodyString := body.String()
 			if !strings.Contains(bodyString, contentData.CommonData.Authority) {
@@ -167,6 +181,9 @@ func TestSend(t *testing.T) {
 			}
 
 		case "authority-creation-successful":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, contentData)
+			})
 			_, body = setAuthorityRequestContent(contentData, smtpServer.From)
 			bodyString := body.String()
 			if !strings.Contains(bodyString, contentData.CommonData.Authority) {
@@ -177,6 +194,9 @@ func TestSend(t *testing.T) {
 			}
 
 		case "acceptable-use-policy-accepted":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, contentData)
+			})
 			_, body = setAUPConfirmationContent(contentData, smtpServer.From)
 			bodyString := body.String()
 			if !strings.Contains(bodyString, contentData.CommonData.Authority) {
@@ -187,8 +207,10 @@ func TestSend(t *testing.T) {
 			}
 
 		case "acceptable-use-policy-renewal":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, contentData)
+			})
 			_, body = setAUPRenewalContent(contentData, smtpServer.From)
-
 			bodyString := body.String()
 			if !strings.Contains(bodyString, contentData.CommonData.Authority) {
 				t.Errorf("Email template %v.html failed. Template malformed. Expected \"%v\" in template, found \"%v\"\n", subject, contentData.CommonData.Authority, "")
@@ -201,6 +223,9 @@ func TestSend(t *testing.T) {
 			}
 
 		case "acceptable-use-policy-expired":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, contentData)
+			})
 			_, body = setAUPExpiredContent(contentData, smtpServer.From)
 			bodyString := body.String()
 			if !strings.Contains(bodyString, contentData.CommonData.Authority) {
@@ -215,8 +240,10 @@ func TestSend(t *testing.T) {
 
 		case "slice-creation", "slice-removal", "slice-reminder", "slice-deletion", "slice-crash", "slice-total-quota-exceeded", "slice-lack-of-quota",
 			"slice-deletion-failed", "slice-collection-deletion-failed":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, resourceAllocationData)
+			})
 			_, body = setSliceContent(resourceAllocationData, smtpServer.From, []string{smtpServer.To}, subject)
-
 			bodyString := body.String()
 			if !strings.Contains(bodyString, resourceAllocationData.CommonData.Authority) {
 				t.Errorf("Email template %v.html failed. Template malformed. Expected \"%v\" in template, found \"%v\"\n", subject, resourceAllocationData.CommonData.Authority, "")
@@ -241,6 +268,9 @@ func TestSend(t *testing.T) {
 			}
 
 		case "team-creation", "team-removal", "team-deletion", "team-crash":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, resourceAllocationData)
+			})
 			_, body = setTeamContent(resourceAllocationData, smtpServer.From, subject)
 			bodyString := body.String()
 			if !strings.Contains(bodyString, resourceAllocationData.CommonData.Authority) {
@@ -266,6 +296,9 @@ func TestSend(t *testing.T) {
 			}
 
 		case "node-contribution-successful", "node-contribution-failure", "node-contribution-failure-support":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, multiProviderData)
+			})
 			_, body = setNodeContributionContent(multiProviderData, smtpServer.From, []string{smtpServer.To}, subject)
 			bodyString := body.String()
 			if !strings.Contains(bodyString, multiProviderData.CommonData.Authority) {
@@ -289,6 +322,9 @@ func TestSend(t *testing.T) {
 
 		case "authority-validation-failure-name", "authority-validation-failure-email", "authority-email-verification-malfunction",
 			"authority-creation-failure", "authority-email-verification-dubious":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, contentData)
+			})
 			_, body = setAuthorityFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 			bodyString := body.String()
 			if !strings.Contains(bodyString, contentData.CommonData.Authority) {
@@ -302,6 +338,9 @@ func TestSend(t *testing.T) {
 			}
 		case "user-validation-failure-name", "user-validation-failure-email", "user-email-verification-malfunction", "user-creation-failure", "user-serviceaccount-failure",
 			"user-kubeconfig-failure", "user-email-verification-dubious", "user-email-verification-update-malfunction", "user-deactivation-failure":
+			t.Run("Test Mailer send function", func(t *testing.T) {
+				Send(subject, contentData)
+			})
 			_, body = setUserFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 			bodyString := body.String()
 			if !strings.Contains(bodyString, contentData.CommonData.Authority) {
