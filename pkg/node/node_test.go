@@ -36,11 +36,10 @@ func TestBoundbox(t *testing.T) {
 		inputPoint  [][]float64
 		expectBound []float64
 	}{
-		{[][]float64{{2.352700, 48.854300}}, []float64{2.3527, 2.3527, 48.8543, 48.8543}},
+		{[][]float64{{2.352700, 48.854300}, {-0.039305, 51.421792}, {10.035233, 51.780464}}, []float64{-0.039305, 10.035233, 48.8543, 51.780464}},
 	}
 
 	for _, data := range tests {
-		//t.Logf("Tsst, %v", Boundbox(data.inputPoint))
 		if !reflect.DeepEqual(Boundbox(data.inputPoint), data.expectBound) {
 			t.Errorf("fail, get %v, expect %v\n", Boundbox(data.inputPoint), data.expectBound)
 		}
@@ -127,7 +126,7 @@ func TestGetNodeByHostname(t *testing.T) {
 	}
 
 	for _, test := range data {
-		if output, err := getNodeByHostname(test.node, test.clientset); output != test.expected {
+		if output, err := getNodeByHostname(test.clientset, test.node); output != test.expected {
 			t.Error(err)
 		}
 	}

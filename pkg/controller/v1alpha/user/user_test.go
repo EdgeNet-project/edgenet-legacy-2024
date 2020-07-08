@@ -156,7 +156,7 @@ func (g *UserTestGroup) Init() {
 		},
 		Status: apps_v1alpha.UserStatus{
 			State:  success,
-			Active: true,
+			Active: false,
 			AUP:    true,
 		},
 	}
@@ -204,12 +204,19 @@ func TestUserCreate(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 		g.handler.ObjectCreated(g.userObj.DeepCopy())
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
-		if user == nil {
-			t.Error("\nUser creation failed\n")
-		}
+		user.Status.Active = true
+		var field fields
+		field.active = true
+		g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
 		currentUserRole, _ := g.handler.clientset.RbacV1().Roles(user.GetNamespace()).Get(fmt.Sprintf("user-%s", user.GetName()), metav1.GetOptions{})
+		fmt.Printf("\ncurrectUserRole= %v\n", currentUserRole)
 		if currentUserRole == nil {
 			t.Error("User role cannot be created")
+		}
+		roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(metav1.ListOptions{})
+		fmt.Printf("\nRoleBinding= %v\n", roleBindings)
+		if roleBindings == nil {
+			t.Error("RoleBinding Creation failed")
 		}
 	})
 	t.Run("Check dublicate object", func(t *testing.T) {
@@ -264,20 +271,10 @@ func TestUserUpdate(t *testing.T) {
 		if user.Spec.Email != "NewUserObj@email.com" {
 			t.Error("Updating Email Failed")
 		}
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
-	})
-	t.Run("Updating role", func(t *testing.T) {
-		// Creating a user
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
-		g.handler.ObjectCreated(g.userObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
-		var field fields
-		field.roles = true
-		g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
-		roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(fmt.Sprintf("%s-user-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
-		if roleBindings == nil {
-			t.Error("RoleBinding Creation failed")
+		if user.Status.Active != false {
+			t.Error("User is still Active after changing its email!")
 		}
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
 	})
 }
 

@@ -79,7 +79,6 @@ func Boundbox(points [][]float64) []float64 {
 	var maxY float64 = -math.MaxFloat64
 
 	for _, coordinates := range points {
-		fmt.Printf("cordinates=%v", coordinates)
 		minX = math.Min(minX, coordinates[0])
 		maxX = math.Max(maxX, coordinates[0])
 		minY = math.Min(minY, coordinates[1])
@@ -232,7 +231,7 @@ func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
 }
 
 // CreateJoinToken generates token to be used on adding a node onto the cluster
-func CreateJoinToken(ttl string, hostname string, clientset kubernetes.Interface) string {
+func CreateJoinToken(clientset kubernetes.Interface, ttl string, hostname string) string {
 
 	duration, _ := time.ParseDuration(ttl)
 	token, err := infrastructure.CreateToken(clientset, duration, hostname)
@@ -343,7 +342,7 @@ func GetConditionReadyStatus(node *corev1.Node) string {
 }
 
 // getNodeByHostname uses clientset to get namespace requested
-func getNodeByHostname(hostname string, clientset kubernetes.Interface) (string, error) {
+func getNodeByHostname(clientset kubernetes.Interface, hostname string) (string, error) {
 
 	// Examples for error handling:
 	// - Use helper functions like e.g. errors.IsNotFound()

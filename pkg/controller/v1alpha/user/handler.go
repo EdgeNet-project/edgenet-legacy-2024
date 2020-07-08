@@ -132,7 +132,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			userCopy.Status.Active = true
 			// Create the main service account for permanent use
 			// In next versions, there will be a method to renew the token of this service account for security
-			_, err = registration.CreateServiceAccount(userCopy, "main", t.clientset)
+			_, err = registration.CreateServiceAccount(t.clientset, userCopy, "main")
 			if err != nil {
 				log.Println(err.Error())
 				userCopy.Status.State = failure
@@ -192,7 +192,6 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	// Security check to prevent any kind of manipulation on the AUP
 	if fieldUpdated.aup {
 		userAUP, _ := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
-		fmt.Printf("\nUSERAUP_MAIN= %v\n", userAUP)
 		if userAUP.Spec.Accepted != userCopy.Status.AUP {
 			userCopy.Status.AUP = userAUP.Spec.Accepted
 			userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
@@ -267,16 +266,16 @@ func (t *Handler) setEmailVerification(userCopy *apps_v1alpha.User, authorityNam
 	_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(userCopy.GetNamespace()).Create(emailVerification.DeepCopy())
 	if err == nil {
 		t.sendEmail(userCopy, authorityName, emailVerificationCode, "user-email-verification-update")
-		return err
+	} else {
+		t.sendEmail(userCopy, authorityName, "", "user-email-verification-update-malfunction")
 	}
-	t.sendEmail(userCopy, authorityName, "", "user-email-verification-update-malfunction")
 	return err
 }
 
 // createRoleBindings creates user role bindings according to the roles
 func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *apps_v1alpha.SliceList, teamsRaw *apps_v1alpha.TeamList, ownerAuthority string) {
 	// Create role bindings independent of user roles
-	registration.CreateSpecificRoleBindings(userCopy, t.clientset)
+	registration.CreateSpecificRoleBindings(t.clientset, userCopy)
 	// This part creates the rolebindings one by one in different namespaces
 	createLoop := func(slicesRaw *apps_v1alpha.SliceList, namespacePrefix string) {
 		for _, sliceRow := range slicesRaw.Items {
@@ -284,13 +283,13 @@ func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 				// If the user participates in the slice or it is an Authority-admin or a Manager of the owner authority
 				if (sliceUser.Authority == ownerAuthority && sliceUser.Username == userCopy.GetName()) ||
 					(userCopy.GetNamespace() == sliceRow.GetNamespace() && (containsRole(userCopy.Spec.Roles, "admin") || containsRole(userCopy.Spec.Roles, "manager"))) {
-					registration.CreateRoleBindingsByRoles(userCopy, fmt.Sprintf("%s-slice-%s", namespacePrefix, sliceRow.GetName()), "Slice", t.clientset)
+					registration.CreateRoleBindingsByRoles(t.clientset, userCopy, fmt.Sprintf("%s-slice-%s", namespacePrefix, sliceRow.GetName()), "Slice")
 				}
 			}
 		}
 	}
 	// Create the rolebindings in the authority namespace
-	registration.CreateRoleBindingsByRoles(userCopy, userCopy.GetNamespace(), "Authority", t.clientset)
+	registration.CreateRoleBindingsByRoles(t.clientset, userCopy, userCopy.GetNamespace(), "Authority")
 	createLoop(slicesRaw, userCopy.GetNamespace())
 	// List the teams in the authority namespace
 	for _, teamRow := range teamsRaw.Items {
@@ -298,7 +297,7 @@ func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 			// If the user participates in the team or it is an Authority-admin or a Manager of the owner authority
 			if (teamUser.Authority == ownerAuthority && teamUser.Username == userCopy.GetName()) ||
 				(userCopy.GetNamespace() == teamRow.GetNamespace() && (containsRole(userCopy.Spec.Roles, "admin") || containsRole(userCopy.Spec.Roles, "manager"))) {
-				registration.CreateRoleBindingsByRoles(userCopy, fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName()), "Team", t.clientset)
+				registration.CreateRoleBindingsByRoles(t.clientset, userCopy, fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName()), "Team")
 			}
 		}
 		// List the slices in the team namespace
@@ -366,10 +365,7 @@ func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) error {
 		_, err = t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Create(roleBind)
 		if err != nil {
 			log.Infof("Couldn't create user-aup-%s role: %s", userCopy.GetName(), err)
-			return err
 		}
-	} else {
-		return err
 	}
 	return err
 }
