@@ -66,6 +66,7 @@
               <p>Enable an SSH server on your VM, preferably on a port number other than the default port number of 22. You could use port 25020, for instance.</p>
               <p>Create an EdgeNet user (the username does not matter) as a <strong>sudoer</strong>.</p>
               <p>Copy &amp; paste the contents of <a href="https://github.com/EdgeNet-project/edgenet/blob/master/config/id_rsa.pub">the EdgeNet public key</a> into the SSH authorized keys file for the EdgeNet user.</p>
+              <p><strong>P.S.</strong> The user should be allowed to run commands by using <em>sudo</em> without being prompted for the password.</p>
               <h3 id="prepare-a-description-of-your-node-contribution">Prepare a description of your node contribution</h3>
               <p>The <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/"><code>.yaml</code> format</a> is used to describe Kubernetes objects. Create one for the node contribution object, following the model of the example shown below. Your <code>.yaml</code>file must specify the following information regarding your node contribution:</p>
               <ul>
@@ -89,6 +90,8 @@ spec:
   port: 25010
   enabled: true
   user: edgenet</code></pre>
+              <h4 id="node-naming-pattern">Node naming pattern</h4>
+              <p>The node name pattern in use is <code>&lt;authority-name&gt;.&lt;node-contribution-name&gt;.edge-net.io</code> to provide a node list grouping the authorities. According to the example above, the node name would appear as <strong>lip6-lab.ple-1.edge-net.io</strong>.</p>
               <h3 id="make-your-node-contribution">Make your node contribution</h3>
               <p>Using <code>kubectl</code>, create a node contribution object:</p>
               <pre class="pre"><code>kubectl create -f ./nodecontribution.yaml --kubeconfig ./edgenet-kubeconfig.cfg</code></pre>
@@ -97,6 +100,20 @@ spec:
               <p>Follow the status messages as each installation step is completed.</p>
               <p>You can at any time check on the status of your node contribution by invoking the <code>kubectl describe</code> command. In this example, the node name is <strong>ple-1</strong> and the authority namespace is <strong>authority-lip6-lab</strong>:</p>
               <pre class="pre"><code>kubectl describe nodecontribution ple-1 -n authority-lip6-lab --kubeconfig ./edgenet-kubeconfig.cfg</code></pre>
+              <h4 id="in-case-of-failure">In case of failure</h4>
+              <p>If you encounter the state of <strong>Failure</strong> on the status of your node contribution, please make sure that you follow the instructions correctly. When you make sure you correctly follow the instructions, you can delete the node contribution object and recreate it as below:</p>
+              <pre class="pre"><code>kubectl create -f ./nodecontribution.yaml --kubeconfig ./edgenet-kubeconfig.cfg</code></pre>
+              <pre class="pre"><code>kubectl delete -f ./nodecontribution.yaml --kubeconfig ./edgenet-kubeconfig.cfg</code></pre>
+              <p>In case of any other issue, please contact us by the live support widget:</p>
+              <div class="control-group">
+                <a class="custom-button-flat pulse-danger" target="_blank" href="https://tawk.to/edgenet">
+                  <img alt="Live Chat" src="img/link.png"> <span>Live Chat</span>
+                </a>
+              </div>
+              <h2 id="legal-rights">Legal rights</h2>
+              <p>The use of EdgeNet is subject to the user's acceptance of the Acceptable Use Policy. Please <a href="https://edge-net.org/aup.html">click here</a> to reach the AUP.</p>
+              <p>In addition to this, the containers in EdgeNet doesn't hold root privileges by default.</p>
+              <p>Furthermore, we will put the EdgeFlow solution inherited from PlanetFlow in place to track all activity in the next releases.</p>
             </div>
           </div>
           <!-- ************************************************************************************** -->
