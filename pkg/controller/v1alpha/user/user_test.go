@@ -207,15 +207,13 @@ func TestUserCreate(t *testing.T) {
 		user.Status.Active = true
 		var field fields
 		field.active = true
-		g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
+		g.handler.ObjectUpdated(user.DeepCopy(), field)
 		currentUserRole, _ := g.handler.clientset.RbacV1().Roles(user.GetNamespace()).Get(fmt.Sprintf("user-%s", user.GetName()), metav1.GetOptions{})
-		fmt.Printf("\ncurrectUserRole= %v\n", currentUserRole)
 		if currentUserRole == nil {
 			t.Error("User role cannot be created")
 		}
-		roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).List(metav1.ListOptions{})
-		fmt.Printf("\nRoleBinding= %v\n", roleBindings)
-		if roleBindings == nil {
+		roleBinding, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(fmt.Sprintf("%s-user-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
+		if roleBinding == nil {
 			t.Error("RoleBinding Creation failed")
 		}
 	})
