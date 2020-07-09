@@ -10,7 +10,7 @@ To contribute a node, we assume that you already know how to set up a VM with it
 
 ### Set up a VM
 
-EdgeNet is currently accepting *Ubuntu* and *CentOS* VMs as nodes. We plan to broaden our range of supported operating systems over time.
+EdgeNet is currently accepting nodes that run recent *Ubuntu* or *CentOS* distributions. We plan to broaden our range of supported operating systems over time.
 
 ### Open your firewall
 
