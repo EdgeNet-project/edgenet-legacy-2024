@@ -57,6 +57,9 @@ type patchByOwnerReferenceValue struct {
 	Value []metav1.OwnerReference `json:"value"`
 }
 
+// Clientset to be synced by the custom resources
+var Clientset kubernetes.Interface
+
 // GeoFence function determines whether the point is inside a polygon by using the crossing number method.
 // This method counts the number of times a ray starting at a point crosses a polygon boundary edge.
 // The even numbers mean the point is outside and the odd ones mean the point is inside.
@@ -100,8 +103,8 @@ func Boundbox(points [][]float64) []float64 {
 }
 
 // GetKubeletVersion looks at the head node to decide which version of Kubernetes to install
-func GetKubeletVersion(clientset kubernetes.Interface) string {
-	nodeRaw, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master"})
+func GetKubeletVersion() string {
+	nodeRaw, err := Clientset.CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master"})
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -113,7 +116,7 @@ func GetKubeletVersion(clientset kubernetes.Interface) string {
 }
 
 // SetOwnerReferences make the references owner of the node
-func SetOwnerReferences(clientset kubernetes.Interface, nodeName string, ownerReferences []metav1.OwnerReference) error {
+func SetOwnerReferences(nodeName string, ownerReferences []metav1.OwnerReference) error {
 	// Create a patch slice and initialize it to the size of 1
 	// Append the data existing in the label map to the slice
 	nodePatchArr := make([]interface{}, 1)
@@ -125,12 +128,12 @@ func SetOwnerReferences(clientset kubernetes.Interface, nodeName string, ownerRe
 	nodePatchJSON, _ := json.Marshal(nodePatchArr)
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
-	_, err := clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
+	_, err := Clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
 	return err
 }
 
 // SetNodeScheduling syncs the node with the node contribution
-func SetNodeScheduling(clientset kubernetes.Interface, nodeName string, unschedulable bool) error {
+func SetNodeScheduling(nodeName string, unschedulable bool) error {
 	// Create a patch slice and initialize it to the size of 1
 	nodePatchArr := make([]interface{}, 1)
 	nodePatch := patchByBoolValue{}
@@ -141,17 +144,12 @@ func SetNodeScheduling(clientset kubernetes.Interface, nodeName string, unschedu
 	nodePatchJSON, _ := json.Marshal(nodePatchArr)
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
-	_, err := clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
+	_, err := Clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
 	return err
 }
 
 // setNodeLabels uses client-go to patch nodes by processing a labels map
 func setNodeLabels(hostname string, labels map[string]string) bool {
-	clientset, err := bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
 	// Create a patch slice and initialize it to the label size
 	nodePatchArr := make([]patchStringValue, len(labels))
 	nodePatch := patchStringValue{}
@@ -168,7 +166,7 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
-	_, err = clientset.CoreV1().Nodes().Patch(hostname, types.JSONPatchType, nodesJSON)
+	_, err := Clientset.CoreV1().Nodes().Patch(hostname, types.JSONPatchType, nodesJSON)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -289,13 +287,8 @@ func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
 
 // CreateJoinToken generates token to be used on adding a node onto the cluster
 func CreateJoinToken(ttl string, hostname string) string {
-	clientset, err := bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
 	duration, _ := time.ParseDuration(ttl)
-	token, err := infrastructure.CreateToken(clientset, duration, hostname)
+	token, err := infrastructure.CreateToken(Clientset, duration, hostname)
 	if err != nil {
 		log.Println(err.Error())
 		return "error"
@@ -305,13 +298,7 @@ func CreateJoinToken(ttl string, hostname string) string {
 
 // GetList uses clientset to get node list of the cluster
 func GetList() []string {
-	clientset, err := bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-
-	nodesRaw, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodesRaw, err := Clientset.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -340,18 +327,13 @@ func GetStatusList() []byte {
 		Lon        string   `json:"lon"`
 		Lat        string   `json:"lat"`
 	}
-	clientset, err := bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
 
-	nodesRaw, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodesRaw, err := Clientset.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	podsRaw, err := clientset.CoreV1().Pods("").List(metav1.ListOptions{})
+	podsRaw, err := Clientset.CoreV1().Pods("").List(metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -414,16 +396,10 @@ func GetConditionReadyStatus(node *corev1.Node) string {
 
 // getNodeByHostname uses clientset to get namespace requested
 func getNodeByHostname(hostname string) (string, error) {
-	clientset, err := bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-
 	// Examples for error handling:
 	// - Use helper functions like e.g. errors.IsNotFound()
 	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
-	_, err = clientset.CoreV1().Nodes().Get(hostname, metav1.GetOptions{})
+	_, err := Clientset.CoreV1().Nodes().Get(hostname, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		log.Printf("Node %s not found", hostname)
 		return "false", err

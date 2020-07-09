@@ -18,7 +18,6 @@ package emailverification
 
 import (
 	"fmt"
-	"math/rand"
 	"strings"
 	"time"
 
@@ -26,6 +25,7 @@ import (
 	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/mailer"
+	"edgenet/pkg/util"
 
 	log "github.com/Sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -158,7 +158,7 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 	switch obj.(type) {
 	case *apps_v1alpha.AuthorityRequest:
 		authorityRequestCopy := obj.(*apps_v1alpha.AuthorityRequest)
-		code := "bs" + generateRandomString(16)
+		code := "bs" + util.GenerateRandomString(16)
 		emailVerification := apps_v1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: ownerReferences}}
 		emailVerification.SetName(code)
 		emailVerification.Spec.Kind = "Authority"
@@ -175,7 +175,7 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 	case *apps_v1alpha.User:
 		userCopy := obj.(*apps_v1alpha.User)
 		userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
-		code := "bs" + generateRandomString(16)
+		code := "bs" + util.GenerateRandomString(16)
 		emailVerification := apps_v1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: ownerReferences}}
 		emailVerification.SetName(code)
 		emailVerification.Spec.Kind = "Email"
@@ -191,7 +191,7 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 	case *apps_v1alpha.UserRegistrationRequest:
 		URRCopy := obj.(*apps_v1alpha.UserRegistrationRequest)
 		URROwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(URRCopy.GetNamespace(), metav1.GetOptions{})
-		code := "bs" + generateRandomString(16)
+		code := "bs" + util.GenerateRandomString(16)
 		emailVerification := apps_v1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: ownerReferences}}
 		emailVerification.SetName(code)
 		emailVerification.Spec.Kind = "User"
@@ -362,16 +362,4 @@ func containsRole(roles []string, value string) bool {
 		}
 	}
 	return false
-}
-
-// generateRandomString to have a unique string
-func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
-
-	b := make([]rune, n)
-	rand.Seed(time.Now().UnixNano())
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }

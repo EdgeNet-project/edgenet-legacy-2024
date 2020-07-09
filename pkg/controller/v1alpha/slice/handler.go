@@ -95,6 +95,7 @@ func (t *Handler) Init() error {
 			"requests.storage": resource.MustParse("8Gi"),
 		},
 	}
+	permission.Clientset = t.clientset
 	return err
 }
 
@@ -343,7 +344,7 @@ func (t *Handler) runUserInteractions(sliceCopy *apps_v1alpha.Slice, sliceChildN
 		if err == nil {
 			for _, userRow := range userRaw.Items {
 				if userRow.Spec.Active && userRow.Status.AUP && (userRow.Status.Type == "admin" ||
-					permission.CheckUserRole(t.clientset, sliceCopy.GetNamespace(), userRow.Spec.Email, "slices", sliceCopy.GetName())) {
+					permission.CheckAuthorization(sliceCopy.GetNamespace(), userRow.Spec.Email, "slices", sliceCopy.GetName())) {
 					if operation == "slice-creation" {
 						permission.EstablishRoleBindings(userRow.DeepCopy(), sliceChildNamespaceStr, "Slice")
 						//mailSubject = "creation"

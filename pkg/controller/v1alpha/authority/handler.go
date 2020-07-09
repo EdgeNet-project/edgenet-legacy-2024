@@ -88,6 +88,7 @@ func (t *Handler) Init() error {
 			"count/cronjobs.batch":          resource.Quantity{Format: "0"},
 		},
 	}
+	permission.Clientset = t.clientset
 	return err
 }
 
@@ -180,7 +181,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 	// Because of that, this section covers a variety of possibilities
 	_, err := t.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("authority-%s", authorityCopy.GetName()), metav1.GetOptions{})
 	if err != nil {
-		permission.SetClusterRoles(t.clientset, authorityCopy)
+		permission.CreateClusterRoles(authorityCopy)
 		// Automatically create a namespace to host users, slices, and teams
 		// When a authority is deleted, the owner references feature allows the namespace to be automatically removed
 		ownerReferences := SetAsOwnerReference(authorityCopy)
@@ -229,7 +230,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		defer enableAuthorityAdmin()
 		t.sendEmail(authorityCopy, "authority-creation-successful")
 	} else if err == nil {
-		permission.SetClusterRoles(t.clientset, authorityCopy)
+		permission.CreateClusterRoles(authorityCopy)
 		TRQHandler := totalresourcequota.Handler{}
 		err = TRQHandler.Init()
 		if err == nil {

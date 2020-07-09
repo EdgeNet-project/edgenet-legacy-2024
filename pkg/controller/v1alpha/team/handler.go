@@ -19,7 +19,6 @@ package team
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/bootstrap"
@@ -87,6 +86,7 @@ func (t *Handler) Init() error {
 			"count/cronjobs.batch":          resource.Quantity{Format: "0"},
 		},
 	}
+	permission.Clientset = t.clientset
 	return err
 }
 
@@ -208,7 +208,7 @@ func (t *Handler) runUserInteractions(teamCopy *apps_v1alpha.Team, teamChildName
 	if err == nil {
 		for _, userRow := range userRaw.Items {
 			if userRow.Spec.Active && userRow.Status.AUP && (userRow.Status.Type == "admin" ||
-				permission.CheckUserRole(t.clientset, teamCopy.GetNamespace(), userRow.Spec.Email, "teams", teamCopy.GetName())) {
+				permission.CheckAuthorization(teamCopy.GetNamespace(), userRow.Spec.Email, "teams", teamCopy.GetName())) {
 				permission.EstablishRoleBindings(userRow.DeepCopy(), teamChildNamespaceStr, "Team")
 			}
 		}
@@ -276,14 +276,4 @@ func dry(oldSlice []apps_v1alpha.TeamUsers, newSlice []apps_v1alpha.TeamUsers) (
 	}
 
 	return deletedSlice, addedSlice
-}
-
-func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }

@@ -63,6 +63,8 @@ func (t *Handler) Init() error {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
+	registration.Clientset = t.clientset
+	permission.Clientset = t.clientset
 	return err
 }
 
@@ -151,7 +153,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			}
 			// Create the client certs for permanent use
 			// In next versions, there will be a method to renew the certs for security
-			crt, key, err := registration.MakeUser(userOwnerNamespace.Labels["authority-name"], userCopy.GetName(), userCopy.Spec.Email, t.clientset)
+			crt, key, err := registration.MakeUser(userOwnerNamespace.Labels["authority-name"], userCopy.GetName(), userCopy.Spec.Email)
 			if err != nil {
 				log.Println(err.Error())
 				userCopy.Status.State = failure
@@ -159,7 +161,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-cert-failure")
 				return
 			}
-			err = registration.MakeConfig(userOwnerNamespace.Labels["authority-name"], userCopy.GetName(), userCopy.Spec.Email, crt, key, t.clientset)
+			err = registration.MakeConfig(userOwnerNamespace.Labels["authority-name"], userCopy.GetName(), userCopy.Spec.Email, crt, key)
 			if err != nil {
 				log.Println(err.Error())
 				userCopy.Status.State = failure
@@ -307,7 +309,7 @@ func (t *Handler) Create(obj interface{}) bool {
 // createRoleBindings creates user role bindings according to the roles
 func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *apps_v1alpha.SliceList, teamsRaw *apps_v1alpha.TeamList, ownerAuthority string) {
 	// Create role bindings independent of user roles
-	permission.CreateSpecificRoleBindings(userCopy)
+	permission.EstablishPrivateRoleBindings(userCopy)
 	// This part creates the rolebindings one by one in different namespaces
 	createLoop := func(slicesRaw *apps_v1alpha.SliceList, namespacePrefix string) {
 		for _, sliceRow := range slicesRaw.Items {
@@ -315,7 +317,7 @@ func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 				// If the user participates in the slice or it is an Authority-admin of the owner authority
 				if (sliceUser.Authority == ownerAuthority && sliceUser.Username == userCopy.GetName()) ||
 					(userCopy.GetNamespace() == sliceRow.GetNamespace() && userCopy.Status.Type == "admin") ||
-					permission.CheckUserRole(t.clientset, namespacePrefix, userCopy.Spec.Email, "slices", sliceRow.GetName()) {
+					permission.CheckAuthorization(namespacePrefix, userCopy.Spec.Email, "slices", sliceRow.GetName()) {
 					permission.EstablishRoleBindings(userCopy, fmt.Sprintf("%s-slice-%s", namespacePrefix, sliceRow.GetName()), "Slice")
 				}
 			}
@@ -330,7 +332,7 @@ func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 			// If the user participates in the team or it is an Authority-admin of the owner authority
 			if (teamUser.Authority == ownerAuthority && teamUser.Username == userCopy.GetName()) ||
 				(userCopy.GetNamespace() == teamRow.GetNamespace() && userCopy.Status.Type == "admin") ||
-				permission.CheckUserRole(t.clientset, userCopy.GetNamespace(), userCopy.Spec.Email, "teams", teamRow.GetName()) {
+				permission.CheckAuthorization(userCopy.GetNamespace(), userCopy.Spec.Email, "teams", teamRow.GetName()) {
 				permission.EstablishRoleBindings(userCopy, fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName()), "Team")
 			}
 		}

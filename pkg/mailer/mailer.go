@@ -19,15 +19,14 @@ package mailer
 import (
 	"bytes"
 	"crypto/tls"
+	"edgenet/pkg/util"
 	"encoding/base64"
 	"fmt"
 	"html/template"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net/smtp"
 	"os"
-	"time"
 
 	yaml "gopkg.in/yaml.v2"
 )
@@ -100,7 +99,7 @@ func (s *smtpServer) address() string {
 func Send(subject string, contentData interface{}) {
 	// The code below inits the SMTP configuration for sending emails
 	// The path of the yaml config file of smtp server
-	file, err := os.Open("../../config/smtp.yaml")
+	file, err := os.Open("../../configs/smtp.yaml")
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
 		return
@@ -422,7 +421,7 @@ func setAuthorityRequestContent(contentData interface{}, from string) ([]string,
 // setAuthorityEmailVerificationContent to create an email body related to the email verification
 func setAuthorityEmailVerificationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
-	file, err := os.Open("../../config/console.yaml")
+	file, err := os.Open("../../configs/console.yaml")
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
 	}
@@ -463,7 +462,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 	to := registrationData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/user-registration.html")
-	delimiter := generateRandomString(10)
+	delimiter := util.GenerateRandomString(10)
 	body := setCommonEmailHeaders("[EdgeNet] User Registration Successful", from, to, delimiter)
 	t.Execute(&body, registrationData)
 
@@ -487,7 +486,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 // setUserEmailVerificationContent to create an email body related to the email verification
 func setUserEmailVerificationContent(contentData interface{}, from, subject string) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
-	file, err := os.Open("../../config/console.yaml")
+	file, err := os.Open("../../configs/console.yaml")
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
 	}
@@ -530,16 +529,4 @@ func setUserVerifiedAlertContent(contentData interface{}, from string, to []stri
 	t.Execute(&body, alertData)
 
 	return to, body
-}
-
-// generateRandomString to have a unique string
-func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-	b := make([]rune, n)
-	rand.Seed(time.Now().UnixNano())
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }

@@ -82,6 +82,7 @@ func (t *Handler) Init() error {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
+	node.Clientset = t.clientset
 	return err
 }
 
@@ -194,7 +195,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		if err == nil {
 			log.Println("NODE FOUND")
 			if contributedNode.Spec.Unschedulable != !NCCopy.Spec.Enabled {
-				node.SetNodeScheduling(t.clientset, nodeName, !NCCopy.Spec.Enabled)
+				node.SetNodeScheduling(nodeName, !NCCopy.Spec.Enabled)
 			}
 			if NCCopy.Status.State == failure {
 				go t.runRecoveryProcedure(addr, config, nodeName, NCCopy, contributedNode)
@@ -343,7 +344,7 @@ nodeInstallLoop:
 			log.Println("***************Node Patch***************")
 			// Set the node as schedulable or unschedulable according to the node contribution
 			patchStatus := true
-			err := node.SetNodeScheduling(t.clientset, nodeName, !NCCopy.Spec.Enabled)
+			err := node.SetNodeScheduling(nodeName, !NCCopy.Spec.Enabled)
 			if err != nil {
 				NCCopy.Status.State = incomplete
 				NCCopy.Status.Message = append(NCCopy.Status.Message, "Scheduling configuration failed")
@@ -360,7 +361,7 @@ nodeInstallLoop:
 			if err == nil {
 				ownerReferences = append(ownerReferences, ns.SetAsOwnerReference(NCOwnerNamespace)...)
 			}
-			err = node.SetOwnerReferences(t.clientset, nodeName, ownerReferences)
+			err = node.SetOwnerReferences(nodeName, ownerReferences)
 			if err != nil {
 				NCCopy.Status.State = incomplete
 				NCCopy.Status.Message = append(NCCopy.Status.Message, "Setting owner reference failed")
@@ -569,7 +570,7 @@ func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *a
 		log.Println(err)
 		return err
 	}
-	installationCommands, err := getInstallCommands(conn, nodeName, node.GetKubeletVersion(t.clientset)[1:])
+	installationCommands, err := getInstallCommands(conn, nodeName, node.GetKubeletVersion()[1:])
 	if err != nil {
 		log.Println(err)
 		return err

@@ -216,7 +216,7 @@ func Start() {
 										if (oldObj.Spec.Unschedulable == true && newObj.Spec.Unschedulable == false) ||
 											(oldObj.Spec.Unschedulable == false && newObj.Spec.Unschedulable == true) {
 											if NCRow.Spec.Enabled == newObj.Spec.Unschedulable {
-												node.SetNodeScheduling(clientset, newObj.GetName(), !NCRow.Spec.Enabled)
+												node.SetNodeScheduling(newObj.GetName(), !NCRow.Spec.Enabled)
 											}
 										}
 									}

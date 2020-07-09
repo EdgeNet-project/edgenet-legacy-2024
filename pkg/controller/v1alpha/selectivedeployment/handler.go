@@ -19,7 +19,6 @@ package selectivedeployment
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
@@ -953,14 +952,4 @@ func dry(oldSlice []apps_v1alpha.Controller, newSlice []apps_v1alpha.Controller)
 		}
 	}
 	return uniqueSlice
-}
-
-func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }

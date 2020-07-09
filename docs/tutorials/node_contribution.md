@@ -40,7 +40,7 @@ Enable an SSH server on your VM, preferably on a port number other than the defa
 
 Create an EdgeNet user (the username does not matter) as a **sudoer**.
 
-Copy & paste the contents of [the EdgeNet public key](https://github.com/EdgeNet-project/edgenet/blob/master/config/id_rsa.pub) into the SSH authorized keys file for the EdgeNet user.
+Copy & paste the contents of [the EdgeNet public key](https://github.com/EdgeNet-project/edgenet/blob/master/configs/id_rsa.pub) into the SSH authorized keys file for the EdgeNet user.
 
 ### Prepare a description of your node contribution
 
