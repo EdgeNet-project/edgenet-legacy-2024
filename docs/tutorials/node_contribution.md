@@ -22,7 +22,7 @@ At a minimum, it will only be possible for you to contribute a node if the Kuber
 
 You will use [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview/), the [Kubernetes](https://kubernetes.io/) command-line interface.
 
-You will most likely have used ``kubectl`` to create your EdgeNet user account to begin with. If you need to install it again, please see the releavant [Kubernetes documentation](https://kubernetes.io/docs/tasks/tools/install-kubectl/).
+You will most likely have used ``kubectl`` to create your EdgeNet user account to begin with. If you need to install the tool again, please see the relevant [Kubernetes documentation](https://kubernetes.io/docs/tasks/tools/install-kubectl/).
 
 You will also have received a user-specific kubeconfig file when you created your EdgeNet user account. You will authenticate with this kubeconfig file when you make a node contribution. In what follows, we will assume that it is saved in your working directory on your system as ``./edgenet-kubeconfig.cfg``. If it is elsewhere, please be sure to modify the commands accordingly.
 
