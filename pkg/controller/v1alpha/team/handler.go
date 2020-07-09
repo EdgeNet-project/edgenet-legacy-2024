@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/mailer"
 	"edgenet/pkg/registration"
@@ -36,7 +35,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj, updated interface{})
 	ObjectDeleted(obj, deleted interface{})
@@ -44,25 +43,17 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 	resourceQuota    *corev1.ResourceQuota
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("TeamHandler.Init")
-	var err error
-	t.clientset, err = authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
+
 	t.resourceQuota = &corev1.ResourceQuota{}
 	t.resourceQuota.Name = "team-quota"
 	t.resourceQuota.Spec = corev1.ResourceQuotaSpec{
@@ -85,7 +76,6 @@ func (t *Handler) Init() error {
 			"count/cronjobs.batch":          resource.Quantity{Format: "0"},
 		},
 	}
-	return err
 }
 
 // ObjectCreated is called when an object is created
@@ -191,7 +181,7 @@ func (t *Handler) runUserInteractions(teamCopy *apps_v1alpha.Team, teamChildName
 		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", teamUser.Authority)).Get(teamUser.Username, metav1.GetOptions{})
 		if err == nil && user.Status.Active && user.Status.AUP {
 			if operation == "team-creation" {
-				registration.CreateRoleBindingsByRoles(user.DeepCopy(), teamChildNamespaceStr, "Team")
+				registration.CreateRoleBindingsByRoles(t.clientset, user.DeepCopy(), teamChildNamespaceStr, "Team")
 			}
 
 			if !(operation == "team-creation" && !enabled) {
@@ -204,7 +194,7 @@ func (t *Handler) runUserInteractions(teamCopy *apps_v1alpha.Team, teamChildName
 	if err == nil {
 		for _, userRow := range userRaw.Items {
 			if userRow.Status.Active && userRow.Status.AUP && (containsRole(userRow.Spec.Roles, "admin") || containsRole(userRow.Spec.Roles, "manager")) {
-				registration.CreateRoleBindingsByRoles(userRow.DeepCopy(), teamChildNamespaceStr, "Team")
+				registration.CreateRoleBindingsByRoles(t.clientset, userRow.DeepCopy(), teamChildNamespaceStr, "Team")
 			}
 		}
 	}

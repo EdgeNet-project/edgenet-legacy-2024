@@ -26,10 +26,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-
 // Create function checks namespace occupied or not and uses clientset to create a namespace
-func Create(name string, clientset kubernetes.Interface) (string, error) {
-	exist, err := GetNamespaceByName(name, clientset)
+func Create(clientset kubernetes.Interface, name string) (string, error) {
+	exist, err := GetNamespaceByName(clientset, name)
 	if (err == nil && exist == "true") || (err != nil && exist == "error") {
 		if err == nil {
 			err = errors.NewGone(exist)
@@ -46,12 +45,11 @@ func Create(name string, clientset kubernetes.Interface) (string, error) {
 	return result.GetObjectMeta().GetName(), nil
 }
 
-
 // Delete function checks whether namespace exists, and uses clientset to delete the namespace
-func Delete(namespace string, clientset kubernetes.Interface) (string, error) {
-	
+func Delete(clientset kubernetes.Interface, namespace string) (string, error) {
+
 	// Check namespace exists or not
-	exist, err := GetNamespaceByName(namespace, clientset)
+	exist, err := GetNamespaceByName(clientset, namespace)
 	if err == nil && exist == "true" {
 		err := clientset.CoreV1().Namespaces().Delete(namespace, &metav1.DeleteOptions{})
 		if err != nil {
@@ -69,7 +67,7 @@ func Delete(namespace string, clientset kubernetes.Interface) (string, error) {
 
 // GetList uses clientset, this function gets list of namespaces by eliminating "default", "kube-system", and "kube-public"
 func GetList(clientset kubernetes.Interface) []string {
-	
+
 	// FieldSelector allows getting filtered results
 	namespaceRaw, err := clientset.CoreV1().Namespaces().List(
 		metav1.ListOptions{FieldSelector: "metadata.name!=default,metadata.name!=kube-system,metadata.name!=kube-public"})
@@ -85,7 +83,7 @@ func GetList(clientset kubernetes.Interface) []string {
 }
 
 // GetNamespaceByName uses clientset to get namespace requested
-func GetNamespaceByName(name string, clientset kubernetes.Interface) (string, error) {
+func GetNamespaceByName(clientset kubernetes.Interface, name string) (string, error) {
 	// Examples for error handling:
 	// - Use helper functions like e.g. errors.IsNotFound()
 	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
@@ -103,4 +101,3 @@ func GetNamespaceByName(name string, clientset kubernetes.Interface) (string, er
 		return "true", nil
 	}
 }
-
