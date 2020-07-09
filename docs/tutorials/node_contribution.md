@@ -6,7 +6,7 @@ Each node falls under what we call an *authority* in EdgeNet, which is a group, 
 
 ## Preliminaries
 
-To contribute a node, we assume that you already know how to set up a VM and ensure that certain of its port numbers are accessible from the internet.
+To contribute a node, we assume that you already know how to set up a VM with its own public IP address and ensure that certain of its port numbers are accessible from the internet.
 
 ### Set up a VM
 
