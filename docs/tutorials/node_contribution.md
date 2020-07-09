@@ -16,7 +16,7 @@ EdgeNet is currently accepting nodes that run recent *Ubuntu* or *CentOS* distri
 
 EdgeNet is most useful to researchers if its nodes are entirely open to the internet, without a firewall blocking incoming traffic in any way. This is easiest if your server is in a perimeter network, sometimes called a *DMZ* or *science DMZ*. If you are contributing resources from elsewhere, please do your best, within the limits of what your institution allows. If the server is in your home, please open as many ports as your internet service provider allows.
 
-At a minimum, you may only contribute a node if the Kubernetes [required ports](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#check-required-ports) are accessible from the internet.
+At a minimum, it will only be possible for you to contribute a node if the Kubernetes [required ports](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#check-required-ports) are accessible from the internet.
 
 ## Technologies you will use
 
