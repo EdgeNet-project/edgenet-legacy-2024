@@ -91,20 +91,20 @@ func (s *smtpServer) address() string {
 }
 
 // Send function consumed by the custom resources to send emails
-func Send(subject string, contentData interface{}) {
+func Send(subject string, contentData interface{}) error {
 	// The code below inits the SMTP configuration for sending emails
 	// The path of the yaml config file of smtp server
 	file, err := os.Open("../../config/smtp.yaml")
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
-		return
+		return err
 	}
 	decoder := yaml.NewDecoder(file)
 	var smtpServer smtpServer
 	err = decoder.Decode(&smtpServer)
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
-		return
+		return err
 	}
 
 	// This section determines which email to send whom
@@ -148,7 +148,7 @@ func Send(subject string, contentData interface{}) {
 	client, err := smtp.Dial(smtpServer.address())
 	if err != nil {
 		log.Println(err)
-		return
+		return err
 	}
 	// Check if the server supports TLS
 	if ok, _ := client.Extension("STARTTLS"); ok {
@@ -156,7 +156,7 @@ func Send(subject string, contentData interface{}) {
 		cfg := &tls.Config{ServerName: smtpServer.Host, InsecureSkipVerify: true}
 		if err = client.StartTLS(cfg); err != nil {
 			log.Println(err)
-			return
+			return err
 		}
 	}
 	// Check if the server supports SMTP authentication
@@ -165,40 +165,41 @@ func Send(subject string, contentData interface{}) {
 		auth := smtp.PlainAuth("", smtpServer.Username, smtpServer.Password, smtpServer.Host)
 		if err = client.Auth(auth); err != nil {
 			log.Println(err)
-			return
+			return err
 		}
 	}
 	// The part below starts a mail transaction by using the provided email address
 	if err = client.Mail(smtpServer.From); err != nil {
 		log.Println(err)
-		return
+		return err
 	}
 	// Add recipients to the email
 	for _, addr := range to {
 		if err = client.Rcpt(addr); err != nil {
 			log.Println(err)
-			return
+			return err
 		}
 	}
 	// To write the mail headers and body
 	w, err := client.Data()
 	if err != nil {
 		log.Println(err)
-		return
+		return err
 	}
 	_, err = w.Write(body.Bytes())
 	if err != nil {
 		log.Println(err)
-		return
+		return err
 	}
 	err = w.Close()
 	if err != nil {
 		log.Println(err)
-		return
+		return err
 	}
 	// Close the connection to the server
 	client.Quit()
 	log.Printf("Mailer: email sent to  %s!", to)
+	return err
 }
 
 // setCommonEmailHeaders to create an email body by subject and common headers
