@@ -25,6 +25,8 @@ import (
 	"regexp"
 	"strings"
 
+	"k8s.io/client-go/kubernetes"
+
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/authorization"
 	custconfig "edgenet/pkg/config"
@@ -41,12 +43,8 @@ import (
 )
 
 // CreateSpecificRoleBindings generates role bindings to allow users to access their user objects and the authority to which they belong
-func CreateSpecificRoleBindings(userCopy *apps_v1alpha.User) {
-	clientset, err := authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+func CreateSpecificRoleBindings(clientset kubernetes.Interface, userCopy *apps_v1alpha.User) {
+	var err error
 	// When a user is deleted, the owner references feature allows the related objects to be automatically removed
 	userOwnerReferences := setOwnerReferences(userCopy)
 	// Put the service account dedicated to the user into the role bind subjects
@@ -77,12 +75,8 @@ func CreateSpecificRoleBindings(userCopy *apps_v1alpha.User) {
 }
 
 // CreateRoleBindingsByRoles generates the rolebindings according to user roles in the namespace specified
-func CreateRoleBindingsByRoles(userCopy *apps_v1alpha.User, namespace string, namespaceType string) {
-	clientset, err := authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+func CreateRoleBindingsByRoles(clientset kubernetes.Interface, userCopy *apps_v1alpha.User, namespace string, namespaceType string) {
+	var err error
 	// When a user is deleted, the owner references feature allows the related objects to be automatically removed
 	ownerReferences := setOwnerReferences(userCopy)
 	// Put the service account dedicated to the user into the role bind subjects
@@ -104,12 +98,7 @@ func CreateRoleBindingsByRoles(userCopy *apps_v1alpha.User, namespace string, na
 
 // CreateServiceAccount makes a service account to serve the user. This functionality covers two types of service accounts
 // in EdgeNet use, permanent for main use and temporary for safety.
-func CreateServiceAccount(userCopy *apps_v1alpha.User, accountType string) (*corev1.ServiceAccount, error) {
-	clientset, err := authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+func CreateServiceAccount(clientset kubernetes.Interface, userCopy *apps_v1alpha.User, accountType string) (*corev1.ServiceAccount, error) {
 	// Set the name of service account according to the type
 	name := userCopy.GetName()
 	ownerReferences := setOwnerReferences(userCopy)
@@ -194,8 +183,8 @@ func setOwnerReferences(objCopy interface{}) []metav1.OwnerReference {
 // MakeUser generates key and certificate and then set credentials into the config file. As the next step,
 // this function creates user role and role bindings for the namespace. Lastly, this checks the namespace
 // created successfully or not.
-func MakeUser(user string) ([]byte, int) {
-	userNamespace, err := namespace.Create(user)
+func MakeUser(clientset kubernetes.Interface, user string) ([]byte, int) {
+	userNamespace, err := namespace.Create(clientset, user)
 	if err != nil {
 		log.Printf("Namespace %s couldn't be created.", user)
 		resultMap := map[string]string{"status": "Failure"}
@@ -217,12 +206,6 @@ func MakeUser(user string) ([]byte, int) {
 		resultMap := map[string]string{"status": "Failure"}
 		result, _ := json.Marshal(resultMap)
 		return result, 500
-	}
-
-	clientset, err := authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
 	}
 
 	rbSubjects := []rbacv1.Subject{{Kind: "ServiceAccount", Name: "default", Namespace: user}}
@@ -251,7 +234,7 @@ func MakeUser(user string) ([]byte, int) {
 		return result, 500
 	}
 
-	exist, err := namespace.GetNamespaceByName(user)
+	exist, err := namespace.GetNamespaceByName(clientset, user)
 	if err == nil && exist == "true" {
 		resultMap := map[string]string{"status": "Acknowledged"}
 		result, _ := json.Marshal(resultMap)

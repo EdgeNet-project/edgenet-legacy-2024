@@ -2,14 +2,14 @@ package nodelabeler
 
 import (
 	"edgenet/pkg/node"
-	
+
 	log "github.com/Sirupsen/logrus"
 	api_v1 "k8s.io/api/core/v1"
 )
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init()
 	SetNodeGeolocation(obj interface{})
 }
 
@@ -17,23 +17,22 @@ type HandlerInterface interface {
 type Handler struct{}
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init() {
 	log.Info("Handler.Init")
-	return nil
 }
 
 // SetNodeGeolocation is called when an object is created or updated
 func (t *Handler) SetNodeGeolocation(obj interface{}) {
 	log.Info("Handler.ObjectCreated")
 	// Get internal and external IP addresses of the node
-	internalIP, externalIP := node.GetNodeIPAddresses(obj.(*api_v1.Node))	
+	internalIP, externalIP := node.GetNodeIPAddresses(obj.(*api_v1.Node))
 	result := false
 	// Check if the external IP exists to use it in the first place
 	if externalIP != "" {
 		log.Infof("External IP: %s", externalIP)
 		result = node.GetGeolocationByIP(obj.(*api_v1.Node).Name, externalIP)
 	}
-	// Check if the internal IP exists and 
+	// Check if the internal IP exists and
 	// the result of detecting geolocation by external IP is false
 	if internalIP != "" && result == false {
 		log.Infof("Internal IP: %s", internalIP)

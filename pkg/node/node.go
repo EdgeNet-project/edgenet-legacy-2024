@@ -73,10 +73,10 @@ func GeoFence(boundbox []float64, polygon [][]float64, y float64, x float64) boo
 
 // Boundbox returns a rectangle which created according to the points of the polygon given
 func Boundbox(points [][]float64) []float64 {
-	var minX float64 = -math.MaxFloat64
-	var maxX float64 = math.MaxFloat64
-	var minY float64 = -math.MaxFloat64
-	var maxY float64 = math.MaxFloat64
+	var minX float64 = math.MaxFloat64
+	var maxX float64 = -math.MaxFloat64
+	var minY float64 = math.MaxFloat64
+	var maxY float64 = -math.MaxFloat64
 
 	for _, coordinates := range points {
 		minX = math.Min(minX, coordinates[0])
@@ -109,7 +109,6 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 		row++
 	}
 	nodesJSON, _ := json.Marshal(nodePatchArr)
-
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
 	_, err = clientset.CoreV1().Nodes().Patch(hostname, types.JSONPatchType, nodesJSON)
@@ -232,8 +231,7 @@ func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
 }
 
 // CreateJoinToken generates token to be used on adding a node onto the cluster
-func CreateJoinToken(ttl string, hostname string, clientset kubernetes.Interface) string {
-
+func CreateJoinToken(clientset kubernetes.Interface, ttl string, hostname string) string {
 	duration, _ := time.ParseDuration(ttl)
 	token, err := infrastructure.CreateToken(clientset, duration, hostname)
 	if err != nil {
@@ -343,8 +341,7 @@ func GetConditionReadyStatus(node *corev1.Node) string {
 }
 
 // getNodeByHostname uses clientset to get namespace requested
-func getNodeByHostname(hostname string, clientset kubernetes.Interface) (string, error) {
-
+func getNodeByHostname(clientset kubernetes.Interface, hostname string) (string, error) {
 	// Examples for error handling:
 	// - Use helper functions like e.g. errors.IsNotFound()
 	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
