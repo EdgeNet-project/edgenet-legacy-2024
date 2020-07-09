@@ -1,7 +1,6 @@
 package nodelabeler
 
 import (
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/node"
 
 	log "github.com/Sirupsen/logrus"
@@ -11,26 +10,20 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface)
 	SetNodeGeolocation(obj interface{})
 }
 
 // Handler is a sample implementation of Handler
 type Handler struct {
-	clientset *kubernetes.Clientset
+	clientset kubernetes.Interface
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface) {
 	log.Info("Handler.Init")
-	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+	t.clientset = kubernetes
 	node.Clientset = t.clientset
-	return nil
 }
 
 // SetNodeGeolocation is called when an object is created or updated

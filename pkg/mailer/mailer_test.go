@@ -1,35 +1,35 @@
 package mailer
+
 import (
-	
-	"testing"
-	"strings"
 	"regexp"
-	"fmt"
+	"strings"
+	"testing"
 )
+
 func TestGenerateRandomString(t *testing.T) {
 
 	var codes []string
 
-  for i := 1; i <= 100; i++ {
+	for i := 1; i <= 100; i++ {
 		task := generateRandomString(10)
-		if len(task) != 10{
-		    t.Errorf("code %d has wrong length", len(task))
+		if len(task) != 10 {
+			t.Errorf("code %d has wrong length", len(task))
 		}
-	//string unique
-  if (len(codes) != 0){
-    for _,code := range codes{
-      if(strings.Compare(task, code )) == 0 {
-          t.Errorf("duplicate code %s received", task)
-      }
-    }
-  }
-	codes = append(codes, task)
+		//string unique
+		if len(codes) != 0 {
+			for _, code := range codes {
+				if (strings.Compare(task, code)) == 0 {
+					t.Errorf("duplicate code %s received", task)
+				}
+			}
+		}
+		codes = append(codes, task)
 
-  // if string
+		// if string
 		var IsLetter = regexp.MustCompile(`^[a-zA-Z]+$`).MatchString
 
-	if(!IsLetter(task)){
-	   t.Errorf("Not string code %s received", task)
+		if !IsLetter(task) {
+			t.Errorf("Not string code %s received", task)
+		}
 	}
-}
 }

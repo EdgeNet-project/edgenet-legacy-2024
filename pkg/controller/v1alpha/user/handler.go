@@ -21,7 +21,6 @@ import (
 	"reflect"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/emailverification"
 	"edgenet/pkg/mailer"
@@ -37,7 +36,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj, updated interface{})
 	ObjectDeleted(obj interface{})
@@ -45,27 +44,15 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("UserHandler.Init")
-	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	registration.Clientset = t.clientset
-	permission.Clientset = t.clientset
-	return err
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
@@ -77,6 +64,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
 	// Check if the email address is already taken
 	emailExists, message := t.checkDuplicateObject(userCopy, userOwnerNamespace.Labels["authority-name"])
+
 	if emailExists {
 		userCopy.Spec.Active = false
 		userUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
@@ -385,7 +373,7 @@ func (t *Handler) deleteRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 }
 
 // createAUPRoleBinding links the AUP up with the user
-func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) {
+func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) error {
 	_, err := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Get(fmt.Sprintf("%s-%s", userCopy.GetNamespace(),
 		fmt.Sprintf("user-aup-%s", userCopy.GetName())), metav1.GetOptions{})
 	if err != nil {
@@ -414,6 +402,7 @@ func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) {
 			}
 		}
 	}
+	return err
 }
 
 // sendEmail to send notification to participants

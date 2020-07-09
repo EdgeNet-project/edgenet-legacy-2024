@@ -27,7 +27,6 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/authority"
 	"edgenet/pkg/mailer"
@@ -44,7 +43,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) error
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj interface{})
 	ObjectDeleted(obj interface{})
@@ -52,25 +51,18 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 	publicKey        ssh.Signer
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) error {
 	log.Info("NCHandler.Init")
 	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
+
 	// Get the SSH Public Key of the headnode
 	key, err := ioutil.ReadFile("../../.ssh/id_rsa")
 	if err != nil {
@@ -702,7 +694,7 @@ func startShell(sess *ssh.Session) (*ssh.Session, error) {
 }
 
 // getInstallCommands prepares the commands necessary according to the OS
-func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion string) ([]string, error) {
+func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion string, kubernetes kubernetes.Interface) ([]string, error) {
 	sess, err := startSession(conn)
 	if err != nil {
 		log.Println(err)
@@ -740,7 +732,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			fmt.Sprintf("hostname %s", hostname),
 			"systemctl enable docker",
 			"systemctl start docker",
-			node.CreateJoinToken("600s", hostname),
+			node.CreateJoinToken("600s", hostname, kubernetes),
 			"systemctl daemon-reload",
 			"systemctl restart kubelet",
 		}
@@ -776,7 +768,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			fmt.Sprintf("hostname %s", hostname),
 			"systemctl enable docker",
 			"systemctl start docker",
-			node.CreateJoinToken("600s", hostname),
+			node.CreateJoinToken("600s", hostname, kubernetes),
 			"systemctl daemon-reload",
 			"systemctl restart kubelet",
 		}

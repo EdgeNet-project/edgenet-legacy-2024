@@ -22,7 +22,6 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/totalresourcequota"
 	"edgenet/pkg/controller/v1alpha/user"
@@ -39,7 +38,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj, updated interface{})
 	ObjectDeleted(obj interface{})
@@ -47,27 +46,19 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset         *kubernetes.Clientset
-	edgenetClientset  *versioned.Clientset
+	clientset         kubernetes.Interface
+	edgenetClientset  versioned.Interface
 	lowResourceQuota  *corev1.ResourceQuota
 	medResourceQuota  *corev1.ResourceQuota
 	highResourceQuota *corev1.ResourceQuota
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("SliceHandler.Init")
-	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
+
 	t.lowResourceQuota = &corev1.ResourceQuota{}
 	t.lowResourceQuota.Name = "slice-low-quota"
 	t.lowResourceQuota.Spec = corev1.ResourceQuotaSpec{
@@ -96,7 +87,6 @@ func (t *Handler) Init() error {
 		},
 	}
 	permission.Clientset = t.clientset
-	return err
 }
 
 // ObjectCreated is called when an object is created

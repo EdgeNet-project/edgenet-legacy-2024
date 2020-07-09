@@ -163,7 +163,6 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 		row++
 	}
 	nodesJSON, _ := json.Marshal(nodePatchArr)
-
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
 	_, err := Clientset.CoreV1().Nodes().Patch(hostname, types.JSONPatchType, nodesJSON)
