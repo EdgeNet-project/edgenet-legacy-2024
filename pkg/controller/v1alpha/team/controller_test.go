@@ -24,16 +24,17 @@ func TestStartController(t *testing.T) {
 		t.Error("Add func of event handler authority doesn't work properly")
 	}
 	// Update a team
-	g.teamObj.Spec.Users = []apps_v1alpha.TeamUsers{
+	team.Spec.Users = []apps_v1alpha.TeamUsers{
 		apps_v1alpha.TeamUsers{
 			Authority: g.authorityObj.GetName(),
 			Username:  "user1",
 		},
 	}
+	g.userObj.Status.AUP = true
 	// Creating User before updating requesting server to update internal representation of team
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 	// Requesting server to update internal representation of team
-	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.teamObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(team)
 	team, _ = g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
 	if len(team.Spec.Users) != 1 {
 		t.Error("Failed to add user to team")
@@ -53,6 +54,7 @@ func TestStartController(t *testing.T) {
 	if team != nil {
 		t.Error("Failed to delete new test team")
 	}
+	time.Sleep(time.Millisecond * 500)
 	teamChildNamespace, _ := g.client.CoreV1().Namespaces().Get(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName()), metav1.GetOptions{})
 	if teamChildNamespace != nil {
 		t.Error("Failed to delete Team child namespace")
