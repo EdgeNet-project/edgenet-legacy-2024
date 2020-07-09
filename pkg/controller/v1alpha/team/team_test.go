@@ -156,13 +156,6 @@ func TestTeamCreate(t *testing.T) {
 	g.handler.ObjectCreated(g.teamObj.DeepCopy())
 	// Creation of Team
 	t.Run("creation of Team", func(t *testing.T) {
-		team, err := g.handler.edgenetClientset.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
-		if team == nil {
-			t.Logf("Failed to create new Team when an authority created")
-		}
-		if err != nil {
-			t.Logf("Failed to create new team, %v", err)
-		}
 		teamChildNamespace, _ := g.handler.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName()), metav1.GetOptions{})
 		if teamChildNamespace == nil {
 			t.Errorf("Failed to create team child namespace")
@@ -248,14 +241,9 @@ func TestTeamUserOwnerReferences(t *testing.T) {
 	// Creating team with one user
 	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
 	g.handler.ObjectCreated(g.teamObj.DeepCopy())
-	// Sanity check team created
-	team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
-	if team == nil {
-		t.Logf("Failed to create new team")
-	}
 	// Setting owner references
 	t.Run("Set Owner references", func(t *testing.T) {
-		g.handler.setOwnerReferences(team)
+		g.handler.setOwnerReferences(g.teamObj.DeepCopy())
 		teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())
 		teamChildNamespace, _ := g.client.CoreV1().Namespaces().Get(teamChildNamespaceStr, metav1.GetOptions{})
 		// Verifying team owns child namespace
