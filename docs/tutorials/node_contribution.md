@@ -2,7 +2,7 @@
 
 EdgeNet thrives thanks to contributions from its users and from others who volunteer resources in support of the system. This tutorial describes the very simple process of adding a node to EdgeNet. If you are able to set up a virtual machine (VM) on a server that you administer, then you can contribute, which will be a great benefit to our growing infrastructure and to all EdgeNet users.
 
-Each node falls under what we call an *authority* in EdgeNet, which is a group, or possibly just one person, that takes responsibility for users and/or resources. To contribute a node, please be sure that you are an authority administrator, or that an administrator of your authority has authorized you to make node contributions.
+Each node falls under what we call an *authority* in EdgeNet, which is a group, or possibly just one person, that takes responsibility for users and/or resources. To contribute a node, please be sure that you are an EdgeNet authority administrator, or that an administrator of your authority has authorized you to make node contributions.
 
 ## Preliminaries
 
