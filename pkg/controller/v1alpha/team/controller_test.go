@@ -19,10 +19,6 @@ func TestStartController(t *testing.T) {
 	// Wait for the status update of created object
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
-	// authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityObj.GetName(), metav1.GetOptions{})
-	// if !authority.Status.Enabled {
-	// 	t.Error("Add func of event handler authority doesn't work properly")
-	// }
 	team, _ := g.edgenetclient.AppsV1alpha().Teams(g.authorityObj.GetNamespace()).Get(g.teamObj.GetName(), metav1.GetOptions{})
 	if !team.Status.Enabled {
 		t.Error("Add func of event handler authority doesn't work properly")
@@ -42,12 +38,24 @@ func TestStartController(t *testing.T) {
 	if len(team.Spec.Users) != 1 {
 		t.Error("Failed to add user to team")
 	}
+	// Check user rolebinding in team child namespace
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get("user1", metav1.GetOptions{})
+	time.Sleep(time.Millisecond * 500)
+	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())).Get(fmt.Sprintf("%s-%s-team-%s", user.GetNamespace(), user.GetName(), "admin"), metav1.GetOptions{})
+	// Verifying server created rolebinding for new user in team's child namespace
+	if roleBindings == nil {
+		t.Error("Failed to create Rolebinding for user in team child namespace")
+	}
 	// Delete a user
 	// Requesting server to delete internal representation of team
 	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.teamObj.Name, &metav1.DeleteOptions{})
 	team, _ = g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
 	if team != nil {
 		t.Error("Failed to delete new test team")
+	}
+	teamChildNamespace, _ := g.client.CoreV1().Namespaces().Get(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName()), metav1.GetOptions{})
+	if teamChildNamespace != nil {
+		t.Error("Failed to delete Team child namespace")
 	}
 
 }

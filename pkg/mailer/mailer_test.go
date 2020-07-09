@@ -3,10 +3,13 @@ package mailer
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strings"
 	"testing"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 func TestGenerateRandomString(t *testing.T) {
@@ -39,14 +42,20 @@ func TestGenerateRandomString(t *testing.T) {
 
 func TestSend(t *testing.T) {
 
-	// Initializing temporary test objects
 	var smtpServer smtpServer
-	smtpServer.From = "support@planet-lab.eu"
-	smtpServer.Host = "smtp.mailtrap.io"
-	smtpServer.Password = "8260a9b6047ac5"
-	smtpServer.Port = "2525"
-	smtpServer.To = "support@planet-lab.eu"
-	smtpServer.Username = "35372f352f7f11"
+	// The code below inits the SMTP configuration for sending emails
+	// The path of the yaml config file of test smtp server
+	file, err := os.Open("../../config/smtp_test.yaml")
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+		return
+	}
+	decoder := yaml.NewDecoder(file)
+	err = decoder.Decode(&smtpServer)
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+		return
+	}
 
 	contentData := CommonContentData{}
 	contentData.CommonData.Authority = "TESTAUTHORITY"
