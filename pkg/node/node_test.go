@@ -1,6 +1,7 @@
 package node
 
 import (
+	"reflect"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -21,7 +22,7 @@ func TestUnique(t *testing.T) {
 	}
 	for _, v := range tests {
 		ret := unique(v.input)
-		ok := Equal(ret, v.expect)
+		ok := reflect.DeepEqual(ret, v.expect)
 		if ok {
 			t.Logf("pass")
 		} else {
@@ -29,16 +30,21 @@ func TestUnique(t *testing.T) {
 		}
 	}
 }
-func Equal(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
+
+func TestBoundbox(t *testing.T) {
+	var tests = []struct {
+		inputPoint  [][]float64
+		expectBound []float64
+	}{
+		{[][]float64{{2.352700, 48.854300}, {-0.039305, 51.421792}, {10.035233, 51.780464}}, []float64{-0.039305, 10.035233, 48.8543, 51.780464}},
 	}
-	for i, v := range a {
-		if v != b[i] {
-			return false
+
+	for _, data := range tests {
+		if !reflect.DeepEqual(Boundbox(data.inputPoint), data.expectBound) {
+			t.Errorf("fail, get %v, expect %v\n", Boundbox(data.inputPoint), data.expectBound)
 		}
 	}
-	return true
+
 }
 
 func TestGetList(t *testing.T) {
@@ -70,7 +76,7 @@ func TestGetList(t *testing.T) {
 			expectedNode: []string{"node3", "node4"},
 		}}
 	for _, single := range data {
-		if !Equal(GetList(single.clientset), single.expectedNode) {
+		if !reflect.DeepEqual(GetList(single.clientset), single.expectedNode) {
 			t.Fatal("error")
 		}
 	}
@@ -120,19 +126,17 @@ func TestGetNodeByHostname(t *testing.T) {
 	}
 
 	for _, test := range data {
-		if output, err := getNodeByHostname(test.node, test.clientset); output != test.expected {
+		if output, err := getNodeByHostname(test.clientset, test.node); output != test.expected {
 			t.Error(err)
 		}
 	}
 }
 
 func TestGetNodeIPAddresses(t *testing.T) {
-
 	node1 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1", UID: "01"},
 		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.1", Type: "InternalIP"}, {Address: "10.0.0.1", Type: "ExternalIP"}}}}
 	node2 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-2", UID: "01"},
 		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.2", Type: "InternalIP"}, {Address: "10.0.0.2", Type: "ExternalIP"}}}}
-
 	data := []struct {
 		node       *corev1.Node
 		expectedip []string
@@ -142,7 +146,7 @@ func TestGetNodeIPAddresses(t *testing.T) {
 	}
 
 	for _, test := range data {
-		if outputInternal, outputExternal := GetNodeIPAddresses(test.node); !Equal([]string{outputInternal, outputExternal}, test.expectedip) {
+		if outputInternal, outputExternal := GetNodeIPAddresses(test.node); !reflect.DeepEqual([]string{outputInternal, outputExternal}, test.expectedip) {
 			t.Error("error")
 		}
 	}
