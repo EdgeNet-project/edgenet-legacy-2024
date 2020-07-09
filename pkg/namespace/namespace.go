@@ -19,7 +19,7 @@ package namespace
 import (
 	"log"
 
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 
 	apiv1 "k8s.io/api/core/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -29,7 +29,7 @@ import (
 
 // Create function checks namespace occupied or not and uses clientset to create a namespace
 func Create(name string) (string, error) {
-	clientset, err := authorization.CreateClientSet()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -55,7 +55,7 @@ func Create(name string) (string, error) {
 
 // Delete function checks whether namespace exists, and uses clientset to delete the namespace
 func Delete(namespace string) (string, error) {
-	clientset, err := authorization.CreateClientSet()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -79,7 +79,7 @@ func Delete(namespace string) (string, error) {
 
 // GetList uses clientset, this function gets list of namespaces by eliminating "default", "kube-system", and "kube-public"
 func GetList() []string {
-	clientset, err := authorization.CreateClientSet()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -100,7 +100,7 @@ func GetList() []string {
 
 // GetNamespaceByName uses clientset to get namespace requested
 func GetNamespaceByName(name string) (string, error) {
-	clientset, err := authorization.CreateClientSet()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

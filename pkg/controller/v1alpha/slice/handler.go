@@ -22,13 +22,13 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/totalresourcequota"
 	"edgenet/pkg/controller/v1alpha/user"
 	"edgenet/pkg/mailer"
 	ns "edgenet/pkg/namespace"
-	"edgenet/pkg/registration"
+	"edgenet/pkg/permission"
 
 	log "github.com/Sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -58,12 +58,12 @@ type Handler struct {
 func (t *Handler) Init() error {
 	log.Info("SliceHandler.Init")
 	var err error
-	t.clientset, err = authorization.CreateClientSet()
+	t.clientset, err = bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
+	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -329,7 +329,7 @@ func (t *Handler) runUserInteractions(sliceCopy *apps_v1alpha.Slice, sliceChildN
 		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", sliceUser.Authority)).Get(sliceUser.Username, metav1.GetOptions{})
 		if err == nil && user.Spec.Active && user.Status.AUP {
 			if operation == "slice-creation" {
-				registration.EstablishRoleBindings(user.DeepCopy(), sliceChildNamespaceStr, "Slice")
+				permission.EstablishRoleBindings(user.DeepCopy(), sliceChildNamespaceStr, "Slice")
 			}
 			if !(operation == "slice-creation" && !firstCreation) {
 				t.sendEmail(sliceUser.Username, sliceUser.Authority, ownerAuthority, sliceCopy.GetNamespace(), sliceCopy.GetName(), sliceChildNamespaceStr, operation)
@@ -343,9 +343,9 @@ func (t *Handler) runUserInteractions(sliceCopy *apps_v1alpha.Slice, sliceChildN
 		if err == nil {
 			for _, userRow := range userRaw.Items {
 				if userRow.Spec.Active && userRow.Status.AUP && (userRow.Status.Type == "admin" ||
-					authorization.CheckUserRole(t.clientset, sliceCopy.GetNamespace(), userRow.Spec.Email, "slices", sliceCopy.GetName())) {
+					permission.CheckUserRole(t.clientset, sliceCopy.GetNamespace(), userRow.Spec.Email, "slices", sliceCopy.GetName())) {
 					if operation == "slice-creation" {
-						registration.EstablishRoleBindings(userRow.DeepCopy(), sliceChildNamespaceStr, "Slice")
+						permission.EstablishRoleBindings(userRow.DeepCopy(), sliceChildNamespaceStr, "Slice")
 						//mailSubject = "creation"
 					}
 					/*if !(operation == "slice-creation" && !firstCreation) && !(operation == "slice-creation" && sliceOwner == "team") {

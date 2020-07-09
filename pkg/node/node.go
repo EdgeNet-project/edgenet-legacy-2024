@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/node/infrastructure"
 
 	namecheap "github.com/billputer/go-namecheap"
@@ -147,7 +147,7 @@ func SetNodeScheduling(clientset kubernetes.Interface, nodeName string, unschedu
 
 // setNodeLabels uses client-go to patch nodes by processing a labels map
 func setNodeLabels(hostname string, labels map[string]string) bool {
-	clientset, err := authorization.CreateClientSet()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -278,7 +278,7 @@ func GetNodeIPAddresses(obj *corev1.Node) (string, string) {
 
 // SetHostname generates token to be used on adding a node onto the cluster
 func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
-	client, err := authorization.CreateNamecheapClient()
+	client, err := bootstrap.CreateNamecheapClient()
 	if err != nil {
 		log.Println(err.Error())
 		return false, "Unknown"
@@ -289,7 +289,7 @@ func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
 
 // CreateJoinToken generates token to be used on adding a node onto the cluster
 func CreateJoinToken(ttl string, hostname string) string {
-	clientset, err := authorization.CreateClientSet()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -305,7 +305,7 @@ func CreateJoinToken(ttl string, hostname string) string {
 
 // GetList uses clientset to get node list of the cluster
 func GetList() []string {
-	clientset, err := authorization.CreateClientSet()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -340,7 +340,7 @@ func GetStatusList() []byte {
 		Lon        string   `json:"lon"`
 		Lat        string   `json:"lat"`
 	}
-	clientset, err := authorization.CreateClientSet()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -414,7 +414,7 @@ func GetConditionReadyStatus(node *corev1.Node) string {
 
 // getNodeByHostname uses clientset to get namespace requested
 func getNodeByHostname(hostname string) (string, error) {
-	clientset, err := authorization.CreateClientSet()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

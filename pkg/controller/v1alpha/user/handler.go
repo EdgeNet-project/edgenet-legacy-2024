@@ -21,10 +21,11 @@ import (
 	"reflect"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/emailverification"
 	"edgenet/pkg/mailer"
+	"edgenet/pkg/permission"
 	"edgenet/pkg/registration"
 
 	log "github.com/Sirupsen/logrus"
@@ -52,12 +53,12 @@ type Handler struct {
 func (t *Handler) Init() error {
 	log.Info("UserHandler.Init")
 	var err error
-	t.clientset, err = authorization.CreateClientSet()
+	t.clientset, err = bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
+	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -306,7 +307,7 @@ func (t *Handler) Create(obj interface{}) bool {
 // createRoleBindings creates user role bindings according to the roles
 func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *apps_v1alpha.SliceList, teamsRaw *apps_v1alpha.TeamList, ownerAuthority string) {
 	// Create role bindings independent of user roles
-	registration.CreateSpecificRoleBindings(userCopy)
+	permission.CreateSpecificRoleBindings(userCopy)
 	// This part creates the rolebindings one by one in different namespaces
 	createLoop := func(slicesRaw *apps_v1alpha.SliceList, namespacePrefix string) {
 		for _, sliceRow := range slicesRaw.Items {
@@ -314,14 +315,14 @@ func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 				// If the user participates in the slice or it is an Authority-admin of the owner authority
 				if (sliceUser.Authority == ownerAuthority && sliceUser.Username == userCopy.GetName()) ||
 					(userCopy.GetNamespace() == sliceRow.GetNamespace() && userCopy.Status.Type == "admin") ||
-					authorization.CheckUserRole(t.clientset, namespacePrefix, userCopy.Spec.Email, "slices", sliceRow.GetName()) {
-					registration.EstablishRoleBindings(userCopy, fmt.Sprintf("%s-slice-%s", namespacePrefix, sliceRow.GetName()), "Slice")
+					permission.CheckUserRole(t.clientset, namespacePrefix, userCopy.Spec.Email, "slices", sliceRow.GetName()) {
+					permission.EstablishRoleBindings(userCopy, fmt.Sprintf("%s-slice-%s", namespacePrefix, sliceRow.GetName()), "Slice")
 				}
 			}
 		}
 	}
 	// Create the rolebindings in the authority namespace
-	registration.EstablishRoleBindings(userCopy, userCopy.GetNamespace(), "Authority")
+	permission.EstablishRoleBindings(userCopy, userCopy.GetNamespace(), "Authority")
 	createLoop(slicesRaw, userCopy.GetNamespace())
 	// List the teams in the authority namespace
 	for _, teamRow := range teamsRaw.Items {
@@ -329,8 +330,8 @@ func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 			// If the user participates in the team or it is an Authority-admin of the owner authority
 			if (teamUser.Authority == ownerAuthority && teamUser.Username == userCopy.GetName()) ||
 				(userCopy.GetNamespace() == teamRow.GetNamespace() && userCopy.Status.Type == "admin") ||
-				authorization.CheckUserRole(t.clientset, userCopy.GetNamespace(), userCopy.Spec.Email, "teams", teamRow.GetName()) {
-				registration.EstablishRoleBindings(userCopy, fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName()), "Team")
+				permission.CheckUserRole(t.clientset, userCopy.GetNamespace(), userCopy.Spec.Email, "teams", teamRow.GetName()) {
+				permission.EstablishRoleBindings(userCopy, fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName()), "Team")
 			}
 		}
 		// List the slices in the team namespace

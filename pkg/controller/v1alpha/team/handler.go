@@ -22,12 +22,12 @@ import (
 	"math/rand"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/user"
 	"edgenet/pkg/mailer"
 	ns "edgenet/pkg/namespace"
-	"edgenet/pkg/registration"
+	"edgenet/pkg/permission"
 
 	log "github.com/Sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -55,12 +55,12 @@ type Handler struct {
 func (t *Handler) Init() error {
 	log.Info("TeamHandler.Init")
 	var err error
-	t.clientset, err = authorization.CreateClientSet()
+	t.clientset, err = bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
+	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -195,7 +195,7 @@ func (t *Handler) runUserInteractions(teamCopy *apps_v1alpha.Team, teamChildName
 		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", teamUser.Authority)).Get(teamUser.Username, metav1.GetOptions{})
 		if err == nil && user.Spec.Active && user.Status.AUP {
 			if operation == "team-creation" {
-				registration.EstablishRoleBindings(user.DeepCopy(), teamChildNamespaceStr, "Team")
+				permission.EstablishRoleBindings(user.DeepCopy(), teamChildNamespaceStr, "Team")
 			}
 
 			if !(operation == "team-creation" && !enabled) {
@@ -208,8 +208,8 @@ func (t *Handler) runUserInteractions(teamCopy *apps_v1alpha.Team, teamChildName
 	if err == nil {
 		for _, userRow := range userRaw.Items {
 			if userRow.Spec.Active && userRow.Status.AUP && (userRow.Status.Type == "admin" ||
-				authorization.CheckUserRole(t.clientset, teamCopy.GetNamespace(), userRow.Spec.Email, "teams", teamCopy.GetName())) {
-				registration.EstablishRoleBindings(userRow.DeepCopy(), teamChildNamespaceStr, "Team")
+				permission.CheckUserRole(t.clientset, teamCopy.GetNamespace(), userRow.Spec.Email, "teams", teamCopy.GetName())) {
+				permission.EstablishRoleBindings(userRow.DeepCopy(), teamChildNamespaceStr, "Team")
 			}
 		}
 	}

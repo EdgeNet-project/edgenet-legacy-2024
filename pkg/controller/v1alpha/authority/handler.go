@@ -22,12 +22,12 @@ import (
 	"strings"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/totalresourcequota"
 	"edgenet/pkg/mailer"
 	ns "edgenet/pkg/namespace"
-	"edgenet/pkg/registration"
+	"edgenet/pkg/permission"
 
 	log "github.com/Sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -56,12 +56,12 @@ type Handler struct {
 func (t *Handler) Init() error {
 	log.Info("AuthorityHandler.Init")
 	var err error
-	t.clientset, err = authorization.CreateClientSet()
+	t.clientset, err = bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
+	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -180,7 +180,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 	// Because of that, this section covers a variety of possibilities
 	_, err := t.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("authority-%s", authorityCopy.GetName()), metav1.GetOptions{})
 	if err != nil {
-		registration.SetClusterRoles(t.clientset, authorityCopy)
+		permission.SetClusterRoles(t.clientset, authorityCopy)
 		// Automatically create a namespace to host users, slices, and teams
 		// When a authority is deleted, the owner references feature allows the namespace to be automatically removed
 		ownerReferences := SetAsOwnerReference(authorityCopy)
@@ -229,7 +229,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		defer enableAuthorityAdmin()
 		t.sendEmail(authorityCopy, "authority-creation-successful")
 	} else if err == nil {
-		registration.SetClusterRoles(t.clientset, authorityCopy)
+		permission.SetClusterRoles(t.clientset, authorityCopy)
 		TRQHandler := totalresourcequota.Handler{}
 		err = TRQHandler.Init()
 		if err == nil {

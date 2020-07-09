@@ -24,7 +24,7 @@ import (
 	s "strings"
 	"time"
 
-	custconfig "edgenet/pkg/config"
+	"edgenet/pkg/util"
 
 	namecheap "github.com/billputer/go-namecheap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -63,7 +63,7 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 		return "", err
 	}
 	// This reads server info of the current context from the config file
-	server, err := custconfig.GetServerOfCurrentContext()
+	server, err := util.GetServerOfCurrentContext()
 	if err != nil {
 		log.Println(err)
 		return "", err
