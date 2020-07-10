@@ -1,0 +1,6 @@
+host: "zz.xx.fr"
+port: "587"
+from: "yy@xx.fr"
+username : "yy"
+password : "aa"
+to: "yyz@xx.fr"

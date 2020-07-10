@@ -54,7 +54,6 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 	log.Info("TeamHandler.Init")
 	t.clientset = kubernetes
 	t.edgenetClientset = edgenet
-
 	t.resourceQuota = &corev1.ResourceQuota{}
 	t.resourceQuota.Name = "team-quota"
 	t.resourceQuota.Spec = corev1.ResourceQuotaSpec{
