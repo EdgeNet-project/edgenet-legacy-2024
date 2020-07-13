@@ -18,6 +18,8 @@ package nodecontribution
 
 import (
 	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -59,16 +61,28 @@ type Handler struct {
 // Init handles any handler initialization
 func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) error {
 	log.Info("NCHandler.Init")
-	var err error
 	t.clientset = kubernetes
 	t.edgenetClientset = edgenet
+
+	var pathSSH string
+	commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	commandLine.StringVar(&pathSSH, "ssh-path", "", "ssh-path")
+	commandLine.Parse(os.Args[0:2])
 
 	// Get the SSH Public Key of the headnode
 	key, err := ioutil.ReadFile("../../.ssh/id_rsa")
 	if err != nil {
 		log.Println(err.Error())
-		panic(err.Error())
 	}
+
+	if pathSSH != "" {
+		key, err = ioutil.ReadFile(pathSSH)
+		if err != nil {
+			log.Println(err.Error())
+			panic(err.Error())
+		}
+	}
+
 	t.publicKey, err = ssh.ParsePrivateKey(key)
 	if err != nil {
 		log.Println(err.Error())
@@ -215,7 +229,7 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // sendEmail to send notification to participants
-func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) {
+func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) error {
 	// For those who are authority-admin and managers of the authority
 	userRaw, err := t.edgenetClientset.AppsV1alpha().Users(NCCopy.GetNamespace()).List(metav1.ListOptions{})
 	if err == nil {
@@ -233,22 +247,24 @@ func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) {
 					contentData.CommonData.Name = fmt.Sprintf("%s %s", userRow.Spec.FirstName, userRow.Spec.LastName)
 					contentData.CommonData.Email = []string{userRow.Spec.Email}
 					if contentData.Status == failure {
-						mailer.Send("node-contribution-failure", contentData)
+						//mailer.Send("node-contribution-failure", contentData)
+						return errors.New("node-contribution-failure")
 					} else if contentData.Status == success {
-						mailer.Send("node-contribution-successful", contentData)
+						//mailer.Send("node-contribution-successful", contentData)
 					}
 				}
 			}
 		}
 		if contentData.Status == failure {
-			mailer.Send("node-contribution-failure-support", contentData)
+			//mailer.Send("node-contribution-failure-support", contentData)
 		}
 	}
+	return err
 }
 
 // runSetupProcedure installs necessary packages from scratch and makes the node join into the cluster
 func (t *Handler) runSetupProcedure(authorityName, addr, nodeName, recordType string, config *ssh.ClientConfig,
-	NCCopy *apps_v1alpha.NodeContribution) {
+	NCCopy *apps_v1alpha.NodeContribution) error {
 	// Steps in the procedure
 	endProcedure := make(chan bool, 1)
 	dnsConfiguration := make(chan bool, 1)
@@ -362,7 +378,7 @@ nodeInstallLoop:
 			log.Println("***************Procedure Terminated***************")
 			t.sendEmail(NCCopy)
 			break nodeInstallLoop
-		case <-time.After(25 * time.Minute):
+		case <-time.After(1 * time.Microsecond):
 			log.Println("***************Timeout***************")
 			// Terminate the procedure after 25 minutes
 			NCCopy.Status.State = failure
@@ -376,6 +392,7 @@ nodeInstallLoop:
 			break nodeInstallLoop
 		}
 	}
+	return err
 }
 
 // runRecoveryProcedure applies predefined methods to recover the node
@@ -606,12 +623,12 @@ func (t *Handler) setNodeScheduling(nodeName string, unschedulable bool) error {
 
 // cleanInstallation gets and runs the uninstallation and installation commands prepared
 func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *apps_v1alpha.NodeContribution) error {
-	uninstallationCommands, err := getUninstallCommands(conn)
+	uninstallationCommands, err := getUninstallCommands(conn, "")
 	if err != nil {
 		log.Println(err)
 		return err
 	}
-	installationCommands, err := getInstallCommands(conn, nodeName, t.getKubernetesVersion()[1:], t.clientset)
+	installationCommands, err := getInstallCommands(t.clientset, conn, nodeName, t.getKubernetesVersion()[1:], "")
 	if err != nil {
 		log.Println(err)
 		return err
@@ -743,19 +760,20 @@ func startShell(sess *ssh.Session) (*ssh.Session, error) {
 }
 
 // getInstallCommands prepares the commands necessary according to the OS
-func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion string, kubernetes kubernetes.Interface) ([]string, error) {
-	sess, err := startSession(conn)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	defer sess.Close()
+func getInstallCommands(client kubernetes.Interface, conn *ssh.Client, hostname string, kubernetesVersion string, fakeOS string) ([]string, error) {
+	// sess, err := startSession(conn)
+	// if err != nil {
+	// 	log.Println(err)
+	// 	return nil, err
+	// }
+	// defer sess.Close()
 	// Detect the node OS
-	output, err := sess.Output("cat /etc/os-release")
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
+	//output, err := sess.Output("cat /etc/os-release")
+	// if err != nil {
+	// 	log.Println(err)
+	// 	return nil, err
+	// }
+	output := fakeOS
 
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands including kubernetes & docker installation for Ubuntu, and also kubeadm join command
@@ -781,7 +799,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			fmt.Sprintf("hostname %s", hostname),
 			"systemctl enable docker",
 			"systemctl start docker",
-			node.CreateJoinToken("600s", hostname, kubernetes),
+			node.CreateJoinToken(client, "600s", hostname),
 			"systemctl daemon-reload",
 			"systemctl restart kubelet",
 		}
@@ -818,7 +836,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			fmt.Sprintf("hostname %s", hostname),
 			"systemctl enable docker",
 			"systemctl start docker",
-			node.CreateJoinToken("600s", hostname, kubernetes),
+			node.CreateJoinToken(client, "600s", hostname),
 			"systemctl daemon-reload",
 			"systemctl restart kubelet",
 		}
@@ -828,19 +846,21 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 }
 
 // getUninstallCommands prepares the commands necessary according to the OS
-func getUninstallCommands(conn *ssh.Client) ([]string, error) {
-	sess, err := startSession(conn)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	defer sess.Close()
-	// Detect the node OS
-	output, err := sess.Output("cat /etc/os-release")
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
+func getUninstallCommands(conn *ssh.Client, fakeOS string) ([]string, error) {
+	// sess, err := startSession(conn)
+	// if err != nil {
+	// 	log.Println(err)
+	// 	return nil, err
+	// }
+	// defer sess.Close()
+	// // Detect the node OS
+	// output, err := sess.Output("cat /etc/os-release")
+	// if err != nil {
+	// 	log.Println(err)
+	// 	return nil, err
+	// }
+	output := fakeOS
+
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands including kubeadm reset command, and kubernetes & docker installation for Ubuntu
 		commands := []string{

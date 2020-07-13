@@ -2,8 +2,12 @@ package nodecontribution
 
 import (
 	"edgenet/pkg/client/clientset/versioned"
+	"edgenet/pkg/controller/v1alpha/authority"
+	"edgenet/pkg/controller/v1alpha/user"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"testing"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
@@ -19,26 +23,57 @@ import (
 )
 
 type NodecontributionTestGroup struct {
-	authorityObj  apps_v1alpha.Authority
-	client        kubernetes.Interface
-	edgenetclient versioned.Interface
-	handler       Handler
+	nodecontributionObj apps_v1alpha.NodeContribution
+	authorityObj        apps_v1alpha.Authority
+	userObj             apps_v1alpha.User
+	client              kubernetes.Interface
+	edgenetclient       versioned.Interface
+	handler             Handler
 }
 
+//var SSHPath string
+
 func TestMain(m *testing.M) {
+	// Patch for fixing relative path issue while implementing unit tests
+	os.Args = []string{"-ssh-path", "../../../../config/.ssh/id_rsa",
+		"-namecheap-path", "../../../../config/namecheap.yaml",
+		"-smtp-path", "../../../../config/smtp.yaml",
+		"-authorityCreationTemplate-path", "../../../../assets/templates/email/authority-creation.html"}
+
 	log.SetOutput(ioutil.Discard)
 	logrus.SetOutput(ioutil.Discard)
 	os.Exit(m.Run())
 }
 
 func (g *NodecontributionTestGroup) Init() {
+	nodecontributionObj := apps_v1alpha.NodeContribution{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NodeContribution",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "edgenetNode",
+			Namespace: "authority-edgenetUnitTest",
+		},
+		Spec: apps_v1alpha.NodeContributionSpec{
+			Host:    "143.197.162.100",
+			Port:    525,
+			User:    "edgenetNodeUser",
+			Enabled: false,
+		},
+		Status: apps_v1alpha.NodeContributionStatus{
+			// 	State:   success,
+			// 	Message: append([]string{}, "Node Created successful"),
+		},
+	}
+
 	authorityObj := apps_v1alpha.Authority{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Authority",
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "edgenet",
+			Name: "edgenetUnitTest",
 		},
 		Spec: apps_v1alpha.AuthoritySpec{
 			FullName:  "EdgeNet",
@@ -51,7 +86,7 @@ func (g *NodecontributionTestGroup) Init() {
 				ZIP:     "75005",
 			},
 			Contact: apps_v1alpha.Contact{
-				Email:     "unittest@edge-net.org",
+				Email:     "unitTest@edge-net.org",
 				FirstName: "unit",
 				LastName:  "testing",
 				Phone:     "+33NUMBER",
@@ -62,9 +97,44 @@ func (g *NodecontributionTestGroup) Init() {
 			Enabled: false,
 		},
 	}
+	userObj := apps_v1alpha.User{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "User",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "unittestingObj",
+			Namespace:  "authority-edgenetUnitTest",
+			UID:        "TestUID",
+			Generation: 1,
+		},
+		Spec: apps_v1alpha.UserSpec{
+			FirstName: "EdgeNetFirstName",
+			LastName:  "EdgeNetLastName",
+			Roles:     []string{"Manager"},
+			Email:     "userObj@email.com",
+		},
+		Status: apps_v1alpha.UserStatus{
+			State:  success,
+			Active: true,
+			AUP:    true,
+		},
+	}
 	g.authorityObj = authorityObj
+	g.userObj = userObj
+	g.nodecontributionObj = nodecontributionObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
+	// Invoke authority ObjectCreated to create namespace
+	authorityHandler := authority.Handler{}
+	authorityHandler.Init(g.client, g.edgenetclient)
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
+	// Invoke user ObjectCreated to create a user with role manager
+	userHandler := user.Handler{}
+	userHandler.Init(g.client, g.edgenetclient)
+	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+	userHandler.ObjectCreated(g.userObj.DeepCopy())
 }
 
 //TestHandlerInit for handler initialization
@@ -81,4 +151,107 @@ func TestHandlerInit(t *testing.T) {
 		t.Error("EdgeNet clientset sync problem")
 	}
 
+}
+
+func TestNodeContributionCreate(t *testing.T) {
+	g := NodecontributionTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+
+	t.Run("Creation of Node with Null Host", func(t *testing.T) {
+		// Create a node with null Host field
+		g.nodecontributionObj.Spec.Host = ""
+		g.edgenetclient.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.nodecontributionObj.DeepCopy())
+		g.handler.ObjectCreated(g.nodecontributionObj.DeepCopy())
+		node, _ := g.edgenetclient.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.nodecontributionObj.Name, metav1.GetOptions{})
+		if !reflect.DeepEqual(node.Status.Message, []string{"Host field must be an IP Address"}) {
+			t.Error("Empty Host field get not detected!")
+		}
+	})
+
+	t.Run("Creation of Node while Authority is not enabled", func(t *testing.T) {
+		g.authorityObj.Status.Enabled = false
+		g.edgenetclient.AppsV1alpha().Authorities().Update(g.authorityObj.DeepCopy())
+		//create a node
+		g.edgenetclient.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.nodecontributionObj.DeepCopy())
+		g.handler.ObjectCreated(g.nodecontributionObj.DeepCopy())
+		node, _ := g.handler.edgenetClientset.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.nodecontributionObj.Name, metav1.GetOptions{})
+		if !reflect.DeepEqual(node.Status.Message, []string{"Authority disabled"}) {
+			t.Error("Authority enabled field check failed!")
+		}
+	})
+}
+
+func TestNodeContributionUpdate(t *testing.T) {
+	g := NodecontributionTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+
+	t.Run("Update of NodeContribution with empty host, Authority enabled", func(t *testing.T) {
+		//create a node
+		g.edgenetclient.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.nodecontributionObj.DeepCopy())
+		g.handler.ObjectCreated(g.nodecontributionObj.DeepCopy())
+		node, _ := g.edgenetclient.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.nodecontributionObj.Name, metav1.GetOptions{})
+		node.Spec.Host = ""
+		g.handler.ObjectUpdated(node.DeepCopy())
+		node, _ = g.handler.edgenetClientset.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(node.Name, metav1.GetOptions{})
+		if !reflect.DeepEqual(node.Status.Message, []string{"Host field must be an IP Address"}) {
+			t.Log(node)
+			t.Errorf("Host field detection failed")
+		}
+	})
+}
+
+func TestSendEmail(t *testing.T) {
+	g := NodecontributionTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+	//create a node
+	g.edgenetclient.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.nodecontributionObj.DeepCopy())
+	g.handler.ObjectCreated(g.nodecontributionObj.DeepCopy())
+	err := g.handler.sendEmail(g.nodecontributionObj.DeepCopy())
+	if err != nil {
+		t.Errorf("Send Email failed")
+	}
+}
+
+func TestSetAuthorityAsOwnerRefrence(t *testing.T) {
+	g := NodecontributionTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+	//create a node
+	g.edgenetclient.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.nodecontributionObj.DeepCopy())
+	g.handler.ObjectCreated(g.nodecontributionObj.DeepCopy())
+	err := g.handler.setAuthorityAsOwnerReference(g.authorityObj.Name, g.nodecontributionObj.Name)
+	if err != nil {
+		t.Errorf("SetAuthority as Owner Refrence Failed")
+	}
+}
+
+func TestGetInstallCommands(t *testing.T) {
+	g := NodecontributionTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+
+	var fakeOSName string = "NAME=\"Ubuntu\"VERSION=\"18.04.4 LTS (Bionic Beaver)\"ID=ubuntuID_LIKE=debianPRETTY_NAME=\"Ubuntu 18.04.4 LTS\"VERSION_ID=\"18.04\""
+	_, err := getInstallCommands(g.client, nil, g.nodecontributionObj.GetName(), "1.12", fakeOSName)
+	if err != nil {
+		t.Errorf("Get Install Commands Failed")
+	}
+}
+
+func TestGetUnistallCommands(t *testing.T) {
+	var fakeOSName string = "NAME=\"Ubuntu\"VERSION=\"18.04.4 LTS (Bionic Beaver)\"ID=ubuntuID_LIKE=debianPRETTY_NAME=\"Ubuntu 18.04.4 LTS\"VERSION_ID=\"18.04\""
+	_, err := getUninstallCommands(nil, fakeOSName)
+	if err != nil {
+		t.Errorf("Get Unistall Commands Failed")
+	}
+}
+
+func TestGetRecordType(t *testing.T) {
+	ipV4 := "98.139.180.149"
+	ipV6 := "2607:f0d0:1002:51::4"
+	if (getRecordType(ipV4) != "A") || (getRecordType(ipV6) != "AAAA") {
+		t.Errorf("IP type detection failed")
+	}
 }
