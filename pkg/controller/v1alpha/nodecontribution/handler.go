@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -378,7 +379,7 @@ nodeInstallLoop:
 			log.Println("***************Procedure Terminated***************")
 			t.sendEmail(NCCopy)
 			break nodeInstallLoop
-		case <-time.After(1 * time.Microsecond):
+		case <-time.After(25 * time.Minute):
 			log.Println("***************Timeout***************")
 			// Terminate the procedure after 25 minutes
 			NCCopy.Status.State = failure
@@ -623,12 +624,12 @@ func (t *Handler) setNodeScheduling(nodeName string, unschedulable bool) error {
 
 // cleanInstallation gets and runs the uninstallation and installation commands prepared
 func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *apps_v1alpha.NodeContribution) error {
-	uninstallationCommands, err := getUninstallCommands(conn, "")
+	uninstallationCommands, err := getUninstallCommands(conn, []byte(""))
 	if err != nil {
 		log.Println(err)
 		return err
 	}
-	installationCommands, err := getInstallCommands(t.clientset, conn, nodeName, t.getKubernetesVersion()[1:], "")
+	installationCommands, err := getInstallCommands(t.clientset, conn, nodeName, t.getKubernetesVersion()[1:], []byte(""))
 	if err != nil {
 		log.Println(err)
 		return err
@@ -693,7 +694,7 @@ func rebootNode(conn *ssh.Client) error {
 
 // reconfigureNode gets and runs the configuration commands prepared
 func reconfigureNode(conn *ssh.Client, hostname string) error {
-	configurationCommands, err := getReconfigurationCommands(conn, hostname)
+	configurationCommands, err := getReconfigurationCommands(conn, hostname, []byte(""))
 	if err != nil {
 		log.Println(err)
 		return err
@@ -760,20 +761,24 @@ func startShell(sess *ssh.Session) (*ssh.Session, error) {
 }
 
 // getInstallCommands prepares the commands necessary according to the OS
-func getInstallCommands(client kubernetes.Interface, conn *ssh.Client, hostname string, kubernetesVersion string, fakeOS string) ([]string, error) {
-	// sess, err := startSession(conn)
-	// if err != nil {
-	// 	log.Println(err)
-	// 	return nil, err
-	// }
-	// defer sess.Close()
-	// Detect the node OS
-	//output, err := sess.Output("cat /etc/os-release")
-	// if err != nil {
-	// 	log.Println(err)
-	// 	return nil, err
-	// }
-	output := fakeOS
+func getInstallCommands(client kubernetes.Interface, conn *ssh.Client, hostname string, kubernetesVersion string, fakeOS []byte) ([]string, error) {
+	var output []byte
+	if !reflect.DeepEqual(output, []byte("")) {
+		output = fakeOS
+	} else {
+		sess, err := startSession(conn)
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+		defer sess.Close()
+		// Detect the node OS
+		output, err = sess.Output("cat /etc/os-release")
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+	}
 
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands including kubernetes & docker installation for Ubuntu, and also kubeadm join command
@@ -846,20 +851,24 @@ func getInstallCommands(client kubernetes.Interface, conn *ssh.Client, hostname 
 }
 
 // getUninstallCommands prepares the commands necessary according to the OS
-func getUninstallCommands(conn *ssh.Client, fakeOS string) ([]string, error) {
-	// sess, err := startSession(conn)
-	// if err != nil {
-	// 	log.Println(err)
-	// 	return nil, err
-	// }
-	// defer sess.Close()
-	// // Detect the node OS
-	// output, err := sess.Output("cat /etc/os-release")
-	// if err != nil {
-	// 	log.Println(err)
-	// 	return nil, err
-	// }
-	output := fakeOS
+func getUninstallCommands(conn *ssh.Client, fakeOS []byte) ([]string, error) {
+	var output []byte
+	if !reflect.DeepEqual(output, []byte("")) {
+		output = fakeOS
+	} else {
+		sess, err := startSession(conn)
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+		defer sess.Close()
+		// Detect the node OS
+		output, err = sess.Output("cat /etc/os-release")
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+	}
 
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands including kubeadm reset command, and kubernetes & docker installation for Ubuntu
@@ -887,19 +896,25 @@ func getUninstallCommands(conn *ssh.Client, fakeOS string) ([]string, error) {
 }
 
 // getReconfigurationCommands prepares the commands necessary according to the OS
-func getReconfigurationCommands(conn *ssh.Client, hostname string) ([]string, error) {
-	sess, err := startSession(conn)
-	if err != nil {
-		log.Println(err)
-		return nil, err
+func getReconfigurationCommands(conn *ssh.Client, hostname string, fakeOS []byte) ([]string, error) {
+	var output []byte
+	if !reflect.DeepEqual(output, []byte("")) {
+		output = fakeOS
+	} else {
+		sess, err := startSession(conn)
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+		defer sess.Close()
+		// Detect the node OS
+		output, err = sess.Output("cat /etc/os-release")
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
 	}
-	defer sess.Close()
-	// Detect the node OS
-	output, err := sess.Output("cat /etc/os-release")
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
+
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands to set the hostname, restart docker & kubernetes and flush iptables on Ubuntu
 		commands := []string{

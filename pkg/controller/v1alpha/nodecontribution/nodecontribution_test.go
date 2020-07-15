@@ -4,6 +4,7 @@ import (
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/authority"
 	"edgenet/pkg/controller/v1alpha/user"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -31,14 +32,14 @@ type NodecontributionTestGroup struct {
 	handler             Handler
 }
 
-//var SSHPath string
-
 func TestMain(m *testing.M) {
+
 	// Patch for fixing relative path issue while implementing unit tests
+	flag.Parse()
 	os.Args = []string{"-ssh-path", "../../../../config/.ssh/id_rsa",
-		"-namecheap-path", "../../../../config/namecheap.yaml",
+		"-fakenamecheap-path", "../../../../config/namecheap.yaml",
 		"-smtp-path", "../../../../config/smtp.yaml",
-		"-authorityCreationTemplate-path", "../../../../assets/templates/email/authority-creation.html"}
+		"-authoritycreationtemplate-path", "../../../../assets/templates/email/authority-creation.html"}
 
 	log.SetOutput(ioutil.Discard)
 	logrus.SetOutput(ioutil.Discard)
@@ -59,11 +60,7 @@ func (g *NodecontributionTestGroup) Init() {
 			Host:    "143.197.162.100",
 			Port:    525,
 			User:    "edgenetNodeUser",
-			Enabled: false,
-		},
-		Status: apps_v1alpha.NodeContributionStatus{
-			// 	State:   success,
-			// 	Message: append([]string{}, "Node Created successful"),
+			Enabled: true,
 		},
 	}
 
@@ -158,6 +155,17 @@ func TestNodeContributionCreate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
 
+	t.Run("Creation of Node", func(t *testing.T) {
+		// Create a node
+		g.edgenetclient.AppsV1alpha().NodeContributions(g.nodecontributionObj.GetNamespace()).Create(g.nodecontributionObj.DeepCopy())
+		g.handler.ObjectCreated(g.nodecontributionObj.DeepCopy())
+		node, _ := g.edgenetclient.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.nodecontributionObj.Name, metav1.GetOptions{})
+		if node != nil {
+			t.Log(node)
+			t.Error("Fake Error!")
+		}
+	})
+
 	t.Run("Creation of Node with Null Host", func(t *testing.T) {
 		// Create a node with null Host field
 		g.nodecontributionObj.Spec.Host = ""
@@ -233,18 +241,42 @@ func TestGetInstallCommands(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
 
-	var fakeOSName string = "NAME=\"Ubuntu\"VERSION=\"18.04.4 LTS (Bionic Beaver)\"ID=ubuntuID_LIKE=debianPRETTY_NAME=\"Ubuntu 18.04.4 LTS\"VERSION_ID=\"18.04\""
-	_, err := getInstallCommands(g.client, nil, g.nodecontributionObj.GetName(), "1.12", fakeOSName)
+	var fakeOSDebian []byte = []byte("NAME=UbuntuID=ubuntuID_LIKE=debianPRETTY_NAME=Ubuntu")
+	var fakeOSCentos []byte = []byte("NAME=CentosID=centosID_LIKE=centosPRETTY_NAME=Centos")
+	_, err := getInstallCommands(g.client, nil, g.nodecontributionObj.GetName(), "1.12", fakeOSDebian)
 	if err != nil {
-		t.Errorf("Get Install Commands Failed")
+		t.Errorf("Get Install Debian Commands Failed")
+	}
+	_, err = getInstallCommands(g.client, nil, g.nodecontributionObj.GetName(), "1.15", fakeOSCentos)
+	if err != nil {
+		t.Errorf("Get Install Centos Commands Failed")
 	}
 }
 
 func TestGetUnistallCommands(t *testing.T) {
-	var fakeOSName string = "NAME=\"Ubuntu\"VERSION=\"18.04.4 LTS (Bionic Beaver)\"ID=ubuntuID_LIKE=debianPRETTY_NAME=\"Ubuntu 18.04.4 LTS\"VERSION_ID=\"18.04\""
-	_, err := getUninstallCommands(nil, fakeOSName)
+	var fakeOSDebian []byte = []byte("NAME=UbuntuID=ubuntuID_LIKE=debianPRETTY_NAME=Ubuntu")
+	var fakeOSCentos []byte = []byte("NAME=CentosID=centosID_LIKE=centosPRETTY_NAME=Centos")
+	_, err := getUninstallCommands(nil, fakeOSDebian)
 	if err != nil {
-		t.Errorf("Get Unistall Commands Failed")
+		t.Errorf("Get Unistall Debian Commands Failed")
+	}
+	_, err = getUninstallCommands(nil, fakeOSCentos)
+	if err != nil {
+		t.Errorf("Get Unistall Centos Commands Failed")
+	}
+}
+
+func TestGetReconfigurationCommands(t *testing.T) {
+	fakeHostName := "TestHost"
+	var fakeOSDebian []byte = []byte("NAME=UbuntuID=ubuntuID_LIKE=debianPRETTY_NAME=Ubuntu")
+	var fakeOSCentos []byte = []byte("NAME=CentosID=centosID_LIKE=centosPRETTY_NAME=Centos")
+	_, err := getReconfigurationCommands(nil, fakeHostName, fakeOSDebian)
+	if err != nil {
+		t.Errorf("Get Reconfiguration Debian Commands Failed")
+	}
+	_, err = getReconfigurationCommands(nil, fakeHostName, fakeOSCentos)
+	if err != nil {
+		t.Errorf("Get Reconfiguration Centos Commands Failed")
 	}
 }
 

@@ -151,11 +151,11 @@ func GetNamecheapCredentials() (string, string, string, error) {
 	// Getting the command line argument(if existed) and use another path for namecheap.yaml file
 	var pathNameCheap string
 	commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	commandLine.StringVar(&pathNameCheap, "namecheap-path", "", "namecheap-path")
+	commandLine.StringVar(&pathNameCheap, "fakenamecheap-path", "", "fakenamecheap-path")
 	commandLine.Parse(os.Args[2:4])
 
 	// The path of the yaml config file of namecheap
-	file, err := os.Open("../../config/namecheap.yaml\n")
+	file, err := os.Open("../../config/namecheap.yaml")
 	if err != nil {
 		log.Printf("unexpected error executing command: %v", err)
 	}
