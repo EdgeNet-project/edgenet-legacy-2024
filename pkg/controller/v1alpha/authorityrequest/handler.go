@@ -264,9 +264,8 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 	exists := false
 	message := []string{}
 	// To check username on the users resource
-	authorityRaw, _ := t.edgenetClientset.AppsV1alpha().Authorities().List(
-		metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", authorityRequestCopy.GetName())})
-	if len(authorityRaw.Items) == 0 {
+	authorityRaw, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityRequestCopy.GetName(), metav1.GetOptions{})
+	if authorityRaw == nil {
 		// To check email address among users
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {

@@ -5,8 +5,11 @@ import (
 	"edgenet/pkg/client/clientset/versioned"
 	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
 	"edgenet/pkg/controller/v1alpha/authority"
+	"edgenet/pkg/controller/v1alpha/user"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/Sirupsen/logrus"
@@ -89,8 +92,7 @@ func (g *ARTestGroup) Init() {
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "authority request name",
-			// Namespace: "authority-edgenet",
+			Name: "authorityRequestName",
 		},
 		Spec: apps_v1alpha.AuthorityRequestSpec{
 			FullName:  "John Doe",
@@ -151,9 +153,6 @@ func (g *ARTestGroup) Init() {
 	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	g.authorityObj.SetName("edgenet2")
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 
 func TestHandlerInit(t *testing.T) {
@@ -174,9 +173,7 @@ func TestARCreate(t *testing.T) {
 	g := ARTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	// Creation of Authority request
-
-	// Creation of Authority request
+	// Creation of Authority reques
 	t.Run("creation of Authority request", func(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
 		g.handler.ObjectCreated(g.authorityRequestObj.DeepCopy())
@@ -196,17 +193,6 @@ func TestARCreate(t *testing.T) {
 		if AR.Status.Message == nil {
 			t.Error("Failed to detect Authority name collision")
 		}
-		// t.Log(g.edgenetclient.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{}))
-		// g.authorityRequestObj.SetName("authorityrequest1")
-		// // Create authority request
-		// g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
-		// g.handler.ObjectCreated(g.authorityRequestObj.DeepCopy())
-		// t.Logf("metadata.name==%s", g.authorityRequestObj.GetName())
-		// authorityRaw, _ := g.edgenetclient.AppsV1alpha().Authorities().List(
-		// 	metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", g.authorityRequestObj.GetName())})
-		// t.Log(authorityRaw)
-		// t.Log(g.edgenetclient.AppsV1alpha().Authorities().List(metav1.ListOptions{}))
-		// t.Log(g.edgenetclient.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{}))
 	})
 
 }
@@ -219,39 +205,27 @@ func TestARUpdate(t *testing.T) {
 		// Create Authority request
 		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
 		g.handler.ObjectCreated(g.authorityRequestObj.DeepCopy())
-
-		authorityRaw, _ := g.edgenetclient.AppsV1alpha().Authorities().List(
-			metav1.ListOptions{FieldSelector: "metadata.name==jibberish"})
-		// should be empty
-		t.Log(authorityRaw)
-
-		// // Create user
-		// userHandler := user.Handler{}
-		// userHandler.Init(g.client, g.edgenetclient)
-		// g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
-		// userHandler.ObjectCreated(g.userObj.DeepCopy())
-		// // Update User in authority request to cause collision
-		// g.authorityRequestObj.Spec.Contact.Email = "userName@edge-net.org"
-		// AR, err := g.edgenetclient.AppsV1alpha().AuthorityRequests().Update(g.authorityRequestObj.DeepCopy())
-		// t.Log(AR, err)
-		// g.handler.ObjectUpdated(g.authorityRequestObj.DeepCopy())
-		// AR, err = g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
-		// t.Log(AR, err)
-		// if AR.Status.Message == nil {
-		// 	t.Error("Failed to detect Authority name collision")
-		// }
-
-		// g.authorityRequestObj.SetName("AuthorityRequest")
-
-		// t.Log(AR.Status.Message)
-		// // Checking duplicate emails and authority names
-
-		// // AR, err := g.edgenetclient.AppsV1alpha().AuthorityRequests().Update(g.authorityRequestObj.DeepCopy())
-		// // t.Log(AR, err)
-
-		// // authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
-		// // if authorityRequest.Status.Expires == nil {
-		// // 	t.Errorf("Failed to update approval timeout of authority request")
-		// // }
+		// Create user
+		userHandler := user.Handler{}
+		userHandler.Init(g.client, g.edgenetclient)
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		userHandler.ObjectCreated(g.userObj.DeepCopy())
+		// Set contact email in authority request obj equal to user email to cause collision
+		g.authorityRequestObj.Spec.Contact.Email = "userName@edge-net.org"
+		g.edgenetclient.AppsV1alpha().AuthorityRequests().Update(g.authorityRequestObj.DeepCopy())
+		g.handler.ObjectUpdated(g.authorityRequestObj.DeepCopy())
+		AR, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
+		if AR.Status.Message == nil && strings.Contains(AR.Status.Message[0], "Email address") {
+			t.Error("Failed to detect email address collision")
+		}
+	})
+	t.Run("Testing Authority Request transition to Authority", func(t *testing.T) {
+		g.authorityRequestObj.Spec.Contact.Email = "JohnDoe@edge-net.org"
+		g.edgenetclient.AppsV1alpha().AuthorityRequests().Update(g.authorityRequestObj.DeepCopy())
+		g.handler.ObjectUpdated(g.authorityRequestObj.DeepCopy())
+		authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
+		if authority == nil {
+			t.Error("Failed to create Authority from Authority Request after approval")
+		}
 	})
 }
