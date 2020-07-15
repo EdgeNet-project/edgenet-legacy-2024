@@ -23,7 +23,6 @@ import (
 type ARTestGroup struct {
 	authorityObj        apps_v1alpha.Authority
 	authorityRequestObj apps_v1alpha.AuthorityRequest
-	teamObj             apps_v1alpha.Team
 	userObj             apps_v1alpha.User
 	client              kubernetes.Interface
 	edgenetclient       versioned.Interface
@@ -38,24 +37,6 @@ func TestMain(m *testing.M) {
 
 // Init syncs the test group
 func (g *ARTestGroup) Init() {
-	teamObj := apps_v1alpha.Team{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Team",
-			APIVersion: "apps.edgenet.io/v1alpha",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "edgenetteam",
-			UID:       "edgenetteamUID",
-			Namespace: "authority-edgenet",
-		},
-		Spec: apps_v1alpha.TeamSpec{
-			Users:       []apps_v1alpha.TeamUsers{},
-			Description: "This is a test description",
-		},
-		Status: apps_v1alpha.TeamStatus{
-			Enabled: false,
-		},
-	}
 	authorityObj := apps_v1alpha.Authority{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Authority",
@@ -143,7 +124,6 @@ func (g *ARTestGroup) Init() {
 	}
 	g.authorityObj = authorityObj
 	g.authorityRequestObj = AuthorityRequestObj
-	g.teamObj = teamObj
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
