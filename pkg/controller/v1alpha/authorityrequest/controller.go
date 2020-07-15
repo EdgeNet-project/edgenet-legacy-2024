@@ -23,7 +23,7 @@ import (
 	"syscall"
 	"time"
 
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	appsinformer_v1 "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
 
 	log "github.com/Sirupsen/logrus"
@@ -57,7 +57,7 @@ const success = "Successful"
 
 // Start function is entry point of the controller
 func Start() {
-	edgenetClientset, err := authorization.CreateEdgeNetClientSet()
+	edgenetClientset, err := bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

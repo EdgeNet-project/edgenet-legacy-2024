@@ -18,13 +18,14 @@ package userregistrationrequest
 
 import (
 	"fmt"
-	"math/rand"
 	"reflect"
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
+	"edgenet/pkg/controller/v1alpha/emailverification"
+	"edgenet/pkg/controller/v1alpha/user"
 	"edgenet/pkg/mailer"
 
 	log "github.com/Sirupsen/logrus"
@@ -50,12 +51,12 @@ type Handler struct {
 func (t *Handler) Init() error {
 	log.Info("URRHandler.Init")
 	var err error
-	t.clientset, err = authorization.CreateClientSet()
+	t.clientset, err = bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
+	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -88,9 +89,21 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	// Check if the authority is active
 	if URROwnerAuthority.Spec.Enabled {
 		if URRCopy.Spec.Approved {
-			created := !t.createUser(URRCopy, URROwnerNamespace.Labels["authority-name"])
-			if created {
-				return
+			userHandler := user.Handler{}
+			err := userHandler.Init()
+			if err == nil {
+				created := !userHandler.Create(URRCopy)
+				if created {
+					return
+				} else {
+					t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "user-creation-failure")
+					URRCopy.Status.State = failure
+					URRCopy.Status.Message = []string{"User creation failed", err.Error()}
+					URRCopyUpdated, err := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(URRCopy)
+					if err == nil {
+						URRCopy = URRCopyUpdated
+					}
+				}
 			}
 		}
 		// If the service restarts, it creates all objects again
@@ -103,7 +116,19 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			URRCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(72 * time.Hour),
 			}
-			URRCopy = t.setEmailVerification(URRCopy, URROwnerNamespace.Labels["authority-name"])
+			emailVerificationHandler := emailverification.Handler{}
+			err := emailVerificationHandler.Init()
+			if err == nil {
+				created := emailVerificationHandler.Create(URRCopy, SetAsOwnerReference(URRCopy))
+				if created {
+					// Update the status as successful
+					URRCopy.Status.State = success
+					URRCopy.Status.Message = []string{"Everything is OK, verification email sent"}
+				} else {
+					URRCopy.Status.State = issue
+					URRCopy.Status.Message = []string{"Couldn't send verification email"}
+				}
+			}
 		} else {
 			go t.runApprovalTimeout(URRCopy)
 		}
@@ -126,9 +151,30 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		if !exists {
 			// Check whether the request for user registration approved
 			if URRCopy.Spec.Approved {
-				changeStatus = t.createUser(URRCopy, URROwnerNamespace.Labels["authority-name"])
+				userHandler := user.Handler{}
+				err := userHandler.Init()
+				if err == nil {
+					changeStatus := userHandler.Create(URRCopy)
+					if changeStatus {
+						t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "user-creation-failure")
+						URRCopy.Status.State = failure
+						URRCopy.Status.Message = []string{"User creation failed", err.Error()}
+					}
+				}
 			} else if !URRCopy.Spec.Approved && URRCopy.Status.State == failure {
-				URRCopy = t.setEmailVerification(URRCopy, URROwnerNamespace.Labels["authority-name"])
+				emailVerificationHandler := emailverification.Handler{}
+				err := emailVerificationHandler.Init()
+				if err == nil {
+					created := emailVerificationHandler.Create(URRCopy, SetAsOwnerReference(URRCopy))
+					if created {
+						// Update the status as successful
+						URRCopy.Status.State = success
+						URRCopy.Status.Message = []string{"Everything is OK, verification email sent"}
+					} else {
+						URRCopy.Status.State = issue
+						URRCopy.Status.Message = []string{"Couldn't send verification email"}
+					}
+				}
 				changeStatus = true
 			}
 		} else if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
@@ -150,73 +196,14 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// Mail notification, TBD
 }
 
-// Create a user on authority
-func (t *Handler) createUser(URRCopy *apps_v1alpha.UserRegistrationRequest, authorityName string) bool {
-	failed := false
-	user := apps_v1alpha.User{}
-	user.SetName(URRCopy.GetName())
-	user.Spec.Bio = URRCopy.Spec.Bio
-	user.Spec.Email = URRCopy.Spec.Email
-	user.Spec.FirstName = URRCopy.Spec.FirstName
-	user.Spec.LastName = URRCopy.Spec.LastName
-	user.Spec.URL = URRCopy.Spec.URL
-	user.Spec.Active = true
-	_, err := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Create(user.DeepCopy())
-	if err == nil {
-		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})
-	} else {
-		t.sendEmail(URRCopy, authorityName, "", "user-creation-failure")
-		failed = true
-		URRCopy.Status.State = failure
-		URRCopy.Status.Message = []string{"User creation failed", err.Error()}
-	}
-	return failed
-}
-
-// setEmailVerification to provide one-time code for verification
-func (t *Handler) setEmailVerification(URRCopy *apps_v1alpha.UserRegistrationRequest, authorityName string) *apps_v1alpha.UserRegistrationRequest {
-	// The section below is a part of the method which provides email verification
-	// Email verification code is a security point for email verification. The user
-	// registration object creates an email verification object with a name which is
-	// this email verification code. Only who knows the authority and the email verification
-	// code can manipulate that object by using a public token.
-	URROwnerReferences := t.setOwnerReferences(URRCopy)
-	emailVerificationCode := "bs" + generateRandomString(16)
-	emailVerification := apps_v1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: URROwnerReferences}}
-	emailVerification.SetName(emailVerificationCode)
-	emailVerification.Spec.Kind = "User"
-	emailVerification.Spec.Identifier = URRCopy.GetName()
-	_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(URRCopy.GetNamespace()).Create(emailVerification.DeepCopy())
-	if err == nil {
-		t.sendEmail(URRCopy, authorityName, emailVerificationCode, "user-email-verification")
-		// Update the status as successful
-		URRCopy.Status.State = success
-		URRCopy.Status.Message = []string{"Everything is OK, verification email sent"}
-	} else {
-		t.sendEmail(URRCopy, authorityName, emailVerificationCode, "user-email-verification-malfunction")
-		URRCopy.Status.State = issue
-		URRCopy.Status.Message = []string{"Couldn't send verification email"}
-	}
-	return URRCopy
-}
-
 // sendEmail to send notification to participants
-func (t *Handler) sendEmail(URRCopy *apps_v1alpha.UserRegistrationRequest, authorityName, emailVerificationCode, subject string) {
+func (t *Handler) sendEmail(URRCopy *apps_v1alpha.UserRegistrationRequest, authorityName, subject string) {
 	// Set the HTML template variables
-	var contentData interface{}
-	var collective = mailer.CommonContentData{}
-	collective.CommonData.Authority = authorityName
-	collective.CommonData.Username = URRCopy.GetName()
-	collective.CommonData.Name = fmt.Sprintf("%s %s", URRCopy.Spec.FirstName, URRCopy.Spec.LastName)
-	collective.CommonData.Email = []string{URRCopy.Spec.Email}
-	if emailVerificationCode != "" {
-		verifyContent := mailer.VerifyContentData{}
-		verifyContent.Code = emailVerificationCode
-		verifyContent.CommonData = collective.CommonData
-		contentData = verifyContent
-	} else {
-		contentData = collective
-	}
+	contentData := mailer.CommonContentData{}
+	contentData.CommonData.Authority = authorityName
+	contentData.CommonData.Username = URRCopy.GetName()
+	contentData.CommonData.Name = fmt.Sprintf("%s %s", URRCopy.Spec.FirstName, URRCopy.Spec.LastName)
+	contentData.CommonData.Email = []string{URRCopy.Spec.Email}
 	mailer.Send(subject, contentData)
 }
 
@@ -337,36 +324,24 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 			}
 		}
 		if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
-			t.sendEmail(URRCopy, authorityName, "", "user-validation-failure-email")
+			t.sendEmail(URRCopy, authorityName, "user-validation-failure-email")
 		}
 	} else {
 		exists = true
 		message = append(message, fmt.Sprintf("Username, %s, already exists for another user account", URRCopy.GetName()))
 		if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
-			t.sendEmail(URRCopy, authorityName, "", "user-validation-failure-name")
+			t.sendEmail(URRCopy, authorityName, "user-validation-failure-name")
 		}
 	}
 	return exists, message
 }
 
-// setOwnerReferences put the userregistrationrequest as owner
-func (t *Handler) setOwnerReferences(URRCopy *apps_v1alpha.UserRegistrationRequest) []metav1.OwnerReference {
+// SetAsOwnerReference put the userregistrationrequest as owner
+func SetAsOwnerReference(URRCopy *apps_v1alpha.UserRegistrationRequest) []metav1.OwnerReference {
 	ownerReferences := []metav1.OwnerReference{}
 	newNamespaceRef := *metav1.NewControllerRef(URRCopy, apps_v1alpha.SchemeGroupVersion.WithKind("UserRegistrationRequest"))
 	takeControl := false
 	newNamespaceRef.Controller = &takeControl
 	ownerReferences = append(ownerReferences, newNamespaceRef)
 	return ownerReferences
-}
-
-// generateRandomString to have a unique string
-func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
-
-	b := make([]rune, n)
-	rand.Seed(time.Now().UnixNano())
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }

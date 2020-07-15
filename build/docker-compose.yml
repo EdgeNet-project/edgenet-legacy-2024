@@ -29,7 +29,7 @@ services:
     image: edgenet-authority:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../config/:/root/config/
+      - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
   edgenet-authorityrequest:
     container_name: edgenet-authorityrequest
@@ -40,7 +40,7 @@ services:
     image: edgenet-authorityrequest:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../config/:/root/config/
+      - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
   edgenet-user:
     container_name: edgenet-user
@@ -51,7 +51,7 @@ services:
     image: edgenet-user:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../config/:/root/config/
+      - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
       - ../assets/certs:/root/assets/certs
       - ../assets/kubeconfigs:/root/assets/kubeconfigs
@@ -64,7 +64,7 @@ services:
     image: edgenet-userregistrationrequest:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../config/:/root/config/
+      - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
   edgenet-acceptableusepolicy:
     container_name: edgenet-acceptableusepolicy
@@ -75,7 +75,7 @@ services:
     image: edgenet-acceptableusepolicy:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../config/:/root/config/
+      - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
   edgenet-emailverification:
     container_name: edgenet-emailverification
@@ -86,7 +86,7 @@ services:
     image: edgenet-emailverification:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../config/:/root/config/
+      - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
   edgenet-slice:
     container_name: edgenet-slice
@@ -97,7 +97,7 @@ services:
     image: edgenet-slice:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../config/:/root/config/
+      - ../configs/:/root/configs/
       - ../assets/kubeconfigs:/root/assets/kubeconfigs
       - ../assets/templates/:/root/assets/templates/
   edgenet-team:
@@ -109,7 +109,7 @@ services:
     image: edgenet-team:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../config/:/root/config/
+      - ../configs/:/root/configs/
       - ../assets/kubeconfigs:/root/assets/kubeconfigs
       - ../assets/templates/:/root/assets/templates/
   edgenet-nodecontribution:
@@ -123,7 +123,7 @@ services:
       - /etc/kubernetes/:/etc/kubernetes/
       - ~/.kube/:/root/.kube/
       - ~/.ssh/:/root/.ssh/
-      - ../config/:/root/config/
+      - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
   edgenet-totalresourcequota:
     container_name: edgenet-totalresourcequota
@@ -134,6 +134,6 @@ services:
     image: edgenet-totalresourcequota:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../config/:/root/config/
+      - ../configs/:/root/configs/
       - ../assets/kubeconfigs:/root/assets/kubeconfigs
       - ../assets/templates/:/root/assets/templates/

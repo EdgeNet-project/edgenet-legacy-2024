@@ -19,7 +19,6 @@ package team
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"os"
 	"os/signal"
 	"reflect"
@@ -27,7 +26,7 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	appsinformer_v1 "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
 
 	log "github.com/Sirupsen/logrus"
@@ -80,12 +79,12 @@ const delete = "delete"
 
 // Start function is entry point of the controller
 func Start() {
-	clientset, err := authorization.CreateClientSet()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	edgenetClientset, err := authorization.CreateEdgeNetClientSet()
+	edgenetClientset, err := bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -271,46 +270,4 @@ func (c *controller) processNextItem() bool {
 	c.queue.Forget(event.(informerevent).key)
 
 	return true
-}
-
-// dry function remove the same values of the old and new objects from the old object to have
-// the slice of deleted and added values.
-func dry(oldSlice []apps_v1alpha.TeamUsers, newSlice []apps_v1alpha.TeamUsers) ([]apps_v1alpha.TeamUsers, []apps_v1alpha.TeamUsers) {
-	var deletedSlice []apps_v1alpha.TeamUsers
-	var addedSlice []apps_v1alpha.TeamUsers
-
-	for _, oldValue := range oldSlice {
-		exists := false
-		for _, newValue := range newSlice {
-			if oldValue.Authority == newValue.Authority && oldValue.Username == newValue.Username {
-				exists = true
-			}
-		}
-		if !exists {
-			deletedSlice = append(deletedSlice, apps_v1alpha.TeamUsers{Authority: oldValue.Authority, Username: oldValue.Username})
-		}
-	}
-	for _, newValue := range newSlice {
-		exists := false
-		for _, oldValue := range oldSlice {
-			if newValue.Authority == oldValue.Authority && newValue.Username == oldValue.Username {
-				exists = true
-			}
-		}
-		if !exists {
-			addedSlice = append(addedSlice, apps_v1alpha.TeamUsers{Authority: newValue.Authority, Username: newValue.Username})
-		}
-	}
-
-	return deletedSlice, addedSlice
-}
-
-func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }

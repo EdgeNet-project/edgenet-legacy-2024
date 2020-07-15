@@ -22,11 +22,13 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/totalresourcequota"
+	"edgenet/pkg/controller/v1alpha/user"
 	"edgenet/pkg/mailer"
-	"edgenet/pkg/registration"
+	ns "edgenet/pkg/namespace"
+	"edgenet/pkg/permission"
 
 	log "github.com/Sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -56,12 +58,12 @@ type Handler struct {
 func (t *Handler) Init() error {
 	log.Info("SliceHandler.Init")
 	var err error
-	t.clientset, err = authorization.CreateClientSet()
+	t.clientset, err = bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
+	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -93,6 +95,7 @@ func (t *Handler) Init() error {
 			"requests.storage": resource.MustParse("8Gi"),
 		},
 	}
+	permission.Clientset = t.clientset
 	return err
 }
 
@@ -139,8 +142,8 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 						sliceOwnerNamespace.Labels["owner"], sliceOwnerNamespace.Labels["owner-name"], "slice-creation", true)
 					// To set constraints in the slice namespace and to update the expiration date of slice
 					sliceCopy = t.setConstrainsByProfile(sliceChildNamespaceCreated.GetName(), sliceCopy)
-					sliceOwnerReferences := t.setOwnerReferences(sliceChildNamespaceCreated)
-					sliceCopy.ObjectMeta.OwnerReferences = sliceOwnerReferences
+					ownerReferences := t.getOwnerReferences(sliceCopy, sliceChildNamespaceCreated)
+					sliceCopy.ObjectMeta.OwnerReferences = ownerReferences
 					t.edgenetClientset.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Update(sliceCopy)
 				} else {
 					t.runUserInteractions(sliceCopy, sliceChildNamespaceCreated.GetName(), sliceOwnerNamespace.Labels["authority-name"],
@@ -243,6 +246,19 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// Mail notification, TBD
 }
 
+// getOwnerReferences returns the users and the child namespace as owners
+func (t *Handler) getOwnerReferences(sliceCopy *apps_v1alpha.Slice, namespace *corev1.Namespace) []metav1.OwnerReference {
+	ownerReferences := ns.SetAsOwnerReference(namespace)
+	// The following section makes users who participate in that team become the team owners
+	for _, sliceUser := range sliceCopy.Spec.Users {
+		userCopy, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", sliceUser.Authority)).Get(sliceUser.Username, metav1.GetOptions{})
+		if err == nil && userCopy.Spec.Active && userCopy.Status.AUP {
+			ownerReferences = append(ownerReferences, user.SetAsOwnerReference(userCopy)...)
+		}
+	}
+	return ownerReferences
+}
+
 func (t *Handler) checkResourcesAvailabilityForSlice(sliceCopy *apps_v1alpha.Slice, authorityName string) bool {
 	TRQCopy, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(authorityName, metav1.GetOptions{})
 	quotaExceeded := true
@@ -314,7 +330,7 @@ func (t *Handler) runUserInteractions(sliceCopy *apps_v1alpha.Slice, sliceChildN
 		user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", sliceUser.Authority)).Get(sliceUser.Username, metav1.GetOptions{})
 		if err == nil && user.Spec.Active && user.Status.AUP {
 			if operation == "slice-creation" {
-				registration.EstablishRoleBindings(user.DeepCopy(), sliceChildNamespaceStr, "Slice")
+				permission.EstablishRoleBindings(user.DeepCopy(), sliceChildNamespaceStr, "Slice")
 			}
 			if !(operation == "slice-creation" && !firstCreation) {
 				t.sendEmail(sliceUser.Username, sliceUser.Authority, ownerAuthority, sliceCopy.GetNamespace(), sliceCopy.GetName(), sliceChildNamespaceStr, operation)
@@ -328,9 +344,9 @@ func (t *Handler) runUserInteractions(sliceCopy *apps_v1alpha.Slice, sliceChildN
 		if err == nil {
 			for _, userRow := range userRaw.Items {
 				if userRow.Spec.Active && userRow.Status.AUP && (userRow.Status.Type == "admin" ||
-					authorization.CheckUserRole(t.clientset, sliceCopy.GetNamespace(), userRow.Spec.Email, "slices", sliceCopy.GetName())) {
+					permission.CheckAuthorization(sliceCopy.GetNamespace(), userRow.Spec.Email, "slices", sliceCopy.GetName())) {
 					if operation == "slice-creation" {
-						registration.EstablishRoleBindings(userRow.DeepCopy(), sliceChildNamespaceStr, "Slice")
+						permission.EstablishRoleBindings(userRow.DeepCopy(), sliceChildNamespaceStr, "Slice")
 						//mailSubject = "creation"
 					}
 					/*if !(operation == "slice-creation" && !firstCreation) && !(operation == "slice-creation" && sliceOwner == "team") {
@@ -340,16 +356,6 @@ func (t *Handler) runUserInteractions(sliceCopy *apps_v1alpha.Slice, sliceChildN
 			}
 		}
 	}
-}
-
-// setOwnerReferences returns the namespace as owner
-func (t *Handler) setOwnerReferences(childNamespace *corev1.Namespace) []metav1.OwnerReference {
-	// The section below makes the child namespace become the slice owner
-	newSliceRef := *metav1.NewControllerRef(childNamespace, corev1.SchemeGroupVersion.WithKind("Namespace"))
-	takeControl := false
-	newSliceRef.Controller = &takeControl
-	ownerReferences := []metav1.OwnerReference{newSliceRef}
-	return ownerReferences
 }
 
 // sendEmail to send notification to participants
@@ -463,4 +469,36 @@ timeoutLoop:
 			break timeoutLoop
 		}
 	}
+}
+
+// dry function remove the same values of the old and new objects from the old object to have
+// the slice of deleted and added values.
+func dry(oldSlice []apps_v1alpha.SliceUsers, newSlice []apps_v1alpha.SliceUsers) ([]apps_v1alpha.SliceUsers, []apps_v1alpha.SliceUsers) {
+	var deletedSlice []apps_v1alpha.SliceUsers
+	var addedSlice []apps_v1alpha.SliceUsers
+
+	for _, oldValue := range oldSlice {
+		exists := false
+		for _, newValue := range newSlice {
+			if oldValue.Authority == newValue.Authority && oldValue.Username == newValue.Username {
+				exists = true
+			}
+		}
+		if !exists {
+			deletedSlice = append(deletedSlice, apps_v1alpha.SliceUsers{Authority: oldValue.Authority, Username: oldValue.Username})
+		}
+	}
+	for _, newValue := range newSlice {
+		exists := false
+		for _, oldValue := range oldSlice {
+			if newValue.Authority == oldValue.Authority && newValue.Username == oldValue.Username {
+				exists = true
+			}
+		}
+		if !exists {
+			addedSlice = append(addedSlice, apps_v1alpha.SliceUsers{Authority: newValue.Authority, Username: newValue.Username})
+		}
+	}
+
+	return deletedSlice, addedSlice
 }

@@ -24,11 +24,11 @@ import (
 	s "strings"
 	"time"
 
-	custconfig "edgenet/pkg/config"
+	"edgenet/pkg/util"
 
 	namecheap "github.com/billputer/go-namecheap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/cert"
 	bootstraputil "k8s.io/cluster-bootstrap/token/util"
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
@@ -37,7 +37,7 @@ import (
 
 // CreateToken creates the token to be used to add node
 // and return the token
-func CreateToken(clientset clientset.Interface, duration time.Duration, hostname string) (string, error) {
+func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostname string) (string, error) {
 	tokenStr, err := bootstraputil.GenerateBootstrapToken()
 	if err != nil {
 		log.Printf("Error generating token to upload certs: %s", err)
@@ -63,7 +63,7 @@ func CreateToken(clientset clientset.Interface, duration time.Duration, hostname
 		return "", err
 	}
 	// This reads server info of the current context from the config file
-	server, err := custconfig.GetServerOfCurrentContext()
+	server, err := util.GetServerOfCurrentContext()
 	if err != nil {
 		log.Println(err)
 		return "", err

@@ -85,3 +85,19 @@ func GetIPAdress(r *http.Request) string {
 	}
 	return ""
 }
+
+// GetRecordType determines if the IP string is in the form of IPv4 or IPv6 and returns the record type
+func GetRecordType(ip string) string {
+	if net.ParseIP(ip) == nil {
+		return ""
+	}
+	for i := 0; i < len(ip); i++ {
+		switch ip[i] {
+		case '.':
+			return "A"
+		case ':':
+			return "AAAA"
+		}
+	}
+	return ""
+}

@@ -14,14 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package config
+package util
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
+	"time"
 
 	yaml "gopkg.in/yaml.v2"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -151,7 +153,7 @@ func GetServerOfCurrentContext() (string, error) {
 // GetNamecheapCredentials provides authentication info to have API Access
 func GetNamecheapCredentials() (string, string, string, error) {
 	// The path of the yaml config file of namecheap
-	file, err := os.Open("../../config/namecheap.yaml")
+	file, err := os.Open("../../configs/namecheap.yaml")
 	if err != nil {
 		log.Printf("unexpected error executing command: %v", err)
 		return "", "", "", err
@@ -164,4 +166,16 @@ func GetNamecheapCredentials() (string, string, string, error) {
 		return "", "", "", err
 	}
 	return namecheap.APIUser, namecheap.APIToken, namecheap.Username, nil
+}
+
+// GenerateRandomString to have a unique code
+func GenerateRandomString(n int) string {
+	var letter = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+
+	b := make([]rune, n)
+	rand.Seed(time.Now().UnixNano())
+	for i := range b {
+		b[i] = letter[rand.Intn(len(letter))]
+	}
+	return string(b)
 }

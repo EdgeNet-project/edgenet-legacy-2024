@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"time"
 
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/node"
 
 	log "github.com/Sirupsen/logrus"
@@ -33,7 +33,7 @@ type controller struct {
 
 // Start function is entry point of the controller
 func Start() {
-	clientset, err := authorization.CreateClientSet()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

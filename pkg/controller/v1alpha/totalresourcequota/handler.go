@@ -22,7 +22,7 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/mailer"
 
@@ -52,12 +52,12 @@ type Handler struct {
 func (t *Handler) Init() error {
 	log.Info("TotalResourceQuotaHandler.Init")
 	var err error
-	t.clientset, err = authorization.CreateClientSet()
+	t.clientset, err = bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
+	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -132,6 +132,26 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 func (t *Handler) ObjectDeleted(obj interface{}) {
 	log.Info("TotalResourceQuotaHandler.ObjectDeleted")
 	// Delete or disable slices added by authority, TBD.
+}
+
+// Create generates a total resource quota with the name provided
+func (t *Handler) Create(name string) {
+	_, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(name, metav1.GetOptions{})
+	if err != nil {
+		// Set a total resource quota
+		TRQ := apps_v1alpha.TotalResourceQuota{}
+		TRQ.SetName(name)
+		claim := apps_v1alpha.TotalResourceDetails{}
+		claim.Name = "Default"
+		claim.CPU = "12000m"
+		claim.Memory = "12Gi"
+		TRQ.Spec.Claim = append(TRQ.Spec.Claim, claim)
+		TRQ.Spec.Enabled = true
+		_, err = t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Create(TRQ.DeepCopy())
+		if err != nil {
+			log.Infof("Couldn't create total resource quota in %s: %s", name, err)
+		}
+	}
 }
 
 // sendEmail to send notification to participants
