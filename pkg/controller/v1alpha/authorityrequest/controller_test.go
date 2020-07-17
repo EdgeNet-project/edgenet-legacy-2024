@@ -12,7 +12,7 @@ func TestStartController(t *testing.T) {
 	g.Init()
 	// Run the controller in a goroutine
 	go Start(g.client, g.edgenetclient)
-	// Create a team
+	// Create an authority request
 	g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
 	// Wait for the status update of created object
 	time.Sleep(time.Millisecond * 500)
@@ -24,6 +24,7 @@ func TestStartController(t *testing.T) {
 	// Update a Authority request
 	// Update contact email
 	g.authorityRequestObj.Spec.Contact.Email = "JohnDoe1@edge-net.org"
+	g.authorityRequestObj.Status.Approved = true
 	g.edgenetclient.AppsV1alpha().AuthorityRequests().Update(g.authorityRequestObj.DeepCopy())
 	time.Sleep(time.Millisecond * 500)
 	// Checking if Authority Request transitioned to Authority after update

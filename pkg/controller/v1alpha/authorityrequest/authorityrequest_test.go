@@ -96,7 +96,7 @@ func (g *ARTestGroup) Init() {
 		},
 		Status: apps_v1alpha.AuthorityRequestStatus{
 			EmailVerify: true,
-			Approved:    true,
+			Approved:    false,
 			Expires:     nil,
 			State:       "",
 			Message:     nil,
@@ -200,9 +200,14 @@ func TestARUpdate(t *testing.T) {
 		}
 	})
 	t.Run("Testing Authority Request transition to Authority", func(t *testing.T) {
+		// Updating authority registration status to approved
 		g.authorityRequestObj.Spec.Contact.Email = "JohnDoe@edge-net.org"
+		g.authorityRequestObj.Status.Approved = true
+		// Updating the authority registration object
 		g.edgenetclient.AppsV1alpha().AuthorityRequests().Update(g.authorityRequestObj.DeepCopy())
+		// Requesting server to update internal representation of authority registration object and transition it to authority
 		g.handler.ObjectUpdated(g.authorityRequestObj.DeepCopy())
+		// Checking if user with same name as user registration object exists
 		authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authority == nil {
 			t.Error("Failed to create Authority from Authority Request after approval")
