@@ -21,7 +21,6 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -117,7 +116,11 @@ func Start() {
 				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 				event.function = update
 				// The variable of event.delta contains the different values of the old object from the new one
-				event.delta = fmt.Sprintf("%s", strings.Join(dry(oldObj.(*apps_v1alpha.SelectiveDeployment).Spec.Controller, newObj.(*apps_v1alpha.SelectiveDeployment).Spec.Controller), "/?delta?/ "))
+				/*delta := dry(oldObj.(*apps_v1alpha.SelectiveDeployment).Spec.Controllers, newObj.(*apps_v1alpha.SelectiveDeployment).Spec.Controllers)
+				deltaJSON, err := json.Marshal(delta)
+				if err == nil {
+					event.delta = string(deltaJSON)
+				}*/
 				log.Infof("Update selectivedeployment: %s", event.key)
 				if err == nil {
 					queue.Add(event)
@@ -129,10 +132,6 @@ func Start() {
 			// Put the resource object into a key
 			event.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			event.function = delete
-			// The variable of event.delta contains the different values in the same way as UpdateFunc.
-			// In addition to that, this variable includes the name, namespace, type, controller of the deleted object.
-			event.delta = fmt.Sprintf("%s-?delta?- %s-?delta?- %s-?delta?- %s", obj.(*apps_v1alpha.SelectiveDeployment).GetName(), obj.(*apps_v1alpha.SelectiveDeployment).GetNamespace(), obj.(*apps_v1alpha.SelectiveDeployment).Spec.Type,
-				strings.Join(dry(obj.(*apps_v1alpha.SelectiveDeployment).Spec.Controller, []apps_v1alpha.Controller{}), "/?delta?/ "))
 			log.Infof("Delete selectivedeployment: %s", event.key)
 			if err == nil {
 				queue.Add(event)
@@ -172,7 +171,7 @@ func Start() {
 							if sdRow.Status.State == partial || sdRow.Status.State == success {
 							selectorLoop:
 								for _, selectorDet := range sdRow.Spec.Selector {
-									if selectorDet.Count == 0 || (selectorDet.Count != 0 && (strings.Contains(sdRow.Status.Message, "Fewer nodes issue") || strings.Contains(sdRow.Status.Message, "fewer nodes issue"))) {
+									if selectorDet.Quantity == 0 || (selectorDet.Quantity != 0 && (contains(sdRow.Status.Message, "Fewer nodes issue"))) {
 										event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
 										event.function = create
 										log.Infof("SD node added: %s, recovery started for: %s", key, event.key)
@@ -206,7 +205,7 @@ func Start() {
 					if sdRow.Status.State == partial || sdRow.Status.State == success {
 					selectorLoop:
 						for _, selectorDet := range sdRow.Spec.Selector {
-							if selectorDet.Count == 0 || (selectorDet.Count != 0 && (strings.Contains(sdRow.Status.Message, "Fewer nodes issue") || strings.Contains(sdRow.Status.Message, "fewer nodes issue"))) {
+							if selectorDet.Quantity == 0 || (selectorDet.Quantity != 0 && (contains(sdRow.Status.Message, "fewer nodes issue"))) {
 								event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
 								event.function = create
 								log.Infof("SD node updated: %s, recovery started for: %s", key, event.key)
@@ -535,7 +534,7 @@ func (c *controller) processNextItem() bool {
 	if !exists {
 		if event.(informerevent).function == delete {
 			c.logger.Infof("Controller.processNextItem: object deleted detected: %s", keyRaw)
-			c.handler.ObjectDeleted(item, event.(informerevent).delta)
+			c.handler.ObjectDeleted(item)
 		}
 	} else {
 		if event.(informerevent).function == create {
@@ -547,10 +546,6 @@ func (c *controller) processNextItem() bool {
 		}
 	}
 	c.queue.Forget(event.(informerevent).key)
-
-	if c.queue.Len() == 0 {
-		go c.handler.ConfigureControllers()
-	}
 
 	return true
 }
