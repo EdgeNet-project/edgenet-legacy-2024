@@ -62,8 +62,6 @@ func (g *AuthorityTestGroup) Init() {
 				Phone:     "+33NUMBER",
 				Username:  "unittesting",
 			},
-		},
-		Status: apps_v1alpha.AuthorityStatus{
 			Enabled: false,
 		},
 	}
@@ -108,12 +106,12 @@ func (g *AuthorityTestGroup) Init() {
 		Spec: apps_v1alpha.UserSpec{
 			FirstName: "EdgeNet",
 			LastName:  "EdgeNet",
-			Roles:     []string{"Admin"},
 			Email:     "unittest@edge-net.org",
+			Active:    true,
 		},
 		Status: apps_v1alpha.UserStatus{
-			State:  success,
-			Active: true,
+			Type:  "Admin",
+			State: success,
 		},
 	}
 	g.authorityObj = authorityObj
@@ -153,7 +151,7 @@ func TestAuthorityCreate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
 
-	t.Run("creation of user-total resource quota-cluster role", func(t *testing.T) {
+	t.Run("creation of user, total resource quota, cluster role", func(t *testing.T) {
 		g.handler.ObjectCreated(g.authorityObj.DeepCopy())
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 		if user == nil {
@@ -195,13 +193,13 @@ func TestAuthorityUpdate(t *testing.T) {
 	g.edgenetclient.AppsV1alpha().Users("default").Create(g.userObj.DeepCopy())
 	// Use the same email address with the user created above
 	g.authorityObj.Spec.Contact.Email = "check"
-	g.authorityObj.Status.Enabled = true
+	g.authorityObj.Spec.Enabled = true
 	g.handler.ObjectUpdated(g.authorityObj.DeepCopy())
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 	if user.Spec.Email == "check" {
 		t.Error("Duplicate value cannot be detected")
 	}
-	if user.Status.Active {
+	if user.Spec.Active {
 		t.Error("User cannot be deactivated")
 	}
 }
@@ -279,6 +277,7 @@ func TestAuthorityPreparation(t *testing.T) {
 	g := AuthorityTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
+	g.authorityObj.Spec.Enabled = true
 	var authorityCopy *apps_v1alpha.Authority
 	// Test repeated demands
 	for i := 1; i < 3; i++ {
@@ -294,7 +293,7 @@ func TestAuthorityPreparation(t *testing.T) {
 			if authorityCopy.Status.State != established {
 				t.Error("Authority establishment failed")
 			}
-			if authorityCopy.Status.Enabled != true {
+			if authorityCopy.Spec.Enabled != true {
 				t.Error("Authority is disabled after creation")
 			}
 		})

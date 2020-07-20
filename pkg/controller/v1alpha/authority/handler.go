@@ -193,10 +193,8 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 			authorityCopy = authorityCopyUpdated
 		}
 		TRQHandler := totalresourcequota.Handler{}
-		err = TRQHandler.Init()
-		if err == nil {
-			TRQHandler.Create(authorityCopy.GetName())
-		}
+		TRQHandler.Init(t.clientset, t.edgenetClientset)
+		TRQHandler.Create(authorityCopy.GetName())
 		// Automatically enable authority and update authority status
 		authorityCopy.Status.State = established
 		authorityCopy.Status.Message = []string{"Authority successfully established"}
@@ -221,10 +219,8 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 	} else if err == nil {
 		permission.CreateClusterRoles(authorityCopy)
 		TRQHandler := totalresourcequota.Handler{}
-		err = TRQHandler.Init()
-		if err == nil {
-			TRQHandler.Create(authorityCopy.GetName())
-		}
+		TRQHandler.Init(t.clientset, t.edgenetClientset)
+		TRQHandler.Create(authorityCopy.GetName())
 	}
 	return authorityCopy
 }
