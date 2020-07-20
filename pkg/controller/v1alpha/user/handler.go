@@ -214,7 +214,8 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-deactivation-failure")
 			}
 			emailVerificationHandler := emailverification.Handler{}
-			err = emailVerificationHandler.Init()
+			emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
+			err = nil
 			if err == nil {
 				created := emailVerificationHandler.Create(userCopy, SetAsOwnerReference(userCopy))
 				if created {

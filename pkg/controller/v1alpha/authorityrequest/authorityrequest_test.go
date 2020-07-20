@@ -62,9 +62,7 @@ func (g *ARTestGroup) Init() {
 				Phone:     "+33NUMBER",
 				Username:  "unittesting",
 			},
-		},
-		Status: apps_v1alpha.AuthorityStatus{
-			Enabled: false,
+			Enabled: true,
 		},
 	}
 	AuthorityRequestObj := apps_v1alpha.AuthorityRequest{
@@ -93,13 +91,13 @@ func (g *ARTestGroup) Init() {
 				Phone:     "123456789",
 				Email:     "JohnDoe@edge-net.org",
 			},
+			Approved: false,
 		},
 		Status: apps_v1alpha.AuthorityRequestStatus{
-			EmailVerify: true,
-			Approved:    false,
-			Expires:     nil,
-			State:       "",
-			Message:     nil,
+			EmailVerified: true,
+			Expires:       nil,
+			State:         "",
+			Message:       nil,
 		},
 	}
 	userObj := apps_v1alpha.User{
@@ -114,12 +112,11 @@ func (g *ARTestGroup) Init() {
 		Spec: apps_v1alpha.UserSpec{
 			FirstName: "user",
 			LastName:  "NAME",
-			Roles:     []string{"Admin"},
 			Email:     "userName@edge-net.org",
 		},
 		Status: apps_v1alpha.UserStatus{
-			State:  success,
-			Active: true,
+			Type:  "Admin",
+			State: success,
 		},
 	}
 	g.authorityObj = authorityObj
@@ -153,12 +150,11 @@ func TestARCreate(t *testing.T) {
 	g := ARTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	// Creation of Authority reques
+	// Creation of Authority request
 	t.Run("creation of Authority request", func(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
 		g.handler.ObjectCreated(g.authorityRequestObj.DeepCopy())
 		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
-		t.Log(authorityRequest.Status.Expires)
 		if authorityRequest.Status.Expires == nil {
 			t.Errorf("Failed to update approval timeout of Authority Request")
 		}
@@ -202,12 +198,13 @@ func TestARUpdate(t *testing.T) {
 	t.Run("Testing Authority Request transition to Authority", func(t *testing.T) {
 		// Updating authority registration status to approved
 		g.authorityRequestObj.Spec.Contact.Email = "JohnDoe@edge-net.org"
-		g.authorityRequestObj.Status.Approved = true
+		g.authorityRequestObj.Spec.Approved = true
 		// Updating the authority registration object
 		g.edgenetclient.AppsV1alpha().AuthorityRequests().Update(g.authorityRequestObj.DeepCopy())
 		// Requesting server to update internal representation of authority registration object and transition it to authority
 		g.handler.ObjectUpdated(g.authorityRequestObj.DeepCopy())
-		// Checking if user with same name as user registration object exists
+		// Checking if authority with same name as authority registration object exists
+		g.edgenetclient.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{})
 		authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authority == nil {
 			t.Error("Failed to create Authority from Authority Request after approval")

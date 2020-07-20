@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"testing"
-	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/client/clientset/versioned"
@@ -65,8 +64,6 @@ func (g *UserTestGroup) Init() {
 				Phone:     "+33NUMBER",
 				Username:  "unittesting",
 			},
-		},
-		Status: apps_v1alpha.AuthorityStatus{
 			Enabled: false,
 		},
 	}
@@ -96,9 +93,7 @@ func (g *UserTestGroup) Init() {
 						},
 					},
 					Description: "This is a Teamtest description",
-				},
-				Status: apps_v1alpha.TeamStatus{
-					Enabled: false,
+					Enabled:     false,
 				},
 			},
 		},
@@ -129,9 +124,7 @@ func (g *UserTestGroup) Init() {
 						},
 					},
 					Description: "This is a Slicetest description",
-				},
-				Status: apps_v1alpha.SliceStatus{
-					Renew: false,
+					Renew:       false,
 				},
 			},
 		},
@@ -151,13 +144,11 @@ func (g *UserTestGroup) Init() {
 		Spec: apps_v1alpha.UserSpec{
 			FirstName: "EdgeNetFirstName",
 			LastName:  "EdgeNetLastName",
-			Roles:     []string{"Admin"},
 			Email:     "userObj@email.com",
 		},
 		Status: apps_v1alpha.UserStatus{
-			State:  success,
-			Active: false,
-			AUP:    true,
+			State: success,
+			AUP:   true,
 		},
 	}
 	g.authorityObj = authorityObj
@@ -204,7 +195,7 @@ func TestUserCreate(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 		g.handler.ObjectCreated(g.userObj.DeepCopy())
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
-		user.Status.Active = true
+		user.Spec.Active = true
 		var field fields
 		field.active = true
 		g.handler.ObjectUpdated(user.DeepCopy(), field)
@@ -251,7 +242,7 @@ func TestUserUpdate(t *testing.T) {
 		if user.Status.Message == nil {
 			t.Error("Duplicate value cannot be detected")
 		}
-		if user.Status.Active {
+		if user.Spec.Active {
 			t.Error("User cannot be deactivated")
 		}
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
@@ -269,24 +260,24 @@ func TestUserUpdate(t *testing.T) {
 		if user.Spec.Email != "NewUserObj@email.com" {
 			t.Error("Updating Email Failed")
 		}
-		if user.Status.Active != false {
+		if user.Spec.Active != false {
 			t.Error("User is still Active after changing its email!")
 		}
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
 	})
 }
 
-func TestSetEmailVerification(t *testing.T) {
-	g := UserTestGroup{}
-	g.Init()
-	g.handler.Init(g.client, g.edgenetclient)
+// func TestSetEmailVerification(t *testing.T) {
+// 	g := UserTestGroup{}
+// 	g.Init()
+// 	g.handler.Init(g.client, g.edgenetclient)
 
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
-	result := g.handler.setEmailVerification(user, fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
-	if result != nil {
-		t.Error("user-email-verification-update-malfunction")
-	}
-}
+// 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
+// 	result := g.handler.setEmailVerification(user, fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
+// 	if result != nil {
+// 		t.Error("user-email-verification-update-malfunction")
+// 	}
+// }
 
 func TestCreateRoleBindings(t *testing.T) {
 	g := UserTestGroup{}
@@ -344,13 +335,13 @@ func TestCreateAUPRoleBinding(t *testing.T) {
 	}
 }
 
-func TestGenerateRandomString(t *testing.T) {
-	for i := 1; i < 5; i++ {
-		origin := generateRandomString(16)
-		time.Sleep(1 * time.Microsecond)
-		test := generateRandomString(16)
-		if origin == test {
-			t.Error("User GenerateRadnomString failed")
-		}
-	}
-}
+// func TestGenerateRandomString(t *testing.T) {
+// 	for i := 1; i < 5; i++ {
+// 		origin := generateRandomString(16)
+// 		time.Sleep(1 * time.Microsecond)
+// 		test := generateRandomString(16)
+// 		if origin == test {
+// 			t.Error("User GenerateRadnomString failed")
+// 		}
+// 	}
+// }

@@ -25,7 +25,7 @@ func TestStartController(t *testing.T) {
 	// Update a Authority request
 	// Update contact email
 	g.userRegistrationObj.Spec.Email = "URR@edge-net.org"
-	g.userRegistrationObj.Status.Approved = true
+	g.userRegistrationObj.Spec.Approved = true
 	g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.userRegistrationObj.DeepCopy())
 	time.Sleep(time.Millisecond * 500)
 	// Checking if user registration transitioned to user after update

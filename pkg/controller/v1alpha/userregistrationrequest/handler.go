@@ -22,7 +22,6 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/emailverification"
 	"edgenet/pkg/controller/v1alpha/user"
@@ -50,18 +49,8 @@ type Handler struct {
 // Init handles any handler initialization
 func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("URRHandler.Init")
-	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	return err
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
@@ -90,7 +79,8 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	if URROwnerAuthority.Spec.Enabled {
 		if URRCopy.Spec.Approved {
 			userHandler := user.Handler{}
-			err := userHandler.Init()
+			var err error
+			userHandler.Init(t.clientset, t.edgenetClientset)
 			if err == nil {
 				created := !userHandler.Create(URRCopy)
 				if created {
@@ -117,7 +107,8 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				Time: time.Now().Add(72 * time.Hour),
 			}
 			emailVerificationHandler := emailverification.Handler{}
-			err := emailVerificationHandler.Init()
+			var err error
+			emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
 			if err == nil {
 				created := emailVerificationHandler.Create(URRCopy, SetAsOwnerReference(URRCopy))
 				if created {
@@ -152,7 +143,8 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 			// Check whether the request for user registration approved
 			if URRCopy.Spec.Approved {
 				userHandler := user.Handler{}
-				err := userHandler.Init()
+				var err error
+				userHandler.Init(t.clientset, t.edgenetClientset)
 				if err == nil {
 					changeStatus := userHandler.Create(URRCopy)
 					if changeStatus {
@@ -163,7 +155,8 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 				}
 			} else if !URRCopy.Spec.Approved && URRCopy.Status.State == failure {
 				emailVerificationHandler := emailverification.Handler{}
-				err := emailVerificationHandler.Init()
+				var err error
+				emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
 				if err == nil {
 					created := emailVerificationHandler.Create(URRCopy, SetAsOwnerReference(URRCopy))
 					if created {

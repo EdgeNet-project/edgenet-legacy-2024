@@ -22,7 +22,6 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/authority"
 	"edgenet/pkg/controller/v1alpha/emailverification"
@@ -50,18 +49,8 @@ type Handler struct {
 // Init handles any handler initialization
 func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("authorityRequestHandler.Init")
-	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	return err
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
@@ -84,8 +73,9 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		return
 	}
 	if authorityRequestCopy.Spec.Approved {
+		var err error
 		authorityHandler := authority.Handler{}
-		err := authorityHandler.Init()
+		authorityHandler.Init(t.clientset, t.edgenetClientset)
 		if err == nil {
 			created := !authorityHandler.Create(authorityRequestCopy)
 			if created {
@@ -107,7 +97,8 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			Time: time.Now().Add(72 * time.Hour),
 		}
 		emailVerificationHandler := emailverification.Handler{}
-		err := emailVerificationHandler.Init()
+		emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
+		var err error
 		if err == nil {
 			created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
 			if created {
@@ -135,8 +126,9 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	if !exists {
 		// Check whether the request for authority creation approved
 		if authorityRequestCopy.Spec.Approved {
+			var err error
 			authorityHandler := authority.Handler{}
-			err := authorityHandler.Init()
+			authorityHandler.Init(t.clientset, t.edgenetClientset)
 			if err == nil {
 				changeStatus := authorityHandler.Create(authorityRequestCopy)
 				if changeStatus {
@@ -147,7 +139,8 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 			}
 		} else if !authorityRequestCopy.Spec.Approved && authorityRequestCopy.Status.State == failure {
 			emailVerificationHandler := emailverification.Handler{}
-			err := emailVerificationHandler.Init()
+			emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
+			var err error
 			if err == nil {
 				created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
 				if created {
@@ -193,9 +186,8 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 	exists := false
 	message := []string{}
 	// To check username on the users resource
-	authorityRaw, _ := t.edgenetClientset.AppsV1alpha().Authorities().List(
-		metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", authorityRequestCopy.GetName())})
-	if len(authorityRaw.Items) == 0 {
+	authorityRaw, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityRequestCopy.GetName(), metav1.GetOptions{})
+	if authorityRaw == nil {
 		// To check email address among users
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
@@ -315,7 +307,7 @@ timeoutLoop:
 	}
 }
 
-// SetOwnerReference put the authorityrequest as owner
+// SetAsOwnerReference put the authorityrequest as owner
 func SetAsOwnerReference(authorityRequestCopy *apps_v1alpha.AuthorityRequest) []metav1.OwnerReference {
 	ownerReferences := []metav1.OwnerReference{}
 	newNamespaceRef := *metav1.NewControllerRef(authorityRequestCopy, apps_v1alpha.SchemeGroupVersion.WithKind("AuthorityRequest"))

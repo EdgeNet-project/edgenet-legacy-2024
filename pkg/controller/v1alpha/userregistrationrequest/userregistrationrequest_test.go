@@ -61,9 +61,7 @@ func (g *URRTestGroup) Init() {
 				Phone:     "+33NUMBER",
 				Username:  "unittesting",
 			},
-		},
-		Status: apps_v1alpha.AuthorityStatus{
-			Enabled: false,
+			Enabled: true,
 		},
 	}
 	userObj := apps_v1alpha.User{
@@ -78,12 +76,11 @@ func (g *URRTestGroup) Init() {
 		Spec: apps_v1alpha.UserSpec{
 			FirstName: "user",
 			LastName:  "NAME",
-			Roles:     []string{"Admin"},
 			Email:     "userName@edge-net.org",
 		},
 		Status: apps_v1alpha.UserStatus{
-			State:  success,
-			Active: true,
+			State: success,
+			Type:  "Admin",
 		},
 	}
 	URRObj := apps_v1alpha.UserRegistrationRequest{
@@ -98,15 +95,12 @@ func (g *URRTestGroup) Init() {
 		Spec: apps_v1alpha.UserRegistrationRequestSpec{
 			FirstName: "user",
 			LastName:  "NAME",
-			Roles:     []string{"Admin"},
 			Email:     "URR@edge-net.org",
 		},
 		Status: apps_v1alpha.UserRegistrationRequestStatus{
-			EmailVerify: true,
-			Approved:    false,
-			Expires:     nil,
-			// State,
-			Message: nil,
+			EmailVerified: true,
+			Expires:       nil,
+			Message:       nil,
 		},
 	}
 	g.authorityObj = authorityObj
@@ -178,7 +172,7 @@ func TestURRUpdate(t *testing.T) {
 
 	t.Run("Testing Authority Request transition to Authority", func(t *testing.T) {
 		// Updating user registration status to approved
-		g.userRegistrationObj.Status.Approved = true
+		g.userRegistrationObj.Spec.Approved = true
 		g.userRegistrationObj.Spec.Email = "URR@edge-net.org"
 		// Updating the user registration object
 		g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.userRegistrationObj.DeepCopy())
