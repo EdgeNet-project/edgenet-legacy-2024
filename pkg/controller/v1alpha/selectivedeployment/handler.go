@@ -39,7 +39,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj interface{}, delta string)
 	ObjectDeleted(obj interface{}, delta string)
@@ -50,8 +50,8 @@ type HandlerInterface interface {
 
 // SDHandler is a implementation of Handler
 type SDHandler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 	sdDet            sdDet
 	wgHandler        map[string]*sync.WaitGroup
 	wgRecovery       map[string]*sync.WaitGroup
@@ -74,23 +74,23 @@ type sdDet struct {
 }
 
 // Init handles any handler initialization
-func (t *SDHandler) Init() error {
+func (t *SDHandler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("SDHandler.Init")
 	t.sdDet = sdDet{}
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 	t.wgHandler = make(map[string]*sync.WaitGroup)
 	t.wgRecovery = make(map[string]*sync.WaitGroup)
-	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	return err
+	// t.clientset, err = authorization.CreateClientSet()
+	// if err != nil {
+	// 	log.Println(err.Error())
+	// 	panic(err.Error())
+	// }
+	// t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
+	// if err != nil {
+	// 	log.Println(err.Error())
+	// 	panic(err.Error())
+	// }
 }
 
 // namespaceInit does initialization of the namespace
