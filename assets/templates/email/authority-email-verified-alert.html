@@ -21,7 +21,7 @@
             </tr>
             <tr>
               <td style="word-break: break-word; width: 100%; margin: 0; padding: 0; -premailer-width: 100%; -premailer-cellpadding: 0; -premailer-cellspacing: 0;" width="570">
-                <table style="width: 570px; margin: 0 auto; padding: 0; -premailer-width: 570px; -premailer-cellpadding: 0; -premailer-cellspacing: 0;" align="center" width="570">                  
+                <table style="width: 570px; margin: 0 auto; padding: 0; -premailer-width: 570px; -premailer-cellpadding: 0; -premailer-cellspacing: 0;" align="center" width="570">
                   <tr>
                     <td style="word-break: break-word; padding: 35px;">
                       <div class="f-fallback">
@@ -61,11 +61,7 @@
                         </table>
                         <p><b>If you notice any errors</b>, please simply leave the request to lapse on its own in 72 hours.</p>
                         <p>If everything looks to be in order, please confirm the request by following the instructions below.</p>
-                        <p>
-                          In the first place, you need to run the <i>kubectl proxy</i> command that makes the proxy working.
-                          When proxy is running, you can directly copy and paste the cURL request into your terminal.
-                        </p>
-                        <p>Here is the <b>kubectl command</b> and <b>cURL request</b>, which allow you to accept the authority request:</p>
+                        <p>You can do this with the following <b>kubectl command</b>, presuming that the admin kubeconfig file is saved in your working directory on your system as ./admin.cfg:</p>
                         <table style="margin: 0 0 21px;" width="100%">
                           <tr>
                             <td style="word-break: break-word; background-color: #F4F4F7; padding: 16px;">
@@ -73,19 +69,8 @@
                                 <tr>
                                   <td style="word-break: break-word; padding: 0;">
                                     <span class="f-fallback">
-                                      <strong>Kubectl command:</strong>
-                                      <span style="background-color: #1f1f1f; color: #629755; border: 1px solid #A4BCB6; display: block; padding: 20px; white-space: pre">kubectl proxy --port=8001 --kubeconfig ./admin.cfg &amp;</span>
-                                    </span>
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td style="word-break: break-word; padding: 0;">
-                                    <span class="f-fallback">
-                                        <strong>cURL request:</strong>
-                                        <span style="background-color: #1f1f1f; color: #629755; border: 1px solid #A4BCB6; display: block; padding: 20px; white-space: pre">curl --location --request PATCH 'http://localhost:8001/apis/apps.edgenet.io/v1alpha/authorityrequests/{{.CommonData.Authority}}/status' \
---header 'Accept: application/json' \
---header 'Content-Type: application/json-patch+json' \
---data-raw '[{"op": "replace", "path": "/status/approved", "value": true}]'</span>
+                                        <strong>Kubectl command:</strong>
+                                        <span style="background-color: #1f1f1f; color: #629755; border: 1px solid #A4BCB6; display: block; padding: 20px; white-space: pre">kubectl patch authorityrequest {{.CommonData.Authority}} --type='json' -p='[{"op": "replace", "path": "/spec/approved", "value":true}]' --kubeconfig ./admin.cfg</span>
                                     </span>
                                   </td>
                                 </tr>

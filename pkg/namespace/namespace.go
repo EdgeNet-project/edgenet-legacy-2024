@@ -19,16 +19,20 @@ package namespace
 import (
 	"log"
 
-	"k8s.io/client-go/kubernetes"
-
 	apiv1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
+// Clientset to be synced by the custom resources
+var Clientset kubernetes.Interface
+
 // Create function checks namespace occupied or not and uses clientset to create a namespace
-func Create(clientset kubernetes.Interface, name string) (string, error) {
-	exist, err := GetNamespaceByName(clientset, name)
+func Create(name string) (string, error) {
+	// Check namespace occupied or not
+	exist, err := GetNamespaceByName(name)
 	if (err == nil && exist == "true") || (err != nil && exist == "error") {
 		if err == nil {
 			err = errors.NewGone(exist)
@@ -37,7 +41,7 @@ func Create(clientset kubernetes.Interface, name string) (string, error) {
 		return "", err
 	}
 	userNamespace := &apiv1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
-	result, err := clientset.CoreV1().Namespaces().Create(userNamespace)
+	result, err := Clientset.CoreV1().Namespaces().Create(userNamespace)
 	if err != nil {
 		log.Println(err)
 		return "", err
@@ -46,12 +50,11 @@ func Create(clientset kubernetes.Interface, name string) (string, error) {
 }
 
 // Delete function checks whether namespace exists, and uses clientset to delete the namespace
-func Delete(clientset kubernetes.Interface, namespace string) (string, error) {
-
+func Delete(namespace string) (string, error) {
 	// Check namespace exists or not
 	exist, err := GetNamespaceByName(clientset, namespace)
 	if err == nil && exist == "true" {
-		err := clientset.CoreV1().Namespaces().Delete(namespace, &metav1.DeleteOptions{})
+		err := Clientset.CoreV1().Namespaces().Delete(namespace, &metav1.DeleteOptions{})
 		if err != nil {
 			log.Println(err)
 			return "", err
@@ -66,10 +69,9 @@ func Delete(clientset kubernetes.Interface, namespace string) (string, error) {
 }
 
 // GetList uses clientset, this function gets list of namespaces by eliminating "default", "kube-system", and "kube-public"
-func GetList(clientset kubernetes.Interface) []string {
-
+func GetList() []string {
 	// FieldSelector allows getting filtered results
-	namespaceRaw, err := clientset.CoreV1().Namespaces().List(
+	namespaceRaw, err := Clientset.CoreV1().Namespaces().List(
 		metav1.ListOptions{FieldSelector: "metadata.name!=default,metadata.name!=kube-system,metadata.name!=kube-public"})
 	if err != nil {
 		log.Println(err.Error())
@@ -83,11 +85,11 @@ func GetList(clientset kubernetes.Interface) []string {
 }
 
 // GetNamespaceByName uses clientset to get namespace requested
-func GetNamespaceByName(clientset kubernetes.Interface, name string) (string, error) {
+func GetNamespaceByName(name string) (string, error) {
 	// Examples for error handling:
 	// - Use helper functions like e.g. errors.IsNotFound()
 	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
-	_, err := clientset.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
+	_, err := Clientset.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		log.Printf("Namespace %s not found", name)
 		return "false", err
@@ -100,4 +102,14 @@ func GetNamespaceByName(clientset kubernetes.Interface, name string) (string, er
 	} else {
 		return "true", nil
 	}
+}
+
+// SetAsOwnerReference returns the namespace as owner
+func SetAsOwnerReference(namespace *corev1.Namespace) []metav1.OwnerReference {
+	// The section below makes namespace the owner
+	newNamespaceRef := *metav1.NewControllerRef(namespace, corev1.SchemeGroupVersion.WithKind("Namespace"))
+	takeControl := false
+	newNamespaceRef.Controller = &takeControl
+	namespaceOwnerReferences := []metav1.OwnerReference{newNamespaceRef}
+	return namespaceOwnerReferences
 }

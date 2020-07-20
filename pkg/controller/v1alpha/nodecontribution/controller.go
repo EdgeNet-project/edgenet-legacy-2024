@@ -17,7 +17,6 @@ limitations under the License.
 package nodecontribution
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -34,7 +33,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
@@ -56,26 +54,6 @@ type controller struct {
 type informerevent struct {
 	key      string
 	function string
-}
-
-// JSON structure of patch operation
-type patchByBoolValue struct {
-	Op    string `json:"op"`
-	Path  string `json:"path"`
-	Value bool   `json:"value"`
-}
-type patchByOwnerReferenceValue struct {
-	Op    string                `json:"op"`
-	Path  string                `json:"path"`
-	Value []patchOwnerReference `json:"value"`
-}
-type patchOwnerReference struct {
-	APIVersion         string `json:"apiVersion"`
-	BlockOwnerDeletion bool   `json:"blockOwnerDeletion"`
-	Controller         bool   `json:"controller"`
-	Kind               string `json:"kind"`
-	Name               string `json:"name"`
-	UID                string `json:"uid"`
 }
 
 // Constant variables for events
@@ -232,18 +210,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 										if (oldObj.Spec.Unschedulable == true && newObj.Spec.Unschedulable == false) ||
 											(oldObj.Spec.Unschedulable == false && newObj.Spec.Unschedulable == true) {
 											if NCRow.Spec.Enabled == newObj.Spec.Unschedulable {
-												// Create a patch slice and initialize it to the label size
-												nodePatchArr := make([]patchByBoolValue, 1)
-												nodePatch := patchByBoolValue{}
-												// Append the data existing in the label map to the slice
-												nodePatch.Op = "replace"
-												nodePatch.Path = "/spec/unschedulable"
-												nodePatch.Value = !NCRow.Spec.Enabled
-												nodePatchArr[0] = nodePatch
-												nodePatchJSON, _ := json.Marshal(nodePatchArr)
-												// Patch the nodes with the arguments:
-												// hostname, patch type, and patch data
-												_, err = clientset.CoreV1().Nodes().Patch(newObj.GetName(), types.JSONPatchType, nodePatchJSON)
+												node.SetNodeScheduling(newObj.GetName(), !NCRow.Spec.Enabled)
 											}
 										}
 									}

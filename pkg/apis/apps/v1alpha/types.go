@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Sorbonne Université
+Copyright 2020 Sorbonne Université
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -109,6 +109,7 @@ type AuthoritySpec struct {
 	URL       string  `json:"url"`
 	Address   Address `json:"address"`
 	Contact   Contact `json:"contact"`
+	Enabled   bool    `json:"enabled"`
 }
 
 // Contact
@@ -131,7 +132,6 @@ type Address struct {
 
 // AuthorityStatus is the status for a Authority resource
 type AuthorityStatus struct {
-	Enabled bool     `json:"enabled"`
 	State   string   `json:"state"`
 	Message []string `json:"message"`
 }
@@ -170,15 +170,15 @@ type AuthorityRequestSpec struct {
 	URL       string  `json:"url"`
 	Address   Address `json:"address"`
 	Contact   Contact `json:"contact"`
+	Approved  bool    `json:"approved"`
 }
 
 // AuthorityRequestStatus is the status for a AuthorityRequest resource
 type AuthorityRequestStatus struct {
-	EmailVerify bool          `json:"emailverify"`
-	Approved    bool          `json:"approved"`
-	Expires     *meta_v1.Time `json:"expires"`
-	State       string        `json:"state"`
-	Message     []string      `json:"message"`
+	EmailVerified bool          `json:"emailverified"`
+	Expires       *meta_v1.Time `json:"expires"`
+	State         string        `json:"state"`
+	Message       []string      `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -211,6 +211,7 @@ type Team struct {
 type TeamSpec struct {
 	Users       []TeamUsers `json:"users"`
 	Description string      `json:"description"`
+	Enabled     bool        `json:"enabled"`
 }
 
 type TeamUsers struct {
@@ -220,7 +221,8 @@ type TeamUsers struct {
 
 // TeamStatus is the status for a Team resource
 type TeamStatus struct {
-	Enabled bool `json:"enabled"`
+	State   string   `json:"state"`
+	Message []string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -255,6 +257,7 @@ type SliceSpec struct {
 	Profile     string       `json:"profile"`
 	Users       []SliceUsers `json:"users"`
 	Description string       `json:"description"`
+	Renew       bool         `json:"renew"`
 }
 
 type SliceUsers struct {
@@ -264,8 +267,9 @@ type SliceUsers struct {
 
 // SliceStatus is the status for a Slice resource
 type SliceStatus struct {
-	Renew   bool          `json:"renew"`
 	Expires *meta_v1.Time `json:"expires"`
+	State   string        `json:"state"`
+	Message []string      `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -296,17 +300,17 @@ type User struct {
 
 // UserSpec is the spec for a User resource
 type UserSpec struct {
-	FirstName string   `json:"firstname"`
-	LastName  string   `json:"lastname"`
-	Email     string   `json:"email"`
-	Roles     []string `json:"roles"`
-	URL       string   `json:"url"`
-	Bio       string   `json:"bio"`
+	FirstName string `json:"firstname"`
+	LastName  string `json:"lastname"`
+	Email     string `json:"email"`
+	URL       string `json:"url"`
+	Bio       string `json:"bio"`
+	Active    bool   `json:"active"`
 }
 
 // UserStatus is the status for a User resource
 type UserStatus struct {
-	Active  bool     `json:"active"`
+	Type    string   `json:"type"`
 	AUP     bool     `json:"aup"`
 	State   string   `json:"state"`
 	Message []string `json:"message"`
@@ -340,21 +344,20 @@ type UserRegistrationRequest struct {
 
 // UserRegistrationRequestSpec is the spec for a UserRegistrationRequest resource
 type UserRegistrationRequestSpec struct {
-	FirstName string   `json:"firstname"`
-	LastName  string   `json:"lastname"`
-	Email     string   `json:"email"`
-	Roles     []string `json:"roles"`
-	URL       string   `json:"url"`
-	Bio       string   `json:"bio"`
+	FirstName string `json:"firstname"`
+	LastName  string `json:"lastname"`
+	Email     string `json:"email"`
+	URL       string `json:"url"`
+	Bio       string `json:"bio"`
+	Approved  bool   `json:"approved"`
 }
 
 // UserRegistrationRequestStatus is the status for a UserRegistrationRequest resource
 type UserRegistrationRequestStatus struct {
-	EmailVerify bool          `json:"emailverify"`
-	Approved    bool          `json:"approved"`
-	Expires     *meta_v1.Time `json:"expires"`
-	State       string        `json:"state"`
-	Message     []string      `json:"message"`
+	EmailVerified bool          `json:"emailverified"`
+	Expires       *meta_v1.Time `json:"expires"`
+	State         string        `json:"state"`
+	Message       []string      `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -386,12 +389,14 @@ type AcceptableUsePolicy struct {
 // AcceptableUsePolicySpec is the spec for a AcceptableUsePolicy resource
 type AcceptableUsePolicySpec struct {
 	Accepted bool `json:"accepted"`
+	Renew    bool `json:"renew"`
 }
 
 // AcceptableUsePolicyStatus is the status for a AcceptableUsePolicy resource
 type AcceptableUsePolicyStatus struct {
-	Renew   bool          `json:"renew"`
 	Expires *meta_v1.Time `json:"expires"`
+	State   string        `json:"state"`
+	Message []string      `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -429,7 +434,6 @@ type EmailVerificationSpec struct {
 
 // EmailVerificationStatus is the status for a EmailVerification resource
 type EmailVerificationStatus struct {
-	Renew   bool          `json:"renew"`
 	Expires *meta_v1.Time `json:"expires"`
 	State   string        `json:"state"`
 	Message []string      `json:"message"`

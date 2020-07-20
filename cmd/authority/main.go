@@ -1,20 +1,20 @@
 package main
 
 import (
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/controller/v1alpha/authority"
 	"log"
 )
 
 func main() {
 	// Set kubeconfig to be used to create clientsets
-	authorization.SetKubeConfig()
-	clientset, err := authorization.CreateClientSet()
+	bootstrap.SetKubeConfig()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	edgenetClientset, err := authorization.CreateEdgeNetClientSet()
+	edgenetClientset, err := bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

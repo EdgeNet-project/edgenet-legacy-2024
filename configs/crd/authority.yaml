@@ -1,4 +1,4 @@
-# Copyright 2019 Sorbonne Université
+# Copyright 2020 Sorbonne Université
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: authorityrequests.apps.edgenet.io
+  name: authorities.apps.edgenet.io
 spec:
   group: apps.edgenet.io
   # list of versions supported by this CustomResourceDefinition
@@ -42,9 +42,9 @@ spec:
         - name: Country
           type: string
           jsonPath: .spec.address.country
-        - name: Expires
-          type: string
-          jsonPath: .status.expires
+        - name: Enabled
+          type: boolean
+          jsonPath: .spec.enabled
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -60,6 +60,7 @@ spec:
                 - url
                 - address
                 - contact
+                - enabled
               properties:
                 fullname:
                   type: string
@@ -106,15 +107,11 @@ spec:
                       type: string
                     phone:
                       type: string
+                enabled:
+                  type: boolean
             status:
               type: object
               properties:
-                emailverify:
-                  type: boolean
-                approved:
-                  type: boolean
-                expires:
-                  type: string
                 state:
                   type: string
                 message:
@@ -123,6 +120,6 @@ spec:
                     type: string
   scope: Cluster
   names:
-    plural: authorityrequests
-    singular: authorityrequest
-    kind: AuthorityRequest
+    plural: authorities
+    singular: authority
+    kind: Authority

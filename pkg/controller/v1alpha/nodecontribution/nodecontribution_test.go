@@ -2,6 +2,7 @@ package nodecontribution
 
 import (
 	"edgenet/pkg/client/clientset/versioned"
+<<<<<<< HEAD
 	"edgenet/pkg/controller/v1alpha/authority"
 	"edgenet/pkg/controller/v1alpha/user"
 	"flag"
@@ -9,6 +10,10 @@ import (
 	"io/ioutil"
 	"os"
 	"reflect"
+=======
+	"io/ioutil"
+	"os"
+>>>>>>> 4f2155f4e9d4dc806d3451fe8e379bc50caa8b34
 	"testing"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
@@ -24,6 +29,7 @@ import (
 )
 
 type NodecontributionTestGroup struct {
+<<<<<<< HEAD
 	nodecontributionObj apps_v1alpha.NodeContribution
 	authorityObj        apps_v1alpha.Authority
 	userObj             apps_v1alpha.User
@@ -41,12 +47,22 @@ func TestMain(m *testing.M) {
 		"-smtp-path", "../../../../config/smtp.yaml",
 		"-authoritycreationtemplate-path", "../../../../assets/templates/email/authority-creation.html"}
 
+=======
+	authorityObj  apps_v1alpha.Authority
+	client        kubernetes.Interface
+	edgenetclient versioned.Interface
+	handler       Handler
+}
+
+func TestMain(m *testing.M) {
+>>>>>>> 4f2155f4e9d4dc806d3451fe8e379bc50caa8b34
 	log.SetOutput(ioutil.Discard)
 	logrus.SetOutput(ioutil.Discard)
 	os.Exit(m.Run())
 }
 
 func (g *NodecontributionTestGroup) Init() {
+<<<<<<< HEAD
 	nodecontributionObj := apps_v1alpha.NodeContribution{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "NodeContribution",
@@ -64,13 +80,19 @@ func (g *NodecontributionTestGroup) Init() {
 		},
 	}
 
+=======
+>>>>>>> 4f2155f4e9d4dc806d3451fe8e379bc50caa8b34
 	authorityObj := apps_v1alpha.Authority{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Authority",
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
+<<<<<<< HEAD
 			Name: "edgenetUnitTest",
+=======
+			Name: "edgenet",
+>>>>>>> 4f2155f4e9d4dc806d3451fe8e379bc50caa8b34
 		},
 		Spec: apps_v1alpha.AuthoritySpec{
 			FullName:  "EdgeNet",
@@ -83,7 +105,11 @@ func (g *NodecontributionTestGroup) Init() {
 				ZIP:     "75005",
 			},
 			Contact: apps_v1alpha.Contact{
+<<<<<<< HEAD
 				Email:     "unitTest@edge-net.org",
+=======
+				Email:     "unittest@edge-net.org",
+>>>>>>> 4f2155f4e9d4dc806d3451fe8e379bc50caa8b34
 				FirstName: "unit",
 				LastName:  "testing",
 				Phone:     "+33NUMBER",
@@ -94,6 +120,7 @@ func (g *NodecontributionTestGroup) Init() {
 			Enabled: false,
 		},
 	}
+<<<<<<< HEAD
 	userObj := apps_v1alpha.User{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "User",
@@ -132,6 +159,11 @@ func (g *NodecontributionTestGroup) Init() {
 	userHandler.Init(g.client, g.edgenetclient)
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 	userHandler.ObjectCreated(g.userObj.DeepCopy())
+=======
+	g.authorityObj = authorityObj
+	g.client = testclient.NewSimpleClientset()
+	g.edgenetclient = edgenettestclient.NewSimpleClientset()
+>>>>>>> 4f2155f4e9d4dc806d3451fe8e379bc50caa8b34
 }
 
 //TestHandlerInit for handler initialization
@@ -149,6 +181,7 @@ func TestHandlerInit(t *testing.T) {
 	}
 
 }
+<<<<<<< HEAD
 
 func TestNodeContributionCreate(t *testing.T) {
 	g := NodecontributionTestGroup{}
@@ -287,3 +320,5 @@ func TestGetRecordType(t *testing.T) {
 		t.Errorf("IP type detection failed")
 	}
 }
+=======
+>>>>>>> 4f2155f4e9d4dc806d3451fe8e379bc50caa8b34

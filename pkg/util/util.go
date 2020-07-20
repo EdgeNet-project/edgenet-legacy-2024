@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package config
+package util
 
 import (
 	"bytes"
@@ -22,7 +22,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
+	"time"
 
 	yaml "gopkg.in/yaml.v2"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -33,6 +35,7 @@ import (
 
 // A part of the general structure of a kubeconfig file
 type clusterDetails struct {
+	CA     []byte `json:"certificate-authority-data"`
 	Server string `json:"server"`
 }
 type clusters struct {
@@ -76,7 +79,7 @@ func getConfigView() (string, error) {
 	configCmd := cmdconfig.NewCmdConfigView(cmdutil.NewFactory(genericclioptions.NewConfigFlags(false)), streams, pathOptions)
 	// "context" is a global flag, inherited from base kubectl command in the real world
 	configCmd.Flags().String("context", "kubernetes-admin@kubernetes", "The name of the kubeconfig context to use")
-	configCmd.Flags().Parse([]string{"--minify", "--output=json"})
+	configCmd.Flags().Parse([]string{"--minify", "--output=json", "--raw=true"})
 	if err := configCmd.Execute(); err != nil {
 		log.Printf("unexpected error executing command: %v", err)
 		return "", err
@@ -87,17 +90,17 @@ func getConfigView() (string, error) {
 }
 
 // GetClusterServerOfCurrentContext provides cluster and server info of the current context
-func GetClusterServerOfCurrentContext() (string, string, error) {
+func GetClusterServerOfCurrentContext() (string, string, []byte, error) {
 	configStr, err := getConfigView()
 	if err != nil {
 		log.Printf("unexpected error executing command: %v", err)
-		return "", "", err
+		return "", "", nil, err
 	}
 	var configViewDet configView
 	err = json.Unmarshal([]byte(configStr), &configViewDet)
 	if err != nil {
 		log.Printf("unexpected error executing command: %v", err)
-		return "", "", err
+		return "", "", nil, err
 	}
 
 	currentContext := configViewDet.CurrentContext
@@ -105,15 +108,18 @@ func GetClusterServerOfCurrentContext() (string, string, error) {
 	for _, contextRaw := range configViewDet.Contexts {
 		if contextRaw.Name == currentContext {
 			cluster = contextRaw.Context.Cluster
+
 		}
 	}
 	var server string
+	var CA []byte
 	for _, clusterRaw := range configViewDet.Clusters {
 		if clusterRaw.Name == cluster {
 			server = clusterRaw.Cluster.Server
+			CA = clusterRaw.Cluster.CA
 		}
 	}
-	return cluster, server, nil
+	return cluster, server, CA, nil
 }
 
 // GetServerOfCurrentContext provides the server info of the current context
@@ -129,7 +135,6 @@ func GetServerOfCurrentContext() (string, error) {
 		log.Printf("unexpected error executing command: %v", err)
 		return "", err
 	}
-
 	currentContext := configViewDet.CurrentContext
 	var cluster string
 	for _, contextRaw := range configViewDet.Contexts {
@@ -155,7 +160,7 @@ func GetNamecheapCredentials() (string, string, string, error) {
 	commandLine.Parse(os.Args[2:4])
 
 	// The path of the yaml config file of namecheap
-	file, err := os.Open("../../config/namecheap.yaml")
+	file, err := os.Open("../../configs/namecheap.yaml")
 	if err != nil {
 		log.Printf("unexpected error executing command: %v", err)
 	}
@@ -176,4 +181,16 @@ func GetNamecheapCredentials() (string, string, string, error) {
 		return "", "", "", err
 	}
 	return namecheap.APIUser, namecheap.APIToken, namecheap.Username, nil
+}
+
+// GenerateRandomString to have a unique code
+func GenerateRandomString(n int) string {
+	var letter = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+
+	b := make([]rune, n)
+	rand.Seed(time.Now().UnixNano())
+	for i := range b {
+		b[i] = letter[rand.Intn(len(letter))]
+	}
+	return string(b)
 }

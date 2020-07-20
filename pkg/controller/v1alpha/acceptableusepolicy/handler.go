@@ -21,7 +21,7 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/mailer"
 
@@ -48,12 +48,12 @@ type Handler struct {
 func (t *Handler) Init() error {
 	log.Info("AUPHandler.Init")
 	var err error
-	t.clientset, err = authorization.CreateClientSet()
+	t.clientset, err = bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
+	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -70,34 +70,50 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	AUPOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(AUPCopy.GetNamespace(), metav1.GetOptions{})
 	AUPOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(AUPOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	// Check if the authority is active
-	if AUPOwnerAuthority.Status.Enabled {
+	if AUPOwnerAuthority.Spec.Enabled {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		if AUPCopy.Spec.Accepted && AUPCopy.Status.Expires == nil {
 			// Run timeout goroutine
 			go t.runApprovalTimeout(AUPCopy)
-			defer t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
-			if AUPCopy.Status.Renew {
-				AUPCopy.Status.Renew = false
+			if AUPCopy.Spec.Renew {
+				AUPCopy.Spec.Renew = false
+				AUPUpdated, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(AUPCopy)
+				if err == nil {
+					AUPCopy = AUPUpdated
+				}
 			}
 			// Set a timeout cycle which makes the acceptable use policy expires every 6 months
 			AUPCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(4382 * time.Hour),
 			}
+			AUPCopy.Status.State = success
+			AUPCopy.Status.Message = []string{"Acceptable use policy approved"}
+			AUPUpdated, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
+			if err == nil {
+				AUPCopy = AUPUpdated
+			} else {
+				AUPCopy.Status.State = failure
+				AUPCopy.Status.Message = []string{"Acceptable use policy approved", "Expiry date couldn't be set"}
+				t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
+			}
 		} else if AUPCopy.Spec.Accepted && AUPCopy.Status.Expires != nil {
 			// Check if the 6 months cycle expired
 			if AUPCopy.Status.Expires.Time.Sub(time.Now()) >= 0 {
 				go t.runApprovalTimeout(AUPCopy)
+				if AUPCopy.Spec.Renew {
+					AUPCopy.Spec.Renew = false
+					t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(AUPCopy)
+				}
 			} else {
 				AUPCopy.Spec.Accepted = false
-				AUPCopyUpdated, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(AUPCopy)
+				AUPCopy.Spec.Renew = false
+				AUPUpdated, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(AUPCopy)
 				if err == nil {
-					AUPCopy = AUPCopyUpdated
+					AUPCopy = AUPUpdated
 				}
-			}
-
-			if AUPCopy.Status.Renew {
-				AUPCopy.Status.Renew = false
+				AUPCopy.Status.State = failure
+				AUPCopy.Status.Message = []string{"Acceptable use policy expired"}
 				t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
 			}
 		}
@@ -113,8 +129,17 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	AUPOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(AUPOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	fieldUpdated := updated.(fields)
 
-	if AUPOwnerAuthority.Status.Enabled {
-		defer t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
+	if AUPOwnerAuthority.Spec.Enabled {
+		defer func() {
+			AUPUpdated, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
+			if err == nil {
+				AUPCopy = AUPUpdated
+			}
+			if AUPCopy.Spec.Renew {
+				AUPCopy.Spec.Renew = false
+				t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(AUPCopy)
+			}
+		}()
 		// To manipulate user object according to the changes of acceptable use policy
 		if fieldUpdated.accepted {
 			// Get the user who owns this acceptable use policy object
@@ -138,15 +163,23 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 				AUPUser.Status.AUP = false
 			}
 			go t.edgenetClientset.AppsV1alpha().Users(AUPUser.GetNamespace()).UpdateStatus(AUPUser)
-		} else if AUPCopy.Spec.Accepted && AUPCopy.Status.Renew {
+		} else if AUPCopy.Spec.Accepted && AUPCopy.Spec.Renew {
+			AUPCopy.Status.State = success
+			AUPCopy.Status.Message = []string{"Acceptable Use Policy Agreed and Renewed"}
 			AUPCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(4382 * time.Hour),
 			}
 		}
-		AUPCopy.Status.Renew = false
 	} else {
 		AUPCopy.Spec.Accepted = false
-		t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(AUPCopy)
+		AUPCopy.Spec.Renew = false
+		AUPUpdated, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(AUPCopy)
+		if err == nil {
+			AUPCopy = AUPUpdated
+		}
+		AUPCopy.Status.State = failure
+		AUPCopy.Status.Message = []string{"Authority disabled"}
+		t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
 	}
 }
 
@@ -179,28 +212,32 @@ func (t *Handler) runApprovalTimeout(AUPCopy *apps_v1alpha.AcceptableUsePolicy) 
 			for AUPEvent := range watchAUP.ResultChan() {
 				// Get updated acceptable use policy object
 				updatedAUP, status := AUPEvent.Object.(*apps_v1alpha.AcceptableUsePolicy)
-				if status {
-					if AUPEvent.Type == "DELETED" || !updatedAUP.Spec.Accepted {
-						terminated <- true
-						continue
-					}
+				if AUPCopy.GetUID() == updatedAUP.GetUID() {
+					if status {
+						if AUPEvent.Type == "DELETED" || !updatedAUP.Spec.Accepted {
+							terminated <- true
+							continue
+						}
 
-					if updatedAUP.Status.Expires != nil {
-						// Check whether expiration date updated
-						if AUPCopy.Status.Expires != nil && timeout != nil {
-							if AUPCopy.Status.Expires.Time == updatedAUP.Status.Expires.Time {
-								AUPCopy = updatedAUP
-								continue
+						if updatedAUP.Status.Expires != nil {
+							// Check whether expiration date updated - TBD
+							/*if AUPCopy.Status.Expires != nil && timeout != nil {
+								if AUPCopy.Status.Expires.Time == updatedAUP.Status.Expires.Time {
+									AUPCopy = updatedAUP
+									continue
+								}
+							}*/
+
+							if updatedAUP.Status.Expires.Time.Sub(time.Now()) >= 0 {
+								timeout = time.After(time.Until(updatedAUP.Status.Expires.Time))
+								reminder = time.After(time.Until(updatedAUP.Status.Expires.Time.Add(time.Hour * -168)))
+								timeoutRenewed <- true
+							} else {
+								terminated <- true
 							}
 						}
-
-						if updatedAUP.Status.Expires.Time.Sub(time.Now()) >= 0 {
-							timeout = time.After(time.Until(updatedAUP.Status.Expires.Time))
-							reminder = time.After(time.Until(updatedAUP.Status.Expires.Time.Add(time.Hour * -168)))
-							timeoutRenewed <- true
-						}
+						AUPCopy = updatedAUP
 					}
-					AUPCopy = updatedAUP
 				}
 			}
 		}()

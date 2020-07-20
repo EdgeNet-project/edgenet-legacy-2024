@@ -5,20 +5,25 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	api_v1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init()
+	Init(kubernetes kubernetes.Interface)
 	SetNodeGeolocation(obj interface{})
 }
 
 // Handler is a sample implementation of Handler
-type Handler struct{}
+type Handler struct {
+	clientset kubernetes.Interface
+}
 
 // Init handles any handler initialization
-func (t *Handler) Init() {
+func (t *Handler) Init(kubernetes kubernetes.Interface) {
 	log.Info("Handler.Init")
+	t.clientset = kubernetes
+	node.Clientset = t.clientset
 }
 
 // SetNodeGeolocation is called when an object is created or updated

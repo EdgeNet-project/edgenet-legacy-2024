@@ -1,10 +1,11 @@
-package authorization
+package bootstrap
+
 import (
-	"testing"
-	"path/filepath"
 	"flag"
-	
+	"path/filepath"
+	"testing"
 )
+
 func TestHomeDir(t *testing.T) {
 	home := homeDir()
 	if home == "" {
@@ -19,19 +20,8 @@ func TestSetKubeConfig(t *testing.T) {
 	SetKubeConfig()
 	var r string
 	flag.StringVar(&r, "r", filepath.Join(homeDir(), ".kube", "config"), "")
-		if(kubeconfig != "" && kubeconfig != r){
-			t.Fatal("Error, another path has been detected")
-}
+	if kubeconfig != "" && kubeconfig != r {
+		t.Fatal("Error, another path has been detected")
+	}
 	flag.Parse()
 }
-
-
-
-
-
-
-
-
-
-
-

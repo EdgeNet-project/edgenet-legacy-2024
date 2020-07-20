@@ -1,6 +1,6 @@
 # Create a user in EdgeNet
 
-In EdgeNet, a user can have a variety of roles as authority-admin, Manager, and User, and Tech role will be enabled in the future to manage node operations. You can create a user in a authority if you are an authority-admin of that authority or a cluster admin.
+In EdgeNet, there are two type of users as authority admin and regular user. You can create a user in a authority if you are an authority-admin of that authority or a cluster admin.
 
 ## Technologies you will use
 The technology that you will use is [Kubernetes](https://kubernetes.io/), to create
@@ -13,7 +13,7 @@ You will use your EdgeNet admin or authority-admin kubeconfig file to create a u
 
 ### Create a user
 In the first place, you need to create a user object according to your
-information. This object must include username consisting of [allowed characters](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/), the namespace of the authority, which is a combination of **"authority"** prefix and authority nickname, you want yourself to register in, firstname, lastname, email, and roles. Here is an example:
+information. This object must include username consisting of [allowed characters](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/), the namespace of the authority, which is a combination of **"authority"** prefix and authority nickname, you want yourself to register in, firstname, lastname, and email. Here is an example:
 
 ```yaml
 apiVersion: apps.edgenet.io/v1alpha
@@ -25,7 +25,6 @@ spec:
   firstname: <your firstname>
   lastname: <your lastname>
   email: <your email address>
-  roles: [Admin, Manager, User]
 ```
 
 ```

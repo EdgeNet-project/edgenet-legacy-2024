@@ -133,12 +133,10 @@ func TestGetNodeByHostname(t *testing.T) {
 }
 
 func TestGetNodeIPAddresses(t *testing.T) {
-
 	node1 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1", UID: "01"},
 		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.1", Type: "InternalIP"}, {Address: "10.0.0.1", Type: "ExternalIP"}}}}
 	node2 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-2", UID: "01"},
 		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.2", Type: "InternalIP"}, {Address: "10.0.0.2", Type: "ExternalIP"}}}}
-
 	data := []struct {
 		node       *corev1.Node
 		expectedip []string
