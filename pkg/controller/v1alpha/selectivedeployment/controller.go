@@ -39,7 +39,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
@@ -463,7 +462,7 @@ func Start() {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	// Run the controller loop as a background task to start processing resources
-	go controller.run(stopCh, clientset, edgenetClientset)
+	go controller.run(stopCh)
 	// A channel to observe OS signals for smooth shut down
 	sigTerm := make(chan os.Signal, 1)
 	signal.Notify(sigTerm, syscall.SIGTERM)
@@ -472,13 +471,13 @@ func Start() {
 }
 
 // Run starts the controller loop
-func (c *controller) run(stopCh <-chan struct{}, clientset kubernetes.Interface, edgenetClientset versioned.Interface) {
+func (c *controller) run(stopCh <-chan struct{}) {
 	// A Go panic which includes logging and terminating
 	defer utilruntime.HandleCrash()
 	// Shutdown after all goroutines have done
 	defer c.queue.ShutDown()
 	c.logger.Info("run: initiating")
-	c.handler.Init(clientset, edgenetClientset)
+	c.handler.Init()
 	// Run the informer to list and watch resources
 	go c.informer.Run(stopCh)
 	go c.nodeInformer.Run(stopCh)

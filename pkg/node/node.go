@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"edgenet/pkg/bootstrap"
+	"edgenet/pkg/node/infrastructure"
 
 	namecheap "github.com/billputer/go-namecheap"
 	geoip2 "github.com/oschwald/geoip2-golang"

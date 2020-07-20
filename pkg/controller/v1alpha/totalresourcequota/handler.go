@@ -207,7 +207,7 @@ func CheckExpiryDate(TRQCopy *apps_v1alpha.TotalResourceQuota) bool {
 }
 
 // ResourceConsumptionControl both calculates the total resource quota and the total consumption in the authority.
-// Additionally, when a Slice is created it comes along with a resource consumption demand. This function also allows us
+// Additionally, when a Slice created it comes along with a resource consumption demand. This function also allows us
 // to compare free resources with demands as well.
 func (t *Handler) ResourceConsumptionControl(TRQCopy *apps_v1alpha.TotalResourceQuota, CPUDemand int64, memoryDemand int64) (*apps_v1alpha.TotalResourceQuota, bool) {
 	// Find out the total resource quota by taking claims and drops into account
