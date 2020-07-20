@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"reflect"
 	"syscall"
 	"time"
 
@@ -56,7 +55,7 @@ type informerevent struct {
 type fields struct {
 	active bool
 	aup    bool
-	roles  bool
+	role   bool
 	email  bool
 }
 
@@ -102,16 +101,13 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			// Find out whether the fields updated
 			event.updated.active = false
 			event.updated.aup = false
-			event.updated.roles = false
+			event.updated.role = false
 			event.updated.email = false
-			if oldObj.(*apps_v1alpha.User).Status.Active != newObj.(*apps_v1alpha.User).Status.Active {
+			if oldObj.(*apps_v1alpha.User).Spec.Active != newObj.(*apps_v1alpha.User).Spec.Active {
 				event.updated.active = true
 			}
 			if oldObj.(*apps_v1alpha.User).Status.AUP != newObj.(*apps_v1alpha.User).Status.AUP {
 				event.updated.aup = true
-			}
-			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.User).Spec.Roles, newObj.(*apps_v1alpha.User).Spec.Roles) {
-				event.updated.roles = true
 			}
 			if oldObj.(*apps_v1alpha.User).Spec.Email != newObj.(*apps_v1alpha.User).Spec.Email {
 				event.updated.email = true

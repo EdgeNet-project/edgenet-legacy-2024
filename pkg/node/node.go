@@ -20,7 +20,6 @@ limitations under the License.
 package node
 
 import (
-	"edgenet/pkg/authorization"
 	"edgenet/pkg/node/infrastructure"
 	"encoding/json"
 	"fmt"
@@ -30,7 +29,8 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/client-go/kubernetes"
+	"edgenet/pkg/bootstrap"
+	"edgenet/pkg/node/infrastructure"
 
 	namecheap "github.com/billputer/go-namecheap"
 	geoip2 "github.com/oschwald/geoip2-golang"
@@ -38,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 )
 
 // JSON structure of patch operation
@@ -46,6 +47,19 @@ type patchStringValue struct {
 	Path  string `json:"path"`
 	Value string `json:"value"`
 }
+type patchByBoolValue struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value bool   `json:"value"`
+}
+type patchByOwnerReferenceValue struct {
+	Op    string                  `json:"op"`
+	Path  string                  `json:"path"`
+	Value []metav1.OwnerReference `json:"value"`
+}
+
+// Clientset to be synced by the custom resources
+var Clientset kubernetes.Interface
 
 // GeoFence function determines whether the point is inside a polygon by using the crossing number method.
 // This method counts the number of times a ray starting at a point crosses a polygon boundary edge.
@@ -89,13 +103,54 @@ func Boundbox(points [][]float64) []float64 {
 	return bounding
 }
 
-// setNodeLabels uses client-go to patch nodes by processing a labels map
-func setNodeLabels(hostname string, labels map[string]string) bool {
-	clientset, err := authorization.CreateClientSet()
+// GetKubeletVersion looks at the head node to decide which version of Kubernetes to install
+func GetKubeletVersion() string {
+	nodeRaw, err := Clientset.CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master"})
 	if err != nil {
 		log.Println(err.Error())
-		panic(err.Error())
 	}
+	kubeletVersion := ""
+	for _, nodeRow := range nodeRaw.Items {
+		kubeletVersion = nodeRow.Status.NodeInfo.KubeletVersion
+	}
+	return kubeletVersion
+}
+
+// SetOwnerReferences make the references owner of the node
+func SetOwnerReferences(nodeName string, ownerReferences []metav1.OwnerReference) error {
+	// Create a patch slice and initialize it to the size of 1
+	// Append the data existing in the label map to the slice
+	nodePatchArr := make([]interface{}, 1)
+	nodePatch := patchByOwnerReferenceValue{}
+	nodePatch.Op = "add"
+	nodePatch.Path = "/metadata/ownerReferences"
+	nodePatch.Value = ownerReferences
+	nodePatchArr[0] = nodePatch
+	nodePatchJSON, _ := json.Marshal(nodePatchArr)
+	// Patch the nodes with the arguments:
+	// hostname, patch type, and patch data
+	_, err := Clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
+	return err
+}
+
+// SetNodeScheduling syncs the node with the node contribution
+func SetNodeScheduling(nodeName string, unschedulable bool) error {
+	// Create a patch slice and initialize it to the size of 1
+	nodePatchArr := make([]interface{}, 1)
+	nodePatch := patchByBoolValue{}
+	nodePatch.Op = "replace"
+	nodePatch.Path = "/spec/unschedulable"
+	nodePatch.Value = unschedulable
+	nodePatchArr[0] = nodePatch
+	nodePatchJSON, _ := json.Marshal(nodePatchArr)
+	// Patch the nodes with the arguments:
+	// hostname, patch type, and patch data
+	_, err := Clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
+	return err
+}
+
+// setNodeLabels uses client-go to patch nodes by processing a labels map
+func setNodeLabels(hostname string, labels map[string]string) bool {
 	// Create a patch slice and initialize it to the label size
 	nodePatchArr := make([]patchStringValue, len(labels))
 	nodePatch := patchStringValue{}
@@ -111,7 +166,7 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 	nodesJSON, _ := json.Marshal(nodePatchArr)
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
-	_, err = clientset.CoreV1().Nodes().Patch(hostname, types.JSONPatchType, nodesJSON)
+	_, err := Clientset.CoreV1().Nodes().Patch(hostname, types.JSONPatchType, nodesJSON)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -221,7 +276,7 @@ func GetNodeIPAddresses(obj *corev1.Node) (string, string) {
 
 // SetHostname generates token to be used on adding a node onto the cluster
 func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
-	client, err := authorization.CreateNamecheapClient()
+	client, err := bootstrap.CreateNamecheapClient()
 	if err != nil {
 		log.Println(err.Error())
 		return false, "Unknown"
@@ -231,9 +286,9 @@ func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
 }
 
 // CreateJoinToken generates token to be used on adding a node onto the cluster
-func CreateJoinToken(clientset kubernetes.Interface, ttl string, hostname string) string {
+func CreateJoinToken(ttl string, hostname string) string {
 	duration, _ := time.ParseDuration(ttl)
-	token, err := infrastructure.CreateToken(clientset, duration, hostname)
+	token, err := infrastructure.CreateToken(Clientset, duration, hostname)
 	if err != nil {
 		log.Println(err.Error())
 		return "error"
@@ -242,9 +297,8 @@ func CreateJoinToken(clientset kubernetes.Interface, ttl string, hostname string
 }
 
 // GetList uses clientset to get node list of the cluster
-func GetList(clientset kubernetes.Interface) []string {
-
-	nodesRaw, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+func GetList() []string {
+	nodesRaw, err := Clientset.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -274,12 +328,12 @@ func GetStatusList(clientset kubernetes.Interface) []byte {
 		Lat        string   `json:"lat"`
 	}
 
-	nodesRaw, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodesRaw, err := Clientset.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	podsRaw, err := clientset.CoreV1().Pods("").List(metav1.ListOptions{})
+	podsRaw, err := Clientset.CoreV1().Pods("").List(metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -341,11 +395,11 @@ func GetConditionReadyStatus(node *corev1.Node) string {
 }
 
 // getNodeByHostname uses clientset to get namespace requested
-func getNodeByHostname(clientset kubernetes.Interface, hostname string) (string, error) {
+func getNodeByHostname(hostname string) (string, error) {
 	// Examples for error handling:
 	// - Use helper functions like e.g. errors.IsNotFound()
 	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
-	_, err := clientset.CoreV1().Nodes().Get(hostname, metav1.GetOptions{})
+	_, err := Clientset.CoreV1().Nodes().Get(hostname, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		log.Printf("Node %s not found", hostname)
 		return "false", err

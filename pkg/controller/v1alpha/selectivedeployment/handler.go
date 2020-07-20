@@ -26,7 +26,7 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/node"
 
@@ -80,12 +80,12 @@ func (t *SDHandler) Init() error {
 	t.wgHandler = make(map[string]*sync.WaitGroup)
 	t.wgRecovery = make(map[string]*sync.WaitGroup)
 	var err error
-	t.clientset, err = authorization.CreateClientSet()
+	t.clientset, err = bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
+	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -934,4 +934,22 @@ func containsOwnerRef(ownerRefs []metav1.OwnerReference, value metav1.OwnerRefer
 		}
 	}
 	return false
+}
+
+// dry function remove the same values of the old and new objects from the old object to have
+// the slice of deleted values.
+func dry(oldSlice []apps_v1alpha.Controller, newSlice []apps_v1alpha.Controller) []string {
+	var uniqueSlice []string
+	for _, oldValue := range oldSlice {
+		exists := false
+		for _, newValue := range newSlice {
+			if oldValue.Type == newValue.Type && oldValue.Name == newValue.Name {
+				exists = true
+			}
+		}
+		if !exists {
+			uniqueSlice = append(uniqueSlice, fmt.Sprintf("%s?/delta/? %s", oldValue.Type, oldValue.Name))
+		}
+	}
+	return uniqueSlice
 }

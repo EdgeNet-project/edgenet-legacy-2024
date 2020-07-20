@@ -19,15 +19,14 @@ package mailer
 import (
 	"bytes"
 	"crypto/tls"
+	"edgenet/pkg/util"
 	"encoding/base64"
 	"fmt"
 	"html/template"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net/smtp"
 	"os"
-	"time"
 
 	yaml "gopkg.in/yaml.v2"
 )
@@ -67,6 +66,7 @@ type MultiProviderData struct {
 type VerifyContentData struct {
 	CommonData commonData
 	Code       string
+	URL        string
 }
 
 // ValidationFailureContentData to set the failure-specific variables
@@ -85,6 +85,11 @@ type smtpServer struct {
 	To       string `yaml:"to"`
 }
 
+// console implementation
+type console struct {
+	URL string `yaml:"url"`
+}
+
 // address to get URI of smtp server
 func (s *smtpServer) address() string {
 	return fmt.Sprintf("%s:%s", s.Host, s.Port)
@@ -94,7 +99,7 @@ func (s *smtpServer) address() string {
 func Send(subject string, contentData interface{}) error {
 	// The code below inits the SMTP configuration for sending emails
 	// The path of the yaml config file of smtp server
-	file, err := os.Open("../../config/smtp.yaml")
+	file, err := os.Open("../../configs/smtp.yaml")
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
 		return err
@@ -139,7 +144,7 @@ func Send(subject string, contentData interface{}) error {
 	case "authority-validation-failure-name", "authority-validation-failure-email", "authority-email-verification-malfunction",
 		"authority-creation-failure", "authority-email-verification-dubious":
 		to, body = setAuthorityFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
-	case "user-validation-failure-name", "user-validation-failure-email", "user-email-verification-malfunction", "user-creation-failure", "user-serviceaccount-failure",
+	case "user-validation-failure-name", "user-validation-failure-email", "user-email-verification-malfunction", "user-creation-failure", "user-cert-failure",
 		"user-kubeconfig-failure", "user-email-verification-dubious", "user-email-verification-update-malfunction", "user-deactivation-failure":
 		to, body = setUserFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	}
@@ -223,7 +228,7 @@ func setCommonEmailHeaders(subject string, from string, to []string, delimiter s
 		headers += fmt.Sprintf("\r\n--%s\r\n", delimiter)
 	}
 	headers += "Content-Type: text/html; charset=\"utf-8\"\r\n"
-	headers += "Content-Transfer-Encoding: 8bit\r\n"
+	headers += "Content-Transfer-Encoding: 8bit\r\n\r\n"
 	if delimiter != "" {
 		headers += "\r\n"
 	}
@@ -417,6 +422,17 @@ func setAuthorityRequestContent(contentData interface{}, from string) ([]string,
 // setAuthorityEmailVerificationContent to create an email body related to the email verification
 func setAuthorityEmailVerificationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
+	file, err := os.Open("../../configs/console.yaml")
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+	}
+	decoder := yaml.NewDecoder(file)
+	var console console
+	err = decoder.Decode(&console)
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+	}
+	verificationData.URL = console.URL
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template
@@ -447,7 +463,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 	to := registrationData.CommonData.Email
 	// The HTML template
 	t, _ := template.ParseFiles("../../assets/templates/email/user-registration.html")
-	delimiter := generateRandomString(10)
+	delimiter := util.GenerateRandomString(10)
 	body := setCommonEmailHeaders("[EdgeNet] User Registration Successful", from, to, delimiter)
 	t.Execute(&body, registrationData)
 
@@ -457,7 +473,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 	headers += "Content-Disposition: attachment;filename=\"edgenet-kubeconfig.cfg\"\r\n"
 	// Read the kubeconfig file created for web authentication
 	// It will be in the attachment of email
-	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet-authority-%s-%s.cfg", registrationData.CommonData.Authority,
+	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", registrationData.CommonData.Authority,
 		registrationData.CommonData.Username))
 	if fileErr != nil {
 		log.Panic(fileErr)
@@ -471,6 +487,17 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 // setUserEmailVerificationContent to create an email body related to the email verification
 func setUserEmailVerificationContent(contentData interface{}, from, subject string) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
+	file, err := os.Open("../../configs/console.yaml")
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+	}
+	decoder := yaml.NewDecoder(file)
+	var console console
+	err = decoder.Decode(&console)
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+	}
+	verificationData.URL = console.URL
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template
@@ -503,16 +530,4 @@ func setUserVerifiedAlertContent(contentData interface{}, from string, to []stri
 	t.Execute(&body, alertData)
 
 	return to, body
-}
-
-// generateRandomString to have a unique string
-func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-	b := make([]rune, n)
-	rand.Seed(time.Now().UnixNano())
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }

@@ -19,7 +19,6 @@ package team
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"os"
 	"os/signal"
 	"reflect"
@@ -111,13 +110,9 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 			event.function = update
 			// Find out whether the fields updated
-			event.change.enabled = false
 			event.change.users.status = false
 			event.change.users.deleted = ""
 			event.change.users.added = ""
-			if oldObj.(*apps_v1alpha.Team).Status.Enabled != newObj.(*apps_v1alpha.Team).Status.Enabled {
-				event.change.enabled = true
-			}
 			if !reflect.DeepEqual(oldObj.(*apps_v1alpha.Team).Spec.Users, newObj.(*apps_v1alpha.Team).Spec.Users) {
 				event.change.users.status = true
 				sliceDeleted, sliceAdded := dry(oldObj.(*apps_v1alpha.Team).Spec.Users, newObj.(*apps_v1alpha.Team).Spec.Users)
@@ -149,7 +144,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			event.change.object.name = obj.(*apps_v1alpha.Team).GetName()
 			event.change.object.ownerNamespace = obj.(*apps_v1alpha.Team).GetNamespace()
 			event.change.object.childNamespace = fmt.Sprintf("%s-team-%s", obj.(*apps_v1alpha.Team).GetNamespace(), obj.(*apps_v1alpha.Team).GetName())
-			event.change.enabled = obj.(*apps_v1alpha.Team).Status.Enabled
+			event.change.enabled = obj.(*apps_v1alpha.Team).Spec.Enabled
 			log.Infof("Delete team: %s", event.key)
 			if err == nil {
 				queue.Add(event)
@@ -171,14 +166,6 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	_, err = clientset.RbacV1().ClusterRoles().Create(teamRole)
 	if err != nil {
 		log.Infof("Couldn't create team-admin cluster role: %s", err)
-	}
-	// Authority Manager
-	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "slices/status"}, Verbs: []string{"*"}}}
-	teamRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "team-manager"},
-		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(teamRole)
-	if err != nil {
-		log.Infof("Couldn't create team-manager cluster role: %s", err)
 	}
 	// Authority User
 	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "slices/status"}, Verbs: []string{"*"}}}
@@ -276,46 +263,4 @@ func (c *controller) processNextItem() bool {
 	c.queue.Forget(event.(informerevent).key)
 
 	return true
-}
-
-// dry function remove the same values of the old and new objects from the old object to have
-// the slice of deleted and added values.
-func dry(oldSlice []apps_v1alpha.TeamUsers, newSlice []apps_v1alpha.TeamUsers) ([]apps_v1alpha.TeamUsers, []apps_v1alpha.TeamUsers) {
-	var deletedSlice []apps_v1alpha.TeamUsers
-	var addedSlice []apps_v1alpha.TeamUsers
-
-	for _, oldValue := range oldSlice {
-		exists := false
-		for _, newValue := range newSlice {
-			if oldValue.Authority == newValue.Authority && oldValue.Username == newValue.Username {
-				exists = true
-			}
-		}
-		if !exists {
-			deletedSlice = append(deletedSlice, apps_v1alpha.TeamUsers{Authority: oldValue.Authority, Username: oldValue.Username})
-		}
-	}
-	for _, newValue := range newSlice {
-		exists := false
-		for _, oldValue := range oldSlice {
-			if newValue.Authority == oldValue.Authority && newValue.Username == oldValue.Username {
-				exists = true
-			}
-		}
-		if !exists {
-			addedSlice = append(addedSlice, apps_v1alpha.TeamUsers{Authority: newValue.Authority, Username: newValue.Username})
-		}
-	}
-
-	return deletedSlice, addedSlice
-}
-
-func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }

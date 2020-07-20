@@ -18,7 +18,6 @@ package selectivedeployment
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"os/signal"
 	"reflect"
@@ -28,7 +27,7 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
+	"edgenet/pkg/bootstrap"
 	appsinformer_v1alpha "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
 	"edgenet/pkg/node"
 
@@ -78,12 +77,12 @@ const unknownStr = "Unknown"
 
 // Start function is entry point of the controller
 func Start() {
-	clientset, err := authorization.CreateClientSet()
+	clientset, err := bootstrap.CreateClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	edgenetClientset, err := authorization.CreateEdgeNetClientSet()
+	edgenetClientset, err := bootstrap.CreateEdgeNetClientSet()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -554,32 +553,4 @@ func (c *controller) processNextItem() bool {
 	}
 
 	return true
-}
-
-// dry function remove the same values of the old and new objects from the old object to have
-// the slice of deleted values.
-func dry(oldSlice []apps_v1alpha.Controller, newSlice []apps_v1alpha.Controller) []string {
-	var uniqueSlice []string
-	for _, oldValue := range oldSlice {
-		exists := false
-		for _, newValue := range newSlice {
-			if oldValue.Type == newValue.Type && oldValue.Name == newValue.Name {
-				exists = true
-			}
-		}
-		if !exists {
-			uniqueSlice = append(uniqueSlice, fmt.Sprintf("%s?/delta/? %s", oldValue.Type, oldValue.Name))
-		}
-	}
-	return uniqueSlice
-}
-
-func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }

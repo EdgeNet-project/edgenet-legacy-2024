@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Sorbonne Université
+Copyright 2020 Sorbonne Université
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ limitations under the License.
 // The credit for this namecheap API communication goes to:
 // https://github.com/billputer/go-namecheap
 
-package authorization
+package bootstrap
 
 import (
 	"flag"
@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 
 	edgenetclientset "edgenet/pkg/client/clientset/versioned"
-	"edgenet/pkg/config"
+	"edgenet/pkg/util"
 
 	namecheap "github.com/billputer/go-namecheap"
 	"k8s.io/client-go/kubernetes"
@@ -90,7 +90,7 @@ func CreateClientSet() (*kubernetes.Clientset, error) {
 
 // CreateNameCheapClient generates the client to interact with Namecheap API
 func CreateNamecheapClient() (*namecheap.Client, error) {
-	apiuser, apitoken, username, err := config.GetNamecheapCredentials()
+	apiuser, apitoken, username, err := util.GetNamecheapCredentials()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

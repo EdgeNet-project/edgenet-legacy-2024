@@ -1,6 +1,7 @@
 package authority
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -17,14 +18,14 @@ func TestStartController(t *testing.T) {
 	// Wait for the status update of the created object
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
-	authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityObj.GetName(), metav1.GetOptions{})
-	if !authority.Status.Enabled {
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
+	if user == nil {
 		t.Error("Add func of event handler doesn't work properly")
 	}
 	// Update an authority
 	g.authorityObj.Spec.FullName = "test"
 	g.edgenetclient.AppsV1alpha().Authorities().Update(g.authorityObj.DeepCopy())
-	authority, _ = g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityObj.GetName(), metav1.GetOptions{})
+	authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityObj.GetName(), metav1.GetOptions{})
 	if authority.Spec.FullName != "test" {
 		t.Error("Update func of event handler doesn't work properly")
 	}

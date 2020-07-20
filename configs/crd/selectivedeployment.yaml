@@ -1,0 +1,123 @@
+# Copyright 2020 Sorbonne Université
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: selectivedeployments.apps.edgenet.io
+spec:
+  group: apps.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Ready
+          type: string
+          jsonPath: .status.ready
+        - name: Status
+          type: string
+          jsonPath: .status.state
+        - name: Type
+          type: string
+          description: The type of selectivedeployment filter
+          jsonPath: .spec.type
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - controller
+                - type
+                - selector
+              properties:
+                controller:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        enum:
+                          - Deployment
+                          - DaemonSet
+                          - StatefulSet
+                      name:
+                        type: string
+                  minimum: 1
+                type:
+                  type: string
+                  enum:
+                    - City
+                    - State
+                    - Country
+                    - Continent
+                    - Polygon
+                selector:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                      operator:
+                        type: string
+                        enum:
+                          - In
+                          - NotIn
+                      count:
+                        type: integer
+                        description: The number of nodes that will be picked for this selector. 0 means no limitation.
+                        minimum: 0
+                  minimum: 1
+            status:
+              type: object
+              properties:
+                ready:
+                  type: boolean
+                state:
+                  type: string
+                message:
+                  type: string
+                crash:
+                  type: array
+                  nullable: true
+                  items:
+                    type: object
+                    properties:
+                      controller:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                            name:
+                              type: string
+                        minimum: 1
+                      reason:
+                        type: string
+  scope: Namespaced
+  names:
+    plural: selectivedeployments
+    singular: selectivedeployment
+    kind: SelectiveDeployment
+    shortNames:
+      - sd

@@ -22,7 +22,6 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/mailer"
 
@@ -35,7 +34,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj, updated interface{})
 	ObjectDeleted(obj interface{})
@@ -43,26 +42,16 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 	resourceQuota    *corev1.ResourceQuota
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("TotalResourceQuotaHandler.Init")
-	var err error
-	t.clientset, err = authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	return err
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
@@ -74,7 +63,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	TRQAuthority, err := t.edgenetClientset.AppsV1alpha().Authorities().Get(TRQCopy.GetName(), metav1.GetOptions{})
 	if err == nil {
 		// Check if the authority is active
-		if TRQAuthority.Status.Enabled && TRQCopy.Spec.Enabled {
+		if TRQAuthority.Spec.Enabled && TRQCopy.Spec.Enabled {
 			// If the service restarts, it creates all objects again
 			// Because of that, this section covers a variety of possibilities
 			TRQCopy.Status.State = success
@@ -109,7 +98,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	if err == nil {
 		fieldUpdated := updated.(fields)
 		// Check if the authority is active
-		if TRQAuthority.Status.Enabled && TRQCopy.Spec.Enabled {
+		if TRQAuthority.Spec.Enabled && TRQCopy.Spec.Enabled {
 			// Start procedures if the spec changes
 			if fieldUpdated.spec {
 				TRQCopy, _ = t.ResourceConsumptionControl(TRQCopy, 0, 0)
@@ -134,6 +123,26 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// Delete or disable slices added by authority, TBD.
 }
 
+// Create generates a total resource quota with the name provided
+func (t *Handler) Create(name string) {
+	_, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(name, metav1.GetOptions{})
+	if err != nil {
+		// Set a total resource quota
+		TRQ := apps_v1alpha.TotalResourceQuota{}
+		TRQ.SetName(name)
+		claim := apps_v1alpha.TotalResourceDetails{}
+		claim.Name = "Default"
+		claim.CPU = "12000m"
+		claim.Memory = "12Gi"
+		TRQ.Spec.Claim = append(TRQ.Spec.Claim, claim)
+		TRQ.Spec.Enabled = true
+		_, err = t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Create(TRQ.DeepCopy())
+		if err != nil {
+			log.Infof("Couldn't create total resource quota in %s: %s", name, err)
+		}
+	}
+}
+
 // sendEmail to send notification to participants
 func (t *Handler) sendEmail(username, name, email, userAuthority, sliceAuthority, sliceOwnerNamespace, sliceName, sliceNamespace, subject string) {
 	// Set the HTML template variables
@@ -156,10 +165,10 @@ func (t *Handler) prohibitResourceUsage(TRQCopy *apps_v1alpha.TotalResourceQuota
 		TRQCopy.Status.State = failure
 		TRQCopy.Status.Message = []string{}
 	}
-	if !TRQAuthority.Status.Enabled {
+	if !TRQAuthority.Spec.Enabled {
 		TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Authority disabled")
 	}
-	if !TRQAuthority.Status.Enabled {
+	if !TRQAuthority.Spec.Enabled {
 		TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Total resource quota disabled")
 	}
 	// Delete all slices of authority
@@ -397,7 +406,7 @@ func (t *Handler) balanceResourceConsumption(TRQCopy *apps_v1alpha.TotalResource
 	if err == nil {
 		for _, sliceUser := range oldestSlice.Spec.Users {
 			user, err := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", sliceUser.Authority)).Get(sliceUser.Username, metav1.GetOptions{})
-			if err == nil && user.Status.Active && user.Status.AUP {
+			if err == nil && user.Spec.Active && user.Status.AUP {
 				t.sendEmail(sliceUser.Username, fmt.Sprintf("%s %s", user.Spec.FirstName, user.Spec.LastName), user.Spec.Email, sliceUser.Authority,
 					TRQCopy.GetName(), oldestSlice.GetNamespace(), oldestSlice.GetName(), sliceChildNamespaceStr, "slice-total-quota-exceeded")
 			}
@@ -434,18 +443,20 @@ func (t *Handler) runTimeout(TRQCopy *apps_v1alpha.TotalResourceQuota) {
 			for TRQEvent := range watchTRQ.ResultChan() {
 				// Get updated slice object
 				updatedTRQ, status := TRQEvent.Object.(*apps_v1alpha.TotalResourceQuota)
-				if status {
-					if TRQEvent.Type == "DELETED" {
-						terminated <- true
-						continue
-					}
-					TRQCopy = updatedTRQ
-					exists := CheckExpiryDate(TRQCopy)
-					if exists {
-						timeout = time.After(time.Until(getClosestExpiryDate(TRQCopy)))
-						timeoutRenewed <- true
-					} else {
-						terminated <- true
+				if TRQCopy.GetUID() == updatedTRQ.GetUID() {
+					if status {
+						if TRQEvent.Type == "DELETED" {
+							terminated <- true
+							continue
+						}
+						TRQCopy = updatedTRQ
+						exists := CheckExpiryDate(TRQCopy)
+						if exists {
+							timeout = time.After(time.Until(getClosestExpiryDate(TRQCopy)))
+							timeoutRenewed <- true
+						} else {
+							terminated <- true
+						}
 					}
 				}
 			}

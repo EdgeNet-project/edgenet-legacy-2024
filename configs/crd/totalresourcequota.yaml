@@ -1,4 +1,4 @@
-# Copyright 2019 Sorbonne Université
+# Copyright 2020 Sorbonne Université
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,12 +17,9 @@ metadata:
   name: totalresourcequotas.apps.edgenet.io
 spec:
   group: apps.edgenet.io
-  # list of versions supported by this CustomResourceDefinition
   versions:
     - name: v1alpha
-      # Each version can be enabled/disabled by Served flag.
       served: true
-      # One and only one version must be marked as the storage version.
       storage: true
       subresources:
         status: {}

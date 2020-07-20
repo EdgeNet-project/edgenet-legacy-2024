@@ -58,11 +58,7 @@
                           EdgeNet smoothly.
                         </p>
                         <p>
-                          In the first place, you need to run the <i>kubectl proxy</i> command that makes the proxy working.
-                          When proxy is running, you can directly copy and paste the cURL request into your terminal.
-                        </p>
-                        <p>
-                          Here is your user information accompanying by the <b>kubectl command</b> and <b>cURL request</b>,
+                          Here is your user information accompanying by the <b>kubectl command</b>,
                           which allow you to accept and renew the acceptable use policy:
                         </p>
                         <table style="margin: 0 0 21px;" width="100%">
@@ -89,21 +85,10 @@
                                   </td>
                                 </tr>
                                 <tr>
-                                  <td style="word-break: break-word; padding: 10px 0 0 0;">
-                                    <span class="f-fallback">
-                                      <strong>Kubectl command:</strong>
-                                      <span style="background-color: #1f1f1f; color: #629755; border: 1px solid #A4BCB6; display: block; padding: 20px; white-space: pre">kubectl proxy --port=8001 --kubeconfig ./edgenet-kubeconfig.cfg &amp;</span>
-                                    </span>
-                                  </td>
-                                </tr>
-                                <tr>
                                   <td style="word-break: break-word; padding: 0;">
                                     <span class="f-fallback">
-                                        <strong>cURL request:</strong>
-                                        <span style="background-color: #1f1f1f; color: #629755; border: 1px solid #A4BCB6; display: block; padding: 20px; white-space: pre">curl --location --request PATCH 'http://localhost:8001/apis/apps.edgenet.io/v1alpha/namespaces/authority-{{.CommonData.Authority}}/acceptableusepolicies/{{.CommonData.Username}}/status' \
---header 'Accept: application/json' \
---header 'Content-Type: application/json-patch+json' \
---data-raw '[{"op": "replace", "path": "/status/renew", "value": true}]'</span>
+                                        <strong>Kubectl command:</strong>
+                                        <span style="background-color: #1f1f1f; color: #629755; border: 1px solid #A4BCB6; display: block; padding: 20px; white-space: pre">kubectl patch acceptableusepolicy {{.CommonData.Username}} -n authority-{{.CommonData.Authority}} --type='json' -p='[{"op": "replace", "path": "/spec/renew", "value":true}]' --kubeconfig ./public.cfg</span>
                                     </span>
                                   </td>
                                 </tr>

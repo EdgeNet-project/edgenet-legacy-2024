@@ -45,7 +45,7 @@ func TestSend(t *testing.T) {
 	var smtpServer smtpServer
 	// The code below inits the SMTP configuration for sending emails
 	// The path of the yaml config file of test smtp server
-	file, err := os.Open("../../config/smtp_test.yaml")
+	file, err := os.Open("../../configs/smtp_test.yaml")
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
 		return

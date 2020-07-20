@@ -1,6 +1,6 @@
 # Create a team in EdgeNet
 
-In EdgeNet, an authority-admin or manager can directly create a team that empowers participants to create slices. Participants, ie users, may belong to different authorities.
+In EdgeNet, an authority-admin or authorized user can directly create a team that empowers participants to create slices. Participants, ie users, may belong to different authorities.
 
 ## Technologies you will use
 The technology that you will use is [Kubernetes](https://kubernetes.io/), to create
@@ -32,4 +32,4 @@ kubectl create -f ./team.yaml --kubeconfig ./your-kubeconfig.cfg
 
 ### Notification process
 
-At this point, the authority-admin(s) and manager(s) of the authority on which team created and the participants of the team get their invitations by email containing team information.
+At this point, the authority-admin(s) and authorized user(s) of the authority on which team created and the participants of the team get their invitations by email containing team information.

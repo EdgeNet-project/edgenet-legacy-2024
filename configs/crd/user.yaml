@@ -1,0 +1,88 @@
+# Copyright 2020 Sorbonne Université
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: users.apps.edgenet.io
+spec:
+  group: apps.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: "First Name"
+          type: string
+          jsonPath: .spec.firstname
+        - name: "Last Name"
+          type: string
+          jsonPath: .spec.lastname
+        - name: Email
+          type: string
+          jsonPath: .spec.email
+        - name: Active
+          type: boolean
+          jsonPath: .spec.active
+        - name: AUP
+          type: boolean
+          jsonPath: .status.aup
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - firstname
+                - lastname
+                - email
+                - active
+              properties:
+                firstname:
+                  type: string
+                lastname:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                url:
+                  type: string
+                bio:
+                  type: string
+                active:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                type:
+                  type: string
+                aup:
+                  type: boolean
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+  scope: Namespaced
+  names:
+    plural: users
+    singular: user
+    kind: User
