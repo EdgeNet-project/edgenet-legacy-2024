@@ -22,6 +22,7 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
+	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/mailer"
 	"edgenet/pkg/util"
@@ -33,7 +34,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
+	Init() error
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj, updated interface{})
 	ObjectDeleted(obj interface{})
@@ -41,15 +42,25 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        kubernetes.Interface
-	edgenetClientset versioned.Interface
+	clientset        *kubernetes.Clientset
+	edgenetClientset *versioned.Clientset
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
+func (t *Handler) Init() error {
 	log.Info("EVHandler.Init")
-	t.clientset = kubernetes
-	t.edgenetClientset = edgenet
+	var err error
+	t.clientset, err = bootstrap.CreateClientSet()
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	return err
 }
 
 // ObjectCreated is called when an object is created

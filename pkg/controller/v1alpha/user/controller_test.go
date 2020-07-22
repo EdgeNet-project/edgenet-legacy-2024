@@ -14,7 +14,7 @@ func TestStartController(t *testing.T) {
 	g.Init()
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
-	g.authorityObj.Spec.Enabled = true
+	g.authorityObj.Status.Enabled = true
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 
@@ -26,7 +26,7 @@ func TestStartController(t *testing.T) {
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
-	if !user.Spec.Active {
+	if !user.Status.Active {
 		t.Errorf("Add func of event handler doesn't work properly")
 	}
 	// Update a user
