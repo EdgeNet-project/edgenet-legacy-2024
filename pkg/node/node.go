@@ -20,7 +20,6 @@ limitations under the License.
 package node
 
 import (
-	"edgenet/pkg/node/infrastructure"
 	"encoding/json"
 	"fmt"
 	"log"

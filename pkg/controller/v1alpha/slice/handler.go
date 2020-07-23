@@ -254,7 +254,7 @@ func (t *Handler) checkResourcesAvailabilityForSlice(sliceCopy *apps_v1alpha.Sli
 	quotaExceeded := true
 	if err == nil {
 		TRQHandler := totalresourcequota.Handler{}
-		err = TRQHandler.Init()
+		TRQHandler.Init(t.clientset, t.edgenetClientset)
 		if err == nil {
 			switch sliceCopy.Spec.Profile {
 			case "Low":
@@ -450,7 +450,7 @@ timeoutLoop:
 			TRQCopy, err := t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(sliceOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 			if err == nil {
 				TRQHandler := totalresourcequota.Handler{}
-				err = TRQHandler.Init()
+				TRQHandler.Init(t.clientset, t.edgenetClientset)
 				if err == nil {
 					TRQHandler.ResourceConsumptionControl(TRQCopy, 0, 0)
 				}

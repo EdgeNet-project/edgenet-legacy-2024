@@ -100,17 +100,22 @@ func (s *smtpServer) address() string {
 func Send(subject string, contentData interface{}) error {
 	// The code below inits the SMTP configuration for sending emails
 	// The path of the yaml config file of smtp server
+	// Getting the command line argument(if existed) and use another path for namecheap.yaml file
+
+	var pathSMTP string
+	// commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	// commandLine.StringVar(&pathSMTP, "smtp-path", "", "smtp-path")
+	// commandLine.Parse(os.Args[4:6])
 	file, err := os.Open("../../configs/smtp.yaml")
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
-		return err
 	}
 
 	if pathSMTP != "" {
 		file, err = os.Open(pathSMTP)
 		if err != nil {
 			log.Printf("Mailer: unexpected error executing command: %v", err)
-			return
+			return err
 		}
 	}
 

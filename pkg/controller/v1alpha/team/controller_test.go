@@ -20,7 +20,7 @@ func TestStartController(t *testing.T) {
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
 	team, _ := g.edgenetclient.AppsV1alpha().Teams(g.authorityObj.GetNamespace()).Get(g.teamObj.GetName(), metav1.GetOptions{})
-	if !team.Status.Enabled {
+	if !team.Spec.Enabled {
 		t.Error("Add func of event handler authority doesn't work properly")
 	}
 	// Update a team

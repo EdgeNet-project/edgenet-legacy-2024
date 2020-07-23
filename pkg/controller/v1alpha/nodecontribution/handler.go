@@ -18,6 +18,7 @@ package nodecontribution
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -64,6 +65,11 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 	var err error
 	t.clientset = kubernetes
 	t.edgenetClientset = edgenet
+
+	var pathSSH string
+	commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	commandLine.StringVar(&pathSSH, "ssh-path", "", "ssh-path")
+	commandLine.Parse(os.Args[0:2])
 
 	// Get the SSH Public Key of the headnode
 	key, err := ioutil.ReadFile("../../.ssh/id_rsa")
@@ -226,7 +232,7 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // sendEmail to send notification to participants
-func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) {
+func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) error {
 	// For those who are authority-admin and authorized users of the authority
 	userRaw, err := t.edgenetClientset.AppsV1alpha().Users(NCCopy.GetNamespace()).List(metav1.ListOptions{})
 	if err == nil {
@@ -575,7 +581,7 @@ func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *a
 		log.Println(err)
 		return err
 	}
-	installationCommands, err := getInstallCommands(conn, nodeName, node.GetKubeletVersion()[1:])
+	installationCommands, err := getInstallCommands(conn, nodeName, node.GetKubeletVersion()[1:], []byte(""))
 	if err != nil {
 		log.Println(err)
 		return err
@@ -707,18 +713,23 @@ func startShell(sess *ssh.Session) (*ssh.Session, error) {
 }
 
 // getInstallCommands prepares the commands necessary according to the OS
-func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion string, kubernetes kubernetes.Interface) ([]string, error) {
-	sess, err := startSession(conn)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	defer sess.Close()
-	// Detect the node OS
-	output, err := sess.Output("cat /etc/os-release")
-	if err != nil {
-		log.Println(err)
-		return nil, err
+func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion string, fakeOS []byte) ([]string, error) {
+	var output []byte
+	if !reflect.DeepEqual(output, []byte("")) {
+		output = fakeOS
+	} else {
+		sess, err := startSession(conn)
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+		defer sess.Close()
+		// Detect the node OS
+		output, err = sess.Output("cat /etc/os-release")
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
 	}
 
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
@@ -745,7 +756,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			fmt.Sprintf("hostname %s", hostname),
 			"systemctl enable docker",
 			"systemctl start docker",
-			node.CreateJoinToken("600s", hostname, kubernetes),
+			node.CreateJoinToken("600s", hostname),
 			"systemctl daemon-reload",
 			"systemctl restart kubelet",
 		}
@@ -781,7 +792,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			fmt.Sprintf("hostname %s", hostname),
 			"systemctl enable docker",
 			"systemctl start docker",
-			node.CreateJoinToken("600s", hostname, kubernetes),
+			node.CreateJoinToken("600s", hostname),
 			"systemctl daemon-reload",
 			"systemctl restart kubelet",
 		}

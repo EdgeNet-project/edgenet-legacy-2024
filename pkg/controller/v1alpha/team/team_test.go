@@ -54,9 +54,7 @@ func (g *TeamTestGroup) Init() {
 		Spec: apps_v1alpha.TeamSpec{
 			Users:       []apps_v1alpha.TeamUsers{},
 			Description: "This is a test description",
-		},
-		Status: apps_v1alpha.TeamStatus{
-			Enabled: false,
+			Enabled:     true,
 		},
 	}
 	authorityObj := apps_v1alpha.Authority{
@@ -84,9 +82,7 @@ func (g *TeamTestGroup) Init() {
 				Phone:     "+33NUMBER",
 				Username:  "unittesting",
 			},
-		},
-		Status: apps_v1alpha.AuthorityStatus{
-			Enabled: false,
+			Enabled: true,
 		},
 	}
 	userObj := apps_v1alpha.User{
@@ -101,12 +97,12 @@ func (g *TeamTestGroup) Init() {
 		Spec: apps_v1alpha.UserSpec{
 			FirstName: "user",
 			LastName:  "NAME",
-			Roles:     []string{"Admin"},
 			Email:     "userName@edge-net.org",
+			Active:    true,
 		},
 		Status: apps_v1alpha.UserStatus{
-			State:  success,
-			Active: true,
+			Type:  "Admin",
+			State: success,
 		},
 	}
 	g.authorityObj = authorityObj
@@ -176,7 +172,7 @@ func TestTeamUpdate(t *testing.T) {
 	// Update of team status
 	t.Run("Update existing team", func(t *testing.T) {
 		// Building field parameter
-		g.teamObj.Status.Enabled = false
+		g.teamObj.Spec.Enabled = false
 		var field fields
 		field.enabled = true
 		// Requesting server to Update internal representation of team
@@ -185,11 +181,11 @@ func TestTeamUpdate(t *testing.T) {
 		g.handler.ObjectUpdated(g.teamObj.DeepCopy(), field)
 		// Verifying Team status is enabled in server's representation of team
 		team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
-		if team.Status.Enabled {
+		if team.Spec.Enabled {
 			t.Error("Failed to update status of team")
 		}
 		// Re-enable team for futher tests
-		g.teamObj.Status.Enabled = true
+		g.teamObj.Spec.Enabled = true
 		// Requesting server to Update internal representation of team
 		g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.teamObj.DeepCopy())
 		// Invoking ObjectUpdated to send emails to users added or removed from team
@@ -207,7 +203,7 @@ func TestTeamUpdate(t *testing.T) {
 		var field fields
 		field.users.status, field.enabled = true, true
 		field.users.added = `[{"Authority": "edgenet", "Username": "user1" }]`
-		g.userObj.Status.Active, g.userObj.Status.AUP = true, true
+		g.userObj.Spec.Active, g.userObj.Status.AUP = true, true
 		// Creating User before updating requesting server to update internal representation of team
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 		userHandler.ObjectCreated(g.userObj.DeepCopy())
@@ -217,40 +213,12 @@ func TestTeamUpdate(t *testing.T) {
 		g.handler.ObjectUpdated(g.teamObj.DeepCopy(), field)
 		// Check user rolebinding in team child namespace
 		user, _ := g.handler.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get("user1", metav1.GetOptions{})
-		roleBindings, _ := g.client.RbacV1().RoleBindings(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())).Get(fmt.Sprintf("%s-%s-team-%s", user.GetNamespace(), user.GetName(), "admin"), metav1.GetOptions{})
+		roleBindings, _ := g.client.RbacV1().RoleBindings(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())).Get(fmt.Sprintf("%s-%s-team-%s", user.GetNamespace(), user.GetName(), "user"), metav1.GetOptions{})
+		t.Log(roleBindings)
 		// Verifying server created rolebinding for new user in team's child namespace
 		if roleBindings == nil {
 			t.Error("Failed to create Rolebinding for user in team child namespace")
 		}
-	})
-}
-
-func TestTeamUserOwnerReferences(t *testing.T) {
-	g := TeamTestGroup{}
-	g.Init()
-	g.handler.Init(g.client, g.edgenetclient)
-	g.teamObj.Spec.Users = []apps_v1alpha.TeamUsers{
-		apps_v1alpha.TeamUsers{
-			Authority: g.authorityObj.GetName(),
-			Username:  "user1",
-		},
-	}
-	g.userObj.Status.Active, g.userObj.Status.AUP = true, true
-	// Creating User before updating requesting server to update internal representation of team
-	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
-	// Creating team with one user
-	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
-	g.handler.ObjectCreated(g.teamObj.DeepCopy())
-	// Setting owner references
-	t.Run("Set Owner references", func(t *testing.T) {
-		g.handler.setOwnerReferences(g.teamObj.DeepCopy())
-		teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())
-		teamChildNamespace, _ := g.client.CoreV1().Namespaces().Get(teamChildNamespaceStr, metav1.GetOptions{})
-		// Verifying team owns child namespace
-		if teamChildNamespace.Labels["owner"] != "team" && teamChildNamespace.Labels["owner-name"] != "edgnetteam" {
-			t.Error("Failed to set team namespace owner references")
-		}
-
 	})
 }
 

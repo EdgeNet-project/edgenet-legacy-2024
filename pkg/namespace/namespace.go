@@ -52,7 +52,7 @@ func Create(name string) (string, error) {
 // Delete function checks whether namespace exists, and uses clientset to delete the namespace
 func Delete(namespace string) (string, error) {
 	// Check namespace exists or not
-	exist, err := GetNamespaceByName(clientset, namespace)
+	exist, err := GetNamespaceByName(namespace)
 	if err == nil && exist == "true" {
 		err := Clientset.CoreV1().Namespaces().Delete(namespace, &metav1.DeleteOptions{})
 		if err != nil {

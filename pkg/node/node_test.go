@@ -75,8 +75,10 @@ func TestGetList(t *testing.T) {
 		}),
 			expectedNode: []string{"node3", "node4"},
 		}}
+
 	for _, single := range data {
-		if !reflect.DeepEqual(GetList(single.clientset), single.expectedNode) {
+		Clientset = single.clientset
+		if !reflect.DeepEqual(GetList(), single.expectedNode) {
 			t.Fatal("error")
 		}
 	}
@@ -126,7 +128,8 @@ func TestGetNodeByHostname(t *testing.T) {
 	}
 
 	for _, test := range data {
-		if output, err := getNodeByHostname(test.clientset, test.node); output != test.expected {
+		Clientset = test.clientset
+		if output, err := getNodeByHostname(test.node); output != test.expected {
 			t.Error(err)
 		}
 	}

@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -30,8 +31,6 @@ import (
 	"os"
 	"regexp"
 	"time"
-
-	"k8s.io/client-go/kubernetes"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/util"
@@ -59,6 +58,17 @@ var Clientset kubernetes.Interface
 
 // MakeUser generates key and certificate and then set user credentials into the config file.
 func MakeUser(authority, username, email string) ([]byte, []byte, error) {
+
+	var headnodePath string
+
+	flag.Parse()
+	args := flag.Args()
+	if len(args) == 1 {
+		commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+		commandLine.StringVar(&headnodePath, "headnode-path", "", "headnode-path")
+		commandLine.Parse(os.Args[0:2])
+	}
+
 	path := fmt.Sprintf("../../assets/certs/%s", email)
 	reader := rand.Reader
 	bitSize := 4096
@@ -79,7 +89,13 @@ func MakeUser(authority, username, email string) ([]byte, []byte, error) {
 	file, err := os.Open("../../configs/headnode.yaml")
 	if err != nil {
 		log.Printf("Registration: unexpected error executing command: %v", err)
-		return nil, nil, err
+	}
+	if headnodePath != "" {
+		file, err = os.Open(headnodePath)
+		if err != nil {
+			log.Printf("Registration: unexpected error executing command: %v", err)
+			return nil, nil, err
+		}
 	}
 	decoder := yaml.NewDecoder(file)
 	var headnode headnode
@@ -114,8 +130,11 @@ func MakeUser(authority, username, email string) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	timeout := time.After(5 * time.Minute)
+	timeout := time.After(15 * time.Minute)
 	ticker := time.Tick(15 * time.Second)
+	if headnodePath != "" {
+		timeout = time.After(2 * time.Second)
+	}
 check:
 	for {
 		select {
