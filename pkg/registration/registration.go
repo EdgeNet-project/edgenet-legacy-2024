@@ -133,7 +133,8 @@ func MakeUser(authority, username, email string) ([]byte, []byte, error) {
 	timeout := time.After(15 * time.Minute)
 	ticker := time.Tick(15 * time.Second)
 	if headnodePath != "" {
-		timeout = time.After(2 * time.Second)
+		timeout = time.After(3 * time.Second)
+		ticker = time.Tick(1 * time.Second)
 	}
 check:
 	for {
