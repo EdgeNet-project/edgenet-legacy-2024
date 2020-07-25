@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"reflect"
+	"time"
 
 	"edgenet/pkg/client/clientset/versioned"
 	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
@@ -98,13 +99,34 @@ func (g *RegistrationTestGroup) Init() {
 	Clientset = g.client
 }
 
-func TestMakeUser(t *testing.T) {
+func TestUserCreation(t *testing.T) {
 	g := RegistrationTestGroup{}
 	g.Init()
 	// Get the user object
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 	// Find the authority from the namespace in which the object is (needed for invoking MakeUser)
 	userOwnerNamespace, _ := g.client.CoreV1().Namespaces().Get(user.GetNamespace(), metav1.GetOptions{})
+	// Mock the signer
+	go func() {
+		timeout := time.After(10 * time.Second)
+		ticker := time.Tick(1 * time.Second)
+	check:
+		for {
+			select {
+			case <-timeout:
+				break check
+			case <-ticker:
+				CSRObj, getErr := Clientset.CertificatesV1beta1().CertificateSigningRequests().Get(fmt.Sprintf("%s-%s", userOwnerNamespace.Labels["authority-name"], user.GetName()), metav1.GetOptions{})
+				if getErr == nil {
+					CSRObj.Status.Certificate = CSRObj.Spec.Request
+					_, updateErr := Clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateStatus(CSRObj)
+					if updateErr == nil {
+						break check
+					}
+				}
+			}
+		}
+	}()
 	_, _, err := MakeUser(userOwnerNamespace.Labels["authority-name"], user.GetName(), user.Spec.Email)
 	if err != nil {
 		t.Errorf("MakeUser Failed")
