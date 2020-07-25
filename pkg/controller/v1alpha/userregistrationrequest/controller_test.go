@@ -20,7 +20,7 @@ func TestStartController(t *testing.T) {
 	// Get the object and check the status
 	AR, _ := g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userRegistrationObj.GetName(), metav1.GetOptions{})
 	if AR.Status.Expires == nil || AR.Status.Message == nil {
-		t.Error("Add func of event handler authority request doesn't work properly")
+		t.Error(ErrorDict["add-func"])
 	}
 	// Update a Authority request
 	// Update contact email
@@ -29,8 +29,8 @@ func TestStartController(t *testing.T) {
 	g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.userRegistrationObj.DeepCopy())
 	time.Sleep(time.Millisecond * 500)
 	// Checking if user registration transitioned to user after update
-	User, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userRegistrationObj.GetName(), metav1.GetOptions{})
-	if User == nil {
-		t.Error("Failed to create user from user Request after approval")
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userRegistrationObj.GetName(), metav1.GetOptions{})
+	if user == nil {
+		t.Error(ErrorDict["usr-URR"])
 	}
 }

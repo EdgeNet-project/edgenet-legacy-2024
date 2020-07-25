@@ -28,6 +28,16 @@ type URRTestGroup struct {
 	handler             Handler
 }
 
+var ErrorDict = map[string]string{
+	"k8-sync":        "Kubernetes clientset sync problem",
+	"edgnet-sync":    "EdgeNet clientset sync problem",
+	"URR-timeout":    "Failed to update approval timeout of user Request",
+	"usr-email-coll": "Failed to detect user email address collision",
+	"usr-approv":     "Failed to create user from user Request after approval",
+	"add-func":       "Add func of event handler authority request doesn't work properly",
+	"usr-URR":        "Failed to create user from user Request after approval",
+}
+
 func TestMain(m *testing.M) {
 	log.SetOutput(ioutil.Discard)
 	logrus.SetOutput(ioutil.Discard)
@@ -77,6 +87,7 @@ func (g *URRTestGroup) Init() {
 			FirstName: "user",
 			LastName:  "NAME",
 			Email:     "userName@edge-net.org",
+			Active:    false,
 		},
 		Status: apps_v1alpha.UserStatus{
 			State: success,
@@ -108,11 +119,11 @@ func (g *URRTestGroup) Init() {
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
-	//invoke ObjectCreated to create namespace
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	//invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 
@@ -166,7 +177,7 @@ func TestURRUpdate(t *testing.T) {
 		g.handler.ObjectUpdated(g.userRegistrationObj.DeepCopy())
 		URR, _ := g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userRegistrationObj.GetName(), metav1.GetOptions{})
 		if URR.Status.Message == nil {
-			t.Error("Failed to detect user email collision")
+			t.Error(ErrorDict["usr-email-coll"])
 		}
 	})
 
@@ -181,7 +192,7 @@ func TestURRUpdate(t *testing.T) {
 		// Checking if user with same name as user registration object exists
 		User, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userRegistrationObj.GetName(), metav1.GetOptions{})
 		if User == nil {
-			t.Error("Failed to create user from user Request after approval")
+			t.Error(ErrorDict["usr-approv"])
 		}
 	})
 }

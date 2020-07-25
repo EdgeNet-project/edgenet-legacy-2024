@@ -20,7 +20,6 @@ limitations under the License.
 package node
 
 import (
-	"edgenet/pkg/node/infrastructure"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -30,6 +29,7 @@ import (
 	"time"
 
 	"edgenet/pkg/bootstrap"
+	"edgenet/pkg/node/infrastructure"
 
 	namecheap "github.com/billputer/go-namecheap"
 	geoip2 "github.com/oschwald/geoip2-golang"

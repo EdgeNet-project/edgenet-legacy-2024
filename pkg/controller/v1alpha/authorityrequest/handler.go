@@ -98,17 +98,14 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		}
 		emailVerificationHandler := emailverification.Handler{}
 		emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-		var err error
-		if err == nil {
-			created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
-			if created {
-				// Update the status as successful
-				authorityRequestCopy.Status.State = success
-				authorityRequestCopy.Status.Message = []string{"Everything is OK, verification email sent"}
-			} else {
-				authorityRequestCopy.Status.State = issue
-				authorityRequestCopy.Status.Message = []string{"Couldn't send verification email"}
-			}
+		created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
+		if created {
+			// Update the status as successful
+			authorityRequestCopy.Status.State = success
+			authorityRequestCopy.Status.Message = []string{"Everything is OK, verification email sent"}
+		} else {
+			authorityRequestCopy.Status.State = issue
+			authorityRequestCopy.Status.Message = []string{"Couldn't send verification email"}
 		}
 	} else {
 		go t.runApprovalTimeout(authorityRequestCopy)
@@ -140,17 +137,14 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		} else if !authorityRequestCopy.Spec.Approved && authorityRequestCopy.Status.State == failure {
 			emailVerificationHandler := emailverification.Handler{}
 			emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-			var err error
-			if err == nil {
-				created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
-				if created {
-					// Update the status as successful
-					authorityRequestCopy.Status.State = success
-					authorityRequestCopy.Status.Message = []string{"Everything is OK, verification email sent"}
-				} else {
-					authorityRequestCopy.Status.State = issue
-					authorityRequestCopy.Status.Message = []string{"Couldn't send verification email"}
-				}
+			created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
+			if created {
+				// Update the status as successful
+				authorityRequestCopy.Status.State = success
+				authorityRequestCopy.Status.Message = []string{"Everything is OK, verification email sent"}
+			} else {
+				authorityRequestCopy.Status.State = issue
+				authorityRequestCopy.Status.Message = []string{"Couldn't send verification email"}
 			}
 			changeStatus = true
 		}
@@ -186,8 +180,8 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 	exists := false
 	message := []string{}
 	// To check username on the users resource
-	authorityRaw, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityRequestCopy.GetName(), metav1.GetOptions{})
-	if authorityRaw == nil {
+	authorityObj, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityRequestCopy.GetName(), metav1.GetOptions{})
+	if authorityObj == nil {
 		// To check email address among users
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {

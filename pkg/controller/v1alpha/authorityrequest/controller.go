@@ -58,7 +58,6 @@ const success = "Successful"
 
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
-
 	var err error
 	clientset := kubernetes
 	edgenetClientset := edgenet

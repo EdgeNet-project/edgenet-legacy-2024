@@ -29,6 +29,17 @@ type ARTestGroup struct {
 	handler             Handler
 }
 
+var ErrorDict = map[string]string{
+	"k8-sync":      "Kubernetes clientset sync problem",
+	"edgnet-sync":  "EdgeNet clientset sync problem",
+	"auth-timeout": "Failed to update approval timeout of Authority Request",
+	"auth-coll":    "Failed to detect Authority name collision",
+	"email-coll":   "Failed to detect email address collision",
+	"auth-approv":  "Failed to create Authority from Authority Request after approval",
+	"add-func":     "Add func of event handler authority request doesn't work properly",
+	"auth-AR":      "Failed to create Authority from Authority Request after approval",
+}
+
 func TestMain(m *testing.M) {
 	log.SetOutput(ioutil.Discard)
 	logrus.SetOutput(ioutil.Discard)
@@ -65,7 +76,7 @@ func (g *ARTestGroup) Init() {
 			Enabled: true,
 		},
 	}
-	AuthorityRequestObj := apps_v1alpha.AuthorityRequest{
+	authorityRequestObj := apps_v1alpha.AuthorityRequest{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "authorityRequest",
 			APIVersion: "apps.edgenet.io/v1alpha",
@@ -94,7 +105,7 @@ func (g *ARTestGroup) Init() {
 			Approved: false,
 		},
 		Status: apps_v1alpha.AuthorityRequestStatus{
-			EmailVerified: true,
+			EmailVerified: false,
 			Expires:       nil,
 			State:         "",
 			Message:       nil,
@@ -113,6 +124,7 @@ func (g *ARTestGroup) Init() {
 			FirstName: "user",
 			LastName:  "NAME",
 			Email:     "userName@edge-net.org",
+			Active:    false,
 		},
 		Status: apps_v1alpha.UserStatus{
 			Type:  "Admin",
@@ -120,15 +132,15 @@ func (g *ARTestGroup) Init() {
 		},
 	}
 	g.authorityObj = authorityObj
-	g.authorityRequestObj = AuthorityRequestObj
+	g.authorityRequestObj = authorityRequestObj
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
-	//invoke ObjectCreated to create namespace
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	//invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 
@@ -139,10 +151,10 @@ func TestHandlerInit(t *testing.T) {
 	// Initialize the handler
 	g.handler.Init(g.client, g.edgenetclient)
 	if g.handler.clientset != g.client {
-		t.Error("Kubernetes clientset sync problem")
+		t.Error(ErrorDict["k8-sync"])
 	}
 	if g.handler.edgenetClientset != g.edgenetclient {
-		t.Error("EdgeNet clientset sync problem")
+		t.Error(ErrorDict["edgnet-sync"])
 	}
 }
 
@@ -156,7 +168,7 @@ func TestARCreate(t *testing.T) {
 		g.handler.ObjectCreated(g.authorityRequestObj.DeepCopy())
 		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authorityRequest.Status.Expires == nil {
-			t.Errorf("Failed to update approval timeout of Authority Request")
+			t.Errorf(ErrorDict["auth-timeout"])
 		}
 	})
 	t.Run("checking duplicate Authority names", func(t *testing.T) {
@@ -167,7 +179,7 @@ func TestARCreate(t *testing.T) {
 		g.handler.ObjectCreated(g.authorityRequestObj.DeepCopy())
 		AR, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if AR.Status.Message == nil {
-			t.Error("Failed to detect Authority name collision")
+			t.Error(ErrorDict["auth-coll"])
 		}
 	})
 
@@ -192,7 +204,7 @@ func TestARUpdate(t *testing.T) {
 		g.handler.ObjectUpdated(g.authorityRequestObj.DeepCopy())
 		AR, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if AR.Status.Message == nil && strings.Contains(AR.Status.Message[0], "Email address") {
-			t.Error("Failed to detect email address collision")
+			t.Error(ErrorDict["email-coll"])
 		}
 	})
 	t.Run("Testing Authority Request transition to Authority", func(t *testing.T) {
@@ -207,7 +219,7 @@ func TestARUpdate(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{})
 		authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authority == nil {
-			t.Error("Failed to create Authority from Authority Request after approval")
+			t.Error(ErrorDict["auth-approv"])
 		}
 	})
 }

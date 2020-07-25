@@ -255,16 +255,13 @@ func (t *Handler) checkResourcesAvailabilityForSlice(sliceCopy *apps_v1alpha.Sli
 	if err == nil {
 		TRQHandler := totalresourcequota.Handler{}
 		TRQHandler.Init(t.clientset, t.edgenetClientset)
-		err = nil
-		if err == nil {
-			switch sliceCopy.Spec.Profile {
-			case "Low":
-				_, quotaExceeded = TRQHandler.ResourceConsumptionControl(TRQCopy, t.lowResourceQuota.Spec.Hard.Cpu().Value(), t.lowResourceQuota.Spec.Hard.Memory().Value())
-			case "Medium":
-				_, quotaExceeded = TRQHandler.ResourceConsumptionControl(TRQCopy, t.medResourceQuota.Spec.Hard.Cpu().Value(), t.medResourceQuota.Spec.Hard.Memory().Value())
-			case "High":
-				_, quotaExceeded = TRQHandler.ResourceConsumptionControl(TRQCopy, t.highResourceQuota.Spec.Hard.Cpu().Value(), t.highResourceQuota.Spec.Hard.Memory().Value())
-			}
+		switch sliceCopy.Spec.Profile {
+		case "Low":
+			_, quotaExceeded = TRQHandler.ResourceConsumptionControl(TRQCopy, t.lowResourceQuota.Spec.Hard.Cpu().Value(), t.lowResourceQuota.Spec.Hard.Memory().Value())
+		case "Medium":
+			_, quotaExceeded = TRQHandler.ResourceConsumptionControl(TRQCopy, t.medResourceQuota.Spec.Hard.Cpu().Value(), t.medResourceQuota.Spec.Hard.Memory().Value())
+		case "High":
+			_, quotaExceeded = TRQHandler.ResourceConsumptionControl(TRQCopy, t.highResourceQuota.Spec.Hard.Cpu().Value(), t.highResourceQuota.Spec.Hard.Memory().Value())
 		}
 	}
 	return !quotaExceeded
@@ -274,7 +271,7 @@ func (t *Handler) checkResourcesAvailabilityForSlice(sliceCopy *apps_v1alpha.Sli
 func (t *Handler) setConstrainsByProfile(childNamespace string, sliceCopy *apps_v1alpha.Slice) *apps_v1alpha.Slice {
 	switch sliceCopy.Spec.Profile {
 	case "Low":
-		// Set the timeout which is 6 weeks for medium profile slices
+		// Set the timeout which is 6 weeks for low profile slices
 		if sliceCopy.Spec.Renew || sliceCopy.Status.Expires == nil {
 			sliceCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(1344 * time.Hour),
@@ -452,10 +449,7 @@ timeoutLoop:
 			if err == nil {
 				TRQHandler := totalresourcequota.Handler{}
 				TRQHandler.Init(t.clientset, t.edgenetClientset)
-				err = nil
-				if err == nil {
-					TRQHandler.ResourceConsumptionControl(TRQCopy, 0, 0)
-				}
+				TRQHandler.ResourceConsumptionControl(TRQCopy, 0, 0)
 			}
 			closeChannels()
 			break timeoutLoop

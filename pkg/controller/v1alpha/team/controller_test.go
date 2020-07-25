@@ -40,7 +40,7 @@ func TestStartController(t *testing.T) {
 		t.Error("Failed to add user to team")
 	}
 	// Check user rolebinding in team child namespace
-	user, _:= g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get("user1", metav1.GetOptions{})
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get("user1", metav1.GetOptions{})
 	time.Sleep(time.Millisecond * 500)
 	roleBindings, _ := g.client.RbacV1().RoleBindings(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())).Get(fmt.Sprintf("%s-%s-team-%s", user.GetNamespace(), user.GetName(), "admin"), metav1.GetOptions{})
 	// Verifying server created rolebinding for new user in team's child namespace

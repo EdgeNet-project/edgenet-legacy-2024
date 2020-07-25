@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"testing"
+	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/client/clientset/versioned"
@@ -82,6 +83,7 @@ func (g *SliceTestGroup) Init() {
 			FirstName: "user",
 			LastName:  "NAME",
 			Email:     "userName@edge-net.org",
+			Active:    false,
 		},
 		Status: apps_v1alpha.UserStatus{
 			Type:  "Admin",
@@ -99,7 +101,6 @@ func (g *SliceTestGroup) Init() {
 			OwnerReferences: []metav1.OwnerReference{},
 		},
 		Spec: apps_v1alpha.SliceSpec{
-			// Type:        "",
 			Profile:     "Low",
 			Users:       []apps_v1alpha.SliceUsers{},
 			Description: "This is a test description",
@@ -114,11 +115,11 @@ func (g *SliceTestGroup) Init() {
 	g.sliceObj = sliceObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
-	//invoke ObjectCreated to create namespace
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	//invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 
@@ -159,6 +160,10 @@ func TestSliceCreate(t *testing.T) {
 		if sliceChildNamespace == nil {
 			t.Errorf("Failed to create slice child namespace")
 		}
+		resourceQuota, _ := g.client.CoreV1().ResourceQuotas(sliceChildNamespace.GetName()).List(metav1.ListOptions{})
+		if resourceQuota == nil {
+			t.Errorf("Failed to create slice resource quota")
+		}
 	})
 }
 
@@ -187,6 +192,14 @@ func TestSliceUpdate(t *testing.T) {
 			t.Error("Failed to update profile of slice")
 		}
 		if slice.Status.Expires == nil {
+			t.Error("Failed to update expiration time of slice")
+		}
+		testTime := &metav1.Time{
+			Time: time.Now().Add(672 * time.Hour),
+		}
+		yy1, mm1, dd1 := slice.Status.Expires.Date()
+		yy2, mm2, dd2 := testTime.Date()
+		if yy1 != yy2 && mm1 != mm2 && dd1 != dd2 {
 			t.Error("Failed to update expiration time of slice")
 		}
 	})

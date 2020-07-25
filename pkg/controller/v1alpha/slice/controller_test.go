@@ -20,7 +20,7 @@ func TestStartController(t *testing.T) {
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
 	slice, _ := g.edgenetclient.AppsV1alpha().Slices(g.authorityObj.GetNamespace()).Get(g.sliceObj.GetName(), metav1.GetOptions{})
-	if slice.Spec.Renew {
+	if slice.Status.Expires == nil {
 		t.Error("Add func of event handler authority doesn't work properly")
 	}
 	// Update a slice
@@ -35,10 +35,6 @@ func TestStartController(t *testing.T) {
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 	// Requesting server to update internal representation of slice
 	g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(slice)
-	slice, _ = g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.sliceObj.GetName(), metav1.GetOptions{})
-	if len(slice.Spec.Users) != 1 {
-		t.Error("Failed to add user to slice")
-	}
 	// Check user rolebinding in slice child namespace
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get("user1", metav1.GetOptions{})
 	time.Sleep(time.Millisecond * 500)

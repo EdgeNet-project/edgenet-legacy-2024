@@ -54,10 +54,10 @@ func (g *TeamTestGroup) Init() {
 		Spec: apps_v1alpha.TeamSpec{
 			Users:       []apps_v1alpha.TeamUsers{},
 			Description: "This is a test description",
-			Enabled: true,
+			Enabled:     true,
 		},
 		Status: apps_v1alpha.TeamStatus{
-			State:  success,
+			State: success,
 		},
 	}
 	authorityObj := apps_v1alpha.Authority{
@@ -101,10 +101,11 @@ func (g *TeamTestGroup) Init() {
 			FirstName: "user",
 			LastName:  "NAME",
 			Email:     "userName@edge-net.org",
+			Active:    false,
 		},
 		Status: apps_v1alpha.UserStatus{
 			Type:  "Admin",
-			State:  success,
+			State: success,
 		},
 	}
 	g.authorityObj = authorityObj
@@ -112,11 +113,11 @@ func (g *TeamTestGroup) Init() {
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
-	//invoke ObjectCreated to create namespace
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	//invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 
