@@ -20,8 +20,7 @@ func TestStartController(t *testing.T) {
 	AUP, _ := g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.AUPObj.GetName(), metav1.GetOptions{})
 	// Check state
 	if AUP.Status.State != success && AUP.Status.Expires != nil {
-		t.Errorf("Failed to create Acceptable use policy")
-
+		t.Errorf(errorDict["add-func"])
 	}
 
 	// Update an AUP
@@ -31,6 +30,6 @@ func TestStartController(t *testing.T) {
 	AUP, _ = g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.AUPObj.GetName(), metav1.GetOptions{})
 	// Check state
 	if AUP.Status.State != success && AUP.Status.Expires != nil && strings.Contains(AUP.Status.Message[0], "Agreed and Renewed") {
-		t.Errorf("Failed to update Acceptable use policy")
+		t.Errorf(errorDict["add-func"])
 	}
 }

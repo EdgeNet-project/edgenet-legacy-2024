@@ -97,10 +97,10 @@ func TestHandlerInit(t *testing.T) {
 	// Initialize the handler
 	g.handler.Init(g.client, g.edgenetclient)
 	if g.handler.clientset != g.client {
-		t.Error("Kubernetes clientset sync problem")
+		t.Error(errorDict["k8-sync"])
 	}
 	if g.handler.edgenetClientset != g.edgenetclient {
-		t.Error("EdgeNet clientset sync problem")
+		t.Error(errorDict["edgnet-sync"])
 	}
 }
 
@@ -116,7 +116,7 @@ func TestAUPCreate(t *testing.T) {
 		g.handler.ObjectCreated(g.AUPObj.DeepCopy())
 		AUP, _ := g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.AUPObj.GetName(), metav1.GetOptions{})
 		if AUP.Status.State != success && AUP.Status.Expires != nil {
-			t.Errorf("Failed to create Acceptable use policy")
+			t.Errorf(errorDict["AUP-create"])
 		}
 	})
 }
@@ -140,7 +140,7 @@ func TestAUPUpdate(t *testing.T) {
 		// Verifying server triggered changes
 		AUP, _ := g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.AUPObj.GetName(), metav1.GetOptions{})
 		if AUP.Status.State != success && AUP.Status.Expires != nil && strings.Contains(AUP.Status.Message[0], "Agreed and Renewed") {
-			t.Errorf("Failed to update Acceptable use policy")
+			t.Errorf(errorDict["AUP-update"])
 		}
 	})
 }

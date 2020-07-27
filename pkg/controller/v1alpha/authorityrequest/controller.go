@@ -56,6 +56,18 @@ const failure = "Failure"
 const issue = "Malfunction"
 const success = "Successful"
 
+// Dictionary for status messages
+var errorDict = map[string]string{
+	"k8-sync":      "Kubernetes clientset sync problem",
+	"edgnet-sync":  "EdgeNet clientset sync problem",
+	"auth-timeout": "Failed to update approval timeout of Authority Request",
+	"auth-coll":    "Failed to detect Authority name collision",
+	"email-coll":   "Failed to detect email address collision",
+	"auth-approv":  "Failed to create Authority from Authority Request after approval",
+	"add-func":     "Add func of event handler doesn't work properly",
+	"upd-func":     "Update func of event handler doesn't work properly",
+}
+
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	var err error

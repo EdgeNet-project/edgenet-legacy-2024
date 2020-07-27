@@ -28,16 +28,6 @@ type URRTestGroup struct {
 	handler             Handler
 }
 
-var ErrorDict = map[string]string{
-	"k8-sync":        "Kubernetes clientset sync problem",
-	"edgnet-sync":    "EdgeNet clientset sync problem",
-	"URR-timeout":    "Failed to update approval timeout of user Request",
-	"usr-email-coll": "Failed to detect user email address collision",
-	"usr-approv":     "Failed to create user from user Request after approval",
-	"add-func":       "Add func of event handler authority request doesn't work properly",
-	"usr-URR":        "Failed to create user from user Request after approval",
-}
-
 func TestMain(m *testing.M) {
 	log.SetOutput(ioutil.Discard)
 	logrus.SetOutput(ioutil.Discard)
@@ -109,7 +99,7 @@ func (g *URRTestGroup) Init() {
 			Email:     "URR@edge-net.org",
 		},
 		Status: apps_v1alpha.UserRegistrationRequestStatus{
-			EmailVerified: true,
+			EmailVerified: false,
 			Expires:       nil,
 			Message:       nil,
 		},
@@ -150,7 +140,6 @@ func TestURRCreate(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userRegistrationObj.DeepCopy())
 		g.handler.ObjectCreated(g.userRegistrationObj.DeepCopy())
 		userRequest, _ := g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userRegistrationObj.GetName(), metav1.GetOptions{})
-		t.Log(userRequest.Status.Expires)
 		if userRequest.Status.Expires == nil {
 			t.Errorf("Failed to update approval timeout of user Request")
 		}

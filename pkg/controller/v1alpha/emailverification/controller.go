@@ -63,6 +63,16 @@ const create = "create"
 const update = "update"
 const delete = "delete"
 
+// Dictionary for status messages
+var errorDict = map[string]string{
+	"k8-sync":     "Kubernetes clientset sync problem",
+	"edgnet-sync": "EdgeNet clientset sync problem",
+	"EV-create":   "Failed to create Email verification object. Expiration date not updated",
+	"EV-del-fail": "Failed to create Email verification object. EV not deleted after verified",
+	"add-func":    "Add func of event handler doesn't work properly",
+	"upd-func":    "Update func of event handler doesn't work properly",
+}
+
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	var err error

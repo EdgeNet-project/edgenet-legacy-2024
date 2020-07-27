@@ -76,6 +76,23 @@ const create = "create"
 const update = "update"
 const delete = "delete"
 
+// Dictionary for status messages
+var errorDict = map[string]string{
+	"k8-sync":                "Kubernetes clientset sync problem",
+	"edgnet-sync":            "EdgeNet clientset sync problem",
+	"quota-name":             "Wrong resource quota name",
+	"quota-spec":             "Resource quota spec issue",
+	"quota-pod":              "Resource quota allows pod deployment",
+	"slice-child-nmspce":     "Failed to create slice child namespace",
+	"slice-quota":            "Failed to create slice resource quota",
+	"slice-prof":             "Failed to update profile of slice",
+	"slice-exp":              "Failed to update expiration time of slice",
+	"slice-user-rolebinding": "Failed to create Rolebinding for user in slice child namespace",
+	"add-func":               "Add func of event handler doesn't work properly",
+	"upd-func":               "Update func of event handler doesn't work properly",
+	"del-func":               "Delete func of event handler doesn't work properly",
+}
+
 // Start function is entry point of the controller
 func Start(clientset kubernetes.Interface, edgenetClientset versioned.Interface) {
 	var err error

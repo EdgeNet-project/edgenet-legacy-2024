@@ -31,6 +31,6 @@ func TestStartController(t *testing.T) {
 	// Checking if user registration transitioned to user after update
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userRegistrationObj.GetName(), metav1.GetOptions{})
 	if user == nil {
-		t.Error(ErrorDict["usr-URR"])
+		t.Error(ErrorDict["upd-func"])
 	}
 }

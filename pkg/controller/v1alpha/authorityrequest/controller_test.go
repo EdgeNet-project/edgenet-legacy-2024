@@ -19,7 +19,7 @@ func TestStartController(t *testing.T) {
 	// Get the object and check the status
 	AR, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
 	if AR.Status.Expires == nil || AR.Status.Message == nil {
-		t.Error(ErrorDict["add-func"])
+		t.Error(errorDict["add-func"])
 	}
 	// Update a Authority request
 	// Update contact email
@@ -30,6 +30,6 @@ func TestStartController(t *testing.T) {
 	// Checking if Authority Request transitioned to Authority after update
 	authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
 	if authority == nil {
-		t.Error(ErrorDict["auth-AR"])
+		t.Error(errorDict["upd-func"])
 	}
 }

@@ -79,7 +79,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	if URROwnerAuthority.Spec.Enabled {
 		if URRCopy.Spec.Approved {
 			userHandler := user.Handler{}
-			var err error
 			userHandler.Init(t.clientset, t.edgenetClientset)
 			created := !userHandler.Create(URRCopy)
 			if created {
@@ -87,13 +86,12 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			} else {
 				t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "user-creation-failure")
 				URRCopy.Status.State = failure
-				URRCopy.Status.Message = []string{"User creation failed", err.Error()}
+				URRCopy.Status.Message = []string{"User creation failed", ""}
 				URRCopyUpdated, err := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(URRCopy)
 				if err == nil {
 					URRCopy = URRCopyUpdated
 				}
 			}
-
 		}
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
@@ -139,13 +137,12 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 			// Check whether the request for user registration approved
 			if URRCopy.Spec.Approved {
 				userHandler := user.Handler{}
-				var err error
 				userHandler.Init(t.clientset, t.edgenetClientset)
 				changeStatus := userHandler.Create(URRCopy)
 				if changeStatus {
 					t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "user-creation-failure")
 					URRCopy.Status.State = failure
-					URRCopy.Status.Message = []string{"User creation failed", err.Error()}
+					URRCopy.Status.Message = []string{"User creation failed", ""}
 				}
 			} else if !URRCopy.Spec.Approved && URRCopy.Status.State == failure {
 				emailVerificationHandler := emailverification.Handler{}

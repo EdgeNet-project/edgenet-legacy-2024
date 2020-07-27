@@ -78,6 +78,26 @@ const create = "create"
 const update = "update"
 const delete = "delete"
 
+// Dictionary for status messages
+var errorDict = map[string]string{
+	"k8-sync":               "Kubernetes clientset sync problem",
+	"edgnet-sync":           "EdgeNet clientset sync problem",
+	"quota-name":            "Wrong resource quota name",
+	"quota-spec":            "Resource quota spec issue",
+	"quota-pod":             "Resource quota allows pod deployment",
+	"team-child-nmspce":     "Failed to create team child namespace",
+	"team-status":           "Failed to update status of team",
+	"team-user-rolebinding": "Failed to create Rolebinding for user in team child namespace",
+	"team-get-owner-ref":    "Failed to get owner references",
+	"team-set-owner-ref":    "Failed to set team namespace owner references",
+	"team-fail":             "Failed to create new team",
+	"team-users-del":        "Failed to delete users in team",
+	"team-del-child-nmspce": "Failed to delete Team child namespace",
+	"add-func":              "Add func of event handler doesn't work properly",
+	"upd-func":              "Update func of event handler doesn't work properly",
+	"del-func":              "Delete func of event handler doesn't work properly",
+}
+
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	var err error

@@ -100,10 +100,10 @@ func TestHandlerInit(t *testing.T) {
 	// Initialize the handler
 	g.handler.Init(g.client, g.edgenetclient)
 	if g.handler.clientset != g.client {
-		t.Error("Kubernetes clientset sync problem")
+		t.Error(errorDict["k8-sync"])
 	}
 	if g.handler.edgenetClientset != g.edgenetclient {
-		t.Error("EdgeNet clientset sync problem")
+		t.Error(errorDict["edgenet-sync"])
 	}
 }
 
@@ -118,7 +118,7 @@ func TestEVCreate(t *testing.T) {
 		// Handler will update expiration time
 		EV, _ := g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.EVObj.GetName(), metav1.GetOptions{})
 		if EV.Status.Expires == nil {
-			t.Error("Failed to create Email verification object. Expiration date not updated")
+			t.Error(errorDict["EV-create"])
 		}
 	})
 	t.Run("creation of Email verification already verified", func(t *testing.T) {
@@ -128,7 +128,7 @@ func TestEVCreate(t *testing.T) {
 		// Handler will delete EV if verified
 		EV, _ := g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.EVObj.GetName(), metav1.GetOptions{})
 		if EV != nil {
-			t.Error("Failed to create Email verification object. EV not deleted after verified")
+			t.Error(errorDict["EV-del-fail"])
 		}
 	})
 }
@@ -139,18 +139,16 @@ func TestEVUpdate(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetclient)
 	// Creation of Email verification obj
 	g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.EVObj.DeepCopy())
-	// t.Log(g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).List(metav1.ListOptions{}))
 	g.handler.ObjectCreated(g.EVObj.DeepCopy())
 	t.Run("Update of Email verification", func(t *testing.T) {
 		g.EVObj.Spec.Verified = true
-		g.EVObj.Spec.Kind = "email"
 		var field fields
 		field.kind = true
 		g.handler.ObjectUpdated(g.EVObj.DeepCopy(), field)
-		// Handler will delete EV if kind changed as security feature
+		// Handler will delete EV if verified
 		EV, _ := g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.EVObj.GetName(), metav1.GetOptions{})
 		if EV != nil {
-			t.Error("Failed to update email verification object. EV not deleted after kind updated")
+			t.Error(errorDict["EV-del-fail"])
 		}
 	})
 }

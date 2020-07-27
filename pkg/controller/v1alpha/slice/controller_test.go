@@ -21,7 +21,7 @@ func TestStartController(t *testing.T) {
 	// Get the object and check the status
 	slice, _ := g.edgenetclient.AppsV1alpha().Slices(g.authorityObj.GetNamespace()).Get(g.sliceObj.GetName(), metav1.GetOptions{})
 	if slice.Status.Expires == nil {
-		t.Error("Add func of event handler authority doesn't work properly")
+		t.Error(errorDict["add-func"])
 	}
 	// Update a slice
 	slice.Spec.Users = []apps_v1alpha.SliceUsers{
@@ -41,14 +41,14 @@ func TestStartController(t *testing.T) {
 	roleBindings, _ := g.client.RbacV1().RoleBindings(fmt.Sprintf("%s-slice-%s", g.sliceObj.GetNamespace(), g.sliceObj.GetName())).Get(fmt.Sprintf("%s-%s-slice-%s", user.GetNamespace(), user.GetName(), "admin"), metav1.GetOptions{})
 	// Verifying server created rolebinding for new user in slice's child namespace
 	if roleBindings == nil {
-		t.Error("Failed to create Rolebinding for user in slice child namespace")
+		t.Error(errorDict["upd-func"])
 	}
 	// Delete a user
 	// Requesting server to delete internal representation of slice
 	g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.sliceObj.Name, &metav1.DeleteOptions{})
 	slice, _ = g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.sliceObj.GetName(), metav1.GetOptions{})
 	if slice != nil {
-		t.Error("Failed to delete new test slice")
+		t.Error(errorDict["del-func"])
 	}
 	time.Sleep(time.Millisecond * 500)
 	sliceChildNamespace, _ := g.client.CoreV1().Namespaces().Get(fmt.Sprintf("%s-slice-%s", g.sliceObj.GetNamespace(), g.sliceObj.GetName()), metav1.GetOptions{})

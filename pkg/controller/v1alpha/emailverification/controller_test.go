@@ -21,11 +21,9 @@ func TestStartController(t *testing.T) {
 	EV, _ := g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.EVObj.GetName(), metav1.GetOptions{})
 	// Handler will delete EV if verified
 	if EV.Status.Expires == nil {
-		t.Error("Add func of event handler authority request doesn't work properly")
+		t.Error(errorDict["add-func"])
 	}
 	// Update an EV
-	// Update contact email
-	g.EVObj.Spec.Kind = "email"
 	g.EVObj.Spec.Verified = true
 	g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.EVObj.DeepCopy())
 	time.Sleep(time.Millisecond * 500)
@@ -33,6 +31,6 @@ func TestStartController(t *testing.T) {
 	EV, _ = g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.EVObj.GetName(), metav1.GetOptions{})
 	// Handler will delete EV if verified
 	if EV != nil {
-		t.Error("Add func of event handler authority request doesn't work properly")
+		t.Error(errorDict["upd-func"])
 	}
 }

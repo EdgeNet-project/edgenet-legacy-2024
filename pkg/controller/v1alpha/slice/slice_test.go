@@ -130,19 +130,19 @@ func TestHandlerInit(t *testing.T) {
 	// Initialize the handler
 	g.handler.Init(g.client, g.edgenetclient)
 	if g.handler.clientset != g.client {
-		t.Error("Kubernetes clientset sync problem")
+		t.Error(errorDict["k8-sync"])
 	}
 	if g.handler.edgenetClientset != g.edgenetclient {
-		t.Error("EdgeNet clientset sync problem")
+		t.Error(errorDict["edgenet-sync"])
 	}
 	if g.handler.lowResourceQuota.Name != "slice-low-quota" || g.handler.medResourceQuota.Name != "slice-medium-quota" || g.handler.highResourceQuota.Name != "slice-high-quota" {
-		t.Error("Wrong resource quota name")
+		t.Error(errorDict["quota-name"])
 	}
 	if g.handler.lowResourceQuota.Spec.Hard == nil || g.handler.medResourceQuota.Spec.Hard == nil || g.handler.highResourceQuota.Spec.Hard == nil {
-		t.Error("Resource quota spec issue")
+		t.Error(errorDict["quota-spec"])
 	} else {
 		if g.handler.highResourceQuota.Spec.Hard.Pods().Value() != 0 {
-			t.Error("Resource quota allows pod deployment")
+			t.Error(errorDict["quota-pod"])
 		}
 	}
 }
@@ -158,11 +158,11 @@ func TestSliceCreate(t *testing.T) {
 	t.Run("creation of slice", func(t *testing.T) {
 		sliceChildNamespace, _ := g.handler.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("%s-slice-%s", g.sliceObj.GetNamespace(), g.sliceObj.GetName()), metav1.GetOptions{})
 		if sliceChildNamespace == nil {
-			t.Errorf("Failed to create slice child namespace")
+			t.Error(errorDict["slice-child-nmspce"])
 		}
 		resourceQuota, _ := g.client.CoreV1().ResourceQuotas(sliceChildNamespace.GetName()).List(metav1.ListOptions{})
 		if resourceQuota == nil {
-			t.Errorf("Failed to create slice resource quota")
+			t.Error(errorDict["slice-quota"])
 		}
 	})
 }
@@ -189,10 +189,10 @@ func TestSliceUpdate(t *testing.T) {
 		// Verifying slice expiration time is updated in server's representation of slice
 		slice, _ := g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.sliceObj.GetName(), metav1.GetOptions{})
 		if slice.Spec.Profile != "Medium" {
-			t.Error("Failed to update profile of slice")
+			t.Error(errorDict["slice-prof"])
 		}
 		if slice.Status.Expires == nil {
-			t.Error("Failed to update expiration time of slice")
+			t.Error(errorDict["slice-exp"])
 		}
 		testTime := &metav1.Time{
 			Time: time.Now().Add(672 * time.Hour),
@@ -200,7 +200,7 @@ func TestSliceUpdate(t *testing.T) {
 		yy1, mm1, dd1 := slice.Status.Expires.Date()
 		yy2, mm2, dd2 := testTime.Date()
 		if yy1 != yy2 && mm1 != mm2 && dd1 != dd2 {
-			t.Error("Failed to update expiration time of slice")
+			t.Error(errorDict["slice-exp"])
 		}
 	})
 	t.Run("Add users to slice ", func(t *testing.T) {
@@ -227,7 +227,7 @@ func TestSliceUpdate(t *testing.T) {
 		roleBindings, _ := g.client.RbacV1().RoleBindings(fmt.Sprintf("%s-slice-%s", g.sliceObj.GetNamespace(), g.sliceObj.GetName())).Get(fmt.Sprintf("%s-%s-slice-%s", user.GetNamespace(), user.GetName(), "user"), metav1.GetOptions{})
 		// Verifying server created rolebinding for new user in slice's child namespace
 		if roleBindings == nil {
-			t.Error("Failed to create Rolebinding for user in slice child namespace")
+			t.Error(errorDict["slice-user-rolebinding"])
 		}
 	})
 }
