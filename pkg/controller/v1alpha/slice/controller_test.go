@@ -55,5 +55,4 @@ func TestStartController(t *testing.T) {
 	if sliceChildNamespace != nil {
 		t.Error("Failed to delete slice child namespace")
 	}
-
 }

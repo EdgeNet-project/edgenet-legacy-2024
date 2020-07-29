@@ -27,7 +27,7 @@ func TestStartController(t *testing.T) {
 	g.EVObj.Spec.Verified = true
 	g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.EVObj.DeepCopy())
 	time.Sleep(time.Millisecond * 500)
-	// Checking if user registration transitioned to user after update
+	// Checking if handler created user from user registration and deleted user registration
 	EV, _ = g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.EVObj.GetName(), metav1.GetOptions{})
 	// Handler will delete EV if verified
 	if EV != nil {

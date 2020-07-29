@@ -21,6 +21,23 @@ import (
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
+// Dictionary for status messages
+var errorDict = map[string]string{
+	"k8-sync":                "Kubernetes clientset sync problem",
+	"edgnet-sync":            "EdgeNet clientset sync problem",
+	"quota-name":             "Wrong resource quota name",
+	"quota-spec":             "Resource quota spec issue",
+	"quota-pod":              "Resource quota allows pod deployment",
+	"slice-child-nmspce":     "Failed to create slice child namespace",
+	"slice-quota":            "Failed to create slice resource quota",
+	"slice-prof":             "Failed to update profile of slice",
+	"slice-exp":              "Failed to update expiration time of slice",
+	"slice-user-rolebinding": "Failed to create Rolebinding for user in slice child namespace",
+	"add-func":               "Add func of event handler doesn't work properly",
+	"upd-func":               "Update func of event handler doesn't work properly",
+	"del-func":               "Delete func of event handler doesn't work properly",
+}
+
 // Constant variables for events
 const success = "Successful"
 
@@ -119,7 +136,7 @@ func (g *SliceTestGroup) Init() {
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
-	//invoke ObjectCreated to create namespace
+	// Invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 

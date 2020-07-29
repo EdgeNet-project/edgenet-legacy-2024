@@ -4,21 +4,35 @@ import (
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/client/clientset/versioned"
 	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
-	"edgenet/pkg/controller/v1alpha/authority"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/Sirupsen/logrus"
 	log "github.com/Sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
+// Dictionary for status messages
+var errorDict = map[string]string{
+	"k8-sync":     "Kubernetes clientset sync problem",
+	"edgnet-sync": "EdgeNet clientset sync problem",
+	"TRQ-failed":  "Failed to create Total resource quota",
+	"TRQ-update":  "Failed to update Total resource quota. Exceeded resource quota was not balanced.",
+	"add-func":    "Add func of event handler doesn't work properly",
+	"upd-func":    "Update func of event handler doesn't work properly",
+	"del-func":    "Delete func of event handler doesn't work properly",
+}
+
 // The main structure of test group
 type TRQTestGroup struct {
 	authorityObj  apps_v1alpha.Authority
+	sliceObj      apps_v1alpha.Slice
 	TRQObj        apps_v1alpha.TotalResourceQuota
 	client        kubernetes.Interface
 	edgenetclient versioned.Interface
@@ -66,26 +80,51 @@ func (g *TRQTestGroup) Init() {
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "TRQName",
+			Name: "edgenet",
 			// Namespace: "authority-edgenet",
 		},
 		Spec: apps_v1alpha.TotalResourceQuotaSpec{
-			Enabled: true,
+			Enabled: false,
 		},
 		Status: apps_v1alpha.TotalResourceQuotaStatus{
 			Exceeded: false,
 		},
 	}
+	sliceObj := apps_v1alpha.Slice{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Slice",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "Slice1",
+			Namespace:       "authority-edgenet",
+			OwnerReferences: []metav1.OwnerReference{},
+		},
+		Spec: apps_v1alpha.SliceSpec{
+			Profile:     "High",
+			Users:       []apps_v1alpha.SliceUsers{},
+			Description: "This is a test description",
+			Renew:       true,
+		},
+		Status: apps_v1alpha.SliceStatus{
+			Expires: nil,
+		},
+	}
 	g.authorityObj = authorityObj
+	g.sliceObj = sliceObj
 	g.TRQObj = TRQObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
-	// invoke ObjectCreated to create namespace
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
+	g.authorityObj.Status.State = success
+	g.authorityObj.Spec.Enabled = true
+	// Update Authority status
+	g.edgenetclient.AppsV1alpha().Authorities().UpdateStatus(g.authorityObj.DeepCopy())
+	authorityChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", g.authorityObj.GetName())}}
+	// Create Authority child namepace
+	g.client.CoreV1().Namespaces().Create(authorityChildNamespace)
+
 }
 
 func TestHandlerInit(t *testing.T) {
@@ -108,11 +147,63 @@ func TestTRQCreate(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetclient)
 	// Creation of Total resource quota
 	t.Run("creation of total resource quota", func(t *testing.T) {
+		g.TRQObj.Spec.Enabled = true
 		g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Create(g.TRQObj.DeepCopy())
 		g.handler.ObjectCreated(g.TRQObj.DeepCopy())
-		TRQ, err := g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Get(g.TRQObj.GetName(), metav1.GetOptions{})
-		if TRQ == nil {
+		TRQ, _ := g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Get(g.TRQObj.GetName(), metav1.GetOptions{})
+		if TRQ.Status.State != success {
 			t.Error(errorDict["TRQ-failed"])
+		}
+	})
+	t.Run("creation of resource quota", func(t *testing.T) {
+		g.handler.Create("testquota")
+		TRQ, _ := g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Get("testquota", metav1.GetOptions{})
+		if TRQ.Spec.Claim == nil {
+			t.Error(errorDict["TRQ-failed"])
+		}
+	})
+
+}
+
+func TestTRQupdate(t *testing.T) {
+	g := TRQTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+	// Creation of Total resource quota
+	t.Run("Update of total resource quota", func(t *testing.T) {
+		// Create a resource quota
+		g.handler.resourceQuota = &corev1.ResourceQuota{}
+		g.handler.resourceQuota.Name = "slice-high-quota"
+		g.handler.resourceQuota.Spec = corev1.ResourceQuotaSpec{
+			Hard: map[corev1.ResourceName]resource.Quantity{
+				"cpu":              resource.MustParse("8000m"),
+				"memory":           resource.MustParse("8192Mi"),
+				"requests.storage": resource.MustParse("8Gi"),
+			},
+		}
+		// Create a slice
+		g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.sliceObj.DeepCopy())
+		// Create Slice child namespace with resource quota
+		sliceChildNamespaceStr := fmt.Sprintf("%s-slice-%s", g.sliceObj.GetNamespace(), g.sliceObj.GetName())
+		g.client.CoreV1().ResourceQuotas(sliceChildNamespaceStr).Create(g.handler.resourceQuota)
+		// Set a tiny claim for TRQ so handler triggers exceeded mechanism
+		g.TRQObj.Spec.Claim = []apps_v1alpha.TotalResourceDetails{
+			{
+				Name:    "slice-exceed-quota",
+				CPU:     "2m",
+				Memory:  "2Mi",
+				Expires: nil,
+			},
+		}
+		g.TRQObj.Spec.Enabled = true
+		var field fields
+		field.spec = true
+		g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Update(g.TRQObj.DeepCopy())
+		// Triggering quota exceeded
+		g.handler.ObjectUpdated(g.TRQObj.DeepCopy(), field)
+		slice, _ := g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.sliceObj.GetName(), metav1.GetOptions{})
+		if slice != nil {
+			t.Error(errorDict["TRQ-update"])
 		}
 	})
 }

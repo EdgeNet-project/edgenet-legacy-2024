@@ -63,15 +63,6 @@ const delete = "delete"
 const failure = "Failure"
 const success = "Successful"
 
-// Dictionary for status messages
-var errorDict = map[string]string{
-	"k8-sync":     "Kubernetes clientset sync problem",
-	"edgnet-sync": "EdgeNet clientset sync problem",
-	"AUP-create":  "Failed to create Acceptable use policy",
-	"AUP-update":  "Failed to update Acceptable use policy",
-	"add-func":    "Add func of event handler doesn't work properly",
-}
-
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	var err error

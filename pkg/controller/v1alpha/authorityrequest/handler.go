@@ -73,7 +73,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		return
 	}
 	if authorityRequestCopy.Spec.Approved {
-		var err error
 		authorityHandler := authority.Handler{}
 		authorityHandler.Init(t.clientset, t.edgenetClientset)
 		created := !authorityHandler.Create(authorityRequestCopy)
@@ -82,7 +81,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		} else {
 			t.sendEmail("authority-creation-failure", authorityRequestCopy)
 			authorityRequestCopy.Status.State = failure
-			authorityRequestCopy.Status.Message = []string{"Authority establishment failed", err.Error()}
+			authorityRequestCopy.Status.Message = []string{"Authority establishment failed", ""}
 		}
 	}
 	// If the service restarts, it creates all objects again
@@ -121,14 +120,13 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	if !exists {
 		// Check whether the request for authority creation approved
 		if authorityRequestCopy.Spec.Approved {
-			var err error
 			authorityHandler := authority.Handler{}
 			authorityHandler.Init(t.clientset, t.edgenetClientset)
 			changeStatus := authorityHandler.Create(authorityRequestCopy)
 			if changeStatus {
 				t.sendEmail("authority-creation-failure", authorityRequestCopy)
 				authorityRequestCopy.Status.State = failure
-				authorityRequestCopy.Status.Message = []string{"Authority establishment failed", err.Error()}
+				authorityRequestCopy.Status.Message = []string{"Authority establishment failed", ""}
 			}
 		} else if !authorityRequestCopy.Spec.Approved && authorityRequestCopy.Status.State == failure {
 			emailVerificationHandler := emailverification.Handler{}

@@ -19,6 +19,18 @@ import (
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
+// Dictionary for status messages
+var errorDict = map[string]string{
+	"k8-sync":      "Kubernetes clientset sync problem",
+	"edgnet-sync":  "EdgeNet clientset sync problem",
+	"auth-timeout": "Failed to update approval timeout of Authority Request",
+	"auth-coll":    "Failed to detect Authority name collision",
+	"email-coll":   "Failed to detect email address collision",
+	"auth-approv":  "Failed to create Authority from Authority Request after approval",
+	"add-func":     "Add func of event handler doesn't work properly",
+	"upd-func":     "Update func of event handler doesn't work properly",
+}
+
 // The main structure of test group
 type ARTestGroup struct {
 	authorityObj        apps_v1alpha.Authority
@@ -129,7 +141,7 @@ func (g *ARTestGroup) Init() {
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
-	//invoke ObjectCreated to create namespace
+	// Invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 
@@ -165,8 +177,10 @@ func TestARCreate(t *testing.T) {
 		g.authorityRequestObj.SetName("edgenet")
 		// Create Authority Request
 		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
+		// Triggering collision
 		g.handler.ObjectCreated(g.authorityRequestObj.DeepCopy())
 		AR, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
+		// Status message should have error
 		if AR.Status.Message == nil {
 			t.Error(errorDict["auth-coll"])
 		}
@@ -204,7 +218,7 @@ func TestARUpdate(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().AuthorityRequests().Update(g.authorityRequestObj.DeepCopy())
 		// Requesting server to update internal representation of authority registration object and transition it to authority
 		g.handler.ObjectUpdated(g.authorityRequestObj.DeepCopy())
-		// Checking if authority with same name as authority registration object exists
+		// Checking if handler created authority from authority request
 		g.edgenetclient.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{})
 		authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authority == nil {

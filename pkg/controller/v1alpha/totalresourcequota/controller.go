@@ -75,16 +75,6 @@ const trueStr = "True"
 const falseStr = "False"
 const unknownStr = "Unknown"
 
-// Dictionary for status messages
-var errorDict = map[string]string{
-	"k8-sync":     "Kubernetes clientset sync problem",
-	"edgnet-sync": "EdgeNet clientset sync problem",
-	"TRQ-failed":  "Failed to create Total resource quota",
-	"add-func":    "Add func of event handler doesn't work properly",
-	"upd-func":    "Update func of event handler doesn't work properly",
-	"del-func":    "Delete func of event handler doesn't work properly",
-}
-
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	var err error

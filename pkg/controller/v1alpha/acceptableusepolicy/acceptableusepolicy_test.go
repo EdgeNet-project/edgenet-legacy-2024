@@ -19,6 +19,15 @@ import (
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
+// Dictionary for status messages
+var errorDict = map[string]string{
+	"k8-sync":     "Kubernetes clientset sync problem",
+	"edgnet-sync": "EdgeNet clientset sync problem",
+	"AUP-create":  "Failed to create Acceptable use policy",
+	"AUP-update":  "Failed to update Acceptable use policy",
+	"add-func":    "Add func of event handler doesn't work properly",
+}
+
 // The main structure of test group
 type AUPTestGroup struct {
 	authorityObj  apps_v1alpha.Authority
@@ -86,7 +95,7 @@ func (g *AUPTestGroup) Init() {
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
-	//invoke ObjectCreated to create namespace
+	// Invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 

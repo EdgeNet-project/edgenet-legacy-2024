@@ -59,32 +59,6 @@ const failure = "Failure"
 const success = "Successful"
 const established = "Established"
 
-// Dictionary for status messages
-var errorDict = map[string]string{
-	"k8-sync":              "Kubernetes clientset sync problem",
-	"edgnet-sync":          "EdgeNet clientset sync problem",
-	"quota-name":           "Wrong resource quota name",
-	"quota-spec":           "Resource quota spec issue",
-	"quota-pod":            "Resource quota allows pod deployment",
-	"user-gen":             "User generation failed when an authority created",
-	"TRQ-create":           "Total resource quota cannot be created",
-	"cluster-role":         "Cluster role cannot be created",
-	"dupl-val":             "Duplicate value cannot be detected",
-	"user-deact":           "User cannot be deactivated",
-	"auth-name-coll":       "Authority creation is broken by an authority request due to the name is the same",
-	"auth-req-coll":        "Authority request having same name still exists",
-	"auht-email-coll":      "Authority request having an admin with same email address still exists",
-	"auth-info-del":        "Authority request with different information has been deleted",
-	"user-coll-failed":     "User having same email address cannot be detected",
-	"user-conflict":        "User with different information has created a conflict",
-	"auth-create-failed":   "Authority cannot be created properly",
-	"auth-est-failed":      "Authority establishment failed",
-	"auth-disbld-creation": "Authority is disabled after creation",
-	"add-func":             "Add func of event handler doesn't work properly",
-	"upd-func":             "Update func of event handler doesn't work properly",
-	"del-func":             "Delete func of event handler doesn't work properly",
-}
-
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	var err error

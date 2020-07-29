@@ -18,6 +18,18 @@ import (
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
+// Dictionary for status messages
+var ErrorDict = map[string]string{
+	"k8-sync":        "Kubernetes clientset sync problem",
+	"edgnet-sync":    "EdgeNet clientset sync problem",
+	"URR-timeout":    "Failed to update approval timeout of user Request",
+	"usr-email-coll": "Failed to detect user email address collision",
+	"usr-approv":     "Failed to create user from user Request after approval",
+	"add-func":       "Add func of event handler authority request doesn't work properly",
+	"upd-func":       "Update func of event handler doesn't work properly",
+	"usr-URR":        "Failed to create user from user Request after approval",
+}
+
 // The main structure of test group
 type URRTestGroup struct {
 	authorityObj        apps_v1alpha.Authority
@@ -113,7 +125,7 @@ func (g *URRTestGroup) Init() {
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
-	//invoke ObjectCreated to create namespace
+	// Invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 
@@ -178,7 +190,7 @@ func TestURRUpdate(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.userRegistrationObj.DeepCopy())
 		// Requesting server to update internal representation of user registration object and transition it to user
 		g.handler.ObjectUpdated(g.userRegistrationObj.DeepCopy())
-		// Checking if user with same name as user registration object exists
+		// Checking if handler created user from user registration
 		User, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userRegistrationObj.GetName(), metav1.GetOptions{})
 		if User == nil {
 			t.Error(ErrorDict["usr-approv"])
