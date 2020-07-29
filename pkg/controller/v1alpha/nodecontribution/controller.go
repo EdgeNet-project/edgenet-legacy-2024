@@ -70,6 +70,19 @@ const trueStr = "True"
 const falseStr = "False"
 const unknownStr = "Unknown"
 
+// Dictionary of status messages
+var statusDict = map[string]string{
+	"invalid-host":       "Host field must be an IP Address",
+	"node-ok":            "Node is up and running",
+	"authority-disabled": "Authority disabled",
+
+	"cert-fail":       "Client cert generation failed for user %s",
+	"cert-ok":         "Client cert of the user generated",
+	"kubeconfig-fail": "Kubeconfig file creation failed for user %s",
+	"email-ok":        "Everything is OK, verification email sent",
+	"email-fail":      "Couldn't send verification email",
+}
+
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	var err error

@@ -62,27 +62,21 @@ type Handler struct {
 // Init handles any handler initialization
 func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) error {
 	log.Info("NCHandler.Init")
-	var err error
 	t.clientset = kubernetes
 	t.edgenetClientset = edgenet
 
-	var pathSSH string
-	commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	commandLine.StringVar(&pathSSH, "ssh-path", "", "ssh-path")
-	commandLine.Parse(os.Args[0:2])
-
 	// Get the SSH Public Key of the headnode
 	key, err := ioutil.ReadFile("../../.ssh/id_rsa")
+	if len(os.Args) > 1 {
+		var pathSSH string
+		commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+		commandLine.StringVar(&pathSSH, "ssh-path", "", "ssh-path")
+		commandLine.Parse(os.Args[0:2])
+		key, err = ioutil.ReadFile(pathSSH)
+	}
 	if err != nil {
 		log.Println(err.Error())
-	}
-
-	if pathSSH != "" {
-		key, err = ioutil.ReadFile(pathSSH)
-		if err != nil {
-			log.Println(err.Error())
-			panic(err.Error())
-		}
+		panic(err.Error())
 	}
 
 	t.publicKey, err = ssh.ParsePrivateKey(key)
@@ -119,7 +113,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		recordType := remoteip.GetRecordType(NCCopy.Spec.Host)
 		if recordType == "" {
 			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Host field must be an IP Address")
+			NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["invalid-host"])
 			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			t.sendEmail(NCCopy)
 			return
@@ -141,7 +135,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				go t.runRecoveryProcedure(addr, config, nodeName, NCCopy, contributedNode)
 			} else {
 				NCCopy.Status.State = success
-				NCCopy.Status.Message = append(NCCopy.Status.Message, "Node is up and running")
+				NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["node-ok"])
 				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			}
 		} else {
@@ -157,7 +151,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		if err == nil {
 			NCCopy = NCCopyUpdated
 			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Authority disabled")
+			NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["authority-disabled"])
 			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 		}
 	}
@@ -187,7 +181,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		recordType := remoteip.GetRecordType(NCCopy.Spec.Host)
 		if recordType == "" {
 			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Host field must be an IP Address")
+			NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["invalid-host"])
 			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			t.sendEmail(NCCopy)
 			return
@@ -250,16 +244,16 @@ func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) error {
 					contentData.CommonData.Name = fmt.Sprintf("%s %s", userRow.Spec.FirstName, userRow.Spec.LastName)
 					contentData.CommonData.Email = []string{userRow.Spec.Email}
 					if contentData.Status == failure {
-						//mailer.Send("node-contribution-failure", contentData)
+						mailer.Send("node-contribution-failure", contentData)
 						return errors.New("node-contribution-failure")
 					} else if contentData.Status == success {
-						//mailer.Send("node-contribution-successful", contentData)
+						mailer.Send("node-contribution-successful", contentData)
 					}
 				}
 			}
 		}
 		if contentData.Status == failure {
-			//mailer.Send("node-contribution-failure-support", contentData)
+			mailer.Send("node-contribution-failure-support", contentData)
 		}
 	}
 	return err

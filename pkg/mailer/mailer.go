@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"edgenet/pkg/util"
 	"encoding/base64"
-	"flag"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -100,25 +99,11 @@ func (s *smtpServer) address() string {
 func Send(subject string, contentData interface{}) error {
 	// The code below inits the SMTP configuration for sending emails
 	// The path of the yaml config file of smtp server
-	// Getting the command line argument(if existed) and use another path for namecheap.yaml file
-
-	var pathSMTP string
-	// commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	// commandLine.StringVar(&pathSMTP, "smtp-path", "", "smtp-path")
-	// commandLine.Parse(os.Args[4:6])
 	file, err := os.Open("../../configs/smtp.yaml")
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
+		return err
 	}
-
-	if pathSMTP != "" {
-		file, err = os.Open(pathSMTP)
-		if err != nil {
-			log.Printf("Mailer: unexpected error executing command: %v", err)
-			return err
-		}
-	}
-
 	decoder := yaml.NewDecoder(file)
 	var smtpServer smtpServer
 	err = decoder.Decode(&smtpServer)
@@ -426,15 +411,7 @@ func setAuthorityRequestContent(contentData interface{}, from string) ([]string,
 	// This represents receivers' email addresses
 	to := registrationData.CommonData.Email
 	// The HTML template
-	// Getting the command line argument(if existed) and use another path for authority-creation.html file
-	var authorityCreationTemplate string
-	commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	commandLine.StringVar(&authorityCreationTemplate, "authorityCreationTemplate-path", "", "authorityCreationTemplate-path")
-	commandLine.Parse(os.Args[6:8])
-	t, err := template.ParseFiles("../../assets/templates/email/authority-creation.html")
-	if err != nil {
-		t, err = template.ParseFiles(authorityCreationTemplate)
-	}
+	t, _ := template.ParseFiles("../../assets/templates/email/authority-creation.html")
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] Authority Successfully Created", from, to, delimiter)
 	t.Execute(&body, registrationData)

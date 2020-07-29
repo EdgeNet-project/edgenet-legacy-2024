@@ -28,6 +28,22 @@ import (
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
+// Dictionary for error messages
+var errorDict = map[string]string{
+	"k8-sync":        "Kubernetes clientset sync problem",
+	"edgenet-sync":   "EdgeNet clientset sync problem",
+	"dupl-val":       "Duplicate value cannot be detected",
+	"node-detect":    "Empty Host field get not detected",
+	"auth-enabled":   "Authority enabled field check failed",
+	"node-upd":       "Host field detection failed when updating",
+	"email-sent":     "Send email failed in nodecontribution pkg",
+	"getcm-install":  "Get install Debian/Centos Commands Failed",
+	"getcm-unistall": "Get unistall Debian/Centos Commands Failed",
+	"getcm-reconf":   "Get Reconfiguration Debian/Centos Commands Failed",
+	"add-func":       "Add func of event handler doesn't work properly",
+	"upd-func":       "Update func of event handler doesn't work properly",
+}
+
 type NodecontributionTestGroup struct {
 	nodecontributionObj apps_v1alpha.NodeContribution
 	authorityObj        apps_v1alpha.Authority
@@ -36,13 +52,12 @@ type NodecontributionTestGroup struct {
 	edgenetclient       versioned.Interface
 	handler             Handler
 }
-
 type cleanuper interface {
 	Cleanup(f func())
 }
 
 func TestMain(m *testing.M) {
-	// Creating ssh directory and put SSH keys in there for testing purposes
+	// Creating ssh directory and put SSH (pair)keys in there for testing purposes
 	dirSSH := "../../../../configs/.ssh/"
 	checkExistence := exists(dirSSH)
 	if !checkExistence {
@@ -56,21 +71,14 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// Patch for fixing relative path issue while implementing unit tests
+	// Patch for passing the new path for new configs file
 	// We defined extra argument which can be passed to the program
 	flag.Parse()
-	os.Args = []string{"-ssh-path", "../../../../configs/.ssh/id_rsa",
-		"-fakenamecheap-path", "../../../../configs/namecheap_template.yaml",
-		"-smtp-path", "../../../../configs/smtp_template.yaml",
-		"-authoritycreationtemplate-path", "../../../../assets/templates/email/authority-creation.html"}
-
+	os.Args = []string{"-ssh-path", "../../../../configs/.ssh/id_rsa"}
 	log.SetOutput(ioutil.Discard)
 	logrus.SetOutput(ioutil.Discard)
 	os.Exit(m.Run())
-
 }
-
 func (g *NodecontributionTestGroup) Init() {
 	nodecontributionObj := apps_v1alpha.NodeContribution{
 		TypeMeta: metav1.TypeMeta{
@@ -88,7 +96,6 @@ func (g *NodecontributionTestGroup) Init() {
 			Enabled: true,
 		},
 	}
-
 	authorityObj := apps_v1alpha.Authority{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Authority",
@@ -139,7 +146,6 @@ func (g *NodecontributionTestGroup) Init() {
 			State: success,
 		},
 	}
-
 	g.authorityObj = authorityObj
 	g.userObj = userObj
 	g.nodecontributionObj = nodecontributionObj
@@ -165,19 +171,16 @@ func TestHandlerInit(t *testing.T) {
 	//Initialize the handler
 	g.handler.Init(g.client, g.edgenetclient)
 	if g.handler.clientset != g.client {
-		t.Error("Kubernetes clientset sync problem")
+		t.Error(errorDict["k8-sync"])
 	}
 	if g.handler.edgenetClientset != g.edgenetclient {
-		t.Error("EdgeNet clientset sync problem")
+		t.Error(errorDict["edgenet-sync"])
 	}
-
 }
-
 func TestNodeContributionCreate(t *testing.T) {
 	g := NodecontributionTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-
 	t.Run("Creation of Node with Null Host", func(t *testing.T) {
 		// Create a node with null Host field
 		g.nodecontributionObj.Spec.Host = ""
@@ -185,10 +188,9 @@ func TestNodeContributionCreate(t *testing.T) {
 		g.handler.ObjectCreated(g.nodecontributionObj.DeepCopy())
 		node, _ := g.edgenetclient.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.nodecontributionObj.Name, metav1.GetOptions{})
 		if !reflect.DeepEqual(node.Status.Message, []string{"Host field must be an IP Address"}) {
-			t.Error("Empty Host field get not detected!")
+			t.Error(errorDict["node-detect"])
 		}
 	})
-
 	t.Run("Creation of Node while Authority is not enabled", func(t *testing.T) {
 		g.authorityObj.Spec.Enabled = false
 		g.edgenetclient.AppsV1alpha().Authorities().Update(g.authorityObj.DeepCopy())
@@ -197,17 +199,14 @@ func TestNodeContributionCreate(t *testing.T) {
 		g.handler.ObjectCreated(g.nodecontributionObj.DeepCopy())
 		node, _ := g.handler.edgenetClientset.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.nodecontributionObj.Name, metav1.GetOptions{})
 		if !reflect.DeepEqual(node.Status.Message, []string{"Authority disabled"}) {
-			t.Error("Authority enabled field check failed!")
+			t.Error(errorDict["auth-enabled"])
 		}
 	})
-
 }
-
 func TestNodeContributionUpdate(t *testing.T) {
 	g := NodecontributionTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-
 	t.Run("Update of NodeContribution with empty host, Authority enabled", func(t *testing.T) {
 		//create a node
 		g.edgenetclient.AppsV1alpha().NodeContributions(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.nodecontributionObj.DeepCopy())
@@ -222,7 +221,6 @@ func TestNodeContributionUpdate(t *testing.T) {
 		}
 	})
 }
-
 func TestSendEmail(t *testing.T) {
 	g := NodecontributionTestGroup{}
 	g.Init()
@@ -232,10 +230,9 @@ func TestSendEmail(t *testing.T) {
 	g.handler.ObjectCreated(g.nodecontributionObj.DeepCopy())
 	err := g.handler.sendEmail(g.nodecontributionObj.DeepCopy())
 	if err != nil {
-		t.Errorf("Send Email failed")
+		t.Errorf(errorDict["email-sent"])
 	}
 }
-
 func TestGetInstallCommands(t *testing.T) {
 	g := NodecontributionTestGroup{}
 	g.Init()
@@ -245,43 +242,39 @@ func TestGetInstallCommands(t *testing.T) {
 	var fakeOSCentos []byte = []byte("NAME=CentosID=centosID_LIKE=centosPRETTY_NAME=Centos")
 	_, err := getInstallCommands(nil, g.nodecontributionObj.GetName(), "1.12", fakeOSDebian)
 	if err != nil {
-		t.Errorf("Get Install Debian Commands Failed")
+		t.Errorf(errorDict["getcm-install"])
 	}
 	_, err = getInstallCommands(nil, g.nodecontributionObj.GetName(), "1.15", fakeOSCentos)
 	if err != nil {
-		t.Errorf("Get Install Centos Commands Failed")
+		t.Errorf(errorDict["getcm-install"])
 	}
 }
-
 func TestGetUnistallCommands(t *testing.T) {
 	var fakeOSDebian []byte = []byte("NAME=UbuntuID=ubuntuID_LIKE=debianPRETTY_NAME=Ubuntu")
 	var fakeOSCentos []byte = []byte("NAME=CentosID=centosID_LIKE=centosPRETTY_NAME=Centos")
 	_, err := getUninstallCommands(nil, fakeOSDebian)
 	if err != nil {
-		t.Errorf("Get Unistall Debian Commands Failed")
+		t.Errorf(errorDict["getcm-unistall"])
 	}
 	_, err = getUninstallCommands(nil, fakeOSCentos)
 	if err != nil {
-		t.Errorf("Get Unistall Centos Commands Failed")
+		t.Errorf(errorDict["getcm-unistall"])
 	}
 }
-
 func TestGetReconfigurationCommands(t *testing.T) {
 	fakeHostName := "TestHost"
 	var fakeOSDebian []byte = []byte("NAME=UbuntuID=ubuntuID_LIKE=debianPRETTY_NAME=Ubuntu")
 	var fakeOSCentos []byte = []byte("NAME=CentosID=centosID_LIKE=centosPRETTY_NAME=Centos")
 	_, err := getReconfigurationCommands(nil, fakeHostName, fakeOSDebian)
 	if err != nil {
-		t.Errorf("Get Reconfiguration Debian Commands Failed")
+		t.Errorf(errorDict["getcm-reconf"])
 	}
 	_, err = getReconfigurationCommands(nil, fakeHostName, fakeOSCentos)
 	if err != nil {
-		t.Errorf("Get Reconfiguration Centos Commands Failed")
+		t.Errorf(errorDict["getcm-reconf"])
 	}
-
 	t.Cleanup(func() {
 		// Cleaning up the generated directory and Keys
-		t.Log("CLENUP RUNNED")
 		os.RemoveAll("../../../../configs/.ssh/")
 	})
 }
@@ -298,29 +291,23 @@ func exists(path string) bool {
 	}
 	return false
 }
-
 func generatePairofKeys() error {
 	savePrivateFileTo := "../../../../configs/.ssh/id_rsa"
 	savePublicFileTo := "../../../../configs/.ssh/id_rsa.pub"
 	bitSize := 4096
-
 	privateKey, err := generatePrivateKey(bitSize)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-
 	publicKeyBytes, err := generatePublicKey(&privateKey.PublicKey)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-
 	privateKeyBytes := encodePrivateKeyToPEM(privateKey)
-
 	err = writeKeyToFile(privateKeyBytes, savePrivateFileTo)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-
 	err = writeKeyToFile([]byte(publicKeyBytes), savePublicFileTo)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -335,13 +322,11 @@ func generatePrivateKey(bitSize int) (*rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	// Validate Private Key
 	err = privateKey.Validate()
 	if err != nil {
 		return nil, err
 	}
-
 	log.Println("Private Key generated")
 	return privateKey, nil
 }
@@ -350,17 +335,14 @@ func generatePrivateKey(bitSize int) (*rsa.PrivateKey, error) {
 func encodePrivateKeyToPEM(privateKey *rsa.PrivateKey) []byte {
 	// Get ASN.1 DER format
 	privDER := x509.MarshalPKCS1PrivateKey(privateKey)
-
 	// pem.Block
 	privBlock := pem.Block{
 		Type:    "RSA PRIVATE KEY",
 		Headers: nil,
 		Bytes:   privDER,
 	}
-
 	// Private key in PEM format
 	privatePEM := pem.EncodeToMemory(&privBlock)
-
 	return privatePEM
 }
 
@@ -371,9 +353,7 @@ func generatePublicKey(privatekey *rsa.PublicKey) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	pubKeyBytes := ssh.MarshalAuthorizedKey(publicRsaKey)
-
 	log.Println("Public key generated")
 	return pubKeyBytes, nil
 }
@@ -384,7 +364,6 @@ func writeKeyToFile(keyBytes []byte, saveFileTo string) error {
 	if err != nil {
 		return err
 	}
-
 	log.Printf("Key saved to: %s", saveFileTo)
 	return nil
 }

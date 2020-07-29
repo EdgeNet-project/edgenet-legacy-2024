@@ -8,6 +8,8 @@ import (
 	"os"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	testclient "k8s.io/client-go/kubernetes/fake"
 
@@ -85,6 +87,14 @@ func (g *PermissionTestGroup) Init() {
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
 	// Sync Clientset with fake client
 	Clientset = g.client
+
+	// Create Authority
+	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	g.authorityObj.Status.State = metav1.StatusSuccess
+	g.authorityObj.Spec.Enabled = true
+	g.edgenetclient.AppsV1alpha().Authorities().UpdateStatus(g.authorityObj.DeepCopy())
+	authorityChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", g.authorityObj.GetName())}}
+	g.client.CoreV1().Namespaces().Create(authorityChildNamespace)
 }
 
 func TestCreateClusterRoles(t *testing.T) {
@@ -104,6 +114,20 @@ func TestCreateClusterRoles(t *testing.T) {
 			t.Error("Existed role not identified", createErr)
 		}
 	})
+}
+
+func TestEstablishPrivateRoleBindings(t *testing.T) {
+	g := PermissionTestGroup{}
+	g.Init()
+
+	err := EstablishPrivateRoleBindings(g.userObj.DeepCopy())
+	if err != nil {
+		t.Errorf("failed")
+	}
+	role, _ := g.client.RbacV1().ClusterRoleBindings().Get(fmt.Sprintf("%s-%s-for-authority", g.userObj.GetNamespace(), g.userObj.GetName()), metav1.GetOptions{})
+	if role == nil {
+		t.Errorf("cluster rolebinding failed")
+	}
 }
 
 func TestEstablishRoleBindings(t *testing.T) {
@@ -128,12 +152,11 @@ func TestEstablishRoleBindings(t *testing.T) {
 func TestCheckAuthorization(t *testing.T) {
 	g := PermissionTestGroup{}
 	g.Init()
-	// Creating RoleBindingRow with Kind of ClusterRole
+	// Creating RoleBinding with Kind of ClusterRole
 	EstablishRoleBindings(g.userObj.DeepCopy(), g.userObj.GetNamespace(), "Authority")
-	// Check function output
 	authorized := CheckAuthorization(g.userObj.GetNamespace(), g.userObj.Spec.Email, "authority", g.userObj.GetName())
 	if authorized {
-		t.Errorf("failed determine the Kind of role")
+		t.Errorf("failed to determine the Kind of role")
 	}
 
 }

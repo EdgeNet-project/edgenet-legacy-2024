@@ -27,20 +27,20 @@ func TestStartController(t *testing.T) {
 	// Get the object and check the status
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
 	if !user.Spec.Active {
-		t.Errorf("Add func of event handler doesn't work properly")
+		t.Errorf(errorDict["add-func"])
 	}
 	// Update a user
 	g.userObj.Spec.FirstName = "newName"
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.userObj.DeepCopy())
 	user, _ = g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
 	if user.Spec.FirstName != "newName" {
-		t.Error("Update func of event handler doesn't work properly")
+		t.Errorf(errorDict["upd-func"])
 	}
 	// Delete a user
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.GetName(), &metav1.DeleteOptions{})
 	user, _ = g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
 	if user != nil {
-		t.Error("Delete func of event handler doesn't work properly")
+		t.Errorf(errorDict["del-func"])
 	}
 
 }

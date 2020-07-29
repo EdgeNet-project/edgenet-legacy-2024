@@ -145,7 +145,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			if err != nil {
 				log.Println(err.Error())
 				userCopy.Status.State = failure
-				userCopy.Status.Message = []string{fmt.Sprintf("Client cert generation failed for user %s", userCopy.GetName())}
+				userCopy.Status.Message = []string{fmt.Sprintf(statusDict["cert-fail"], userCopy.GetName())}
 				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-cert-failure")
 				return
 			}
@@ -153,11 +153,11 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			if err != nil {
 				log.Println(err.Error())
 				userCopy.Status.State = failure
-				userCopy.Status.Message = []string{fmt.Sprintf("Kubeconfig file creation failed for user %s", userCopy.GetName())}
+				userCopy.Status.Message = []string{fmt.Sprintf(statusDict["kubeconfig-fail"], userCopy.GetName())}
 				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-kubeconfig-failure")
 			}
 			userCopy.Status.State = success
-			userCopy.Status.Message = []string{"Client cert of the user generated"}
+			userCopy.Status.Message = []string{statusDict["cert-ok"]}
 			t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-registration-successful")
 
 			slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(metav1.ListOptions{})
@@ -220,10 +220,10 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			if created {
 				// Update the status as successful
 				userCopy.Status.State = success
-				userCopy.Status.Message = []string{"Everything is OK, verification email sent"}
+				userCopy.Status.Message = []string{statusDict["email-ok"]}
 			} else {
 				userCopy.Status.State = failure
-				userCopy.Status.Message = []string{"Couldn't send verification email"}
+				userCopy.Status.Message = []string{statusDict["email-fail"]}
 			}
 
 			userCopyUpdated, err = t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
