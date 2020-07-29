@@ -62,6 +62,15 @@ const delete = "delete"
 const failure = "Failure"
 const success = "Successful"
 
+// Dictionary of status messages
+var statusDict = map[string]string{
+	"aup-ok":             "Acceptable use policy approved",
+	"aup-set-fail":       "Expiry date couldn't be set",
+	"aup-expired":        "Acceptable use policy expired",
+	"aup-agreed":         "Acceptable Use Policy Agreed and Renewed",
+	"authority-disabled": "Authority disabled",
+}
+
 // Start function is entry point of the controller
 func Start() {
 	edgenetClientset, err := bootstrap.CreateEdgeNetClientSet()

@@ -18,7 +18,6 @@ package nodecontribution
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -67,13 +66,6 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 
 	// Get the SSH Public Key of the headnode
 	key, err := ioutil.ReadFile("../../.ssh/id_rsa")
-	if len(os.Args) > 1 {
-		var pathSSH string
-		commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-		commandLine.StringVar(&pathSSH, "ssh-path", "", "ssh-path")
-		commandLine.Parse(os.Args[0:2])
-		key, err = ioutil.ReadFile(pathSSH)
-	}
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

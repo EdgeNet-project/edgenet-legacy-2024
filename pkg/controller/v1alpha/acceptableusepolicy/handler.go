@@ -88,13 +88,13 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				Time: time.Now().Add(4382 * time.Hour),
 			}
 			AUPCopy.Status.State = success
-			AUPCopy.Status.Message = []string{"Acceptable use policy approved"}
+			AUPCopy.Status.Message = []string{statusDict["aup-ok"]}
 			AUPUpdated, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
 			if err == nil {
 				AUPCopy = AUPUpdated
 			} else {
 				AUPCopy.Status.State = failure
-				AUPCopy.Status.Message = []string{"Acceptable use policy approved", "Expiry date couldn't be set"}
+				AUPCopy.Status.Message = []string{statusDict["aup-ok"], statusDict["aup-set-fail"]}
 				t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
 			}
 		} else if AUPCopy.Spec.Accepted && AUPCopy.Status.Expires != nil {
@@ -113,7 +113,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 					AUPCopy = AUPUpdated
 				}
 				AUPCopy.Status.State = failure
-				AUPCopy.Status.Message = []string{"Acceptable use policy expired"}
+				AUPCopy.Status.Message = []string{statusDict["aup-expired"]}
 				t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
 			}
 		}
@@ -165,7 +165,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			go t.edgenetClientset.AppsV1alpha().Users(AUPUser.GetNamespace()).UpdateStatus(AUPUser)
 		} else if AUPCopy.Spec.Accepted && AUPCopy.Spec.Renew {
 			AUPCopy.Status.State = success
-			AUPCopy.Status.Message = []string{"Acceptable Use Policy Agreed and Renewed"}
+			AUPCopy.Status.Message = []string{statusDict["aup-agreed"]}
 			AUPCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(4382 * time.Hour),
 			}
@@ -178,7 +178,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			AUPCopy = AUPUpdated
 		}
 		AUPCopy.Status.State = failure
-		AUPCopy.Status.Message = []string{"Authority disabled"}
+		AUPCopy.Status.Message = []string{statusDict["authority-disabled"]}
 		t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
 	}
 }

@@ -425,22 +425,22 @@ func (t *SDHandler) setControllerFilter(sdCopy *apps_v1alpha.SelectiveDeployment
 		sdCopy.Status.State = failure
 		// nonExistentCounter indicates the number of non-existent controller(s) already defined in the desired selectivedeployment object
 		if nonExistentCounter != 0 && len(sdCopy.Status.Crash) != nonExistentCounter {
-			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) are already under the control of any different resource object(s) with the same type, %d controller(s) couldn't be found", (len(uniqueCrashList) - nonExistentCounter), nonExistentCounter)
+			sdCopy.Status.Message = fmt.Sprintf(statusDict["controller-notavail"], (len(uniqueCrashList) - nonExistentCounter), nonExistentCounter)
 		} else if nonExistentCounter != 0 && len(sdCopy.Status.Crash) == nonExistentCounter {
-			sdCopy.Status.Message = "No controllers found"
+			sdCopy.Status.Message = statusDict["controller-notfound"]
 		} else {
-			sdCopy.Status.Message = "All controllers are already under the control of any different resource object(s) with the same type"
+			sdCopy.Status.Message = statusDict["controller-usedSameType"]
 		}
 	} else if len(sdCopy.Status.Crash) == 0 {
 		sdCopy.Status.State = success
-		sdCopy.Status.Message = "SelectiveDeployment runs precisely to ensure that the actual state of the cluster matches the desired state"
+		sdCopy.Status.Message = statusDict["sd-runs"]
 	} else {
 		sdCopy.Status.State = partial
 		if len(sdCopy.Status.Crash) != nonExistentCounter {
-			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) are already under the control of any different resource object(s) with the same type", (len(uniqueCrashList) - nonExistentCounter))
+			sdCopy.Status.Message = fmt.Sprintf(statusDict["controller-usedSameTypeII"], (len(uniqueCrashList) - nonExistentCounter))
 		}
 		if nonExistentCounter != 0 {
-			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) couldn't be found", nonExistentCounter)
+			sdCopy.Status.Message = fmt.Sprintf(statusDict["controller-notfoundII"], nonExistentCounter)
 		}
 	}
 
@@ -682,11 +682,11 @@ func (t *SDHandler) setFilter(sdRow apps_v1alpha.SelectiveDeployment,
 						}
 						if sdCopy.Status.State == success {
 							sdCopy.Status.State = partial
-							sdCopy.Status.Message = fmt.Sprintf("Fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+							sdCopy.Status.Message = fmt.Sprintf(statusDict["nodes-fewer"], counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
 						} else {
-							errorMsg := fmt.Sprintf("fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+							errorMsg := fmt.Sprintf(statusDict["nodes-fewer"], counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
 							if !strings.Contains(strings.ToLower(sdCopy.Status.Message), strings.ToLower(errorMsg)) {
-								sdCopy.Status.Message = fmt.Sprintf("%s, fewer nodes issue, %d node(s) found instead of %d for %s%s", sdCopy.Status.Message, counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+								sdCopy.Status.Message = fmt.Sprintf(statusDict["nodes-fewer"], sdCopy.Status.Message, counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
 							}
 						}
 					}
@@ -697,16 +697,16 @@ func (t *SDHandler) setFilter(sdRow apps_v1alpha.SelectiveDeployment,
 					} else {
 						updateSDStatus(sdCopy)
 					}
-				} else if strings.Contains(sdRow.Status.Message, "Fewer nodes issue") || strings.Contains(sdRow.Status.Message, "fewer nodes issue") {
+				} else if strings.Contains(sdRow.Status.Message, statusDict["nodes-fewerIssue"]) || strings.Contains(sdRow.Status.Message, statusDict["nodes-fewerIssue"]) {
 					defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-					index := strings.Index(sdRow.Status.Message, "Fewer nodes issue")
+					index := strings.Index(sdRow.Status.Message, statusDict["nodes-fewerIssue"])
 					if index != -1 {
 						sdRow.Status.Message = sdRow.Status.Message[0:index]
 						if sdCopy.Status.State == partial {
 							sdCopy.Status.State = success
 						}
 					} else {
-						index := strings.Index(sdRow.Status.Message, ", fewer nodes issue")
+						index := strings.Index(sdRow.Status.Message, statusDict["nodes-fewerIssueII"])
 						sdRow.Status.Message = sdRow.Status.Message[0:index]
 					}
 				}
@@ -740,11 +740,11 @@ func (t *SDHandler) setFilter(sdRow apps_v1alpha.SelectiveDeployment,
 						}
 						if sdCopy.Status.State == success {
 							sdCopy.Status.State = partial
-							sdCopy.Status.Message = fmt.Sprintf("%s%s has a GeoJSON format error", selectorRow.Value[0:strLen], strSuffix)
+							sdCopy.Status.Message = fmt.Sprintf(statusDict["GeoJSON-err"], selectorRow.Value[0:strLen], strSuffix)
 						} else {
-							errorMsg := fmt.Sprintf("%s%s has a GeoJSON format error", selectorRow.Value[0:strLen], strSuffix)
+							errorMsg := fmt.Sprintf(statusDict["GeoJSON-err"], selectorRow.Value[0:strLen], strSuffix)
 							if !strings.Contains(strings.ToLower(sdCopy.Status.Message), strings.ToLower(errorMsg)) {
-								sdCopy.Status.Message = fmt.Sprintf("%s, %s%s has a GeoJSON format error", sdCopy.Status.Message, selectorRow.Value[0:strLen], strSuffix)
+								sdCopy.Status.Message = fmt.Sprintf(statusDict["GeoJSON-errII"], sdCopy.Status.Message, selectorRow.Value[0:strLen], strSuffix)
 							}
 						}
 					}
@@ -818,11 +818,11 @@ func (t *SDHandler) setFilter(sdRow apps_v1alpha.SelectiveDeployment,
 						}
 						if sdCopy.Status.State == success {
 							sdCopy.Status.State = partial
-							sdCopy.Status.Message = fmt.Sprintf("Fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+							sdCopy.Status.Message = fmt.Sprintf(statusDict["nodes-fewer"], counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
 						} else {
-							errorMsg := fmt.Sprintf("fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+							errorMsg := fmt.Sprintf(statusDict["nodes-fewer"], counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
 							if !strings.Contains(strings.ToLower(sdCopy.Status.Message), strings.ToLower(errorMsg)) {
-								sdCopy.Status.Message = fmt.Sprintf("%s, fewer nodes issue, %d node(s) found instead of %d for %s%s", sdCopy.Status.Message, counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+								sdCopy.Status.Message = fmt.Sprintf(statusDict["nodes-fewer"], sdCopy.Status.Message, counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
 							}
 						}
 					}
@@ -833,16 +833,16 @@ func (t *SDHandler) setFilter(sdRow apps_v1alpha.SelectiveDeployment,
 					} else {
 						updateSDStatus(sdCopy)
 					}
-				} else if strings.Contains(sdRow.Status.Message, "Fewer nodes issue") || strings.Contains(sdRow.Status.Message, "fewer nodes issue") {
+				} else if strings.Contains(sdRow.Status.Message, statusDict["nodes-fewerIssue"]) || strings.Contains(sdRow.Status.Message, statusDict["nodes-fewerIssue"]) {
 					defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-					index := strings.Index(sdRow.Status.Message, "Fewer nodes issue")
+					index := strings.Index(sdRow.Status.Message, statusDict["nodes-fewerIssue"])
 					if index != -1 {
 						sdRow.Status.Message = sdRow.Status.Message[0:index]
 						if sdCopy.Status.State == partial {
 							sdCopy.Status.State = success
 						}
 					} else {
-						index := strings.Index(sdRow.Status.Message, ", fewer nodes issue")
+						index := strings.Index(sdRow.Status.Message, statusDict["nodes-fewerIssueII"])
 						sdRow.Status.Message = sdRow.Status.Message[0:index]
 					}
 				}

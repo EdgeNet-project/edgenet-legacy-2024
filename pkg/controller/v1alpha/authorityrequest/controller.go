@@ -55,6 +55,17 @@ const failure = "Failure"
 const issue = "Malfunction"
 const success = "Successful"
 
+// Dictionary of status messages
+var statusDict = map[string]string{
+	"authority-failed": "Authority successfully failed",
+	"authority-taken":  "Authority name, %s, is already taken",
+	"email-ok":         "Everything is OK, verification email sent",
+	"email-fail":       "Couldn't send verification email",
+	"email-exist":      "Email address, %s, already exists for another user account",
+	"email-used-reg":   "Email address, %s, has already been used in a user registration request",
+	"email-used-auth":  "Email address, %s, has already been used in another authority request",
+}
+
 // Start function is entry point of the controller
 func Start() {
 	edgenetClientset, err := bootstrap.CreateEdgeNetClientSet()

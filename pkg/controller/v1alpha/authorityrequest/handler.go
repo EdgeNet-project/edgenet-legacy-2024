@@ -93,7 +93,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		} else {
 			t.sendEmail("authority-creation-failure", authorityRequestCopy)
 			authorityRequestCopy.Status.State = failure
-			authorityRequestCopy.Status.Message = []string{"Authority establishment failed", err.Error()}
+			authorityRequestCopy.Status.Message = []string{statusDict["authority-failed"], err.Error()}
 		}
 
 	}
@@ -113,10 +113,10 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		if created {
 			// Update the status as successful
 			authorityRequestCopy.Status.State = success
-			authorityRequestCopy.Status.Message = []string{"Everything is OK, verification email sent"}
+			authorityRequestCopy.Status.Message = []string{statusDict["email-ok"]}
 		} else {
 			authorityRequestCopy.Status.State = issue
-			authorityRequestCopy.Status.Message = []string{"Couldn't send verification email"}
+			authorityRequestCopy.Status.Message = []string{statusDict["email-fail"]}
 		}
 
 	} else {
@@ -143,7 +143,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 			if changeStatus {
 				t.sendEmail("authority-creation-failure", authorityRequestCopy)
 				authorityRequestCopy.Status.State = failure
-				authorityRequestCopy.Status.Message = []string{"Authority establishment failed", err.Error()}
+				authorityRequestCopy.Status.Message = []string{statusDict["authority-failed"], err.Error()}
 			}
 
 		} else if !authorityRequestCopy.Spec.Approved && authorityRequestCopy.Status.State == failure {
@@ -154,10 +154,10 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 			if created {
 				// Update the status as successful
 				authorityRequestCopy.Status.State = success
-				authorityRequestCopy.Status.Message = []string{"Everything is OK, verification email sent"}
+				authorityRequestCopy.Status.Message = []string{statusDict["email-ok"]}
 			} else {
 				authorityRequestCopy.Status.State = issue
-				authorityRequestCopy.Status.Message = []string{"Couldn't send verification email"}
+				authorityRequestCopy.Status.Message = []string{statusDict["email-fail"]}
 			}
 
 			changeStatus = true
@@ -202,7 +202,7 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 		for _, userRow := range userRaw.Items {
 			if userRow.Spec.Email == authorityRequestCopy.Spec.Contact.Email {
 				exists = true
-				message = append(message, fmt.Sprintf("Email address, %s, already exists for another user account", authorityRequestCopy.Spec.Contact.Email))
+				message = append(message, fmt.Sprintf(statusDict["email-exist"], authorityRequestCopy.Spec.Contact.Email))
 				break
 			}
 		}
@@ -211,7 +211,7 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 		for _, URRRow := range URRRaw.Items {
 			if URRRow.Spec.Email == authorityRequestCopy.Spec.Contact.Email {
 				exists = true
-				message = append(message, fmt.Sprintf("Email address, %s, has already been used in a user registration request", authorityRequestCopy.Spec.Contact.Email))
+				message = append(message, fmt.Sprintf(statusDict["email-used-reg"], authorityRequestCopy.Spec.Contact.Email))
 				break
 			}
 		}
@@ -220,7 +220,7 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 		for _, authorityRequestRow := range authorityRequestRaw.Items {
 			if authorityRequestRow.Spec.Contact.Email == authorityRequestCopy.Spec.Contact.Email && authorityRequestRow.GetUID() != authorityRequestCopy.GetUID() {
 				exists = true
-				message = append(message, fmt.Sprintf("Email address, %s, has already been used in another authority request", authorityRequestCopy.Spec.Contact.Email))
+				message = append(message, fmt.Sprintf(statusDict["email-used-auth"], authorityRequestCopy.Spec.Contact.Email))
 				break
 			}
 		}
@@ -230,7 +230,7 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 		}
 	} else {
 		exists = true
-		message = append(message, fmt.Sprintf("Authority name, %s, is already taken", authorityRequestCopy.GetName()))
+		message = append(message, fmt.Sprintf(statusDict["authority-taken"], authorityRequestCopy.GetName()))
 		if !reflect.DeepEqual(authorityRequestCopy.Status.Message, message) {
 			t.sendEmail("authority-validation-failure-name", authorityRequestCopy)
 		}
