@@ -54,7 +54,7 @@ func (g *TeamTestGroup) Init() {
 		Spec: apps_v1alpha.TeamSpec{
 			Users:       []apps_v1alpha.TeamUsers{},
 			Description: "This is a test description",
-			Enabled:     true,
+			Enabled:     false,
 		},
 	}
 	authorityObj := apps_v1alpha.Authority{
@@ -82,7 +82,7 @@ func (g *TeamTestGroup) Init() {
 				Phone:     "+33NUMBER",
 				Username:  "unittesting",
 			},
-			Enabled: true,
+			Enabled: false,
 		},
 	}
 	userObj := apps_v1alpha.User{

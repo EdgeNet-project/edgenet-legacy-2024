@@ -121,11 +121,8 @@ func TestEstablishPrivateRoleBindings(t *testing.T) {
 	g.Init()
 
 	err := EstablishPrivateRoleBindings(g.userObj.DeepCopy())
-	if err != nil {
-		t.Errorf("failed")
-	}
 	role, _ := g.client.RbacV1().ClusterRoleBindings().Get(fmt.Sprintf("%s-%s-for-authority", g.userObj.GetNamespace(), g.userObj.GetName()), metav1.GetOptions{})
-	if role == nil {
+	if err != nil && role == nil {
 		t.Errorf("cluster rolebinding failed")
 	}
 }
@@ -136,8 +133,8 @@ func TestEstablishRoleBindings(t *testing.T) {
 
 	t.Run("Establish Rolebindings", func(t *testing.T) {
 		err := EstablishRoleBindings(g.userObj.DeepCopy(), g.userObj.GetNamespace(), "Authority")
-		userRoleBind, errS := g.client.RbacV1().RoleBindings(g.userObj.GetNamespace()).Get(fmt.Sprintf("%s-%s-authority-admin", g.userObj.GetNamespace(), g.userObj.GetName()), metav1.GetOptions{})
-		if err != nil || userRoleBind == nil || errS != nil {
+		userRoleBind, errUserRoleBind := g.client.RbacV1().RoleBindings(g.userObj.GetNamespace()).Get(fmt.Sprintf("%s-%s-authority-admin", g.userObj.GetNamespace(), g.userObj.GetName()), metav1.GetOptions{})
+		if err != nil || userRoleBind == nil || errUserRoleBind != nil {
 			t.Errorf("Establish role Bindings Failed")
 		}
 	})

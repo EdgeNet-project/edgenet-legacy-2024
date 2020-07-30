@@ -34,25 +34,25 @@ func TestMain(m *testing.M) {
 func TestGetUnistallCommands(t *testing.T) {
 	var fakeOSDebian []byte = []byte("NAME=UbuntuID=ubuntuID_LIKE=debianPRETTY_NAME=Ubuntu")
 	var fakeOSCentos []byte = []byte("NAME=CentosID=centosID_LIKE=centosPRETTY_NAME=Centos")
-	_, err := getUninstallCommands(nil, fakeOSDebian)
-	if err != nil {
-		t.Errorf(errorDict["getcm-unistall"])
-	}
-	_, err = getUninstallCommands(nil, fakeOSCentos)
-	if err != nil {
-		t.Errorf(errorDict["getcm-unistall"])
+	fakeOS := [2][]byte{fakeOSCentos, fakeOSDebian}
+	for _, value := range fakeOS {
+		os.Args = []string{"-fakeOS", string(value)}
+		_, err := getUninstallCommands(nil)
+		if err != nil {
+			t.Errorf(errorDict["getcm-unistall"])
+		}
 	}
 }
 func TestGetReconfigurationCommands(t *testing.T) {
 	fakeHostName := "TestHost"
 	var fakeOSDebian []byte = []byte("NAME=UbuntuID=ubuntuID_LIKE=debianPRETTY_NAME=Ubuntu")
 	var fakeOSCentos []byte = []byte("NAME=CentosID=centosID_LIKE=centosPRETTY_NAME=Centos")
-	_, err := getReconfigurationCommands(nil, fakeHostName, fakeOSDebian)
-	if err != nil {
-		t.Errorf(errorDict["getcm-reconf"])
-	}
-	_, err = getReconfigurationCommands(nil, fakeHostName, fakeOSCentos)
-	if err != nil {
-		t.Errorf(errorDict["getcm-reconf"])
+	fakeOS := [2][]byte{fakeOSCentos, fakeOSDebian}
+	for _, value := range fakeOS {
+		os.Args = []string{"-fakeOS", string(value)}
+		_, err := getReconfigurationCommands(nil, fakeHostName)
+		if err != nil {
+			t.Errorf(errorDict["getcm-reconf"])
+		}
 	}
 }

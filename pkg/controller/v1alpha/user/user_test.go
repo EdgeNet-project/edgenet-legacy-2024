@@ -190,7 +190,7 @@ func (g *UserTestGroup) Init() {
 			URL:       "",
 		},
 		Status: apps_v1alpha.UserRegistrationRequestStatus{
-			EmailVerified: true,
+			EmailVerified: false,
 		},
 	}
 	g.authorityObj = authorityObj

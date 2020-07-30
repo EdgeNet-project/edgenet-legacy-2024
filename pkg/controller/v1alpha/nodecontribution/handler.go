@@ -17,11 +17,10 @@ limitations under the License.
 package nodecontribution
 
 import (
-	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -218,7 +217,7 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // sendEmail to send notification to participants
-func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) error {
+func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) {
 	// For those who are authority-admin and authorized users of the authority
 	userRaw, err := t.edgenetClientset.AppsV1alpha().Users(NCCopy.GetNamespace()).List(metav1.ListOptions{})
 	if err == nil {
@@ -237,7 +236,6 @@ func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) error {
 					contentData.CommonData.Email = []string{userRow.Spec.Email}
 					if contentData.Status == failure {
 						mailer.Send("node-contribution-failure", contentData)
-						return errors.New("node-contribution-failure")
 					} else if contentData.Status == success {
 						mailer.Send("node-contribution-successful", contentData)
 					}
@@ -248,7 +246,6 @@ func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) error {
 			mailer.Send("node-contribution-failure-support", contentData)
 		}
 	}
-	return err
 }
 
 // runSetupProcedure installs necessary packages from scratch and makes the node join into the cluster
@@ -562,12 +559,12 @@ nodeRecoveryLoop:
 
 // cleanInstallation gets and runs the uninstallation and installation commands prepared
 func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *apps_v1alpha.NodeContribution) error {
-	uninstallationCommands, err := getUninstallCommands(conn, []byte(""))
+	uninstallationCommands, err := getUninstallCommands(conn)
 	if err != nil {
 		log.Println(err)
 		return err
 	}
-	installationCommands, err := getInstallCommands(conn, nodeName, node.GetKubeletVersion()[1:], []byte(""))
+	installationCommands, err := getInstallCommands(conn, nodeName, node.GetKubeletVersion()[1:])
 	if err != nil {
 		log.Println(err)
 		return err
@@ -632,7 +629,7 @@ func rebootNode(conn *ssh.Client) error {
 
 // reconfigureNode gets and runs the configuration commands prepared
 func reconfigureNode(conn *ssh.Client, hostname string) error {
-	configurationCommands, err := getReconfigurationCommands(conn, hostname, []byte(""))
+	configurationCommands, err := getReconfigurationCommands(conn, hostname)
 	if err != nil {
 		log.Println(err)
 		return err
@@ -699,10 +696,14 @@ func startShell(sess *ssh.Session) (*ssh.Session, error) {
 }
 
 // getInstallCommands prepares the commands necessary according to the OS
-func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion string, fakeOS []byte) ([]string, error) {
+func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion string) ([]string, error) {
 	var output []byte
-	if !reflect.DeepEqual(output, []byte("")) {
-		output = fakeOS
+	if len(os.Args) > 1 {
+		var fakeOS string
+		commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+		commandLine.StringVar(&fakeOS, "fakeOS", "", "fakeOS")
+		commandLine.Parse(os.Args[0:2])
+		output = []byte(fakeOS)
 	} else {
 		sess, err := startSession(conn)
 		if err != nil {
@@ -788,10 +789,14 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 }
 
 // getUninstallCommands prepares the commands necessary according to the OS
-func getUninstallCommands(conn *ssh.Client, fakeOS []byte) ([]string, error) {
+func getUninstallCommands(conn *ssh.Client) ([]string, error) {
 	var output []byte
-	if !reflect.DeepEqual(output, []byte("")) {
-		output = fakeOS
+	if len(os.Args) > 1 {
+		var fakeOS string
+		commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+		commandLine.StringVar(&fakeOS, "fakeOS", "", "fakeOS")
+		commandLine.Parse(os.Args[0:2])
+		output = []byte(fakeOS)
 	} else {
 		sess, err := startSession(conn)
 		if err != nil {
@@ -833,10 +838,14 @@ func getUninstallCommands(conn *ssh.Client, fakeOS []byte) ([]string, error) {
 }
 
 // getReconfigurationCommands prepares the commands necessary according to the OS
-func getReconfigurationCommands(conn *ssh.Client, hostname string, fakeOS []byte) ([]string, error) {
+func getReconfigurationCommands(conn *ssh.Client, hostname string) ([]string, error) {
 	var output []byte
-	if !reflect.DeepEqual(output, []byte("")) {
-		output = fakeOS
+	if len(os.Args) > 1 {
+		var fakeOS string
+		commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+		commandLine.StringVar(&fakeOS, "fakeOS", "", "fakeOS")
+		commandLine.Parse(os.Args[0:2])
+		output = []byte(fakeOS)
 	} else {
 		sess, err := startSession(conn)
 		if err != nil {

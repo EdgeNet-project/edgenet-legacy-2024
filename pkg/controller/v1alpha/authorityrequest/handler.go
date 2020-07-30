@@ -85,7 +85,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	}
 	if authorityRequestCopy.Spec.Approved {
 		authorityHandler := authority.Handler{}
-		var err error
 		authorityHandler.Init(t.clientset, t.edgenetClientset)
 		created := !authorityHandler.Create(authorityRequestCopy)
 		if created {
@@ -93,7 +92,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		} else {
 			t.sendEmail("authority-creation-failure", authorityRequestCopy)
 			authorityRequestCopy.Status.State = failure
-			authorityRequestCopy.Status.Message = []string{statusDict["authority-failed"], err.Error()}
+			authorityRequestCopy.Status.Message = []string{statusDict["authority-failed"]}
 		}
 
 	}
@@ -136,20 +135,16 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		// Check whether the request for authority creation approved
 		if authorityRequestCopy.Spec.Approved {
 			authorityHandler := authority.Handler{}
-			var err error
 			authorityHandler.Init(t.clientset, t.edgenetClientset)
-
 			changeStatus := authorityHandler.Create(authorityRequestCopy)
 			if changeStatus {
 				t.sendEmail("authority-creation-failure", authorityRequestCopy)
 				authorityRequestCopy.Status.State = failure
-				authorityRequestCopy.Status.Message = []string{statusDict["authority-failed"], err.Error()}
+				authorityRequestCopy.Status.Message = []string{statusDict["authority-failed"]}
 			}
-
 		} else if !authorityRequestCopy.Spec.Approved && authorityRequestCopy.Status.State == failure {
 			emailVerificationHandler := emailverification.Handler{}
 			emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-
 			created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
 			if created {
 				// Update the status as successful
@@ -159,7 +154,6 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 				authorityRequestCopy.Status.State = issue
 				authorityRequestCopy.Status.Message = []string{statusDict["email-fail"]}
 			}
-
 			changeStatus = true
 		}
 	} else if exists && !reflect.DeepEqual(authorityRequestCopy.Status.Message, message) {

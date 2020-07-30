@@ -112,7 +112,7 @@ func MakeUser(authority, username, email string) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	timeout := time.After(15 * time.Minute)
+	timeout := time.After(5 * time.Minute)
 	ticker := time.Tick(15 * time.Second)
 check:
 	for {

@@ -22,7 +22,6 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/emailverification"
 	"edgenet/pkg/controller/v1alpha/user"
@@ -35,7 +34,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj interface{})
 	ObjectDeleted(obj interface{})
@@ -43,25 +42,15 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("URRHandler.Init")
-	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	return err
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
@@ -91,20 +80,18 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		if URRCopy.Spec.Approved {
 			userHandler := user.Handler{}
 			userHandler.Init(t.clientset, t.edgenetClientset)
-			var err error
 			created := !userHandler.Create(URRCopy)
 			if created {
 				return
 			} else {
 				t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "user-creation-failure")
 				URRCopy.Status.State = failure
-				URRCopy.Status.Message = []string{statusDict["user-failed"], err.Error()}
+				URRCopy.Status.Message = []string{statusDict["user-failed"]}
 				URRCopyUpdated, err := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(URRCopy)
 				if err == nil {
 					URRCopy = URRCopyUpdated
 				}
 			}
-
 		}
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
@@ -118,7 +105,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			}
 			emailVerificationHandler := emailverification.Handler{}
 			emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-
 			created := emailVerificationHandler.Create(URRCopy, SetAsOwnerReference(URRCopy))
 			if created {
 				// Update the status as successful
@@ -128,7 +114,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				URRCopy.Status.State = issue
 				URRCopy.Status.Message = []string{statusDict["email-fail"]}
 			}
-
 		} else {
 			go t.runApprovalTimeout(URRCopy)
 		}
@@ -152,15 +137,12 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 			// Check whether the request for user registration approved
 			if URRCopy.Spec.Approved {
 				userHandler := user.Handler{}
-				var err error
 				userHandler.Init(t.clientset, t.edgenetClientset)
-				if err == nil {
-					changeStatus := userHandler.Create(URRCopy)
-					if changeStatus {
-						t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "user-creation-failure")
-						URRCopy.Status.State = failure
-						URRCopy.Status.Message = []string{statusDict["user-failed"], err.Error()}
-					}
+				changeStatus := userHandler.Create(URRCopy)
+				if changeStatus {
+					t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "user-creation-failure")
+					URRCopy.Status.State = failure
+					URRCopy.Status.Message = []string{statusDict["user-failed"]}
 				}
 			} else if !URRCopy.Spec.Approved && URRCopy.Status.State == failure {
 				emailVerificationHandler := emailverification.Handler{}
@@ -174,7 +156,6 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 					URRCopy.Status.State = issue
 					URRCopy.Status.Message = []string{statusDict["email-fail"]}
 				}
-
 				changeStatus = true
 			}
 		} else if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
@@ -291,11 +272,12 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 	exists := false
 	message := []string{}
 	// To check username on the users resource
-	userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).List(
-		metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", URRCopy.GetName())})
-	if len(userRaw.Items) == 0 {
+	userObj, _ := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Get(URRCopy.GetName(), metav1.GetOptions{})
+	//userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).List(
+	//	metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", URRCopy.GetName())})
+	if userObj == nil {
 		// To check email address
-		userRaw, _ = t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
+		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
 			if userRow.Spec.Email == URRCopy.Spec.Email {
 				exists = true
