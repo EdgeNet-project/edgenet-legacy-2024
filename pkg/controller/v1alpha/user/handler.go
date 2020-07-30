@@ -214,17 +214,15 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 				t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-deactivation-failure")
 			}
 			emailVerificationHandler := emailverification.Handler{}
-			err = emailVerificationHandler.Init()
-			if err == nil {
-				created := emailVerificationHandler.Create(userCopy, SetAsOwnerReference(userCopy))
-				if created {
-					// Update the status as successful
-					userCopy.Status.State = success
-					userCopy.Status.Message = []string{"Everything is OK, verification email sent"}
-				} else {
-					userCopy.Status.State = failure
-					userCopy.Status.Message = []string{"Couldn't send verification email"}
-				}
+			emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
+			created := emailVerificationHandler.Create(userCopy, SetAsOwnerReference(userCopy))
+			if created {
+				// Update the status as successful
+				userCopy.Status.State = success
+				userCopy.Status.Message = []string{"Everything is OK, verification email sent"}
+			} else {
+				userCopy.Status.State = failure
+				userCopy.Status.Message = []string{"Couldn't send verification email"}
 			}
 			userCopyUpdated, err = t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
 			if err == nil {

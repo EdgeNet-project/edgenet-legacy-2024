@@ -19,6 +19,32 @@ import (
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
+// Dictionary for status messages
+var errorDict = map[string]string{
+	"k8-sync":              "Kubernetes clientset sync problem",
+	"edgnet-sync":          "EdgeNet clientset sync problem",
+	"quota-name":           "Wrong resource quota name",
+	"quota-spec":           "Resource quota spec issue",
+	"quota-pod":            "Resource quota allows pod deployment",
+	"user-gen":             "User generation failed when an authority created",
+	"TRQ-create":           "Total resource quota cannot be created",
+	"cluster-role":         "Cluster role cannot be created",
+	"dupl-val":             "Duplicate value cannot be detected",
+	"user-deact":           "User cannot be deactivated",
+	"auth-name-coll":       "Authority creation is broken by an authority request due to the name is the same",
+	"auth-req-coll":        "Authority request having same name still exists",
+	"auht-email-coll":      "Authority request having an admin with same email address still exists",
+	"auth-info-del":        "Authority request with different information has been deleted",
+	"user-coll-failed":     "User having same email address cannot be detected",
+	"user-conflict":        "User with different information has created a conflict",
+	"auth-create-failed":   "Authority cannot be created properly",
+	"auth-est-failed":      "Authority establishment failed",
+	"auth-disbld-creation": "Authority is disabled after creation",
+	"add-func":             "Add func of event handler doesn't work properly",
+	"upd-func":             "Update func of event handler doesn't work properly",
+	"del-func":             "Delete func of event handler doesn't work properly",
+}
+
 // The main structure of test group
 type AuthorityTestGroup struct {
 	authorityObj        apps_v1alpha.Authority
@@ -129,19 +155,19 @@ func TestHandlerInit(t *testing.T) {
 	// Initialize the handler
 	g.handler.Init(g.client, g.edgenetclient)
 	if g.handler.clientset != g.client {
-		t.Error("Kubernetes clientset sync problem")
+		t.Error(errorDict["k8-sync"])
 	}
 	if g.handler.edgenetClientset != g.edgenetclient {
-		t.Error("EdgeNet clientset sync problem")
+		t.Error(errorDict["edgenet-sync"])
 	}
 	if g.handler.resourceQuota.Name != "authority-quota" {
-		t.Error("Wrong resource quota name")
+		t.Error(errorDict["quota-name"])
 	}
 	if g.handler.resourceQuota.Spec.Hard == nil {
-		t.Error("Resource quota spec issue")
+		t.Error(errorDict["quota-spec"])
 	} else {
 		if g.handler.resourceQuota.Spec.Hard.Pods().Value() != 0 {
-			t.Error("Resource quota allows pod deployment")
+			t.Error(errorDict["quota-pod"])
 		}
 	}
 }
@@ -155,17 +181,17 @@ func TestAuthorityCreate(t *testing.T) {
 		g.handler.ObjectCreated(g.authorityObj.DeepCopy())
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 		if user == nil {
-			t.Error("User generation failed when an authority created")
+			t.Error(errorDict["user-gen"])
 		}
 
 		TRQ, _ := g.handler.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(g.authorityObj.GetName(), metav1.GetOptions{})
 		if TRQ == nil {
-			t.Error("Total resource quota cannot be created")
+			t.Error(errorDict["TRQ-create"])
 		}
 
 		clusterRole, _ := g.handler.clientset.RbacV1().ClusterRoles().Get(fmt.Sprintf("authority-%s", g.authorityObj.GetName()), metav1.GetOptions{})
 		if clusterRole == nil {
-			t.Error("Cluster role cannot be created")
+			t.Error(errorDict["cluster-role"])
 		}
 	})
 
@@ -175,7 +201,7 @@ func TestAuthorityCreate(t *testing.T) {
 		g.handler.ObjectCreated(g.authorityObj.DeepCopy())
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 		if user != nil {
-			t.Error("Duplicate value cannot be detected")
+			t.Error(errorDict["dupl-val"])
 		}
 	})
 }
@@ -197,10 +223,10 @@ func TestAuthorityUpdate(t *testing.T) {
 	g.handler.ObjectUpdated(g.authorityObj.DeepCopy())
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 	if user.Spec.Email == "check" {
-		t.Error("Duplicate value cannot be detected")
+		t.Error(errorDict["dupl-val"])
 	}
 	if user.Spec.Active {
-		t.Error("User cannot be deactivated")
+		t.Error(errorDict["user-deact"])
 	}
 }
 
@@ -213,12 +239,12 @@ func TestDuplicateValue(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
 		exists, _ := g.handler.checkDuplicateObject(g.authorityObj.DeepCopy())
 		if exists == true {
-			t.Error("Authority creation is broken by an authority request due to the name is the same")
+			t.Error(errorDict["auth-name-coll"])
 		}
 		// Check if the authority request exists
 		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authorityRequest != nil {
-			t.Error("Authority request having same name still exists")
+			t.Error(errorDict["auth-req-coll"])
 			g.edgenetclient.AppsV1alpha().AuthorityRequests().Delete(g.authorityRequestObj.GetName(), &metav1.DeleteOptions{})
 		}
 	})
@@ -227,11 +253,11 @@ func TestDuplicateValue(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
 		exists, _ := g.handler.checkDuplicateObject(g.authorityObj.DeepCopy())
 		if exists == true {
-			t.Error("Authority creation is broken by an authority request due to the name is the same")
+			t.Error(errorDict["auth-name-coll"])
 		}
 		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authorityRequest != nil {
-			t.Error("Authority request having an admin with same email address still exists")
+			t.Error(errorDict["auth-email-coll"])
 			g.edgenetclient.AppsV1alpha().AuthorityRequests().Delete(g.authorityRequestObj.GetName(), &metav1.DeleteOptions{})
 		}
 	})
@@ -242,11 +268,11 @@ func TestDuplicateValue(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
 		exists, _ := g.handler.checkDuplicateObject(g.authorityObj.DeepCopy())
 		if exists == true {
-			t.Error("Authority creation is broken by an authority request due to the name is the same")
+			t.Error(errorDict["auth-name-coll"])
 		}
 		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authorityRequest == nil {
-			t.Error("Authority request with different information has been deleted")
+			t.Error(errorDict["auth-info-del"])
 		} else {
 			g.edgenetclient.AppsV1alpha().AuthorityRequests().Delete(g.authorityRequestObj.GetName(), &metav1.DeleteOptions{})
 		}
@@ -256,7 +282,7 @@ func TestDuplicateValue(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().Users("default").Create(g.userObj.DeepCopy())
 		exists, _ := g.handler.checkDuplicateObject(g.authorityObj.DeepCopy())
 		if exists != true {
-			t.Error("User having same email address cannot be detected")
+			t.Error(errorDict["user-coll-failed"])
 		}
 		g.edgenetclient.AppsV1alpha().Users("default").Delete(g.userObj.GetName(), &metav1.DeleteOptions{})
 	})
@@ -267,7 +293,7 @@ func TestDuplicateValue(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().Users("default").Create(g.userObj.DeepCopy())
 		exists, _ := g.handler.checkDuplicateObject(g.authorityObj.DeepCopy())
 		if exists == true {
-			t.Error("User with different information has created a conflict")
+			t.Error(errorDict["user-conflict"])
 		}
 		g.edgenetclient.AppsV1alpha().Users("default").Delete(g.userObj.GetName(), &metav1.DeleteOptions{})
 	})
@@ -288,13 +314,13 @@ func TestAuthorityPreparation(t *testing.T) {
 				authorityCopy = g.handler.authorityPreparation(authorityCopy)
 			}
 			if !reflect.DeepEqual(g.authorityObj.Spec, authorityCopy.Spec) {
-				t.Error("Authority cannot be created properly")
+				t.Error(errorDict["auth-create-failed"])
 			}
 			if authorityCopy.Status.State != established {
-				t.Error("Authority establishment failed")
+				t.Error(errorDict["auth-est-failed"])
 			}
 			if authorityCopy.Spec.Enabled != true {
-				t.Error("Authority is disabled after creation")
+				t.Error(errorDict["auth-disbld-creation"])
 			}
 		})
 	}

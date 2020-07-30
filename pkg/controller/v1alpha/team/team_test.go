@@ -20,6 +20,26 @@ import (
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
+// Dictionary for status messages
+var errorDict = map[string]string{
+	"k8-sync":               "Kubernetes clientset sync problem",
+	"edgnet-sync":           "EdgeNet clientset sync problem",
+	"quota-name":            "Wrong resource quota name",
+	"quota-spec":            "Resource quota spec issue",
+	"quota-pod":             "Resource quota allows pod deployment",
+	"team-child-nmspce":     "Failed to create team child namespace",
+	"team-status":           "Failed to update status of team",
+	"team-user-rolebinding": "Failed to create Rolebinding for user in team child namespace",
+	"team-get-owner-ref":    "Failed to get owner references",
+	"team-set-owner-ref":    "Failed to set team namespace owner references",
+	"team-fail":             "Failed to create new team",
+	"team-users-del":        "Failed to delete users in team",
+	"team-del-child-nmspce": "Failed to delete Team child namespace",
+	"add-func":              "Add func of event handler doesn't work properly",
+	"upd-func":              "Update func of event handler doesn't work properly",
+	"del-func":              "Delete func of event handler doesn't work properly",
+}
+
 // Constant variables for events
 const success = "Successful"
 
@@ -54,9 +74,10 @@ func (g *TeamTestGroup) Init() {
 		Spec: apps_v1alpha.TeamSpec{
 			Users:       []apps_v1alpha.TeamUsers{},
 			Description: "This is a test description",
+			Enabled:     true,
 		},
 		Status: apps_v1alpha.TeamStatus{
-			Enabled: false,
+			State: success,
 		},
 	}
 	authorityObj := apps_v1alpha.Authority{
@@ -84,9 +105,7 @@ func (g *TeamTestGroup) Init() {
 				Phone:     "+33NUMBER",
 				Username:  "unittesting",
 			},
-		},
-		Status: apps_v1alpha.AuthorityStatus{
-			Enabled: false,
+			Enabled: true,
 		},
 	}
 	userObj := apps_v1alpha.User{
@@ -101,12 +120,12 @@ func (g *TeamTestGroup) Init() {
 		Spec: apps_v1alpha.UserSpec{
 			FirstName: "user",
 			LastName:  "NAME",
-			Roles:     []string{"Admin"},
 			Email:     "userName@edge-net.org",
+			Active:    false,
 		},
 		Status: apps_v1alpha.UserStatus{
-			State:  success,
-			Active: true,
+			Type:  "Admin",
+			State: success,
 		},
 	}
 	g.authorityObj = authorityObj
@@ -114,11 +133,11 @@ func (g *TeamTestGroup) Init() {
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
-	//invoke ObjectCreated to create namespace
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
 	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	// Invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 
@@ -130,19 +149,19 @@ func TestHandlerInit(t *testing.T) {
 	// Initialize the handler
 	g.handler.Init(g.client, g.edgenetclient)
 	if g.handler.clientset != g.client {
-		t.Error("Kubernetes clientset sync problem")
+		t.Error(errorDict["k8-sync"])
 	}
 	if g.handler.edgenetClientset != g.edgenetclient {
-		t.Error("EdgeNet clientset sync problem")
+		t.Error(errorDict["edgenet-sync"])
 	}
 	if g.handler.resourceQuota.Name != "team-quota" {
-		t.Error("Wrong resource quota name")
+		t.Error(errorDict["quota-name"])
 	}
 	if g.handler.resourceQuota.Spec.Hard == nil {
-		t.Error("Resource quota spec issue")
+		t.Error(errorDict["quota-spec"])
 	} else {
 		if g.handler.resourceQuota.Spec.Hard.Pods().Value() != 0 {
-			t.Error("Resource quota allows pod deployment")
+			t.Error(errorDict["quota-pod"])
 		}
 	}
 }
@@ -158,7 +177,7 @@ func TestTeamCreate(t *testing.T) {
 	t.Run("creation of Team", func(t *testing.T) {
 		teamChildNamespace, _ := g.handler.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName()), metav1.GetOptions{})
 		if teamChildNamespace == nil {
-			t.Errorf("Failed to create team child namespace")
+			t.Error(errorDict["team-child-nmspce"])
 		}
 	})
 }
@@ -176,7 +195,7 @@ func TestTeamUpdate(t *testing.T) {
 	// Update of team status
 	t.Run("Update existing team", func(t *testing.T) {
 		// Building field parameter
-		g.teamObj.Status.Enabled = false
+		g.teamObj.Spec.Enabled = false
 		var field fields
 		field.enabled = true
 		// Requesting server to Update internal representation of team
@@ -185,11 +204,11 @@ func TestTeamUpdate(t *testing.T) {
 		g.handler.ObjectUpdated(g.teamObj.DeepCopy(), field)
 		// Verifying Team status is enabled in server's representation of team
 		team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
-		if team.Status.Enabled {
-			t.Error("Failed to update status of team")
+		if team.Spec.Enabled {
+			t.Error(errorDict["team-status"])
 		}
 		// Re-enable team for futher tests
-		g.teamObj.Status.Enabled = true
+		g.teamObj.Spec.Enabled = true
 		// Requesting server to Update internal representation of team
 		g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.teamObj.DeepCopy())
 		// Invoking ObjectUpdated to send emails to users added or removed from team
@@ -207,7 +226,7 @@ func TestTeamUpdate(t *testing.T) {
 		var field fields
 		field.users.status, field.enabled = true, true
 		field.users.added = `[{"Authority": "edgenet", "Username": "user1" }]`
-		g.userObj.Status.Active, g.userObj.Status.AUP = true, true
+		g.userObj.Spec.Active, g.userObj.Status.AUP = true, true
 		// Creating User before updating requesting server to update internal representation of team
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 		userHandler.ObjectCreated(g.userObj.DeepCopy())
@@ -217,10 +236,10 @@ func TestTeamUpdate(t *testing.T) {
 		g.handler.ObjectUpdated(g.teamObj.DeepCopy(), field)
 		// Check user rolebinding in team child namespace
 		user, _ := g.handler.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get("user1", metav1.GetOptions{})
-		roleBindings, _ := g.client.RbacV1().RoleBindings(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())).Get(fmt.Sprintf("%s-%s-team-%s", user.GetNamespace(), user.GetName(), "admin"), metav1.GetOptions{})
+		roleBindings, _ := g.client.RbacV1().RoleBindings(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())).Get(fmt.Sprintf("%s-%s-team-%s", user.GetNamespace(), user.GetName(), "user"), metav1.GetOptions{})
 		// Verifying server created rolebinding for new user in team's child namespace
 		if roleBindings == nil {
-			t.Error("Failed to create Rolebinding for user in team child namespace")
+			t.Error(errorDict["team-user-rolebinding"])
 		}
 	})
 }
@@ -235,7 +254,7 @@ func TestTeamUserOwnerReferences(t *testing.T) {
 			Username:  "user1",
 		},
 	}
-	g.userObj.Status.Active, g.userObj.Status.AUP = true, true
+	g.userObj.Spec.Active, g.userObj.Status.AUP = true, true
 	// Creating User before updating requesting server to update internal representation of team
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 	// Creating team with one user
@@ -243,12 +262,14 @@ func TestTeamUserOwnerReferences(t *testing.T) {
 	g.handler.ObjectCreated(g.teamObj.DeepCopy())
 	// Setting owner references
 	t.Run("Set Owner references", func(t *testing.T) {
-		g.handler.setOwnerReferences(g.teamObj.DeepCopy())
 		teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())
 		teamChildNamespace, _ := g.client.CoreV1().Namespaces().Get(teamChildNamespaceStr, metav1.GetOptions{})
+		if g.handler.getOwnerReferences(g.teamObj.DeepCopy(), teamChildNamespace) == nil {
+			t.Error(errorDict["team-get-owner-ref"])
+		}
 		// Verifying team owns child namespace
 		if teamChildNamespace.Labels["owner"] != "team" && teamChildNamespace.Labels["owner-name"] != "edgnetteam" {
-			t.Error("Failed to set team namespace owner references")
+			t.Error(errorDict["team-set-owner-ref"])
 		}
 
 	})
@@ -269,7 +290,7 @@ func TestTeamDelete(t *testing.T) {
 	// Sanity check for team creation
 	team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
 	if team == nil {
-		t.Error("Failed to create new team")
+		t.Error(errorDict["team-fail"])
 	}
 	// Deleting team
 	t.Run("Delete team", func(t *testing.T) {
@@ -284,13 +305,13 @@ func TestTeamDelete(t *testing.T) {
 		team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
 		if team != nil {
 			if len(team.Spec.Users) != 0 {
-				t.Error("Failed to delete users in team")
+				t.Error(errorDict["team-users-del"])
 			}
 			t.Error("Failed to delete new test team")
 		}
 		teamChildNamespace, _ := g.client.CoreV1().Namespaces().Get(fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName()), metav1.GetOptions{})
 		if teamChildNamespace != nil {
-			t.Error("Failed to delete Team child namespace")
+			t.Error(errorDict["team-del-child-nmspce"])
 		}
 	})
 }
