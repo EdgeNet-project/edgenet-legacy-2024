@@ -41,8 +41,6 @@ type HandlerInterface interface {
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj interface{}, delta string)
 	ObjectDeleted(obj interface{})
-	ConfigureControllers()
-	CheckControllerStatus(old, new interface{}, eventType string) ([]apps_v1alpha.SelectiveDeployment, bool)
 	GetSelectiveDeployments(node string) ([][]string, bool)
 }
 
@@ -170,193 +168,193 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 	sdCopy.Status = apps_v1alpha.SelectiveDeploymentStatus{}
 	defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
 	ownerReferences := SetAsOwnerReference(sdCopy)
-
+	controllerCounter := 0
+	failureCounter := 0
 	if sdCopy.Spec.Controllers.Deployment != nil {
+		controllerCounter += len(sdCopy.Spec.Controllers.Deployment)
 		for _, sdDeployment := range sdCopy.Spec.Controllers.Deployment {
 			deploymentObj, err := t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Get(sdDeployment.GetName(), metav1.GetOptions{})
 			if errors.IsNotFound(err) {
-				sdDeployment.SetOwnerReferences(ownerReferences)
-				_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Create(sdDeployment.DeepCopy())
+				configuredDeployment, failureCount := t.configureController(sdCopy, sdDeployment, ownerReferences)
+				failureCounter += failureCount
+				_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Create(configuredDeployment.(*appsv1.Deployment))
 				if err != nil {
-					// Set error status
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Deployment %s could not be created", sdDeployment.GetName()))
+					failureCounter++
 				}
 			} else {
-				// Create a function for this part
-
-				underControl := false
-				for _, reference := range deploymentObj.GetOwnerReferences() {
-					if reference.Kind == "SelectiveDeployment" && reference.UID != sdCopy.GetUID() {
-						underControl = true
-						// Set error status
-
-					}
-				}
+				underControl := checkOwnerReferences(sdCopy, deploymentObj.GetOwnerReferences())
 				if !underControl {
 					// Configure the deployment according to the SD
+					deploymentObj = sdDeployment.DeepCopy()
+					configuredDeployment, failureCount := t.configureController(sdCopy, deploymentObj, ownerReferences)
+					failureCounter += failureCount
+					_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(configuredDeployment.(*appsv1.Deployment))
+					if err != nil {
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Deployment %s could not be updated", sdDeployment.GetName()))
+						failureCounter++
+					}
+				} else {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Deployment %s is already under the control of another selective deployment", sdDeployment.GetName()))
+					failureCounter++
 				}
 			}
 		}
 	}
 	if sdCopy.Spec.Controllers.DaemonSet != nil {
+		controllerCounter += len(sdCopy.Spec.Controllers.DaemonSet)
 		for _, sdDaemonset := range sdCopy.Spec.Controllers.DaemonSet {
 			daemonsetObj, err := t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Get(sdDaemonset.GetName(), metav1.GetOptions{})
 			if errors.IsNotFound(err) {
-				sdDaemonset.SetOwnerReferences(ownerReferences)
-				_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Create(sdDaemonset.DeepCopy())
+				configuredDaemonSet, failureCount := t.configureController(sdCopy, sdDaemonset, ownerReferences)
+				failureCounter += failureCount
+
+				_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Create(configuredDaemonSet.(*appsv1.DaemonSet))
 				if err != nil {
-					// Set error status
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("DaemonSet %s could not be created", sdDaemonset.GetName()))
+					failureCounter++
 				}
 			} else {
-				// Create a function for this part
-				underControl := false
-
-				for _, reference := range daemonsetObj.GetOwnerReferences() {
-					if reference.Kind == "SelectiveDeployment" && reference.UID != sdCopy.GetUID() {
-						underControl = true
-						// Set error status
-
-					}
-				}
+				underControl := checkOwnerReferences(sdCopy, daemonsetObj.GetOwnerReferences())
 				if !underControl {
-					// Configure the deployment according to the SD
+					// Configure the daemonset according to the SD
+					daemonsetObj = sdDaemonset.DeepCopy()
+					configuredDaemonSet, failureCount := t.configureController(sdCopy, sdDaemonset, ownerReferences)
+					failureCounter += failureCount
+
+					_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(configuredDaemonSet.(*appsv1.DaemonSet))
+					if err != nil {
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("DaemonSet %s could not be updated", sdDaemonset.GetName()))
+						failureCounter++
+					}
+				} else {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("DaemonSet %s is already under the control of another selective deployment", sdDaemonset.GetName()))
+					failureCounter++
 				}
 			}
 		}
 	}
 	if sdCopy.Spec.Controllers.StatefulSet != nil {
+		controllerCounter += len(sdCopy.Spec.Controllers.StatefulSet)
 		for _, sdStatefulset := range sdCopy.Spec.Controllers.StatefulSet {
 			statefulsetObj, err := t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Get(sdStatefulset.GetName(), metav1.GetOptions{})
 			if errors.IsNotFound(err) {
-				sdStatefulset.SetOwnerReferences(ownerReferences)
-				_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Create(sdStatefulset.DeepCopy())
+				configuredStatefulSet, failureCount := t.configureController(sdCopy, sdStatefulset, ownerReferences)
+				failureCounter += failureCount
+				_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Create(configuredStatefulSet.(*appsv1.StatefulSet))
 				if err != nil {
-					// Set error status
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s could not be created", sdStatefulset.GetName()))
+					failureCounter++
 				} else {
-					// Create a function for this part
-
-					underControl := false
-					for _, reference := range statefulsetObj.GetOwnerReferences() {
-						if reference.Kind == "SelectiveDeployment" && reference.UID != sdCopy.GetUID() {
-							underControl = true
-							// Set error status
-
-						}
-					}
+					underControl := checkOwnerReferences(sdCopy, statefulsetObj.GetOwnerReferences())
 					if !underControl {
-						// Configure the deployment according to the SD
+						// Configure the statefulset according to the SD
+						statefulsetObj = sdStatefulset.DeepCopy()
+						configuredStatefulSet, failureCount := t.configureController(sdCopy, sdStatefulset, ownerReferences)
+						failureCounter += failureCount
+
+						_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(configuredStatefulSet.(*appsv1.StatefulSet))
+						if err != nil {
+							sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s could not be created", sdStatefulset.GetName()))
+							failureCounter++
+						}
+					} else {
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s is already under the control of another selective deployment", sdStatefulset.GetName()))
+						failureCounter++
 					}
 				}
 			}
 		}
 	}
 
-	// The problems and details of the desired new selectivedeployment object are described herein, and this step is the last of the error processing
-	/*if len(uniqueCrashList) == len(sdCopy.Spec.Controllers) {
-		sdCopy.Status.State = failure
-		// nonExistentCounter indicates the number of non-existent controller(s) already defined in the desired selectivedeployment object
-		if nonExistentCounter != 0 && len(sdCopy.Status.Crash) != nonExistentCounter {
-			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) are already under the control of any different resource object(s) with the same type, %d controller(s) couldn't be found", (len(uniqueCrashList) - nonExistentCounter), nonExistentCounter)
-		} else if nonExistentCounter != 0 && len(sdCopy.Status.Crash) == nonExistentCounter {
-			sdCopy.Status.Message = "No controllers found"
-		} else {
-			sdCopy.Status.Message = "All controllers are already under the control of any different resource object(s) with the same type"
-		}
-	} else if len(sdCopy.Status.Crash) == 0 {
+	if failureCounter == 0 {
 		sdCopy.Status.State = success
-		sdCopy.Status.Message = "SelectiveDeployment runs precisely to ensure that the actual state of the cluster matches the desired state"
+	} else if controllerCounter == failureCounter {
+		sdCopy.Status.State = failure
 	} else {
 		sdCopy.Status.State = partial
-		if len(sdCopy.Status.Crash) != nonExistentCounter {
-			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) are already under the control of any different resource object(s) with the same type", (len(uniqueCrashList) - nonExistentCounter))
-		}
-		if nonExistentCounter != 0 {
-			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) couldn't be found", nonExistentCounter)
-		}
-	}*/
-
-	// The number of controller(s) that the selectivedeployment resource successfully controls
-	//sdCopy.Status.Ready = fmt.Sprintf("%d/%d", len(sdCopy.Spec.Controllers)-len(uniqueCrashList), len(sdCopy.Spec.Controllers))
+	}
+	sdCopy.Status.Ready = fmt.Sprintf("%d/%d", failureCounter, controllerCounter)
 }
 
-// configureController manipulate the controllers by selectivedeployments to match the desired state that users supplied
-func (t *SDHandler) configureController(sdCopy *apps_v1alpha.SelectiveDeployment, ownerReferences []metav1.OwnerReference) {
+// configureController manipulate the controller by selectivedeployments to match the desired state that users supplied
+func (t *SDHandler) configureController(sdCopy *apps_v1alpha.SelectiveDeployment, controllerRow interface{}, ownerReferences []metav1.OwnerReference) (interface{}, int) {
 	log.Info("configureController: start")
-	nodeSelectorTermList := t.setFilter(sdCopy, "addOrUpdate")
-
-	updateController := func(controllerRow interface{}) {
-		// Set the new node affinity configuration in the controller and update that
-		nodeAffinity := &corev1.NodeAffinity{
-			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-				NodeSelectorTerms: nodeSelectorTermList,
+	nodeSelectorTermList, failureCount := t.setFilter(sdCopy, "addOrUpdate")
+	// Set the new node affinity configuration in the controller and update that
+	nodeAffinity := &corev1.NodeAffinity{
+		RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+			NodeSelectorTerms: nodeSelectorTermList,
+		},
+	}
+	if len(nodeSelectorTermList) <= 0 {
+		affinity := &corev1.Affinity{
+			NodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: nodeSelectorTermList,
+				},
 			},
 		}
-		if len(nodeSelectorTermList) <= 0 {
-			affinity := &corev1.Affinity{
-				NodeAffinity: &corev1.NodeAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-						NodeSelectorTerms: nodeSelectorTermList,
-					},
-				},
-			}
-			affinity.Reset()
-		}
-		switch controllerObj := controllerRow.(type) {
-		case appsv1.Deployment:
-			controllerCopy := controllerObj.DeepCopy()
-			if len(nodeSelectorTermList) <= 0 && controllerCopy.Spec.Template.Spec.Affinity != nil {
-				controllerCopy.Spec.Template.Spec.Affinity.Reset()
-			} else if controllerCopy.Spec.Template.Spec.Affinity != nil {
-				controllerCopy.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
-			} else {
-				controllerCopy.Spec.Template.Spec.Affinity = &corev1.Affinity{
-					NodeAffinity: nodeAffinity,
-				}
-			}
-			log.Printf("%s/Deployment/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
-			controllerCopy.ObjectMeta.OwnerReferences = ownerReferences
-			t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(controllerCopy)
-		case appsv1.DaemonSet:
-			controllerCopy := controllerObj.DeepCopy()
-			if len(nodeSelectorTermList) <= 0 && controllerCopy.Spec.Template.Spec.Affinity != nil {
-				controllerCopy.Spec.Template.Spec.Affinity.Reset()
-			} else if controllerCopy.Spec.Template.Spec.Affinity != nil {
-				controllerCopy.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
-			} else {
-				controllerCopy.Spec.Template.Spec.Affinity = &corev1.Affinity{
-					NodeAffinity: nodeAffinity,
-				}
-			}
-			log.Printf("%s/DaemonSet/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
-			controllerCopy.ObjectMeta.OwnerReferences = ownerReferences
-			t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(controllerCopy)
-		case appsv1.StatefulSet:
-			controllerCopy := controllerObj.DeepCopy()
-			if len(nodeSelectorTermList) <= 0 && controllerCopy.Spec.Template.Spec.Affinity != nil {
-				controllerCopy.Spec.Template.Spec.Affinity.Reset()
-			} else if controllerCopy.Spec.Template.Spec.Affinity != nil {
-				controllerCopy.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
-			} else {
-				controllerCopy.Spec.Template.Spec.Affinity = &corev1.Affinity{
-					NodeAffinity: nodeAffinity,
-				}
-			}
-			log.Printf("%s/StatefulSet/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
-			controllerCopy.ObjectMeta.OwnerReferences = ownerReferences
-			t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(controllerCopy)
-		}
+		affinity.Reset()
 	}
+	var controllerCopy interface{}
+	switch controllerObj := controllerRow.(type) {
+	case appsv1.Deployment:
+		controllerCopy := controllerObj.DeepCopy()
+		if len(nodeSelectorTermList) <= 0 && controllerCopy.Spec.Template.Spec.Affinity != nil {
+			controllerCopy.Spec.Template.Spec.Affinity.Reset()
+		} else if controllerCopy.Spec.Template.Spec.Affinity != nil {
+			controllerCopy.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		} else {
+			controllerCopy.Spec.Template.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: nodeAffinity,
+			}
+		}
+		log.Printf("%s/Deployment/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
+		controllerCopy.ObjectMeta.OwnerReferences = ownerReferences
+		//t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(controllerCopy)
+	case appsv1.DaemonSet:
+		controllerCopy := controllerObj.DeepCopy()
+		if len(nodeSelectorTermList) <= 0 && controllerCopy.Spec.Template.Spec.Affinity != nil {
+			controllerCopy.Spec.Template.Spec.Affinity.Reset()
+		} else if controllerCopy.Spec.Template.Spec.Affinity != nil {
+			controllerCopy.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		} else {
+			controllerCopy.Spec.Template.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: nodeAffinity,
+			}
+		}
+		log.Printf("%s/DaemonSet/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
+		controllerCopy.ObjectMeta.OwnerReferences = ownerReferences
+		//t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(controllerCopy)
+	case appsv1.StatefulSet:
+		controllerCopy := controllerObj.DeepCopy()
+		if len(nodeSelectorTermList) <= 0 && controllerCopy.Spec.Template.Spec.Affinity != nil {
+			controllerCopy.Spec.Template.Spec.Affinity.Reset()
+		} else if controllerCopy.Spec.Template.Spec.Affinity != nil {
+			controllerCopy.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		} else {
+			controllerCopy.Spec.Template.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: nodeAffinity,
+			}
+		}
+		log.Printf("%s/StatefulSet/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
+		controllerCopy.ObjectMeta.OwnerReferences = ownerReferences
+		//t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(controllerCopy)
+	}
+	return controllerCopy, failureCount
 }
 
 // setFilter generates the values in the predefined form and puts those into the node selection fields of the selectivedeployment object
-func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event string) []corev1.NodeSelectorTerm {
+func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event string) ([]corev1.NodeSelectorTerm, int) {
 	var nodeSelectorTermList []corev1.NodeSelectorTerm
+	failureCounter := 0
 	for _, selectorRow := range sdCopy.Spec.Selector {
 		var matchExpression corev1.NodeSelectorRequirement
 		matchExpression.Values = []string{}
 		matchExpression.Operator = selectorRow.Operator
 		matchExpression.Key = "kubernetes.io/hostname"
 		selectorName := strings.ToLower(selectorRow.Name)
-		selectorFailure := false
 		// Turn the key into the predefined form which is determined at the custom resource definition of selectivedeployment
 		switch selectorName {
 		case "city", "state", "country", "continent":
@@ -407,46 +405,15 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 							}
 						}
 					}
-
 					if selectorRow.Quantity != 0 && selectorRow.Quantity > counter {
-						updateSDStatus := func(sdCopy *apps_v1alpha.SelectiveDeployment) {
-							strLen := 16
-							strSuffix := "..."
-							if len(selectorRow.Value) <= strLen {
-								strLen = len(selectorRow.Value)
-								strSuffix = ""
-							}
-							if sdCopy.Status.State == success {
-								sdCopy.Status.State = partial
-								//sdCopy.Status.Message = fmt.Sprintf("Fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix)
-							} else {
-								errorMsg := fmt.Sprintf("fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix)
-								//if !strings.Contains(strings.ToLower(sdCopy.Status.Message), strings.ToLower(errorMsg)) {
-								//sdCopy.Status.Message = fmt.Sprintf("%s, fewer nodes issue, %d node(s) found instead of %d for %s%s", sdCopy.Status.Message, counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix)
-								//}
-							}
+						strLen := 16
+						strSuffix := "..."
+						if len(selectorRow.Value) <= strLen {
+							strLen = len(selectorRow.Value)
+							strSuffix = ""
 						}
-						if selectorFailure == false {
-							selectorFailure = true
-							defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-							updateSDStatus(sdCopy)
-						} else {
-							updateSDStatus(sdCopy)
-						}
-					} else if contains(sdCopy.Status.Message, "fewer nodes issue") {
-						defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-						// index := strings.Index(sdRow.Status.Message[], "fewer nodes issue")
-						index := strings.Index(sdCopy.Status.Message[0], "fewer nodes issue")
-						if index != -1 {
-							sdCopy.Status.Message = sdCopy.Status.Message[0:index]
-							if sdCopy.Status.State == partial {
-								sdCopy.Status.State = success
-							}
-						} else {
-							// index := strings.Index(sdRow.Status.Message, ", fewer nodes issue")
-							index := strings.Index(sdCopy.Status.Message[0], ", fewer nodes issue")
-							sdCopy.Status.Message = sdCopy.Status.Message[0:index]
-						}
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix))
+						failureCounter++
 					}
 				}
 			}
@@ -468,30 +435,14 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 					counter := 0
 					err = json.Unmarshal([]byte(selectorValue), &polygon)
 					if err != nil {
-						updateSDStatus := func(sdCopy *apps_v1alpha.SelectiveDeployment) {
-							strLen := 16
-							strSuffix := "..."
-							if len(selectorValue) <= strLen {
-								strLen = len(selectorValue)
-								strSuffix = ""
-							}
-							if sdCopy.Status.State == success {
-								sdCopy.Status.State = partial
-								//sdCopy.Status.Message = fmt.Sprintf("%s%s has a GeoJSON format error", selectorRow.Value[0:strLen], strSuffix)
-							} else {
-								errorMsg := fmt.Sprintf("%s%s has a GeoJSON format error", selectorValue[0:strLen], strSuffix)
-								//if !strings.Contains(strings.ToLower(sdCopy.Status.Message), strings.ToLower(errorMsg)) {
-								//sdCopy.Status.Message = fmt.Sprintf("%s, %s%s has a GeoJSON format error", sdCopy.Status.Message, selectorValue[0:strLen], strSuffix)
-								//}
-							}
+						strLen := 16
+						strSuffix := "..."
+						if len(selectorRow.Value) <= strLen {
+							strLen = len(selectorRow.Value)
+							strSuffix = ""
 						}
-						if selectorFailure == false {
-							selectorFailure = true
-							defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-							updateSDStatus(sdCopy)
-						} else {
-							updateSDStatus(sdCopy)
-						}
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("%s%s has a GeoJSON format error", selectorValue[0:strLen], strSuffix))
+						failureCounter++
 						continue
 					}
 					// The loop to process each node separately
@@ -544,46 +495,15 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 							}
 						}
 					}
-
 					if selectorRow.Quantity != 0 && selectorRow.Quantity > counter {
-						updateSDStatus := func(sdCopy *apps_v1alpha.SelectiveDeployment) {
-							strLen := 16
-							strSuffix := "..."
-							if len(selectorValue) <= strLen {
-								strLen = len(selectorValue)
-								strSuffix = ""
-							}
-							if sdCopy.Status.State == success {
-								sdCopy.Status.State = partial
-								//sdCopy.Status.Message = fmt.Sprintf("Fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Quantity, selectorValue[0:strLen], strSuffix)
-							} else {
-								errorMsg := fmt.Sprintf("fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Quantity, selectorValue[0:strLen], strSuffix)
-								//if !strings.Contains(strings.ToLower(sdCopy.Status.Message), strings.ToLower(errorMsg)) {
-								//sdCopy.Status.Message = fmt.Sprintf("%s, fewer nodes issue, %d node(s) found instead of %d for %s%s", sdCopy.Status.Message, counter, selectorRow.Quantity, selectorValue[0:strLen], strSuffix)
-								//}
-							}
+						strLen := 16
+						strSuffix := "..."
+						if len(selectorRow.Value) <= strLen {
+							strLen = len(selectorRow.Value)
+							strSuffix = ""
 						}
-						if selectorFailure == false {
-							selectorFailure = true
-							defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-							updateSDStatus(sdCopy)
-						} else {
-							updateSDStatus(sdCopy)
-						}
-					} else if contains(sdCopy.Status.Message, "fewer nodes issue") {
-						defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-						index := strings.Index(sdCopy.Status.Message[0], "Fewer nodes issue")
-						//index := strings.Index(sdCopy.Status.Message, "Fewer nodes issue")
-						if index != -1 {
-							sdCopy.Status.Message = sdCopy.Status.Message[0:index]
-							if sdCopy.Status.State == partial {
-								sdCopy.Status.State = success
-							}
-						} else {
-							// index := strings.Index(sdCopy.Status.Message, ", fewer nodes issue")
-							index := strings.Index(sdCopy.Status.Message[0], ", fewer nodes issue")
-							sdCopy.Status.Message = sdCopy.Status.Message[0:index]
-						}
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix))
+						failureCounter++
 					}
 				}
 			}
@@ -595,35 +515,8 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 		nodeSelectorTerm.MatchExpressions = append(nodeSelectorTerm.MatchExpressions, matchExpression)
 		nodeSelectorTermList = append(nodeSelectorTermList, nodeSelectorTerm)
 	}
-	return nodeSelectorTermList
+	return nodeSelectorTermList, failureCounter
 }
-
-// setCrashListByConflicts compares the controllers of the selectivedeployment resource objects with those of the object in the process
-// to make a list of the conflicts which guides the user to understand its faults
-/*func setCrashListByConflicts(sdCopy *apps_v1alpha.SelectiveDeployment, sdRaw *apps_v1alpha.SelectiveDeploymentList) *apps_v1alpha.SelectiveDeployment {
-	// The loop to process each selectivedeployment object separately
-	for _, sdRow := range sdRaw.Items {
-		if sdRow.GetName() != sdCopy.GetName() && sdRow.Spec.Type == sdCopy.Spec.Type && sdRow.Status.State != "" {
-			for _, newController := range sdCopy.Spec.Controllers {
-				for _, otherObjController := range sdRow.Spec.Controllers {
-					if otherObjController.Type == newController.Type && otherObjController.Name == newController.Name {
-						// Checks whether the crash list is empty and this crash exists in the crash list of the selectivedeployment object
-						if crashMatch, _ := checkCrashList(sdRow.Status.Crash, newController, sdCopy.GetName(), "all"); !crashMatch {
-							if crashMatch, _ := checkCrashList(sdCopy.Status.Crash, otherObjController, sdRow.GetName(), "all"); !crashMatch || len(sdCopy.Status.Crash) == 0 {
-								crash := apps_v1alpha.Crash{}
-								crash.Controllers.Type = otherObjController.Type
-								crash.Controllers.Name = otherObjController.Name
-								crash.Reason = sdRow.GetName()
-								sdCopy.Status.Crash = append(sdCopy.Status.Crash, crash)
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return sdCopy
-}*/
 
 // Return whether slice contains value
 func contains(slice []string, value string) bool {
@@ -656,9 +549,19 @@ func SetAsOwnerReference(sdCopy *apps_v1alpha.SelectiveDeployment) []metav1.Owne
 	return ownerReferences
 }
 
+func checkOwnerReferences(sdCopy *apps_v1alpha.SelectiveDeployment, ownerReferences []metav1.OwnerReference) bool {
+	underControl := false
+	for _, reference := range ownerReferences {
+		if reference.Kind == "SelectiveDeployment" && reference.UID != sdCopy.GetUID() {
+			underControl = true
+		}
+	}
+	return underControl
+}
+
 // dry function remove the same values of the old and new objects from the old object to have
 // the slice of deleted values.
-func dry(oldSlice []apps_v1alpha.Controllers, newSlice []apps_v1alpha.Controllers) []string {
+/*func dry(oldSlice []apps_v1alpha.Controllers, newSlice []apps_v1alpha.Controllers) []string {
 	var uniqueSlice []string
 	for _, oldValue := range oldSlice {
 		exists := false
@@ -672,4 +575,4 @@ func dry(oldSlice []apps_v1alpha.Controllers, newSlice []apps_v1alpha.Controller
 		}
 	}
 	return uniqueSlice
-}
+}*/
