@@ -179,3 +179,13 @@ func GenerateRandomString(n int) string {
 	}
 	return string(b)
 }
+
+// Return whether slice contains value
+func Contains(slice []string, value string) bool {
+	for _, ele := range slice {
+		if value == ele {
+			return true
+		}
+	}
+	return false
+}

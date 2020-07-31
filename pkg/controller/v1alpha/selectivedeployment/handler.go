@@ -26,6 +26,7 @@ import (
 	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/node"
+	"edgenet/pkg/util"
 
 	log "github.com/Sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
@@ -41,35 +42,17 @@ type HandlerInterface interface {
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj interface{}, delta string)
 	ObjectDeleted(obj interface{})
-	GetSelectiveDeployments(node string) ([][]string, bool)
 }
 
 // SDHandler is a implementation of Handler
 type SDHandler struct {
 	clientset        *kubernetes.Clientset
 	edgenetClientset *versioned.Clientset
-	sdDet            sdDet
-}
-
-// The data defined by the user to be used for node selection
-type desiredFilter struct {
-	nodeSelectorTerms []corev1.NodeSelectorTerm
-	nodeSelectorTerm  corev1.NodeSelectorTerm
-	matchExpression   corev1.NodeSelectorRequirement
-}
-
-// The data of deleted/updated object to handle operations based on the deleted/updated object
-type sdDet struct {
-	name            string
-	namespace       string
-	sdType          string
-	controllerDelta []string
 }
 
 // Init handles any handler initialization
 func (t *SDHandler) Init() error {
 	log.Info("SDHandler.Init")
-	t.sdDet = sdDet{}
 	var err error
 	t.clientset, err = bootstrap.CreateClientSet()
 	if err != nil {
@@ -106,8 +89,8 @@ func (t *SDHandler) ObjectDeleted(obj interface{}) {
 	// TBD
 }
 
-// GetSelectiveDeployments generates selectivedeployment list from the owner references of controllers which contains the node that has an event (add/update/delete)
-func (t *SDHandler) GetSelectiveDeployments(nodeName string) ([][]string, bool) {
+// getByNode generates selectivedeployment list from the owner references of controllers which contains the node that has an event (add/update/delete)
+func (t *SDHandler) getByNode(nodeName string) ([][]string, bool) {
 	ownerList := [][]string{}
 	status := false
 
@@ -390,7 +373,7 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 						}
 
 						if !conditionBlock && !taintBlock {
-							if contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
+							if util.Contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
 								continue
 							}
 							if selectorValue == nodeRow.Labels[labelKey] && selectorRow.Operator == "In" {
@@ -465,7 +448,7 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 						}
 						if !conditionBlock && !taintBlock {
 							if nodeRow.Labels["edge-net.io/lon"] != "" && nodeRow.Labels["edge-net.io/lat"] != "" {
-								if contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
+								if util.Contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
 									continue
 								}
 								// Because of alphanumeric limitations of Kubernetes on the labels we use "w", "e", "n", and "s" prefixes
@@ -518,26 +501,6 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 	return nodeSelectorTermList, failureCounter
 }
 
-// Return whether slice contains value
-func contains(slice []string, value string) bool {
-	for _, ele := range slice {
-		if value == ele {
-			return true
-		}
-	}
-	return false
-}
-
-// Return whether owner references already contains the reference
-func containsOwnerRef(ownerRefs []metav1.OwnerReference, value metav1.OwnerReference) bool {
-	for _, ele := range ownerRefs {
-		if ele.UID == value.UID {
-			return true
-		}
-	}
-	return false
-}
-
 // SetAsOwnerReference returns the authority as owner
 func SetAsOwnerReference(sdCopy *apps_v1alpha.SelectiveDeployment) []metav1.OwnerReference {
 	// The following section makes authority become the owner
@@ -557,6 +520,40 @@ func checkOwnerReferences(sdCopy *apps_v1alpha.SelectiveDeployment, ownerReferen
 		}
 	}
 	return underControl
+}
+
+func (t *SDHandler) checkController(controllerName, controllerKind, namespace string) (apps_v1alpha.SelectiveDeployment, bool) {
+	exists := false
+	var ownerSD apps_v1alpha.SelectiveDeployment
+	SDRaw, err := t.edgenetClientset.AppsV1alpha().SelectiveDeployments(namespace).List(metav1.ListOptions{})
+	if err != nil {
+		return ownerSD, exists
+	}
+	for _, SDRow := range SDRaw.Items {
+		if controllerKind == "Deployment" {
+			for _, deployment := range SDRow.Spec.Controllers.Deployment {
+				if controllerName == deployment.GetName() {
+					exists = true
+					ownerSD = SDRow
+				}
+			}
+		} else if controllerKind == "DaemonSet" {
+			for _, daemonset := range SDRow.Spec.Controllers.DaemonSet {
+				if controllerName == daemonset.GetName() {
+					exists = true
+					ownerSD = SDRow
+				}
+			}
+		} else if controllerKind == "StatefulSet" {
+			for _, statefulset := range SDRow.Spec.Controllers.StatefulSet {
+				if controllerName == statefulset.GetName() {
+					exists = true
+					ownerSD = SDRow
+				}
+			}
+		}
+	}
+	return ownerSD, exists
 }
 
 // dry function remove the same values of the old and new objects from the old object to have
