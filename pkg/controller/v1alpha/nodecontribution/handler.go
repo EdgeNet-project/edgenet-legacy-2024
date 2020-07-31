@@ -17,7 +17,6 @@ limitations under the License.
 package nodecontribution
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -697,28 +696,18 @@ func startShell(sess *ssh.Session) (*ssh.Session, error) {
 
 // getInstallCommands prepares the commands necessary according to the OS
 func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion string) ([]string, error) {
-	var output []byte
-	if len(os.Args) > 1 {
-		var fakeOS string
-		commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-		commandLine.StringVar(&fakeOS, "fakeOS", "", "fakeOS")
-		commandLine.Parse(os.Args[0:2])
-		output = []byte(fakeOS)
-	} else {
-		sess, err := startSession(conn)
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		defer sess.Close()
-		// Detect the node OS
-		output, err = sess.Output("cat /etc/os-release")
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
+	sess, err := startSession(conn)
+	if err != nil {
+		log.Println(err)
+		return nil, err
 	}
-
+	defer sess.Close()
+	// Detect the node OS
+	output, err := sess.Output("cat /etc/os-release")
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands including kubernetes & docker installation for Ubuntu, and also kubeadm join command
 		commands := []string{
@@ -790,28 +779,18 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 
 // getUninstallCommands prepares the commands necessary according to the OS
 func getUninstallCommands(conn *ssh.Client) ([]string, error) {
-	var output []byte
-	if len(os.Args) > 1 {
-		var fakeOS string
-		commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-		commandLine.StringVar(&fakeOS, "fakeOS", "", "fakeOS")
-		commandLine.Parse(os.Args[0:2])
-		output = []byte(fakeOS)
-	} else {
-		sess, err := startSession(conn)
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		defer sess.Close()
-		// Detect the node OS
-		output, err = sess.Output("cat /etc/os-release")
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
+	sess, err := startSession(conn)
+	if err != nil {
+		log.Println(err)
+		return nil, err
 	}
-
+	defer sess.Close()
+	// Detect the node OS
+	output, err := sess.Output("cat /etc/os-release")
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands including kubeadm reset command, and kubernetes & docker installation for Ubuntu
 		commands := []string{
@@ -839,28 +818,18 @@ func getUninstallCommands(conn *ssh.Client) ([]string, error) {
 
 // getReconfigurationCommands prepares the commands necessary according to the OS
 func getReconfigurationCommands(conn *ssh.Client, hostname string) ([]string, error) {
-	var output []byte
-	if len(os.Args) > 1 {
-		var fakeOS string
-		commandLine := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-		commandLine.StringVar(&fakeOS, "fakeOS", "", "fakeOS")
-		commandLine.Parse(os.Args[0:2])
-		output = []byte(fakeOS)
-	} else {
-		sess, err := startSession(conn)
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		defer sess.Close()
-		// Detect the node OS
-		output, err = sess.Output("cat /etc/os-release")
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
+	sess, err := startSession(conn)
+	if err != nil {
+		log.Println(err)
+		return nil, err
 	}
-
+	defer sess.Close()
+	// Detect the node OS
+	output, err := sess.Output("cat /etc/os-release")
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands to set the hostname, restart docker & kubernetes and flush iptables on Ubuntu
 		commands := []string{

@@ -244,6 +244,36 @@ func TestTeamUpdate(t *testing.T) {
 	})
 }
 
+func TestTeamUserOwnerReferences(t *testing.T) {
+	g := TeamTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+	g.teamObj.Spec.Users = []apps_v1alpha.TeamUsers{
+		apps_v1alpha.TeamUsers{
+			Authority: g.authorityObj.GetName(),
+			Username:  "user1",
+		},
+	}
+	g.userObj.Spec.Active, g.userObj.Status.AUP = true, true
+	// Creating User before updating requesting server to update internal representation of team
+	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+	// Creating team with one user
+	g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.teamObj.DeepCopy())
+	g.handler.ObjectCreated(g.teamObj.DeepCopy())
+	// Setting owner references
+	t.Run("Set Owner references", func(t *testing.T) {
+		teamChildNamespaceStr := fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())
+		teamChildNamespace, _ := g.client.CoreV1().Namespaces().Get(teamChildNamespaceStr, metav1.GetOptions{})
+		if g.handler.getOwnerReferences(g.teamObj.DeepCopy(), teamChildNamespace) == nil {
+			t.Error(errorDict["team-get-owner-ref"])
+		}
+		// Verifying team owns child namespace
+		if teamChildNamespace.Labels["owner"] != "team" && teamChildNamespace.Labels["owner-name"] != "edgnetteam" {
+			t.Error(errorDict["team-set-owner-ref"])
+		}
+
+	})
+}
 func TestTeamDelete(t *testing.T) {
 	g := TeamTestGroup{}
 	g.Init()

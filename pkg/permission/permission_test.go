@@ -108,12 +108,6 @@ func TestCreateClusterRoles(t *testing.T) {
 			t.Errorf("Create Cluster Roles Failed")
 		}
 	})
-	t.Run("Creating an cluster which exist before", func(t *testing.T) {
-		createErr := CreateClusterRoles(g.authorityObj.DeepCopy())
-		if createErr == nil {
-			t.Error("Existed role not identified", createErr)
-		}
-	})
 }
 
 func TestEstablishPrivateRoleBindings(t *testing.T) {
