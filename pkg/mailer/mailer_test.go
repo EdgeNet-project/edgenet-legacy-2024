@@ -12,7 +12,6 @@ import (
 )
 
 func TestSend(t *testing.T) {
-
 	var smtpServer smtpServer
 	// The code below inits the SMTP configuration for sending emails
 	// The path of the yaml config file of test smtp server

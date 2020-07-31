@@ -67,7 +67,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		URRCopy.Status.Message = message
 		// Run timeout goroutine
 		go t.runApprovalTimeout(URRCopy)
-		// Set the approval timeout which is 72 hours
+		// Set the approval timeout which is 24 hours
 		URRCopy.Status.Expires = &metav1.Time{
 			Time: time.Now().Add(24 * time.Hour),
 		}

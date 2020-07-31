@@ -22,7 +22,6 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/authority"
 	"edgenet/pkg/controller/v1alpha/emailverification"
@@ -35,7 +34,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj interface{})
 	ObjectDeleted(obj interface{})
@@ -43,25 +42,15 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("authorityRequestHandler.Init")
-	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	return err
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
@@ -77,7 +66,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		authorityRequestCopy.Status.Message = message
 		// Run timeout goroutine
 		go t.runApprovalTimeout(authorityRequestCopy)
-		// Set the approval timeout which is 72 hours
+		// Set the approval timeout which is 24 hours
 		authorityRequestCopy.Status.Expires = &metav1.Time{
 			Time: time.Now().Add(24 * time.Hour),
 		}
@@ -107,7 +96,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		}
 		emailVerificationHandler := emailverification.Handler{}
 		emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-
 		created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
 		if created {
 			// Update the status as successful
@@ -188,9 +176,8 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 	exists := false
 	message := []string{}
 	// To check username on the users resource
-	authorityRaw, _ := t.edgenetClientset.AppsV1alpha().Authorities().List(
-		metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", authorityRequestCopy.GetName())})
-	if len(authorityRaw.Items) == 0 {
+	authorityObj, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityRequestCopy.GetName(), metav1.GetOptions{})
+	if authorityObj == nil {
 		// To check email address among users
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
@@ -310,7 +297,7 @@ timeoutLoop:
 	}
 }
 
-// SetOwnerReference put the authorityrequest as owner
+// SetAsOwnerReference put the authorityrequest as owner
 func SetAsOwnerReference(authorityRequestCopy *apps_v1alpha.AuthorityRequest) []metav1.OwnerReference {
 	ownerReferences := []metav1.OwnerReference{}
 	newNamespaceRef := *metav1.NewControllerRef(authorityRequestCopy, apps_v1alpha.SchemeGroupVersion.WithKind("AuthorityRequest"))

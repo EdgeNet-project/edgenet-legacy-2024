@@ -215,7 +215,6 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			}
 			emailVerificationHandler := emailverification.Handler{}
 			emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-
 			created := emailVerificationHandler.Create(userCopy, SetAsOwnerReference(userCopy))
 			if created {
 				// Update the status as successful
