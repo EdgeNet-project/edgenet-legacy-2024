@@ -205,7 +205,7 @@ func TestTeamUpdate(t *testing.T) {
 		// Verifying Team status is enabled in server's representation of team
 		team, _ := g.edgenetclient.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.teamObj.GetName(), metav1.GetOptions{})
 		if team.Spec.Enabled {
-			t.Error(errorDict["team-status"])
+			t.Error("Failed to update status of team")
 		}
 		// Re-enable team for futher tests
 		g.teamObj.Spec.Enabled = true
@@ -274,7 +274,6 @@ func TestTeamUserOwnerReferences(t *testing.T) {
 
 	})
 }
-
 func TestTeamDelete(t *testing.T) {
 	g := TeamTestGroup{}
 	g.Init()

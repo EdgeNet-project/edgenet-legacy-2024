@@ -19,9 +19,7 @@ func TestCreate(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		client := testclient.NewSimpleClientset()
-		result, err := Create(client, c.ns)
-		fmt.Println(GetList(client))
+		result, err := Create(c.ns)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -42,10 +40,9 @@ func TestDelete(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		client := testclient.NewSimpleClientset()
-		result, _ := Create(client, c.ns)
-		resultD, err := Delete(client, result)
-		fmt.Println(resultD)
+		temp, _ := Create(c.ns)
+		resultD, err := Delete(c.ns)
+		fmt.Println(resultD, temp)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -57,7 +54,6 @@ func TestDelete(t *testing.T) {
 }
 
 func TestGetList(t *testing.T) {
-	client := testclient.NewSimpleClientset()
 	cases := []struct {
 		ns string
 	}{
@@ -68,10 +64,11 @@ func TestGetList(t *testing.T) {
 	var resultat []string
 
 	for _, c := range cases {
-		result, _ := Create(client, c.ns)
+		result, _ := Create(c.ns)
 		resultat = append(resultat, result)
 	}
-	for index, c := range GetList(client) {
+
+	for index, c := range GetList() {
 		if c != resultat[index] {
 			t.Fatal("Error!!!")
 		}
@@ -108,7 +105,7 @@ func TestGetNamespaceByName(t *testing.T) {
 			expected: "true",
 		}}
 	for _, test := range data {
-		if output, err := GetNamespaceByName(test.clientset, test.ns); output != test.expected {
+		if output, err := GetNamespaceByName(test.ns); output != test.expected {
 			t.Error(err)
 		}
 	}
