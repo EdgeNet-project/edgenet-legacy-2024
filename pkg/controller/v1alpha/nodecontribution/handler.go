@@ -733,7 +733,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 		}
 
 		var debianCommands = []string{
-			"apt-get install software-properties-common",
+			"apt-get install software-properties-common -y",
 			"curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -",
 			"add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable\"",
 			"apt-get update",
