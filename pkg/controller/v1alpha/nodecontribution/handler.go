@@ -710,7 +710,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 	}
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands including kubernetes & docker installation for Ubuntu, and also kubeadm join command
-		commands := []string{
+		commands1 := []string{
 			"dpkg --configure -a",
 			"apt-get update -y && apt-get install -y apt-transport-https -y",
 			"apt-get install curl -y",
@@ -727,7 +727,20 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			"deb https://apt.kubernetes.io/ kubernetes-xenial main",
 			"EOF",
 			"apt-get update",
+		}
+		var ubuntuCommands = []string{
 			fmt.Sprintf("apt-get install docker.io kubeadm=%[1]s-00 kubectl=%[1]s-00 kubelet=%[1]s-00 kubernetes-cni -y", kubernetesVersion),
+		}
+
+		var debianCommands = []string{
+			"apt-get install software-properties-common",
+			"curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -",
+			"add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable\"",
+			"apt-get update",
+			fmt.Sprintf("apt-get install docker-ce kubeadm=%[1]s-00 kubectl=%[1]s-00 kubelet=%[1]s-00 kubernetes-cni -y", kubernetesVersion),
+		}
+
+		commands2 := []string{
 			"apt-mark hold kubelet kubeadm kubectl",
 			fmt.Sprintf("hostname %s", hostname),
 			"systemctl enable docker",
@@ -736,7 +749,11 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			"systemctl daemon-reload",
 			"systemctl restart kubelet",
 		}
-		return commands, nil
+		if ubuntu, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*", string(output[:])); ubuntu {
+			return append(commands1, append(ubuntuCommands, commands2...)...), nil
+		} else {
+			return append(commands1, append(debianCommands, commands2...)...), nil
+		}
 	} else if centos, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*", string(output[:])); centos {
 		// The commands including kubernetes & docker installation for CentOS, and also kubeadm join command
 		commands := []string{
