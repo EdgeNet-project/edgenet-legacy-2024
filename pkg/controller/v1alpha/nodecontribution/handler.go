@@ -751,11 +751,11 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			"systemctl restart kubelet",
 		}
 		if ubuntu, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*", string(output[:])); ubuntu {
-			commandsDependent = append(commands1, append(ubuntuCommands, commands2...)...)
+			commandsDependent = ubuntuCommands
 		} else {
-			commandsDependent = append(commands1, append(debianCommands, commands2...)...)
+			commandsDependent = debianCommands
 		}
-		return commandsDependent, nil
+		return append(commands1, append(commandsDependent, commands2...)...), nil
 	} else if centos, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*", string(output[:])); centos {
 		// The commands including kubernetes & docker installation for CentOS, and also kubeadm join command
 		commands := []string{
