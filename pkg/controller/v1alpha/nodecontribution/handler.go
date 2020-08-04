@@ -794,13 +794,14 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			"systemctl restart kubelet",
 		}
 		return commands, nil
-	} else if centos, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*", string(output[:])); centos {
+	} else if centosOrFedora, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*", string(output[:])); centosOrFedora {
 		// The commands including kubernetes & docker installation for CentOS, and also kubeadm join command
 
 		commands := []string{
 			"yum install yum-utils -y",
 			"yum install epel-release -y",
 			"yum update -y",
+			"export basearch=$(uname -i)",
 			"modprobe br_netfilter",
 			"cat <<EOF > /etc/sysctl.d/k8s.conf",
 			"net.bridge.bridge-nf-call-ip6tables = 1",
@@ -859,7 +860,7 @@ func getUninstallCommands(conn *ssh.Client) ([]string, error) {
 			"iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X",
 		}
 		return commands, nil
-	} else if centos, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*", string(output[:])); centos {
+	} else if centosOrFedora, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*", string(output[:])); centosOrFedora {
 		// The commands including kubeadm reset command, and kubernetes & docker installation for CentOS
 		commands := []string{
 			"kubeadm reset -f",
@@ -900,7 +901,7 @@ func getReconfigurationCommands(conn *ssh.Client, hostname string) ([]string, er
 			"systemctl start kubelet",
 		}
 		return commands, nil
-	} else if centos, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*", string(output[:])); centos {
+	} else if centosOrFedora, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*", string(output[:])); centosOrFedora {
 		// The commands to set the hostname, restart docker & kubernetes and flush iptables on CentOS
 		commands := []string{
 			fmt.Sprintf("hostname %s", hostname),
