@@ -68,7 +68,7 @@ func TestSend(t *testing.T) {
 		case "user-email-verification", "user-email-verification-update":
 			err = Send(subject, verifyContentData)
 			if err != nil {
-				t.Error("Failed to send email")
+				t.Errorf("Failed to send email")
 			}
 			_, body = setUserEmailVerificationContent(verifyContentData, smtpServer.From, subject)
 			bodyString := body.String()

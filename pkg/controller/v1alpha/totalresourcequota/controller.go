@@ -75,6 +75,16 @@ const trueStr = "True"
 const falseStr = "False"
 const unknownStr = "Unknown"
 
+// Dictionary of status messages
+var statusDict = map[string]string{
+	"TRQ-created":       "Total resource quota created",
+	"TRQ-failed":        "Couldn't create total resource quota in %s: %s",
+	"authority-disable": "Authority disabled",
+	"TRQ-disabled":      "Total resource quota disabled",
+	"TRQ-applied":       "Total resource quota applied",
+	"TRQ-appliedFail":   "Total resource quota couldn't be applied",
+}
+
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	var err error

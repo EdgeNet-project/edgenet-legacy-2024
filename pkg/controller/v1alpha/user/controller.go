@@ -66,6 +66,15 @@ const delete = "delete"
 const failure = "Failure"
 const success = "Successful"
 
+// Dictionary of status messages
+var statusDict = map[string]string{
+	"cert-fail":       "Client cert generation failed for user %s",
+	"cert-ok":         "Client cert of the user generated",
+	"kubeconfig-fail": "Kubeconfig file creation failed for user %s",
+	"email-ok":        "Everything is OK, verification email sent",
+	"email-fail":      "Couldn't send verification email",
+}
+
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	var err error

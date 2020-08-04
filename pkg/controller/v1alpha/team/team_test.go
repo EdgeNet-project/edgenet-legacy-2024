@@ -274,7 +274,6 @@ func TestTeamUserOwnerReferences(t *testing.T) {
 
 	})
 }
-
 func TestTeamDelete(t *testing.T) {
 	g := TeamTestGroup{}
 	g.Init()

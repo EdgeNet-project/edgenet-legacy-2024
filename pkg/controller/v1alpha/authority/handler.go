@@ -197,7 +197,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		TRQHandler.Create(authorityCopy.GetName())
 		// Automatically enable authority and update authority status
 		authorityCopy.Status.State = established
-		authorityCopy.Status.Message = []string{"Authority successfully established"}
+		authorityCopy.Status.Message = []string{statusDict["authority-ok"]}
 		enableAuthorityAdmin := func() {
 			t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
 			// Create a user as admin on authority
@@ -211,7 +211,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 			if err != nil {
 				t.sendEmail(authorityCopy, "user-creation-failure")
 				authorityCopy.Status.State = failure
-				authorityCopy.Status.Message = append(authorityCopy.Status.Message, []string{"User creation failed", err.Error()}...)
+				authorityCopy.Status.Message = append(authorityCopy.Status.Message, []string{statusDict["user-failed"], err.Error()}...)
 			}
 		}
 		defer enableAuthorityAdmin()
@@ -248,7 +248,7 @@ func (t *Handler) checkDuplicateObject(authorityCopy *apps_v1alpha.Authority) (b
 				continue
 			}
 			exists = true
-			message = fmt.Sprintf("Email address, %s, already exists for another user account", authorityCopy.Spec.Contact.Email)
+			message = fmt.Sprintf(statusDict["email-exist"], authorityCopy.Spec.Contact.Email)
 			break
 		}
 	}

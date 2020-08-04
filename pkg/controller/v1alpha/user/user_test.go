@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"testing"
-	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"edgenet/pkg/client/clientset/versioned"
@@ -20,12 +19,32 @@ import (
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
+// Dictionary for error messages
+var errorDict = map[string]string{
+	"k8-sync":                 "Kubernetes clientset sync problem",
+	"edgnet-sync":             "EdgeNet clientset sync problem",
+	"dupl-val":                "Duplicate value cannot be detected",
+	"user-gen":                "User generation failed when an authority created",
+	"user-role":               "User role cannot be created",
+	"user-rolebinding":        "RoleBinding Creation failed",
+	"user-rolebinding-delete": "RoleBinding deletion failed",
+	"user-deact":              "User cannot be deactivated",
+	"user-email":              "Updating user email failed",
+	"user-active":             "User is still Active after changing its email",
+	"user-create":             "User creation failed by Create function which can be used by other resources",
+	"AUP-binding":             "Create AUPRolebinding failed",
+	"add-func":                "Add func of event handler doesn't work properly",
+	"upd-func":                "Update func of event handler doesn't work properly",
+	"del-func":                "Delete func of event handler doesn't work properly",
+}
+
 //The main structure of test group
 type UserTestGroup struct {
 	authorityObj  apps_v1alpha.Authority
 	teamList      apps_v1alpha.TeamList
 	sliceList     apps_v1alpha.SliceList
 	userObj       apps_v1alpha.User
+	urrObj        apps_v1alpha.UserRegistrationRequest
 	client        kubernetes.Interface
 	edgenetclient versioned.Interface
 	handler       Handler
@@ -65,9 +84,7 @@ func (g *UserTestGroup) Init() {
 				Phone:     "+33NUMBER",
 				Username:  "unittesting",
 			},
-		},
-		Status: apps_v1alpha.AuthorityStatus{
-			Enabled: false,
+			Enabled: true,
 		},
 	}
 	teamList := apps_v1alpha.TeamList{
@@ -96,9 +113,10 @@ func (g *UserTestGroup) Init() {
 						},
 					},
 					Description: "This is a Teamtest description",
+					Enabled:     true,
 				},
 				Status: apps_v1alpha.TeamStatus{
-					Enabled: false,
+					State: success,
 				},
 			},
 		},
@@ -130,13 +148,9 @@ func (g *UserTestGroup) Init() {
 					},
 					Description: "This is a Slicetest description",
 				},
-				Status: apps_v1alpha.SliceStatus{
-					Renew: false,
-				},
 			},
 		},
 	}
-
 	userObj := apps_v1alpha.User{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "User",
@@ -151,19 +165,39 @@ func (g *UserTestGroup) Init() {
 		Spec: apps_v1alpha.UserSpec{
 			FirstName: "EdgeNetFirstName",
 			LastName:  "EdgeNetLastName",
-			Roles:     []string{"Admin"},
 			Email:     "userObj@email.com",
+			Active:    true,
 		},
 		Status: apps_v1alpha.UserStatus{
-			State:  success,
-			Active: false,
-			AUP:    true,
+			State: success,
+			Type:  "Admin",
+		},
+	}
+	urrObj := apps_v1alpha.UserRegistrationRequest{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "UserRegistrationRequest",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "urrName",
+			Namespace: "authority-edgenet",
+		},
+		Spec: apps_v1alpha.UserRegistrationRequestSpec{
+			Bio:       "urrBio",
+			Email:     "urrEmail",
+			FirstName: "URRFirstName",
+			LastName:  "URRLastname",
+			URL:       "",
+		},
+		Status: apps_v1alpha.UserRegistrationRequestStatus{
+			EmailVerified: false,
 		},
 	}
 	g.authorityObj = authorityObj
 	g.teamList = teamList
 	g.sliceList = sliceList
 	g.userObj = userObj
+	g.urrObj = urrObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
 	// Invoke authority ObjectCreated to create namespace
@@ -180,12 +214,11 @@ func TestHandlerInit(t *testing.T) {
 	g.Init()
 	// Initialize the handler
 	g.handler.Init(g.client, g.edgenetclient)
-
 	if g.handler.clientset != g.client {
-		t.Error("Kubernetes clientset sync problem")
+		t.Error(errorDict["k8-sync"])
 	}
 	if g.handler.edgenetClientset != g.edgenetclient {
-		t.Error("EdgeNet clientset sync problem")
+		t.Error(errorDict["edgnet-sync"])
 	}
 }
 
@@ -197,24 +230,24 @@ func TestUserCreate(t *testing.T) {
 	t.Run("Creation of user from authority", func(t *testing.T) {
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 		if user == nil {
-			t.Error("\nUser generation failed when an authority created\n")
+			t.Error(errorDict["user-gen"])
 		}
 	})
-	t.Run("Creation of user\n", func(t *testing.T) {
+	t.Run("Creation of user", func(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 		g.handler.ObjectCreated(g.userObj.DeepCopy())
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
-		user.Status.Active = true
+		user.Spec.Active = true
 		var field fields
 		field.active = true
 		g.handler.ObjectUpdated(user.DeepCopy(), field)
 		currentUserRole, _ := g.handler.clientset.RbacV1().Roles(user.GetNamespace()).Get(fmt.Sprintf("user-%s", user.GetName()), metav1.GetOptions{})
 		if currentUserRole == nil {
-			t.Error("User role cannot be created")
+			t.Error(errorDict["user-role"])
 		}
-		roleBinding, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(fmt.Sprintf("%s-user-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
+		roleBinding, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(fmt.Sprintf("%s-user-aup-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
 		if roleBinding == nil {
-			t.Error("RoleBinding Creation failed")
+			t.Error(errorDict["user-rolebinding"])
 		}
 	})
 	t.Run("Check dublicate object", func(t *testing.T) {
@@ -228,10 +261,9 @@ func TestUserCreate(t *testing.T) {
 		// Check if the user created successfully or not
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
 		if user.Status.Message == nil {
-			t.Error("Duplicate value cannot be detected")
+			t.Error(errorDict["dupl-val"])
 		}
 	})
-
 }
 
 func TestUserUpdate(t *testing.T) {
@@ -249,10 +281,10 @@ func TestUserUpdate(t *testing.T) {
 		g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
 		if user.Status.Message == nil {
-			t.Error("Duplicate value cannot be detected")
+			t.Error(errorDict["dupl-val"])
 		}
-		if user.Status.Active {
-			t.Error("User cannot be deactivated")
+		if user.Spec.Active {
+			t.Error(errorDict["user-deact"])
 		}
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
 	})
@@ -267,24 +299,22 @@ func TestUserUpdate(t *testing.T) {
 		g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
 		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.Name, metav1.GetOptions{})
 		if user.Spec.Email != "NewUserObj@email.com" {
-			t.Error("Updating Email Failed")
+			t.Error(errorDict["user-rolebinding"])
 		}
-		if user.Status.Active != false {
-			t.Error("User is still Active after changing its email!")
+		if user.Spec.Active != false {
+			t.Error(errorDict["user-active"])
 		}
 		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(g.userObj.Name, &metav1.DeleteOptions{})
 	})
 }
 
-func TestSetEmailVerification(t *testing.T) {
+func TestCreate(t *testing.T) {
 	g := UserTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
-	result := g.handler.setEmailVerification(user, fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
-	if result != nil {
-		t.Error("user-email-verification-update-malfunction")
+	result := g.handler.Create(g.urrObj.DeepCopy())
+	if result {
+		t.Errorf(errorDict["user-create"])
 	}
 }
 
@@ -301,7 +331,7 @@ func TestCreateRoleBindings(t *testing.T) {
 	// Check the creation of use role Binding
 	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(fmt.Sprintf("%s-user-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
 	if roleBindings == nil {
-		t.Error("RoleBinding Creation failed")
+		t.Error(errorDict["user-rolebinding"])
 	}
 }
 
@@ -309,7 +339,6 @@ func TestDeleteRoleBindings(t *testing.T) {
 	g := UserTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-
 	// Creating User from userObj
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 	g.handler.ObjectCreated(g.userObj.DeepCopy())
@@ -319,12 +348,12 @@ func TestDeleteRoleBindings(t *testing.T) {
 	// Check the creation of use role Binding
 	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(fmt.Sprintf("%s-user-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
 	if roleBindings == nil {
-		t.Error("RoleBinding Creation failed")
+		t.Error(errorDict["user-rolebinding"])
 	}
 	g.handler.deleteRoleBindings(user, g.sliceList.DeepCopy(), g.teamList.DeepCopy())
-	roleBindingsResult, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(fmt.Sprintf("%s-user-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
+	roleBindingsResult, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(fmt.Sprintf("%s-user-aup-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
 	if roleBindingsResult != nil {
-		t.Error("RoleBinding Deletion failed")
+		t.Error(errorDict["user-rolebinding-delete"])
 	}
 }
 
@@ -332,25 +361,11 @@ func TestCreateAUPRoleBinding(t *testing.T) {
 	g := UserTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-
 	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
 	g.handler.ObjectCreated(g.userObj.DeepCopy())
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userObj.GetName(), metav1.GetOptions{})
 	err := g.handler.createAUPRoleBinding(user)
 	if err != nil {
-		t.Error("Create AUPRoleBinding failed")
-	} else {
-		t.Logf("\nPassed result=%v\n", err)
-	}
-}
-
-func TestGenerateRandomString(t *testing.T) {
-	for i := 1; i < 5; i++ {
-		origin := generateRandomString(16)
-		time.Sleep(1 * time.Microsecond)
-		test := generateRandomString(16)
-		if origin == test {
-			t.Error("User GenerateRadnomString failed")
-		}
+		t.Error(errorDict["AUP-binding"])
 	}
 }

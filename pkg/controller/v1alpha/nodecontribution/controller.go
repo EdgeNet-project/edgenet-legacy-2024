@@ -70,6 +70,13 @@ const trueStr = "True"
 const falseStr = "False"
 const unknownStr = "Unknown"
 
+// Dictionary of status messages
+var statusDict = map[string]string{
+	"invalid-host":       "Host field must be an IP Address",
+	"node-ok":            "Node is up and running",
+	"authority-disabled": "Authority disabled",
+}
+
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	var err error

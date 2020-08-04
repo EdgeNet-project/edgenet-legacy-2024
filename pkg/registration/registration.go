@@ -73,7 +73,7 @@ func MakeUser(authority, username, email string) ([]byte, []byte, error) {
 		CommonName:   email,
 		Organization: []string{authority},
 	}
-
+	// Opening the default path for headnode
 	file, err := os.Open("../../configs/headnode.yaml")
 	if err != nil {
 		log.Printf("Registration: unexpected error executing command: %v", err)

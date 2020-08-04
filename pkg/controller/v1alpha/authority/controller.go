@@ -59,6 +59,13 @@ const failure = "Failure"
 const success = "Successful"
 const established = "Established"
 
+// Dictionary of status messages
+var statusDict = map[string]string{
+	"authority-ok": "Authority successfully established",
+	"user-failed":  "User creation failed",
+	"email-exist":  "Email address, %s, already exists for another user account",
+}
+
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	var err error

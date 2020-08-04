@@ -158,6 +158,7 @@ func GetNamecheapCredentials() (string, string, string, error) {
 		log.Printf("unexpected error executing command: %v", err)
 		return "", "", "", err
 	}
+
 	decoder := yaml.NewDecoder(file)
 	var namecheap namecheap
 	err = decoder.Decode(&namecheap)

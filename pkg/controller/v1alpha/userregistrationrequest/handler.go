@@ -86,7 +86,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			} else {
 				t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "user-creation-failure")
 				URRCopy.Status.State = failure
-				URRCopy.Status.Message = []string{"User creation failed", ""}
+				URRCopy.Status.Message = []string{statusDict["user-failed"]}
 				URRCopyUpdated, err := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(URRCopy)
 				if err == nil {
 					URRCopy = URRCopyUpdated
@@ -109,10 +109,10 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			if created {
 				// Update the status as successful
 				URRCopy.Status.State = success
-				URRCopy.Status.Message = []string{"Everything is OK, verification email sent"}
+				URRCopy.Status.Message = []string{statusDict["email-ok"]}
 			} else {
 				URRCopy.Status.State = issue
-				URRCopy.Status.Message = []string{"Couldn't send verification email"}
+				URRCopy.Status.Message = []string{statusDict["email-fail"]}
 			}
 		} else {
 			go t.runApprovalTimeout(URRCopy)
@@ -142,7 +142,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 				if changeStatus {
 					t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "user-creation-failure")
 					URRCopy.Status.State = failure
-					URRCopy.Status.Message = []string{"User creation failed", ""}
+					URRCopy.Status.Message = []string{statusDict["user-failed"]}
 				}
 			} else if !URRCopy.Spec.Approved && URRCopy.Status.State == failure {
 				emailVerificationHandler := emailverification.Handler{}
@@ -151,10 +151,10 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 				if created {
 					// Update the status as successful
 					URRCopy.Status.State = success
-					URRCopy.Status.Message = []string{"Everything is OK, verification email sent"}
+					URRCopy.Status.Message = []string{statusDict["email-ok"]}
 				} else {
 					URRCopy.Status.State = issue
-					URRCopy.Status.Message = []string{"Couldn't send verification email"}
+					URRCopy.Status.Message = []string{statusDict["email-fail"]}
 				}
 				changeStatus = true
 			}
@@ -273,15 +273,15 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 	message := []string{}
 	// To check username on the users resource
 	userObj, _ := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Get(URRCopy.GetName(), metav1.GetOptions{})
-	// userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).List(
-	// 	metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", URRCopy.GetName())})
+	//userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).List(
+	//	metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", URRCopy.GetName())})
 	if userObj == nil {
 		// To check email address
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
 			if userRow.Spec.Email == URRCopy.Spec.Email {
 				exists = true
-				message = append(message, fmt.Sprintf("Email address, %s, already exists for another user account", URRCopy.Spec.Email))
+				message = append(message, fmt.Sprintf(statusDict["email-existuser"], URRCopy.Spec.Email))
 				break
 			}
 		}
@@ -291,7 +291,7 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 			for _, URRRow := range URRRaw.Items {
 				if URRRow.Spec.Email == URRCopy.Spec.Email && URRRow.GetUID() != URRCopy.GetUID() {
 					exists = true
-					message = append(message, fmt.Sprintf("Email address, %s, already exists for another user registration request", URRCopy.Spec.Email))
+					message = append(message, fmt.Sprintf(statusDict["email-existregist"], URRCopy.Spec.Email))
 				}
 			}
 			if !exists {
@@ -300,7 +300,7 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 				for _, authorityRequestRow := range authorityRequestRaw.Items {
 					if authorityRequestRow.Spec.Contact.Email == URRCopy.Spec.Email {
 						exists = true
-						message = append(message, fmt.Sprintf("Email address, %s, already exists for another authority request", URRCopy.Spec.Email))
+						message = append(message, fmt.Sprintf(statusDict["email-existauth"], URRCopy.Spec.Email))
 					}
 				}
 			}
@@ -310,7 +310,7 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 		}
 	} else {
 		exists = true
-		message = append(message, fmt.Sprintf("Username, %s, already exists for another user account", URRCopy.GetName()))
+		message = append(message, fmt.Sprintf(statusDict["username-exist"], URRCopy.GetName()))
 		if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
 			t.sendEmail(URRCopy, authorityName, "user-validation-failure-name")
 		}
