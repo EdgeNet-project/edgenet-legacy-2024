@@ -794,7 +794,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			"systemctl restart kubelet",
 		}
 		return commands, nil
-	} else if centosOrFedora, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*", string(output[:])); centosOrFedora {
+	} else if centosOrFedoraOrRHEL, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*|ID=\"rhel\".*|ID=rhel.*", string(output[:])); centosOrFedoraOrRHEL {
 		// The commands including kubernetes & docker installation for CentOS, and also kubeadm join command
 
 		commands := []string{
@@ -860,7 +860,7 @@ func getUninstallCommands(conn *ssh.Client) ([]string, error) {
 			"iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X",
 		}
 		return commands, nil
-	} else if centosOrFedora, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*", string(output[:])); centosOrFedora {
+	} else if centosOrFedoraOrRHEL, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*|ID=\"rhel\".*|ID=rhel.*", string(output[:])); centosOrFedoraOrRHEL {
 		// The commands including kubeadm reset command, and kubernetes & docker installation for CentOS
 		commands := []string{
 			"kubeadm reset -f",
@@ -901,7 +901,7 @@ func getReconfigurationCommands(conn *ssh.Client, hostname string) ([]string, er
 			"systemctl start kubelet",
 		}
 		return commands, nil
-	} else if centosOrFedora, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*", string(output[:])); centosOrFedora {
+	} else if centosOrFedoraOrRHEL, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*|ID=\"rhel\".*|ID=rhel.*", string(output[:])); centosOrFedoraOrRHEL {
 		// The commands to set the hostname, restart docker & kubernetes and flush iptables on CentOS
 		commands := []string{
 			fmt.Sprintf("hostname %s", hostname),
