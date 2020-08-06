@@ -17,10 +17,8 @@ limitations under the License.
 package nodecontribution
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"regexp"
 	"strings"
@@ -29,22 +27,23 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
 	"edgenet/pkg/client/clientset/versioned"
+	"edgenet/pkg/controller/v1alpha/authority"
 	"edgenet/pkg/mailer"
+	ns "edgenet/pkg/namespace"
 	"edgenet/pkg/node"
+	"edgenet/pkg/remoteip"
 
 	log "github.com/Sirupsen/logrus"
 	namecheap "github.com/billputer/go-namecheap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 )
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) error
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj interface{})
 	ObjectDeleted(obj interface{})
@@ -52,36 +51,30 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 	publicKey        ssh.Signer
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) error {
 	log.Info("NCHandler.Init")
-	var err error
-	t.clientset, err = authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
+
 	// Get the SSH Public Key of the headnode
 	key, err := ioutil.ReadFile("../../.ssh/id_rsa")
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
+
 	t.publicKey, err = ssh.ParsePrivateKey(key)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
+	node.Clientset = t.clientset
 	return err
 }
 
@@ -107,10 +100,10 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		// Check whether the host has been given as an IP address or else
-		recordType := getRecordType(NCCopy.Spec.Host)
+		recordType := remoteip.GetRecordType(NCCopy.Spec.Host)
 		if recordType == "" {
 			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Host field must be an IP Address")
+			NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["invalid-host"])
 			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			t.sendEmail(NCCopy)
 			return
@@ -132,7 +125,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				go t.runRecoveryProcedure(addr, config, nodeName, NCCopy, contributedNode)
 			} else {
 				NCCopy.Status.State = success
-				NCCopy.Status.Message = append(NCCopy.Status.Message, "Node is up and running")
+				NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["node-ok"])
 				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			}
 		} else {
@@ -148,7 +141,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		if err == nil {
 			NCCopy = NCCopyUpdated
 			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Authority disabled")
+			NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["authority-disabled"])
 			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 		}
 	}
@@ -175,10 +168,10 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	// Check if the authority is active
 	if authorityEnabled {
 		log.Println("AUTHORITY ENABLED")
-		recordType := getRecordType(NCCopy.Spec.Host)
+		recordType := remoteip.GetRecordType(NCCopy.Spec.Host)
 		if recordType == "" {
 			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Host field must be an IP Address")
+			NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["invalid-host"])
 			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			t.sendEmail(NCCopy)
 			return
@@ -194,7 +187,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		if err == nil {
 			log.Println("NODE FOUND")
 			if contributedNode.Spec.Unschedulable != !NCCopy.Spec.Enabled {
-				t.setNodeScheduling(nodeName, !NCCopy.Spec.Enabled)
+				node.SetNodeScheduling(nodeName, !NCCopy.Spec.Enabled)
 			}
 			if NCCopy.Status.State == failure {
 				go t.runRecoveryProcedure(addr, config, nodeName, NCCopy, contributedNode)
@@ -256,7 +249,7 @@ func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) {
 
 // runSetupProcedure installs necessary packages from scratch and makes the node join into the cluster
 func (t *Handler) runSetupProcedure(authorityName, addr, nodeName, recordType string, config *ssh.ClientConfig,
-	NCCopy *apps_v1alpha.NodeContribution) {
+	NCCopy *apps_v1alpha.NodeContribution) error {
 	// Steps in the procedure
 	endProcedure := make(chan bool, 1)
 	dnsConfiguration := make(chan bool, 1)
@@ -343,7 +336,7 @@ nodeInstallLoop:
 			log.Println("***************Node Patch***************")
 			// Set the node as schedulable or unschedulable according to the node contribution
 			patchStatus := true
-			err := t.setNodeScheduling(nodeName, !NCCopy.Spec.Enabled)
+			err := node.SetNodeScheduling(nodeName, !NCCopy.Spec.Enabled)
 			if err != nil {
 				NCCopy.Status.State = incomplete
 				NCCopy.Status.Message = append(NCCopy.Status.Message, "Scheduling configuration failed")
@@ -351,7 +344,16 @@ nodeInstallLoop:
 				t.sendEmail(NCCopy)
 				patchStatus = false
 			}
-			err = t.setAuthorityAsOwnerReference(authorityName, nodeName)
+			var ownerReferences []metav1.OwnerReference
+			authorityCopy, err := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityName, metav1.GetOptions{})
+			if err == nil {
+				ownerReferences = authority.SetAsOwnerReference(authorityCopy)
+			}
+			NCOwnerNamespace, err := t.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("authority-%s", authorityName), metav1.GetOptions{})
+			if err == nil {
+				ownerReferences = append(ownerReferences, ns.SetAsOwnerReference(NCOwnerNamespace)...)
+			}
+			err = node.SetOwnerReferences(nodeName, ownerReferences)
 			if err != nil {
 				NCCopy.Status.State = incomplete
 				NCCopy.Status.Message = append(NCCopy.Status.Message, "Setting owner reference failed")
@@ -384,6 +386,7 @@ nodeInstallLoop:
 			break nodeInstallLoop
 		}
 	}
+	return err
 }
 
 // runRecoveryProcedure applies predefined methods to recover the node
@@ -553,65 +556,6 @@ nodeRecoveryLoop:
 	}
 }
 
-// setAuthorityAsOwnerReference puts the authority as owner into the node
-func (t *Handler) setAuthorityAsOwnerReference(authorityName, nodeName string) error {
-	// Create a patch slice and initialize it to the size of 1
-	// Append the data existing in the label map to the slice
-	authorityCopy, err := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityName, metav1.GetOptions{})
-	if err == nil {
-		nodePatchOwnerReference := patchOwnerReference{}
-		nodePatchOwnerReference.APIVersion = "apps.edgenet.io/v1alpha"
-		nodePatchOwnerReference.BlockOwnerDeletion = true
-		nodePatchOwnerReference.Controller = false
-		nodePatchOwnerReference.Kind = "Authority"
-		nodePatchOwnerReference.Name = authorityCopy.GetName()
-		nodePatchOwnerReference.UID = string(authorityCopy.GetUID())
-		nodePatchOwnerReferences := append([]patchOwnerReference{}, nodePatchOwnerReference)
-		NCOwnerNamespace, err := t.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("authority-%s", authorityName), metav1.GetOptions{})
-		if err == nil {
-			nodePatchOwnerReference = patchOwnerReference{}
-			nodePatchOwnerReference.APIVersion = "apps.edgenet.io/v1alpha"
-			nodePatchOwnerReference.BlockOwnerDeletion = true
-			nodePatchOwnerReference.Controller = false
-			nodePatchOwnerReference.Kind = "Namespace"
-			nodePatchOwnerReference.Name = NCOwnerNamespace.GetName()
-			nodePatchOwnerReference.UID = string(NCOwnerNamespace.GetUID())
-			nodePatchOwnerReferences = append(nodePatchOwnerReferences, nodePatchOwnerReference)
-		} else {
-			log.Printf("Node %s patch, namespace, failed in %s at node contribution", nodeName, authorityName)
-		}
-		nodePatchArr := make([]interface{}, 1)
-		nodePatch := patchByOwnerReferenceValue{}
-		nodePatch.Op = "add"
-		nodePatch.Path = "/metadata/ownerReferences"
-		nodePatch.Value = nodePatchOwnerReferences
-		nodePatchArr[0] = nodePatch
-		nodePatchJSON, _ := json.Marshal(nodePatchArr)
-		// Patch the nodes with the arguments:
-		// hostname, patch type, and patch data
-		_, err = t.clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
-	} else {
-		log.Printf("Node %s patch, authority, failed in %s at node contribution", nodeName, authorityName)
-	}
-	return err
-}
-
-// setNodeScheduling syncs the node with the node contribution
-func (t *Handler) setNodeScheduling(nodeName string, unschedulable bool) error {
-	// Create a patch slice and initialize it to the size of 1
-	nodePatchArr := make([]interface{}, 1)
-	nodePatch := patchByBoolValue{}
-	nodePatch.Op = "replace"
-	nodePatch.Path = "/spec/unschedulable"
-	nodePatch.Value = unschedulable
-	nodePatchArr[0] = nodePatch
-	nodePatchJSON, _ := json.Marshal(nodePatchArr)
-	// Patch the nodes with the arguments:
-	// hostname, patch type, and patch data
-	_, err := t.clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
-	return err
-}
-
 // cleanInstallation gets and runs the uninstallation and installation commands prepared
 func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *apps_v1alpha.NodeContribution) error {
 	uninstallationCommands, err := getUninstallCommands(conn)
@@ -619,7 +563,7 @@ func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *a
 		log.Println(err)
 		return err
 	}
-	installationCommands, err := getInstallCommands(conn, nodeName, t.getKubernetesVersion()[1:])
+	installationCommands, err := getInstallCommands(conn, nodeName, node.GetKubeletVersion()[1:])
 	if err != nil {
 		log.Println(err)
 		return err
@@ -764,10 +708,26 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 		log.Println(err)
 		return nil, err
 	}
-
+	dockerInstallation := []string{}
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands including kubernetes & docker installation for Ubuntu, and also kubeadm join command
-		commands := []string{
+
+		var ubuntuCommands = []string{
+			"apt-get install docker.io",
+		}
+		var debianCommands = []string{
+			"apt-get install software-properties-common -y",
+			"curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -",
+			"add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable\"",
+			"apt-get update",
+			"apt-get install docker-ce",
+		}
+		if ubuntu, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*", string(output[:])); ubuntu {
+			dockerInstallation = ubuntuCommands
+		} else {
+			dockerInstallation = debianCommands
+		}
+		essentialPackages := []string{
 			"dpkg --configure -a",
 			"apt-get update -y && apt-get install -y apt-transport-https -y",
 			"apt-get install curl -y",
@@ -784,7 +744,9 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			"deb https://apt.kubernetes.io/ kubernetes-xenial main",
 			"EOF",
 			"apt-get update",
-			fmt.Sprintf("apt-get install docker.io kubeadm=%[1]s-00 kubectl=%[1]s-00 kubelet=%[1]s-00 kubernetes-cni -y", kubernetesVersion),
+		}
+		kubernetesInstallation := []string{
+			fmt.Sprintf("apt-get install kubeadm=%[1]s-00 kubectl=%[1]s-00 kubelet=%[1]s-00 kubernetes-cni -y", kubernetesVersion),
 			"apt-mark hold kubelet kubeadm kubectl",
 			fmt.Sprintf("hostname %s", hostname),
 			"systemctl enable docker",
@@ -793,10 +755,10 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			"systemctl daemon-reload",
 			"systemctl restart kubelet",
 		}
+		commands := append(essentialPackages, append(dockerInstallation, kubernetesInstallation...)...)
 		return commands, nil
 	} else if centos, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*", string(output[:])); centos {
 		// The commands including kubernetes & docker installation for CentOS, and also kubeadm join command
-
 		commands := []string{
 			"yum install yum-utils -y",
 			"yum install epel-release -y",
@@ -914,43 +876,4 @@ func getReconfigurationCommands(conn *ssh.Client, hostname string) ([]string, er
 		return commands, nil
 	}
 	return nil, fmt.Errorf("unknown")
-}
-
-// getKubernetesVersion looks at the head node to decide which version of Kubernetes to install
-func (t *Handler) getKubernetesVersion() string {
-	nodeRaw, err := t.clientset.CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master"})
-	if err != nil {
-		log.Println(err.Error())
-	}
-	kubeletVersion := ""
-	for _, nodeRow := range nodeRaw.Items {
-		kubeletVersion = nodeRow.Status.NodeInfo.KubeletVersion
-	}
-	return kubeletVersion
-}
-
-// getRecordType determines if the IP string is in the form of IPv4 or IPv6 and returns the record type
-func getRecordType(ip string) string {
-	if net.ParseIP(ip) == nil {
-		return ""
-	}
-	for i := 0; i < len(ip); i++ {
-		switch ip[i] {
-		case '.':
-			return "A"
-		case ':':
-			return "AAAA"
-		}
-	}
-	return ""
-}
-
-// To check whether user is holder of a role
-func containsRole(roles []string, value string) bool {
-	for _, ele := range roles {
-		if strings.ToLower(value) == strings.ToLower(ele) {
-			return true
-		}
-	}
-	return false
 }
