@@ -708,26 +708,26 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 		log.Println(err)
 		return nil, err
 	}
-	commandsDependent := []string{}
+	dockerInstallation := []string{}
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands including kubernetes & docker installation for Ubuntu, and also kubeadm join command
 
 		var ubuntuCommands = []string{
-			fmt.Sprintf("apt-get install docker.io kubeadm=%[1]s-00 kubectl=%[1]s-00 kubelet=%[1]s-00 kubernetes-cni -y", kubernetesVersion),
+			"apt-get install docker.io",
 		}
 		var debianCommands = []string{
 			"apt-get install software-properties-common -y",
 			"curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -",
 			"add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable\"",
 			"apt-get update",
-			fmt.Sprintf("apt-get install docker-ce kubeadm=%[1]s-00 kubectl=%[1]s-00 kubelet=%[1]s-00 kubernetes-cni -y", kubernetesVersion),
+			"apt-get install docker-ce",
 		}
 		if ubuntu, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*", string(output[:])); ubuntu {
-			commandsDependent = ubuntuCommands
+			dockerInstallation = ubuntuCommands
 		} else {
-			commandsDependent = debianCommands
+			dockerInstallation = debianCommands
 		}
-		commands1 := []string{
+		essentialPackages := []string{
 			"dpkg --configure -a",
 			"apt-get update -y && apt-get install -y apt-transport-https -y",
 			"apt-get install curl -y",
@@ -745,7 +745,8 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			"EOF",
 			"apt-get update",
 		}
-		commands2 := []string{
+		kubernetesInstallation := []string{
+			fmt.Sprintf("apt-get install kubeadm=%[1]s-00 kubectl=%[1]s-00 kubelet=%[1]s-00 kubernetes-cni -y", kubernetesVersion),
 			"apt-mark hold kubelet kubeadm kubectl",
 			fmt.Sprintf("hostname %s", hostname),
 			"systemctl enable docker",
@@ -754,7 +755,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			"systemctl daemon-reload",
 			"systemctl restart kubelet",
 		}
-		commands := append(commands1, append(commandsDependent, commands2...)...)
+		commands := append(essentialPackages, append(dockerInstallation, kubernetesInstallation...)...)
 		return commands, nil
 	} else if centos, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*", string(output[:])); centos {
 		// The commands including kubernetes & docker installation for CentOS, and also kubeadm join command
