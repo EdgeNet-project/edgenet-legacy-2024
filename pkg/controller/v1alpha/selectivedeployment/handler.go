@@ -283,46 +283,46 @@ func (t *SDHandler) configureController(sdCopy *apps_v1alpha.SelectiveDeployment
 	var controllerCopy interface{}
 	switch controllerObj := controllerRow.(type) {
 	case appsv1.Deployment:
-		controllerCopy := controllerObj.DeepCopy()
-		if len(nodeSelectorTermList) <= 0 && controllerCopy.Spec.Template.Spec.Affinity != nil {
-			controllerCopy.Spec.Template.Spec.Affinity.Reset()
-		} else if controllerCopy.Spec.Template.Spec.Affinity != nil {
-			controllerCopy.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		if len(nodeSelectorTermList) <= 0 && controllerObj.Spec.Template.Spec.Affinity != nil {
+			controllerObj.Spec.Template.Spec.Affinity.Reset()
+		} else if controllerObj.Spec.Template.Spec.Affinity != nil {
+			controllerObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
 		} else {
-			controllerCopy.Spec.Template.Spec.Affinity = &corev1.Affinity{
+			controllerObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
 				NodeAffinity: nodeAffinity,
 			}
 		}
-		log.Printf("%s/Deployment/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
-		controllerCopy.ObjectMeta.OwnerReferences = ownerReferences
+		controllerObj.ObjectMeta.OwnerReferences = ownerReferences
+		log.Printf("%s/Deployment/%s: %s", controllerObj.GetNamespace(), controllerObj.GetName(), nodeAffinity)
+		controllerCopy = controllerObj.DeepCopy()
 		//t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(controllerCopy)
 	case appsv1.DaemonSet:
-		controllerCopy := controllerObj.DeepCopy()
-		if len(nodeSelectorTermList) <= 0 && controllerCopy.Spec.Template.Spec.Affinity != nil {
-			controllerCopy.Spec.Template.Spec.Affinity.Reset()
-		} else if controllerCopy.Spec.Template.Spec.Affinity != nil {
-			controllerCopy.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		if len(nodeSelectorTermList) <= 0 && controllerObj.Spec.Template.Spec.Affinity != nil {
+			controllerObj.Spec.Template.Spec.Affinity.Reset()
+		} else if controllerObj.Spec.Template.Spec.Affinity != nil {
+			controllerObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
 		} else {
-			controllerCopy.Spec.Template.Spec.Affinity = &corev1.Affinity{
+			controllerObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
 				NodeAffinity: nodeAffinity,
 			}
 		}
-		log.Printf("%s/DaemonSet/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
-		controllerCopy.ObjectMeta.OwnerReferences = ownerReferences
+		controllerObj.ObjectMeta.OwnerReferences = ownerReferences
+		log.Printf("%s/DaemonSet/%s: %s", controllerObj.GetNamespace(), controllerObj.GetName(), nodeAffinity)
+		controllerCopy = controllerObj.DeepCopy()
 		//t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(controllerCopy)
 	case appsv1.StatefulSet:
-		controllerCopy := controllerObj.DeepCopy()
-		if len(nodeSelectorTermList) <= 0 && controllerCopy.Spec.Template.Spec.Affinity != nil {
-			controllerCopy.Spec.Template.Spec.Affinity.Reset()
-		} else if controllerCopy.Spec.Template.Spec.Affinity != nil {
-			controllerCopy.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		if len(nodeSelectorTermList) <= 0 && controllerObj.Spec.Template.Spec.Affinity != nil {
+			controllerObj.Spec.Template.Spec.Affinity.Reset()
+		} else if controllerObj.Spec.Template.Spec.Affinity != nil {
+			controllerObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
 		} else {
-			controllerCopy.Spec.Template.Spec.Affinity = &corev1.Affinity{
+			controllerObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
 				NodeAffinity: nodeAffinity,
 			}
 		}
-		log.Printf("%s/StatefulSet/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
-		controllerCopy.ObjectMeta.OwnerReferences = ownerReferences
+		controllerObj.ObjectMeta.OwnerReferences = ownerReferences
+		log.Printf("%s/StatefulSet/%s: %s", controllerObj.GetNamespace(), controllerObj.GetName(), nodeAffinity)
+		controllerCopy = controllerObj.DeepCopy()
 		//t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(controllerCopy)
 	}
 	return controllerCopy, failureCount
