@@ -160,7 +160,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 				if !underControl {
 					// Configure the deployment according to the SD
 					deploymentObj = sdDeployment.DeepCopy()
-					configuredDeployment, failureCount := t.configureController(sdCopy, deploymentObj, ownerReferences)
+					configuredDeployment, failureCount := t.configureController(sdCopy, sdDeployment, ownerReferences)
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(configuredDeployment.(*appsv1.Deployment))
 					if err != nil {
@@ -181,7 +181,6 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 			if errors.IsNotFound(err) {
 				configuredDaemonSet, failureCount := t.configureController(sdCopy, sdDaemonset, ownerReferences)
 				failureCounter += failureCount
-
 				_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Create(configuredDaemonSet.(*appsv1.DaemonSet))
 				if err != nil {
 					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("DaemonSet %s could not be created", sdDaemonset.GetName()))
@@ -194,7 +193,6 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 					daemonsetObj = sdDaemonset.DeepCopy()
 					configuredDaemonSet, failureCount := t.configureController(sdCopy, sdDaemonset, ownerReferences)
 					failureCounter += failureCount
-
 					_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(configuredDaemonSet.(*appsv1.DaemonSet))
 					if err != nil {
 						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("DaemonSet %s could not be updated", sdDaemonset.GetName()))
@@ -218,23 +216,22 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 				if err != nil {
 					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s could not be created", sdStatefulset.GetName()))
 					failureCounter++
-				} else {
-					underControl := checkOwnerReferences(sdCopy, statefulsetObj.GetOwnerReferences())
-					if !underControl {
-						// Configure the statefulset according to the SD
-						statefulsetObj = sdStatefulset.DeepCopy()
-						configuredStatefulSet, failureCount := t.configureController(sdCopy, sdStatefulset, ownerReferences)
-						failureCounter += failureCount
-
-						_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(configuredStatefulSet.(*appsv1.StatefulSet))
-						if err != nil {
-							sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s could not be created", sdStatefulset.GetName()))
-							failureCounter++
-						}
-					} else {
-						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s is already under the control of another selective deployment", sdStatefulset.GetName()))
+				}
+			} else {
+				underControl := checkOwnerReferences(sdCopy, statefulsetObj.GetOwnerReferences())
+				if !underControl {
+					// Configure the statefulset according to the SD
+					statefulsetObj = sdStatefulset.DeepCopy()
+					configuredStatefulSet, failureCount := t.configureController(sdCopy, sdStatefulset, ownerReferences)
+					failureCounter += failureCount
+					_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(configuredStatefulSet.(*appsv1.StatefulSet))
+					if err != nil {
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s could not be created", sdStatefulset.GetName()))
 						failureCounter++
 					}
+				} else {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s is already under the control of another selective deployment", sdStatefulset.GetName()))
+					failureCounter++
 				}
 			}
 		}
