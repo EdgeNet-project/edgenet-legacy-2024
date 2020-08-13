@@ -445,7 +445,7 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 										// boundbox is a rectangle which provides to check whether the point is inside polygon
 										// without taking all point of the polygon into consideration
 										boundbox := node.Boundbox(polygon)
-										status := node.GeoFence(boundbox, polygon, lat, lon)
+										status := node.GeoFence(boundbox, polygon, lon, lat)
 										if status && selectorRow.Operator == "In" {
 											matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
 											counter++

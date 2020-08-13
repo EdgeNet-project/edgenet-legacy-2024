@@ -167,7 +167,7 @@ func (g *SDTestGroup) Init() {
 			Selector: []apps_v1alpha.Selector{
 				{
 					Value: []string{
-						"[ [48.8947616, 2.2150567], [48.8084639, 2.2040704], [48.7835862, 2.3393396], [48.8416903, 2.4519494], [48.9171024,2.3932412] ]",
+						"[ [2.2150567, 48.8947616], [2.2040704, 48.8084639], [2.3393396, 48.7835862], [2.4519494, 48.8416903], [2.3932412, 48.9171024] ]",
 					},
 					Operator: "In",
 					Quantity: 1,
@@ -338,8 +338,8 @@ func (g *SDTestGroup) Init() {
 				"edge-net.io/country-iso": "FR",
 				"edge-net.io/state-iso":   "FR",
 				"edge-net.io/continent":   "Europe",
-				"edge-net.io/lon":         "n2.34",
-				"edge-net.io/lat":         "s48.86",
+				"edge-net.io/lon":         "e2.34",
+				"edge-net.io/lat":         "n48.86",
 			},
 		},
 		Status: corev1.NodeStatus{
