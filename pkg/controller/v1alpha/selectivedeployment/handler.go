@@ -151,7 +151,6 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 				failureCounter += failureCount
 				_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Create(configuredDeployment.(*appsv1.Deployment))
 				if err != nil {
-					fmt.Println(err)
 					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Deployment %s could not be created", sdDeployment.GetName()))
 					failureCounter++
 				}
@@ -159,7 +158,6 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 				underControl := checkOwnerReferences(sdCopy, deploymentObj.GetOwnerReferences())
 				if !underControl {
 					// Configure the deployment according to the SD
-					deploymentObj = sdDeployment.DeepCopy()
 					configuredDeployment, failureCount := t.configureController(sdCopy, sdDeployment, ownerReferences)
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(configuredDeployment.(*appsv1.Deployment))
@@ -190,7 +188,6 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 				underControl := checkOwnerReferences(sdCopy, daemonsetObj.GetOwnerReferences())
 				if !underControl {
 					// Configure the daemonset according to the SD
-					daemonsetObj = sdDaemonset.DeepCopy()
 					configuredDaemonSet, failureCount := t.configureController(sdCopy, sdDaemonset, ownerReferences)
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(configuredDaemonSet.(*appsv1.DaemonSet))
@@ -221,7 +218,6 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 				underControl := checkOwnerReferences(sdCopy, statefulsetObj.GetOwnerReferences())
 				if !underControl {
 					// Configure the statefulset according to the SD
-					statefulsetObj = sdStatefulset.DeepCopy()
 					configuredStatefulSet, failureCount := t.configureController(sdCopy, sdStatefulset, ownerReferences)
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(configuredStatefulSet.(*appsv1.StatefulSet))
@@ -449,7 +445,7 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 										// boundbox is a rectangle which provides to check whether the point is inside polygon
 										// without taking all point of the polygon into consideration
 										boundbox := node.Boundbox(polygon)
-										status := node.GeoFence(boundbox, polygon, lon, lat)
+										status := node.GeoFence(boundbox, polygon, lat, lon)
 										if status && selectorRow.Operator == "In" {
 											matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
 											counter++

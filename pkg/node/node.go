@@ -67,8 +67,7 @@ func GeoFence(boundbox []float64, polygon [][]float64, y float64, x float64) boo
 	vertices := len(polygon)
 	lastIndex := vertices - 1
 	oddNodes := false
-
-	if boundbox[0] <= x && boundbox[1] >= x && boundbox[2] <= y && boundbox[3] >= y {
+	if boundbox[0] <= y && boundbox[1] >= y && boundbox[2] <= x && boundbox[3] >= x {
 		for index := range polygon {
 			if (polygon[index][0] < y && polygon[lastIndex][0] >= y || polygon[lastIndex][0] < y &&
 				polygon[index][0] >= y) && (polygon[index][1] <= x || polygon[lastIndex][1] <= x) {
@@ -80,7 +79,6 @@ func GeoFence(boundbox []float64, polygon [][]float64, y float64, x float64) boo
 			lastIndex = index
 		}
 	}
-
 	return oddNodes
 }
 
