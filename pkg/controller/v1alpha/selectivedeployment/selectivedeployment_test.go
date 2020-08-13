@@ -28,9 +28,12 @@ var errorDict = map[string]string{
 
 type SDTestGroup struct {
 	client                 kubernetes.Interface
+	edgenetclient          versioned.Interface
 	statefulsetService     corev1.Service
 	nodeFRObj              corev1.Node
 	nodeUSObj              corev1.Node
+	nodeUSSecondObj        corev1.Node
+	nodeUSThirdObj         corev1.Node
 	sdObjDeployment        apps_v1alpha.SelectiveDeployment
 	sdObjDeploymentPolygon apps_v1alpha.SelectiveDeployment
 	sdObjStatefulset       apps_v1alpha.SelectiveDeployment
@@ -38,7 +41,6 @@ type SDTestGroup struct {
 	deploymentObj          v1.Deployment
 	statefulSetObj         v1.StatefulSet
 	daemonsetObj           v1.DaemonSet
-	edgenetclient          versioned.Interface
 	handler                SDHandler
 }
 
@@ -364,6 +366,60 @@ func (g *SDTestGroup) Init() {
 				"edge-net.io/country-iso": "US",
 				"edge-net.io/state-iso":   "MD",
 				"edge-net.io/continent":   "North America",
+				"edge-net.io/lon":         "w-76.94",
+				"edge-net.io/lat":         "n38.99",
+			},
+		},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				corev1.NodeCondition{
+					Type:   "Ready",
+					Status: "True",
+				},
+			},
+		},
+	}
+	nodeUSSecondObj := corev1.Node{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Node",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "nps-1.edge-net.io",
+			Labels: map[string]string{
+				"kubernetes.io/hostname":  "nps-1.edge-net.io",
+				"edge-net.io/city":        "Seaside",
+				"edge-net.io/country-iso": "US",
+				"edge-net.io/state-iso":   "CA",
+				"edge-net.io/continent":   "North America",
+				"edge-net.io/lon":         "w-121.79",
+				"edge-net.io/lat":         "n36.62",
+			},
+		},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				corev1.NodeCondition{
+					Type:   "Ready",
+					Status: "True",
+				},
+			},
+		},
+	}
+	nodeUSThirdObj := corev1.Node{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Node",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "utdallas-1.edge-net.io",
+			Labels: map[string]string{
+				"kubernetes.io/hostname":  "utdallas-1.edge-net.io",
+				"edge-net.io/city":        "Richardson",
+				"edge-net.io/country-iso": "US",
+				"edge-net.io/state-iso":   "TX",
+				"edge-net.io/continent":   "North America",
+				"edge-net.io/lon":         "w-96.78",
+				"edge-net.io/lat":         "n32.77",
 			},
 		},
 		Status: corev1.NodeStatus{
@@ -493,9 +549,10 @@ func (g *SDTestGroup) Init() {
 			},
 		},
 	}
-
 	g.nodeFRObj = nodeFRObj
 	g.nodeUSObj = nodeUSObj
+	g.nodeUSSecondObj = nodeUSSecondObj
+	g.nodeUSThirdObj = nodeUSThirdObj
 	g.sdObjDeployment = sdObjDeployment
 	g.sdObjDeploymentPolygon = sdObjDeploymentPolygon
 	g.statefulsetService = statefulsetService
@@ -530,6 +587,8 @@ func TestObjectCreated(t *testing.T) {
 	// Creating two nodes
 	g.client.CoreV1().Nodes().Create(g.nodeFRObj.DeepCopy())
 	g.client.CoreV1().Nodes().Create(g.nodeUSObj.DeepCopy())
+	g.client.CoreV1().Nodes().Create(g.nodeUSSecondObj.DeepCopy())
+	g.client.CoreV1().Nodes().Create(g.nodeUSThirdObj.DeepCopy())
 
 	t.Run("creation of SD, Deployment as a controller", func(t *testing.T) {
 		// Invoking the Create function of SD
@@ -539,6 +598,11 @@ func TestObjectCreated(t *testing.T) {
 		sd, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDeployment.GetName(), metav1.GetOptions{})
 		if sd.Status.State != success {
 			t.Errorf("Selective deployment failed with Deployment as a controller")
+		}
+		deployment, _ := g.client.AppsV1().Deployments("").Get(g.sdObjDeployment.Spec.Controllers.Deployment[0].GetName(), metav1.GetOptions{})
+		deploymentNodeName := deployment.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
+		if deploymentNodeName != g.nodeFRObj.GetName() {
+			t.Errorf("Deployment is not in the currect node")
 		}
 	})
 
@@ -550,6 +614,11 @@ func TestObjectCreated(t *testing.T) {
 		sd, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDaemonset.GetName(), metav1.GetOptions{})
 		if sd.Status.State != success {
 			t.Errorf("Selective deployment failed with DaemonSet as a controller")
+		}
+		daemonset, _ := g.client.AppsV1().DaemonSets("").Get(g.sdObjDaemonset.Spec.Controllers.DaemonSet[0].GetName(), metav1.GetOptions{})
+		daemonsetNodeName := daemonset.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
+		if daemonsetNodeName != g.nodeFRObj.GetName() {
+			t.Errorf("Daemonset is not in the currect node")
 		}
 	})
 
