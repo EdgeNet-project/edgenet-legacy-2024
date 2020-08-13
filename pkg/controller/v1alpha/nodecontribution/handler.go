@@ -414,7 +414,6 @@ func (t *Handler) runRecoveryProcedure(addr string, config *ssh.ClientConfig,
 					if nodeEvent.Type == "DELETED" {
 						endProcedure <- true
 					}
-
 					if node.GetConditionReadyStatus(updatedNode) == trueStr {
 						NCCopy.Status.State = success
 						NCCopy.Status.Message = append([]string{}, "Node recovery successful")
@@ -641,7 +640,6 @@ func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *a
 	}
 	//sess.Stdout = os.Stdout
 	sess.Stderr = os.Stderr
-
 	sess, err = startShell(sess)
 	if err != nil {
 		log.Println(err)
@@ -655,7 +653,6 @@ func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *a
 			return err
 		}
 	}
-
 	stdin.Close()
 	// Wait for session to finish
 	err = sess.Wait()
@@ -705,7 +702,6 @@ func reconfigureNode(conn *ssh.Client, hostname string) error {
 	}
 	//sess.Stdout = os.Stdout
 	sess.Stderr = os.Stderr
-
 	sess, err = startShell(sess)
 	if err != nil {
 		log.Println(err)
@@ -719,7 +715,6 @@ func reconfigureNode(conn *ssh.Client, hostname string) error {
 			return err
 		}
 	}
-
 	stdin.Close()
 	// Wait for session to finish
 	err = sess.Wait()
@@ -767,7 +762,6 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 	dockerInstallation := []string{}
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands including kubernetes & docker installation for Ubuntu, and also kubeadm join command
-
 		var ubuntuCommands = []string{
 			"apt-get install docker.io",
 		}
