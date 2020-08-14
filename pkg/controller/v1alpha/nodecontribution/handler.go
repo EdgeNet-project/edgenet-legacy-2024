@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -414,7 +414,6 @@ func (t *Handler) runRecoveryProcedure(addr string, config *ssh.ClientConfig,
 					if nodeEvent.Type == "DELETED" {
 						endProcedure <- true
 					}
-
 					if node.GetConditionReadyStatus(updatedNode) == trueStr {
 						NCCopy.Status.State = success
 						NCCopy.Status.Message = append([]string{}, "Node recovery successful")
@@ -641,7 +640,6 @@ func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *a
 	}
 	//sess.Stdout = os.Stdout
 	sess.Stderr = os.Stderr
-
 	sess, err = startShell(sess)
 	if err != nil {
 		log.Println(err)
@@ -655,7 +653,6 @@ func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *a
 			return err
 		}
 	}
-
 	stdin.Close()
 	// Wait for session to finish
 	err = sess.Wait()
@@ -705,7 +702,6 @@ func reconfigureNode(conn *ssh.Client, hostname string) error {
 	}
 	//sess.Stdout = os.Stdout
 	sess.Stderr = os.Stderr
-
 	sess, err = startShell(sess)
 	if err != nil {
 		log.Println(err)
@@ -719,7 +715,6 @@ func reconfigureNode(conn *ssh.Client, hostname string) error {
 			return err
 		}
 	}
-
 	stdin.Close()
 	// Wait for session to finish
 	err = sess.Wait()
@@ -764,10 +759,25 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 		log.Println(err)
 		return nil, err
 	}
-
+	dockerInstallation := []string{}
 	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
 		// The commands including kubernetes & docker installation for Ubuntu, and also kubeadm join command
-		commands := []string{
+		var ubuntuCommands = []string{
+			"apt-get install docker.io",
+		}
+		var debianCommands = []string{
+			"apt-get install software-properties-common -y",
+			"curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -",
+			"add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable\"",
+			"apt-get update",
+			"apt-get install docker-ce",
+		}
+		if ubuntu, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*", string(output[:])); ubuntu {
+			dockerInstallation = ubuntuCommands
+		} else {
+			dockerInstallation = debianCommands
+		}
+		essentialPackages := []string{
 			"dpkg --configure -a",
 			"apt-get update -y && apt-get install -y apt-transport-https -y",
 			"apt-get install curl -y",
@@ -784,7 +794,9 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			"deb https://apt.kubernetes.io/ kubernetes-xenial main",
 			"EOF",
 			"apt-get update",
-			fmt.Sprintf("apt-get install docker.io kubeadm=%[1]s-00 kubectl=%[1]s-00 kubelet=%[1]s-00 kubernetes-cni -y", kubernetesVersion),
+		}
+		kubernetesInstallation := []string{
+			fmt.Sprintf("apt-get install kubeadm=%[1]s-00 kubectl=%[1]s-00 kubelet=%[1]s-00 kubernetes-cni -y", kubernetesVersion),
 			"apt-mark hold kubelet kubeadm kubectl",
 			fmt.Sprintf("hostname %s", hostname),
 			"systemctl enable docker",
@@ -793,10 +805,10 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			"systemctl daemon-reload",
 			"systemctl restart kubelet",
 		}
+		commands := append(essentialPackages, append(dockerInstallation, kubernetesInstallation...)...)
 		return commands, nil
 	} else if centosOrFedoraOrRHEL, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*|ID=\"rhel\".*|ID=rhel.*", string(output[:])); centosOrFedoraOrRHEL {
 		// The commands including kubernetes & docker installation for CentOS, and also kubeadm join command
-
 		commands := []string{
 			"yum install yum-utils -y",
 			"yum install epel-release -y",
