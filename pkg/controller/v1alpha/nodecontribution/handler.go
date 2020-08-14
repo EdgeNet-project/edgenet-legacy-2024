@@ -774,6 +774,9 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 		}
 		if ubuntu, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*", string(output[:])); ubuntu {
 			dockerInstallation = ubuntuCommands
+		} else if hypriotOS, _ := regexp.MatchString("ID=\"hypriotOS\".*|ID=hypriotOS.*", string(output[:])); hypriotOS {
+			// The ID of hypriotOS should become checked again
+			dockerInstallation = []string{""}
 		} else {
 			dockerInstallation = debianCommands
 		}
