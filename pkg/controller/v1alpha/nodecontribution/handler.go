@@ -760,7 +760,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 		return nil, err
 	}
 	dockerInstallation := []string{}
-	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
+	if ubuntuOrDebianOrHypriot, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*|ID=\"hypriotOS\".*|ID=hypriotOS.*", string(output[:])); ubuntuOrDebianOrHypriot {
 		// The commands including kubernetes & docker installation for Ubuntu, and also kubeadm join command
 		var ubuntuCommands = []string{
 			"apt-get install docker.io",
@@ -776,7 +776,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			dockerInstallation = ubuntuCommands
 		} else if hypriotOS, _ := regexp.MatchString("ID=\"hypriotOS\".*|ID=hypriotOS.*", string(output[:])); hypriotOS {
 			// The ID of hypriotOS should become checked again
-			dockerInstallation = []string{""}
+			dockerInstallation = nil
 		} else {
 			dockerInstallation = debianCommands
 		}
