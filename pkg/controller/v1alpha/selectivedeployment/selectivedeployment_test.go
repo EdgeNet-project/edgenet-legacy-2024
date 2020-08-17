@@ -644,7 +644,7 @@ func TestObjectCreated(t *testing.T) {
 	g := SDTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	// Creating two nodes
+	// Creating four nodes
 	g.client.CoreV1().Nodes().Create(g.nodeFRObj.DeepCopy())
 	g.client.CoreV1().Nodes().Create(g.nodeUSObj.DeepCopy())
 	g.client.CoreV1().Nodes().Create(g.nodeUSSecondObj.DeepCopy())
@@ -746,6 +746,70 @@ func TestObjectCreated(t *testing.T) {
 		sdStatefulSet, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjStatefulset.GetName(), metav1.GetOptions{})
 		if sdStatefulSet.Status.State != success {
 			t.Errorf(errorDict["SD-statefulSetExisted-fail"])
+		}
+	})
+}
+
+func TestObjectUpdated(t *testing.T) {
+	g := SDTestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetclient)
+	// Creating four nodes
+	g.client.CoreV1().Nodes().Create(g.nodeFRObj.DeepCopy())
+	g.client.CoreV1().Nodes().Create(g.nodeUSObj.DeepCopy())
+	g.client.CoreV1().Nodes().Create(g.nodeUSSecondObj.DeepCopy())
+	g.client.CoreV1().Nodes().Create(g.nodeUSThirdObj.DeepCopy())
+
+	t.Run("Update of SD, Deployment as a controller", func(t *testing.T) {
+		// Invoking the Create function of SD
+		g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(g.sdObjDeployment.DeepCopy())
+		g.handler.ObjectCreated(g.sdObjDeployment.DeepCopy())
+		// Get the selectiveDeployment
+		sd, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDeployment.GetName(), metav1.GetOptions{})
+		if sd.Status.State != success {
+			t.Errorf(errorDict["SD-deployment-fail"])
+		}
+		sd.Spec.Controllers.Deployment[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.0"
+		g.handler.ObjectUpdated(sd.DeepCopy(), "")
+		sdUpdated, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDeployment.GetName(), metav1.GetOptions{})
+		if sdUpdated.Status.State != success || sdUpdated.Spec.Controllers.Deployment[0].Spec.Template.Spec.Containers[0].Image != "nginx:1.8.0" {
+			t.Errorf("Update-Failed")
+		}
+	})
+
+	t.Run("Update of SD, DaemonSet as a controller", func(t *testing.T) {
+		// Invoking the Create function of SD
+		g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(g.sdObjDaemonset.DeepCopy())
+		g.handler.ObjectCreated(g.sdObjDaemonset.DeepCopy())
+		// Get the selectiveDeployment
+		sd, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDaemonset.GetName(), metav1.GetOptions{})
+		if sd.Status.State != success {
+			t.Errorf(errorDict["SD-daemonSet-fail"])
+		}
+		sd.Spec.Controllers.DaemonSet[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.0"
+		g.handler.ObjectUpdated(sd.DeepCopy(), "")
+		sdUpdated, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDaemonset.GetName(), metav1.GetOptions{})
+		if sdUpdated.Status.State != success || sdUpdated.Spec.Controllers.DaemonSet[0].Spec.Template.Spec.Containers[0].Image != "nginx:1.8.0" {
+			t.Errorf("Update-Failed")
+		}
+	})
+
+	t.Run("Update of SD, StatefulSet as a controller", func(t *testing.T) {
+		// Creating a service for StatefulSet
+		g.client.CoreV1().Services("").Create(g.statefulsetService.DeepCopy())
+		// Invoking the Create function of SD
+		g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(g.sdObjStatefulset.DeepCopy())
+		g.handler.ObjectCreated(g.sdObjStatefulset.DeepCopy())
+		// Get the selectiveDeployment
+		sdStatefulSet, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjStatefulset.GetName(), metav1.GetOptions{})
+		if sdStatefulSet.Status.State != success {
+			t.Errorf(errorDict["SD-statefulSet-fail"])
+		}
+		sdStatefulSet.Spec.Controllers.StatefulSet[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.0"
+		g.handler.ObjectUpdated(sdStatefulSet.DeepCopy(), "")
+		sdUpdated, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjStatefulset.GetName(), metav1.GetOptions{})
+		if sdUpdated.Status.State != success || sdUpdated.Spec.Controllers.StatefulSet[0].Spec.Template.Spec.Containers[0].Image != "nginx:1.8.0" {
+			t.Errorf("Update-Failed")
 		}
 	})
 }
