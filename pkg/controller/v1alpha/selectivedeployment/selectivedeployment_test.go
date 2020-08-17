@@ -13,6 +13,7 @@ import (
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/Sirupsen/logrus"
@@ -356,6 +357,18 @@ func (g *SDTestGroup) Init() {
 			},
 		},
 		Status: corev1.NodeStatus{
+			Capacity: corev1.ResourceList{
+				corev1.ResourceMemory:           resource.MustParse("3781924"),
+				corev1.ResourceCPU:              resource.MustParse("2"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("51493088"),
+				corev1.ResourcePods:             resource.MustParse("100"),
+			},
+			Allocatable: corev1.ResourceList{
+				corev1.ResourceMemory:           resource.MustParse("3781924"),
+				corev1.ResourceCPU:              resource.MustParse("2"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("51493088"),
+				corev1.ResourcePods:             resource.MustParse("100"),
+			},
 			Conditions: []corev1.NodeCondition{
 				corev1.NodeCondition{
 					Type:   "Ready",
@@ -382,6 +395,18 @@ func (g *SDTestGroup) Init() {
 			},
 		},
 		Status: corev1.NodeStatus{
+			Capacity: corev1.ResourceList{
+				corev1.ResourceMemory:           resource.MustParse("3000000"),
+				corev1.ResourceCPU:              resource.MustParse("2"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("50100880"),
+				corev1.ResourcePods:             resource.MustParse("100"),
+			},
+			Allocatable: corev1.ResourceList{
+				corev1.ResourceMemory:           resource.MustParse("3000000"),
+				corev1.ResourceCPU:              resource.MustParse("2"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("50100880"),
+				corev1.ResourcePods:             resource.MustParse("100"),
+			},
 			Conditions: []corev1.NodeCondition{
 				corev1.NodeCondition{
 					Type:   "Ready",
@@ -408,6 +433,18 @@ func (g *SDTestGroup) Init() {
 			},
 		},
 		Status: corev1.NodeStatus{
+			Capacity: corev1.ResourceList{
+				corev1.ResourceMemory:           resource.MustParse("30000"),
+				corev1.ResourceCPU:              resource.MustParse("1"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("50100"),
+				corev1.ResourcePods:             resource.MustParse("10"),
+			},
+			Allocatable: corev1.ResourceList{
+				corev1.ResourceMemory:           resource.MustParse("30000"),
+				corev1.ResourceCPU:              resource.MustParse("1"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("50100"),
+				corev1.ResourcePods:             resource.MustParse("10"),
+			},
 			Conditions: []corev1.NodeCondition{
 				corev1.NodeCondition{
 					Type:   "Ready",
@@ -434,6 +471,18 @@ func (g *SDTestGroup) Init() {
 			},
 		},
 		Status: corev1.NodeStatus{
+			Capacity: corev1.ResourceList{
+				corev1.ResourceMemory:           resource.MustParse("30000"),
+				corev1.ResourceCPU:              resource.MustParse("1"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("50100"),
+				corev1.ResourcePods:             resource.MustParse("10"),
+			},
+			Allocatable: corev1.ResourceList{
+				corev1.ResourceMemory:           resource.MustParse("30000"),
+				corev1.ResourceCPU:              resource.MustParse("1"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("50100"),
+				corev1.ResourcePods:             resource.MustParse("10"),
+			},
 			Conditions: []corev1.NodeCondition{
 				corev1.NodeCondition{
 					Type:   "Ready",
@@ -615,6 +664,8 @@ func TestObjectCreated(t *testing.T) {
 		if deploymentNodeName != g.nodeFRObj.GetName() {
 			t.Errorf(errorDict["select-deployment-fail"])
 		}
+		// pods, _ := g.client.CoreV1().Pods("").List(metav1.ListOptions{})
+		// TBD: The pod list is at this point empty and looks like it's because of the Fake client
 	})
 
 	t.Run("creation of SD, DaemonSet as a controller", func(t *testing.T) {
