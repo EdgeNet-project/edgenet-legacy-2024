@@ -760,7 +760,7 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 		return nil, err
 	}
 	dockerInstallation := []string{}
-	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
+	if ubuntuOrDebianOrHypriot, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*|ID=\"hypriotOS\".*|ID=hypriotOS.*", string(output[:])); ubuntuOrDebianOrHypriot {
 		// The commands including kubernetes & docker installation for Ubuntu, and also kubeadm join command
 		var ubuntuCommands = []string{
 			"apt-get install docker.io",
@@ -774,6 +774,9 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 		}
 		if ubuntu, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*", string(output[:])); ubuntu {
 			dockerInstallation = ubuntuCommands
+		} else if hypriotOS, _ := regexp.MatchString("ID=\"hypriotOS\".*|ID=hypriotOS.*", string(output[:])); hypriotOS {
+			// The ID of hypriotOS should become checked again
+			dockerInstallation = nil
 		} else {
 			dockerInstallation = debianCommands
 		}
@@ -807,12 +810,13 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 		}
 		commands := append(essentialPackages, append(dockerInstallation, kubernetesInstallation...)...)
 		return commands, nil
-	} else if centos, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*", string(output[:])); centos {
+	} else if centosOrFedoraOrRHEL, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*|ID=\"rhel\".*|ID=rhel.*", string(output[:])); centosOrFedoraOrRHEL {
 		// The commands including kubernetes & docker installation for CentOS, and also kubeadm join command
 		commands := []string{
 			"yum install yum-utils -y",
 			"yum install epel-release -y",
 			"yum update -y",
+			"export basearch=$(uname -i)",
 			"modprobe br_netfilter",
 			"cat <<EOF > /etc/sysctl.d/k8s.conf",
 			"net.bridge.bridge-nf-call-ip6tables = 1",
@@ -871,7 +875,7 @@ func getUninstallCommands(conn *ssh.Client) ([]string, error) {
 			"iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X",
 		}
 		return commands, nil
-	} else if centos, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*", string(output[:])); centos {
+	} else if centosOrFedoraOrRHEL, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*|ID=\"rhel\".*|ID=rhel.*", string(output[:])); centosOrFedoraOrRHEL {
 		// The commands including kubeadm reset command, and kubernetes & docker installation for CentOS
 		commands := []string{
 			"kubeadm reset -f",
@@ -912,7 +916,7 @@ func getReconfigurationCommands(conn *ssh.Client, hostname string) ([]string, er
 			"systemctl start kubelet",
 		}
 		return commands, nil
-	} else if centos, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*", string(output[:])); centos {
+	} else if centosOrFedoraOrRHEL, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*|ID=\"rhel\".*|ID=rhel.*", string(output[:])); centosOrFedoraOrRHEL {
 		// The commands to set the hostname, restart docker & kubernetes and flush iptables on CentOS
 		commands := []string{
 			fmt.Sprintf("hostname %s", hostname),
