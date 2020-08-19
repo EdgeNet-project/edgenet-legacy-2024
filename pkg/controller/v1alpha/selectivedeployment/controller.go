@@ -282,19 +282,19 @@ func Start() {
 	controllerAddFunc := func(obj interface{}) {
 		switch controllerObj := obj.(type) {
 		case *appsv1.Deployment:
-			ownerSD, exists := sdHandler.checkController("Deployment", controllerObj.GetName(), controllerObj.GetNamespace())
+			ownerSD, exists := sdHandler.checkController(controllerObj.GetName(), "Deployment", controllerObj.GetNamespace())
 			if exists {
 				key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
 				addToQueue(ownerSD.DeepCopy(), key, "Deployment")
 			}
 		case *appsv1.DaemonSet:
-			ownerSD, exists := sdHandler.checkController("DaemonSet", controllerObj.GetName(), controllerObj.GetNamespace())
+			ownerSD, exists := sdHandler.checkController(controllerObj.GetName(), "DaemonSet", controllerObj.GetNamespace())
 			if exists {
 				key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
 				addToQueue(ownerSD.DeepCopy(), key, "DaemonSet")
 			}
 		case *appsv1.StatefulSet:
-			ownerSD, exists := sdHandler.checkController("StatefulSet", controllerObj.GetName(), controllerObj.GetNamespace())
+			ownerSD, exists := sdHandler.checkController(controllerObj.GetName(), "StatefulSet", controllerObj.GetNamespace())
 			if exists {
 				key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
 				addToQueue(ownerSD.DeepCopy(), key, "StatefulSet")
