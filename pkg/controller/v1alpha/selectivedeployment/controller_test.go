@@ -1,6 +1,7 @@
 package selectivedeployment
 
 import (
+	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
 	"testing"
 	"time"
 
@@ -12,9 +13,11 @@ func TestStartController(t *testing.T) {
 	g.Init()
 	// Run the controller in a goroutine
 	go Start(g.client, g.edgenetclient)
-	// Creating two nodes
+	// Creating four nodes
 	g.client.CoreV1().Nodes().Create(g.nodeFRObj.DeepCopy())
 	g.client.CoreV1().Nodes().Create(g.nodeUSObj.DeepCopy())
+	g.client.CoreV1().Nodes().Create(g.nodeUSSecondObj.DeepCopy())
+	g.client.CoreV1().Nodes().Create(g.nodeUSThirdObj.DeepCopy())
 	// Invoking the Create function of SD
 	g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(g.sdObjDeployment.DeepCopy())
 	time.Sleep(time.Millisecond * 500)
@@ -41,11 +44,33 @@ func TestStartController(t *testing.T) {
 		t.Errorf("Add func of event handler doesn't work properly")
 	}
 	g.sdObjDeployment.Spec.Controllers.Deployment[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.0"
+	g.sdObjDeployment.Spec.Selector = []apps_v1alpha.Selector{
+		{
+			Value:    []string{"US"},
+			Operator: "In",
+			Quantity: 2,
+			Name:     "Country",
+		},
+	}
+	// Apending the second deployment object
+	g.sdObjDeployment.Spec.Controllers.Deployment = append(g.sdObjDeployment.Spec.Controllers.Deployment, g.deploymentObj)
 	g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Update(g.sdObjDeployment.DeepCopy())
 	time.Sleep(time.Millisecond * 500)
 	sd, _ = g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDeployment.GetName(), metav1.GetOptions{})
 	// Get the selectiveDeployment
 	if sd.Spec.Controllers.Deployment[0].Spec.Template.Spec.Containers[0].Image != "nginx:1.8.0" {
+		t.Errorf("update func of event handler doesn't work properly")
+	}
+	// Checking the node name
+	deployment, _ := g.client.AppsV1().Deployments("").Get(g.sdObjDeployment.Spec.Controllers.Deployment[0].GetName(), metav1.GetOptions{})
+	deploymentNodeNames := deployment.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values
+	usNodesNames := map[string]bool{
+		g.nodeUSObj.GetName():       true,
+		g.nodeUSSecondObj.GetName(): true,
+		g.nodeUSThirdObj.GetName():  true,
+	}
+	if !usNodesNames[deploymentNodeNames[0]] || !usNodesNames[deploymentNodeNames[1]] {
+		t.Log(deploymentNodeNames)
 		t.Errorf("update func of event handler doesn't work properly")
 	}
 }

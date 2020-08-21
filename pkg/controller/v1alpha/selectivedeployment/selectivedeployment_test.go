@@ -32,10 +32,13 @@ var errorDict = map[string]string{
 	"SD-deploymentPolygon-fail":  "Selective deployment failed with Deployment as a controller and using polygon",
 	"select-deployment-fail":     "Deployment is not in the currect node",
 	"select-daemonset-fail":      "Daemonset is not in the currect node",
+	"select-statefulset-fail":    "Statefulset is not in the currect node",
 	"SD-deploymentExisted-fail":  "SD failed with Deployment as a controller and existed Deployment",
 	"SD-daemonSetExisted-fail":   "SD failed with DaemonSet as a controller and existed DaemonSet",
 	"SD-statefulSetExisted-fail": "SD failed with StatefulSet as a controller and existed StatefulSet",
 	"checkCon-fail":              "Check controller func failed",
+	"GetbyNode-fail":             "GetbyNode status failed",
+	"GetbyNode-fail-owner":       "GetbyNode ownerList failed",
 }
 
 type SDTestGroup struct {
@@ -659,6 +662,7 @@ func TestObjectCreated(t *testing.T) {
 		if sd.Status.State != success {
 			t.Errorf(errorDict["SD-deployment-fail"])
 		}
+		// Checking the node name
 		deployment, _ := g.client.AppsV1().Deployments("").Get(g.sdObjDeployment.Spec.Controllers.Deployment[0].GetName(), metav1.GetOptions{})
 		deploymentNodeName := deployment.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
 		if deploymentNodeName != g.nodeFRObj.GetName() {
@@ -677,6 +681,7 @@ func TestObjectCreated(t *testing.T) {
 		if sd.Status.State != success {
 			t.Errorf(errorDict["SD-daemonSet-fail"])
 		}
+		// Checking the node name
 		daemonset, _ := g.client.AppsV1().DaemonSets("").Get(g.sdObjDaemonset.Spec.Controllers.DaemonSet[0].GetName(), metav1.GetOptions{})
 		daemonsetNodeName := daemonset.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
 		if daemonsetNodeName != g.nodeFRObj.GetName() {
@@ -691,9 +696,15 @@ func TestObjectCreated(t *testing.T) {
 		g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(g.sdObjStatefulset.DeepCopy())
 		g.handler.ObjectCreated(g.sdObjStatefulset.DeepCopy())
 		// Get the selectiveDeployment
-		sdStatefulSet, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjStatefulset.GetName(), metav1.GetOptions{})
-		if sdStatefulSet.Status.State != success {
+		sd, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjStatefulset.GetName(), metav1.GetOptions{})
+		if sd.Status.State != success {
 			t.Errorf(errorDict["SD-statefulSet-fail"])
+		}
+		// Checking the node name
+		statefulset, _ := g.client.AppsV1().StatefulSets("").Get(g.sdObjStatefulset.Spec.Controllers.StatefulSet[0].GetName(), metav1.GetOptions{})
+		statefulsetNodeName := statefulset.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
+		if statefulsetNodeName != g.nodeUSObj.GetName() {
+			t.Errorf(errorDict["select-statefulset-fail"])
 		}
 	})
 
@@ -705,6 +716,12 @@ func TestObjectCreated(t *testing.T) {
 		sd, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDeploymentPolygon.GetName(), metav1.GetOptions{})
 		if sd.Status.State != success {
 			t.Errorf(errorDict["SD-deploymentPolygon-fail"])
+		}
+		// Checking the node name
+		deployment, _ := g.client.AppsV1().Deployments("").Get(g.sdObjDeploymentPolygon.Spec.Controllers.Deployment[0].GetName(), metav1.GetOptions{})
+		deploymentNodeName := deployment.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
+		if deploymentNodeName != g.nodeFRObj.GetName() {
+			t.Errorf(errorDict["select-deployment-fail"])
 		}
 	})
 
@@ -719,6 +736,12 @@ func TestObjectCreated(t *testing.T) {
 		if sd.Status.State != success {
 			t.Errorf(errorDict["SD-deploymentExisted-fail"])
 		}
+		// Checking the node name
+		deployment, _ := g.client.AppsV1().Deployments("").Get(g.sdObjDeployment.Spec.Controllers.Deployment[0].GetName(), metav1.GetOptions{})
+		deploymentNodeName := deployment.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
+		if deploymentNodeName != g.nodeFRObj.GetName() {
+			t.Errorf(errorDict["select-deployment-fail"])
+		}
 	})
 
 	t.Run("creation of SD, DaemonSet already existed", func(t *testing.T) {
@@ -731,6 +754,12 @@ func TestObjectCreated(t *testing.T) {
 		sd, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDaemonset.GetName(), metav1.GetOptions{})
 		if sd.Status.State != success {
 			t.Errorf(errorDict["SD-daemonSetExisted-fail"])
+		}
+		// Checking the node name
+		daemonset, _ := g.client.AppsV1().DaemonSets("").Get(g.sdObjDaemonset.Spec.Controllers.DaemonSet[0].GetName(), metav1.GetOptions{})
+		daemonsetNodeName := daemonset.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
+		if daemonsetNodeName != g.nodeFRObj.GetName() {
+			t.Errorf(errorDict["select-daemonset-fail"])
 		}
 	})
 
@@ -747,6 +776,12 @@ func TestObjectCreated(t *testing.T) {
 		if sdStatefulSet.Status.State != success {
 			t.Errorf(errorDict["SD-statefulSetExisted-fail"])
 		}
+		// Checking the node name
+		statefulset, _ := g.client.AppsV1().StatefulSets("").Get(g.sdObjStatefulset.Spec.Controllers.StatefulSet[0].GetName(), metav1.GetOptions{})
+		statefulsetNodeName := statefulset.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
+		if statefulsetNodeName != g.nodeUSObj.GetName() {
+			t.Errorf(errorDict["select-statefulset-fail"])
+		}
 	})
 }
 
@@ -760,7 +795,7 @@ func TestObjectUpdated(t *testing.T) {
 	g.client.CoreV1().Nodes().Create(g.nodeUSSecondObj.DeepCopy())
 	g.client.CoreV1().Nodes().Create(g.nodeUSThirdObj.DeepCopy())
 
-	t.Run("Update of SD, Deployment as a controller", func(t *testing.T) {
+	t.Run("Update Image of SD, Deployment as a controller", func(t *testing.T) {
 		// Invoking the Create function of SD
 		g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(g.sdObjDeployment.DeepCopy())
 		g.handler.ObjectCreated(g.sdObjDeployment.DeepCopy())
@@ -770,6 +805,7 @@ func TestObjectUpdated(t *testing.T) {
 			t.Errorf(errorDict["SD-deployment-fail"])
 		}
 		sd.Spec.Controllers.Deployment[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.0"
+		// Invoke ObjectUpdated function and check the status
 		g.handler.ObjectUpdated(sd.DeepCopy(), "")
 		sdUpdated, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDeployment.GetName(), metav1.GetOptions{})
 		if sdUpdated.Status.State != success || sdUpdated.Spec.Controllers.Deployment[0].Spec.Template.Spec.Containers[0].Image != "nginx:1.8.0" {
@@ -777,7 +813,46 @@ func TestObjectUpdated(t *testing.T) {
 		}
 	})
 
-	t.Run("Update of SD, DaemonSet as a controller", func(t *testing.T) {
+	t.Run("Update Selector of SD, Deployment as a controller", func(t *testing.T) {
+		// Invoking the Create function of SD
+		g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(g.sdObjDeployment.DeepCopy())
+		g.handler.ObjectCreated(g.sdObjDeployment.DeepCopy())
+		// Get the selectiveDeployment
+		sd, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDeployment.GetName(), metav1.GetOptions{})
+		if sd.Status.State != success {
+			t.Errorf(errorDict["SD-deployment-fail"])
+		}
+		// Updating Selector
+		sd.Spec.Selector = []apps_v1alpha.Selector{
+			{
+				Value:    []string{"US"},
+				Operator: "In",
+				Quantity: 2,
+				Name:     "Country",
+			},
+		}
+		// Apending the second deployment object
+		sd.Spec.Controllers.Deployment = append(sd.Spec.Controllers.Deployment, g.deploymentObj)
+		// Invoke ObjectUpdated function and check the status
+		g.handler.ObjectUpdated(sd.DeepCopy(), "")
+		sdUpdated, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDeployment.GetName(), metav1.GetOptions{})
+		if sdUpdated.Status.State != success {
+			t.Errorf("Update-Failed")
+		}
+		// Checking the node name
+		deployment, _ := g.client.AppsV1().Deployments("").Get(g.sdObjDeployment.Spec.Controllers.Deployment[0].GetName(), metav1.GetOptions{})
+		deploymentNodeNames := deployment.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values
+		usNodesNames := map[string]bool{
+			g.nodeUSObj.GetName():       true,
+			g.nodeUSSecondObj.GetName(): true,
+			g.nodeUSThirdObj.GetName():  true,
+		}
+		if !usNodesNames[deploymentNodeNames[0]] || !usNodesNames[deploymentNodeNames[1]] {
+			t.Errorf(errorDict["select-deployment-fail"])
+		}
+	})
+
+	t.Run("Update Image of SD, DaemonSet as a controller", func(t *testing.T) {
 		// Invoking the Create function of SD
 		g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(g.sdObjDaemonset.DeepCopy())
 		g.handler.ObjectCreated(g.sdObjDaemonset.DeepCopy())
@@ -787,6 +862,7 @@ func TestObjectUpdated(t *testing.T) {
 			t.Errorf(errorDict["SD-daemonSet-fail"])
 		}
 		sd.Spec.Controllers.DaemonSet[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.0"
+		// Invoke ObjectUpdated function and check the status
 		g.handler.ObjectUpdated(sd.DeepCopy(), "")
 		sdUpdated, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDaemonset.GetName(), metav1.GetOptions{})
 		if sdUpdated.Status.State != success || sdUpdated.Spec.Controllers.DaemonSet[0].Spec.Template.Spec.Containers[0].Image != "nginx:1.8.0" {
@@ -794,7 +870,46 @@ func TestObjectUpdated(t *testing.T) {
 		}
 	})
 
-	t.Run("Update of SD, StatefulSet as a controller", func(t *testing.T) {
+	t.Run("Update Selector of SD, DaemonSet as a controller", func(t *testing.T) {
+		// Invoking the Create function of SD
+		g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(g.sdObjDaemonset.DeepCopy())
+		g.handler.ObjectCreated(g.sdObjDaemonset.DeepCopy())
+		// Get the selectiveDeployment
+		sd, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDaemonset.GetName(), metav1.GetOptions{})
+		if sd.Status.State != success {
+			t.Errorf(errorDict["SD-daemonSet-fail"])
+		}
+		// Updating Selector
+		sd.Spec.Selector = []apps_v1alpha.Selector{
+			{
+				Value:    []string{"US"},
+				Operator: "In",
+				Quantity: 2,
+				Name:     "Country",
+			},
+		}
+		// Apending the second deployment object
+		sd.Spec.Controllers.DaemonSet = append(sd.Spec.Controllers.DaemonSet, g.daemonsetObj)
+		// Invoke ObjectUpdated function and check the status
+		g.handler.ObjectUpdated(sd.DeepCopy(), "")
+		sdUpdated, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjDaemonset.GetName(), metav1.GetOptions{})
+		if sdUpdated.Status.State != success {
+			t.Errorf("Update-Failed")
+		}
+		// Checking the node name
+		daemonset, _ := g.client.AppsV1().DaemonSets("").Get(g.sdObjDaemonset.Spec.Controllers.DaemonSet[0].GetName(), metav1.GetOptions{})
+		daemonsetNodeNames := daemonset.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values
+		usNodesNames := map[string]bool{
+			g.nodeUSObj.GetName():       true,
+			g.nodeUSSecondObj.GetName(): true,
+			g.nodeUSThirdObj.GetName():  true,
+		}
+		if !usNodesNames[daemonsetNodeNames[0]] || !usNodesNames[daemonsetNodeNames[1]] {
+			t.Errorf(errorDict["select-daemonset-fail"])
+		}
+	})
+
+	t.Run("Update Image of SD, StatefulSet as a controller", func(t *testing.T) {
 		// Creating a service for StatefulSet
 		g.client.CoreV1().Services("").Create(g.statefulsetService.DeepCopy())
 		// Invoking the Create function of SD
@@ -812,15 +927,58 @@ func TestObjectUpdated(t *testing.T) {
 			t.Errorf("Update-Failed")
 		}
 	})
+
+	t.Run("Update Selector of SD, StatefulSet as a controller", func(t *testing.T) {
+		// Creating a service for StatefulSet
+		g.client.CoreV1().Services("").Create(g.statefulsetService.DeepCopy())
+		// Invoking the Create function of SD
+		g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(g.sdObjStatefulset.DeepCopy())
+		g.handler.ObjectCreated(g.sdObjStatefulset.DeepCopy())
+		// Get the selectiveDeployment
+		sdStatefulSet, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjStatefulset.GetName(), metav1.GetOptions{})
+		if sdStatefulSet.Status.State != success {
+			t.Errorf(errorDict["SD-statefulSet-fail"])
+		}
+		// Updating Selector
+		sdStatefulSet.Spec.Selector = []apps_v1alpha.Selector{
+			{
+				Value:    []string{"US"},
+				Operator: "In",
+				Quantity: 2,
+				Name:     "Country",
+			},
+		}
+		// Apending the second deployment object
+		sdStatefulSet.Spec.Controllers.StatefulSet = append(sdStatefulSet.Spec.Controllers.StatefulSet, g.statefulSetObj)
+		// Invoke ObjectUpdated function and check the status
+		g.handler.ObjectUpdated(sdStatefulSet.DeepCopy(), "")
+		sdUpdated, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(g.sdObjStatefulset.GetName(), metav1.GetOptions{})
+		if sdUpdated.Status.State != success {
+			t.Errorf("Update-Failed")
+		}
+		// Checking the node name
+		statefulset, _ := g.client.AppsV1().StatefulSets("").Get(g.sdObjStatefulset.Spec.Controllers.StatefulSet[0].GetName(), metav1.GetOptions{})
+		statefulsetNodeNames := statefulset.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values
+		usNodesNames := map[string]bool{
+			g.nodeUSObj.GetName():       true,
+			g.nodeUSSecondObj.GetName(): true,
+			g.nodeUSThirdObj.GetName():  true,
+		}
+		if !usNodesNames[statefulsetNodeNames[0]] || !usNodesNames[statefulsetNodeNames[1]] {
+			t.Errorf(errorDict["select-statefulset-fail"])
+		}
+	})
 }
 
 func TestGetByNode(t *testing.T) {
 	g := SDTestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
-	// Creating two nodes
+	// Creating four nodes
 	g.client.CoreV1().Nodes().Create(g.nodeFRObj.DeepCopy())
 	g.client.CoreV1().Nodes().Create(g.nodeUSObj.DeepCopy())
+	g.client.CoreV1().Nodes().Create(g.nodeUSSecondObj.DeepCopy())
+	g.client.CoreV1().Nodes().Create(g.nodeUSThirdObj.DeepCopy())
 
 	t.Run("Testing getByNode with Deployment", func(t *testing.T) {
 		// Invoking the Create function of SD
@@ -831,9 +989,12 @@ func TestGetByNode(t *testing.T) {
 		if sd.Status.State != success {
 			t.Errorf(errorDict["SD-deployment-fail"])
 		}
-		_, status := g.handler.getByNode(g.nodeFRObj.GetName())
+		ownerList, status := g.handler.getByNode(g.nodeFRObj.GetName())
+		if reflect.DeepEqual(ownerList[0][0], (g.deploymentObj.GetNamespace() + g.deploymentObj.GetName())) {
+			t.Errorf(errorDict["GetbyNode-fail-owner"])
+		}
 		if status != true {
-			t.Errorf("GetbyNode Failed")
+			t.Errorf(errorDict["GetbyNode-fail"])
 		}
 	})
 
@@ -846,9 +1007,12 @@ func TestGetByNode(t *testing.T) {
 		if sd.Status.State != success {
 			t.Errorf(errorDict["SD-daemonSet-fail"])
 		}
-		_, status := g.handler.getByNode(g.nodeFRObj.GetName())
+		ownerList, status := g.handler.getByNode(g.nodeFRObj.GetName())
+		if reflect.DeepEqual(ownerList[0][0], (g.daemonsetObj.GetNamespace() + g.daemonsetObj.GetName())) {
+			t.Errorf(errorDict["GetbyNode-fail-owner"])
+		}
 		if status != true {
-			t.Errorf("GetbyNode Failed")
+			t.Errorf(errorDict["GetbyNode-fail"])
 		}
 	})
 
@@ -863,9 +1027,12 @@ func TestGetByNode(t *testing.T) {
 		if sdStatefulSet.Status.State != success {
 			t.Errorf(errorDict["SD-statefulSet-fail"])
 		}
-		_, status := g.handler.getByNode(g.nodeUSObj.GetName())
+		ownerList, status := g.handler.getByNode(g.nodeUSObj.GetName())
+		if reflect.DeepEqual(ownerList[0][0], (g.statefulSetObj.GetNamespace() + g.statefulSetObj.GetName())) {
+			t.Errorf(errorDict["GetbyNode-fail-owner"])
+		}
 		if status != true {
-			t.Errorf("GetbyNode Failed")
+			t.Errorf(errorDict["GetbyNode-fail"])
 		}
 	})
 
