@@ -53,6 +53,7 @@ func TestStartController(t *testing.T) {
 		},
 	}
 	// Apending the second deployment object
+	g.deploymentObj.Name = "deployment2"
 	g.sdObjDeployment.Spec.Controllers.Deployment = append(g.sdObjDeployment.Spec.Controllers.Deployment, g.deploymentObj)
 	g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Update(g.sdObjDeployment.DeepCopy())
 	time.Sleep(time.Millisecond * 500)
@@ -62,15 +63,16 @@ func TestStartController(t *testing.T) {
 		t.Errorf("update func of event handler doesn't work properly")
 	}
 	// Checking the node name
-	deployment, _ := g.client.AppsV1().Deployments("").Get(g.sdObjDeployment.Spec.Controllers.Deployment[0].GetName(), metav1.GetOptions{})
-	deploymentNodeNames := deployment.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values
+	deploymentOne, _ := g.client.AppsV1().Deployments("").Get(g.sdObjDeployment.Spec.Controllers.Deployment[0].GetName(), metav1.GetOptions{})
+	deploymentNodeNameOne := deploymentOne.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
+	deploymentTwo, _ := g.client.AppsV1().Deployments("").Get(g.sdObjDeployment.Spec.Controllers.Deployment[1].GetName(), metav1.GetOptions{})
+	deploymentNodeNameTwo := deploymentTwo.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[1]
 	usNodesNames := map[string]bool{
 		g.nodeUSObj.GetName():       true,
 		g.nodeUSSecondObj.GetName(): true,
 		g.nodeUSThirdObj.GetName():  true,
 	}
-	if !usNodesNames[deploymentNodeNames[0]] || !usNodesNames[deploymentNodeNames[1]] {
-		t.Log(deploymentNodeNames)
+	if !usNodesNames[deploymentNodeNameOne] || !usNodesNames[deploymentNodeNameTwo] {
 		t.Errorf("update func of event handler doesn't work properly")
 	}
 }
