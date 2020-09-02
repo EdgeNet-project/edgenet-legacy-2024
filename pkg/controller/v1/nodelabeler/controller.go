@@ -7,7 +7,6 @@ import (
 	"syscall"
 	"time"
 
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/node"
 
 	log "github.com/Sirupsen/logrus"
@@ -32,12 +31,8 @@ type controller struct {
 }
 
 // Start function is entry point of the controller
-func Start() {
-	clientset, err := bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+func Start(kubernetes kubernetes.Interface) {
+	clientset := kubernetes
 
 	// Create the shared informer to list and watch node resources
 	informer := cache.NewSharedIndexInformer(

@@ -40,7 +40,6 @@ func Create(name string) (string, error) {
 		}
 		return "", err
 	}
-
 	userNamespace := &apiv1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
 	result, err := Clientset.CoreV1().Namespaces().Create(userNamespace)
 	if err != nil {

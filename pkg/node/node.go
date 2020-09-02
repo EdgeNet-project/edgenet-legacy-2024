@@ -161,7 +161,6 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 		row++
 	}
 	nodesJSON, _ := json.Marshal(nodePatchArr)
-
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
 	_, err := Clientset.CoreV1().Nodes().Patch(hostname, types.JSONPatchType, nodesJSON)
@@ -310,7 +309,7 @@ func GetList() []string {
 }
 
 // GetStatusList uses clientset to get node list of the cluster that contains Ready State info
-func GetStatusList() []byte {
+func GetStatusList(clientset kubernetes.Interface) []byte {
 	type nodeStatus struct {
 		Node       string   `json:"node"`
 		Ready      string   `json:"ready"`

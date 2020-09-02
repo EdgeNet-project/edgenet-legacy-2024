@@ -22,7 +22,6 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/mailer"
 
@@ -35,7 +34,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj, updated interface{})
 	ObjectDeleted(obj interface{})
@@ -43,26 +42,16 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 	resourceQuota    *corev1.ResourceQuota
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("TotalResourceQuotaHandler.Init")
-	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	return err
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
@@ -78,7 +67,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			// If the service restarts, it creates all objects again
 			// Because of that, this section covers a variety of possibilities
 			TRQCopy.Status.State = success
-			TRQCopy.Status.Message = []string{"Total resource quota created"}
+			TRQCopy.Status.Message = []string{statusDict["TRQ-created"]}
 			// Check the total resource consumption in authority
 			TRQCopy, _ = t.ResourceConsumptionControl(TRQCopy, 0, 0)
 			// If they reached the limit, remove some slices randomly
@@ -149,7 +138,7 @@ func (t *Handler) Create(name string) {
 		TRQ.Spec.Enabled = true
 		_, err = t.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Create(TRQ.DeepCopy())
 		if err != nil {
-			log.Infof("Couldn't create total resource quota in %s: %s", name, err)
+			log.Infof(statusDict["TRQ-failed"], name, err)
 		}
 	}
 }
@@ -177,10 +166,10 @@ func (t *Handler) prohibitResourceUsage(TRQCopy *apps_v1alpha.TotalResourceQuota
 		TRQCopy.Status.Message = []string{}
 	}
 	if !TRQAuthority.Spec.Enabled {
-		TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Authority disabled")
+		TRQCopy.Status.Message = append(TRQCopy.Status.Message, statusDict["authority-disable"])
 	}
 	if !TRQAuthority.Spec.Enabled {
-		TRQCopy.Status.Message = append(TRQCopy.Status.Message, "Total resource quota disabled")
+		TRQCopy.Status.Message = append(TRQCopy.Status.Message, statusDict["TRQ-disabled"])
 	}
 	// Delete all slices of authority
 	err := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", TRQCopy.GetName())).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
@@ -289,11 +278,11 @@ func (t *Handler) calculateTotalQuota(TRQCopy *apps_v1alpha.TotalResourceQuota) 
 		if err == nil {
 			TRQCopy = TRQCopyUpdated
 			TRQCopy.Status.State = success
-			TRQCopy.Status.Message = []string{"Total resource quota applied"}
+			TRQCopy.Status.Message = []string{statusDict["TRQ-applied"]}
 		} else {
 			log.Infof("Couldn't update total resource quota in %s: %s", TRQCopy.GetName(), err)
 			TRQCopy.Status.State = failure
-			TRQCopy.Status.Message = []string{"Total resource quota couldn't be applied"}
+			TRQCopy.Status.Message = []string{statusDict["TRQ-appliedFail"]}
 		}
 	}
 	return TRQCopy, CPUQuota, memoryQuota

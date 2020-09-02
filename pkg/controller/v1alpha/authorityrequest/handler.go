@@ -22,7 +22,6 @@ import (
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/authority"
 	"edgenet/pkg/controller/v1alpha/emailverification"
@@ -35,7 +34,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj interface{})
 	ObjectDeleted(obj interface{})
@@ -43,25 +42,15 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("authorityRequestHandler.Init")
-	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	return err
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
@@ -77,7 +66,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		authorityRequestCopy.Status.Message = message
 		// Run timeout goroutine
 		go t.runApprovalTimeout(authorityRequestCopy)
-		// Set the approval timeout which is 72 hours
+		// Set the approval timeout which is 24 hours
 		authorityRequestCopy.Status.Expires = &metav1.Time{
 			Time: time.Now().Add(24 * time.Hour),
 		}
@@ -85,17 +74,16 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	}
 	if authorityRequestCopy.Spec.Approved {
 		authorityHandler := authority.Handler{}
-		err := authorityHandler.Init()
-		if err == nil {
-			created := !authorityHandler.Create(authorityRequestCopy)
-			if created {
-				return
-			} else {
-				t.sendEmail("authority-creation-failure", authorityRequestCopy)
-				authorityRequestCopy.Status.State = failure
-				authorityRequestCopy.Status.Message = []string{"Authority establishment failed", err.Error()}
-			}
+		authorityHandler.Init(t.clientset, t.edgenetClientset)
+		created := !authorityHandler.Create(authorityRequestCopy)
+		if created {
+			return
+		} else {
+			t.sendEmail("authority-creation-failure", authorityRequestCopy)
+			authorityRequestCopy.Status.State = failure
+			authorityRequestCopy.Status.Message = []string{statusDict["authority-failed"]}
 		}
+
 	}
 	// If the service restarts, it creates all objects again
 	// Because of that, this section covers a variety of possibilities
@@ -107,18 +95,17 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			Time: time.Now().Add(72 * time.Hour),
 		}
 		emailVerificationHandler := emailverification.Handler{}
-		err := emailVerificationHandler.Init()
-		if err == nil {
-			created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
-			if created {
-				// Update the status as successful
-				authorityRequestCopy.Status.State = success
-				authorityRequestCopy.Status.Message = []string{"Everything is OK, verification email sent"}
-			} else {
-				authorityRequestCopy.Status.State = issue
-				authorityRequestCopy.Status.Message = []string{"Couldn't send verification email"}
-			}
+		emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
+		created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
+		if created {
+			// Update the status as successful
+			authorityRequestCopy.Status.State = success
+			authorityRequestCopy.Status.Message = []string{statusDict["email-ok"]}
+		} else {
+			authorityRequestCopy.Status.State = issue
+			authorityRequestCopy.Status.Message = []string{statusDict["email-fail"]}
 		}
+
 	} else {
 		go t.runApprovalTimeout(authorityRequestCopy)
 	}
@@ -136,28 +123,24 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		// Check whether the request for authority creation approved
 		if authorityRequestCopy.Spec.Approved {
 			authorityHandler := authority.Handler{}
-			err := authorityHandler.Init()
-			if err == nil {
-				changeStatus := authorityHandler.Create(authorityRequestCopy)
-				if changeStatus {
-					t.sendEmail("authority-creation-failure", authorityRequestCopy)
-					authorityRequestCopy.Status.State = failure
-					authorityRequestCopy.Status.Message = []string{"Authority establishment failed", err.Error()}
-				}
+			authorityHandler.Init(t.clientset, t.edgenetClientset)
+			changeStatus := authorityHandler.Create(authorityRequestCopy)
+			if changeStatus {
+				t.sendEmail("authority-creation-failure", authorityRequestCopy)
+				authorityRequestCopy.Status.State = failure
+				authorityRequestCopy.Status.Message = []string{statusDict["authority-failed"]}
 			}
 		} else if !authorityRequestCopy.Spec.Approved && authorityRequestCopy.Status.State == failure {
 			emailVerificationHandler := emailverification.Handler{}
-			err := emailVerificationHandler.Init()
-			if err == nil {
-				created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
-				if created {
-					// Update the status as successful
-					authorityRequestCopy.Status.State = success
-					authorityRequestCopy.Status.Message = []string{"Everything is OK, verification email sent"}
-				} else {
-					authorityRequestCopy.Status.State = issue
-					authorityRequestCopy.Status.Message = []string{"Couldn't send verification email"}
-				}
+			emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
+			created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
+			if created {
+				// Update the status as successful
+				authorityRequestCopy.Status.State = success
+				authorityRequestCopy.Status.Message = []string{statusDict["email-ok"]}
+			} else {
+				authorityRequestCopy.Status.State = issue
+				authorityRequestCopy.Status.Message = []string{statusDict["email-fail"]}
 			}
 			changeStatus = true
 		}
@@ -193,15 +176,14 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 	exists := false
 	message := []string{}
 	// To check username on the users resource
-	authorityRaw, _ := t.edgenetClientset.AppsV1alpha().Authorities().List(
-		metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", authorityRequestCopy.GetName())})
-	if len(authorityRaw.Items) == 0 {
+	authorityObj, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityRequestCopy.GetName(), metav1.GetOptions{})
+	if authorityObj == nil {
 		// To check email address among users
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
 			if userRow.Spec.Email == authorityRequestCopy.Spec.Contact.Email {
 				exists = true
-				message = append(message, fmt.Sprintf("Email address, %s, already exists for another user account", authorityRequestCopy.Spec.Contact.Email))
+				message = append(message, fmt.Sprintf(statusDict["email-exist"], authorityRequestCopy.Spec.Contact.Email))
 				break
 			}
 		}
@@ -210,7 +192,7 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 		for _, URRRow := range URRRaw.Items {
 			if URRRow.Spec.Email == authorityRequestCopy.Spec.Contact.Email {
 				exists = true
-				message = append(message, fmt.Sprintf("Email address, %s, has already been used in a user registration request", authorityRequestCopy.Spec.Contact.Email))
+				message = append(message, fmt.Sprintf(statusDict["email-used-reg"], authorityRequestCopy.Spec.Contact.Email))
 				break
 			}
 		}
@@ -219,7 +201,7 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 		for _, authorityRequestRow := range authorityRequestRaw.Items {
 			if authorityRequestRow.Spec.Contact.Email == authorityRequestCopy.Spec.Contact.Email && authorityRequestRow.GetUID() != authorityRequestCopy.GetUID() {
 				exists = true
-				message = append(message, fmt.Sprintf("Email address, %s, has already been used in another authority request", authorityRequestCopy.Spec.Contact.Email))
+				message = append(message, fmt.Sprintf(statusDict["email-used-auth"], authorityRequestCopy.Spec.Contact.Email))
 				break
 			}
 		}
@@ -229,7 +211,7 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 		}
 	} else {
 		exists = true
-		message = append(message, fmt.Sprintf("Authority name, %s, is already taken", authorityRequestCopy.GetName()))
+		message = append(message, fmt.Sprintf(statusDict["authority-taken"], authorityRequestCopy.GetName()))
 		if !reflect.DeepEqual(authorityRequestCopy.Status.Message, message) {
 			t.sendEmail("authority-validation-failure-name", authorityRequestCopy)
 		}
@@ -315,7 +297,7 @@ timeoutLoop:
 	}
 }
 
-// SetOwnerReference put the authorityrequest as owner
+// SetAsOwnerReference put the authorityrequest as owner
 func SetAsOwnerReference(authorityRequestCopy *apps_v1alpha.AuthorityRequest) []metav1.OwnerReference {
 	ownerReferences := []metav1.OwnerReference{}
 	newNamespaceRef := *metav1.NewControllerRef(authorityRequestCopy, apps_v1alpha.SchemeGroupVersion.WithKind("AuthorityRequest"))

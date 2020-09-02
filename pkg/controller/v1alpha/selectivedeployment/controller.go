@@ -76,6 +76,21 @@ const trueStr = "True"
 const falseStr = "False"
 const unknownStr = "Unknown"
 
+// Dictionary of status messages
+var statusDict = map[string]string{
+	"controller-notavail":       "%d controller(s) are already under the control of any different resource object(s) with the same type, %d controller(s) couldn't be found",
+	"controller-notfound":       "No controllers found",
+	"controller-usedSameType":   "All controllers are already under the control of any different resource object(s) with the same type",
+	"sd-runs":                   "SelectiveDeployment runs precisely to ensure that the actual state of the cluster matches the desired state",
+	"controller-usedSameTypeII": "%d controller(s) are already under the control of any different resource object(s) with the same type",
+	"controller-notfoundII":     "%d controller(s) couldn't be found",
+	"nodes-fewer":               "Fewer nodes issue, %d node(s) found instead of %d for %s%s",
+	"nodes-fewerIssue":          "Fewer nodes issue",
+	"nodes-fewerIssueII":        ", fewer nodes issue",
+	"GeoJSON-err":               "%s%s has a GeoJSON format error",
+	"GeoJSON-errII":             "%s, %s%s has a GeoJSON format error",
+}
+
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	var err error

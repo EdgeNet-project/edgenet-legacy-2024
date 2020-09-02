@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/totalresourcequota"
 	"edgenet/pkg/mailer"
@@ -39,7 +38,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj interface{})
 	ObjectDeleted(obj interface{})
@@ -47,25 +46,16 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 	resourceQuota    *corev1.ResourceQuota
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("AuthorityHandler.Init")
-	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 	t.resourceQuota = &corev1.ResourceQuota{}
 	t.resourceQuota.Name = "authority-quota"
 	t.resourceQuota.Spec = corev1.ResourceQuotaSpec{
@@ -89,7 +79,6 @@ func (t *Handler) Init() error {
 		},
 	}
 	permission.Clientset = t.clientset
-	return err
 }
 
 // ObjectCreated is called when an object is created
@@ -204,13 +193,11 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 			authorityCopy = authorityCopyUpdated
 		}
 		TRQHandler := totalresourcequota.Handler{}
-		err = TRQHandler.Init()
-		if err == nil {
-			TRQHandler.Create(authorityCopy.GetName())
-		}
+		TRQHandler.Init(t.clientset, t.edgenetClientset)
+		TRQHandler.Create(authorityCopy.GetName())
 		// Automatically enable authority and update authority status
 		authorityCopy.Status.State = established
-		authorityCopy.Status.Message = []string{"Authority successfully established"}
+		authorityCopy.Status.Message = []string{statusDict["authority-ok"]}
 		enableAuthorityAdmin := func() {
 			t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
 			// Create a user as admin on authority
@@ -224,7 +211,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 			if err != nil {
 				t.sendEmail(authorityCopy, "user-creation-failure")
 				authorityCopy.Status.State = failure
-				authorityCopy.Status.Message = append(authorityCopy.Status.Message, []string{"User creation failed", err.Error()}...)
+				authorityCopy.Status.Message = append(authorityCopy.Status.Message, []string{statusDict["user-failed"], err.Error()}...)
 			}
 		}
 		defer enableAuthorityAdmin()
@@ -232,10 +219,8 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 	} else if err == nil {
 		permission.CreateClusterRoles(authorityCopy)
 		TRQHandler := totalresourcequota.Handler{}
-		err = TRQHandler.Init()
-		if err == nil {
-			TRQHandler.Create(authorityCopy.GetName())
-		}
+		TRQHandler.Init(t.clientset, t.edgenetClientset)
+		TRQHandler.Create(authorityCopy.GetName())
 	}
 	return authorityCopy
 }
@@ -263,7 +248,7 @@ func (t *Handler) checkDuplicateObject(authorityCopy *apps_v1alpha.Authority) (b
 				continue
 			}
 			exists = true
-			message = fmt.Sprintf("Email address, %s, already exists for another user account", authorityCopy.Spec.Contact.Email)
+			message = fmt.Sprintf(statusDict["email-exist"], authorityCopy.Spec.Contact.Email)
 			break
 		}
 	}

@@ -27,7 +27,6 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/bootstrap"
 	"edgenet/pkg/client/clientset/versioned"
 	"edgenet/pkg/controller/v1alpha/authority"
 	"edgenet/pkg/mailer"
@@ -44,7 +43,7 @@ import (
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) error
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj interface{})
 	ObjectDeleted(obj interface{})
@@ -52,31 +51,24 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 	publicKey        ssh.Signer
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) error {
 	log.Info("NCHandler.Init")
-	var err error
-	t.clientset, err = bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
+
 	// Get the SSH Public Key of the headnode
 	key, err := ioutil.ReadFile("../../.ssh/id_rsa")
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
+
 	t.publicKey, err = ssh.ParsePrivateKey(key)
 	if err != nil {
 		log.Println(err.Error())
@@ -111,7 +103,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		recordType := remoteip.GetRecordType(NCCopy.Spec.Host)
 		if recordType == "" {
 			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Host field must be an IP Address")
+			NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["invalid-host"])
 			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			t.sendEmail(NCCopy)
 			return
@@ -133,7 +125,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				go t.runRecoveryProcedure(addr, config, nodeName, NCCopy, contributedNode)
 			} else {
 				NCCopy.Status.State = success
-				NCCopy.Status.Message = append(NCCopy.Status.Message, "Node is up and running")
+				NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["node-ok"])
 				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			}
 		} else {
@@ -149,7 +141,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		if err == nil {
 			NCCopy = NCCopyUpdated
 			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Authority disabled")
+			NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["authority-disabled"])
 			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 		}
 	}
@@ -179,7 +171,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		recordType := remoteip.GetRecordType(NCCopy.Spec.Host)
 		if recordType == "" {
 			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Host field must be an IP Address")
+			NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["invalid-host"])
 			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(NCCopy)
 			t.sendEmail(NCCopy)
 			return
@@ -257,7 +249,7 @@ func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) {
 
 // runSetupProcedure installs necessary packages from scratch and makes the node join into the cluster
 func (t *Handler) runSetupProcedure(authorityName, addr, nodeName, recordType string, config *ssh.ClientConfig,
-	NCCopy *apps_v1alpha.NodeContribution) {
+	NCCopy *apps_v1alpha.NodeContribution) error {
 	// Steps in the procedure
 	endProcedure := make(chan bool, 1)
 	dnsConfiguration := make(chan bool, 1)
@@ -394,6 +386,7 @@ nodeInstallLoop:
 			break nodeInstallLoop
 		}
 	}
+	return err
 }
 
 // runRecoveryProcedure applies predefined methods to recover the node
