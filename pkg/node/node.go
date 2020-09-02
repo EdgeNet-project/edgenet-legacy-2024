@@ -63,24 +63,22 @@ var Clientset kubernetes.Interface
 // GeoFence function determines whether the point is inside a polygon by using the crossing number method.
 // This method counts the number of times a ray starting at a point crosses a polygon boundary edge.
 // The even numbers mean the point is outside and the odd ones mean the point is inside.
-func GeoFence(boundbox []float64, polygon [][]float64, y float64, x float64) bool {
+func GeoFence(boundbox []float64, polygon [][]float64, x float64, y float64) bool {
 	vertices := len(polygon)
 	lastIndex := vertices - 1
 	oddNodes := false
-
 	if boundbox[0] <= x && boundbox[1] >= x && boundbox[2] <= y && boundbox[3] >= y {
 		for index := range polygon {
-			if (polygon[index][0] < y && polygon[lastIndex][0] >= y || polygon[lastIndex][0] < y &&
-				polygon[index][0] >= y) && (polygon[index][1] <= x || polygon[lastIndex][1] <= x) {
-				if polygon[index][1]+(y-polygon[index][0])/(polygon[lastIndex][0]-polygon[index][0])*
-					(polygon[lastIndex][1]-polygon[index][1]) < x {
+			if (polygon[index][1] < y && polygon[lastIndex][1] >= y || polygon[lastIndex][1] < y &&
+				polygon[index][1] >= y) && (polygon[index][0] <= x || polygon[lastIndex][0] <= x) {
+				if polygon[index][0]+(y-polygon[index][1])/(polygon[lastIndex][1]-polygon[index][1])*
+					(polygon[lastIndex][0]-polygon[index][0]) < x {
 					oddNodes = !oddNodes
 				}
 			}
 			lastIndex = index
 		}
 	}
-
 	return oddNodes
 }
 

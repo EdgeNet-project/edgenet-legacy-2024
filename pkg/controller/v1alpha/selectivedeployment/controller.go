@@ -21,15 +21,15 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/bootstrap"
+	"edgenet/pkg/client/clientset/versioned"
 	appsinformer_v1alpha "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
 	"edgenet/pkg/node"
+	"edgenet/pkg/util"
 
 	log "github.com/Sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
@@ -39,6 +39,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
@@ -76,17 +77,10 @@ const falseStr = "False"
 const unknownStr = "Unknown"
 
 // Start function is entry point of the controller
-func Start() {
-	clientset, err := bootstrap.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	edgenetClientset, err := bootstrap.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
+	var err error
+	clientset := kubernetes
+	edgenetClientset := edgenet
 
 	wg := make(map[string]*sync.WaitGroup)
 	sdHandler := &SDHandler{}
@@ -117,7 +111,11 @@ func Start() {
 				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 				event.function = update
 				// The variable of event.delta contains the different values of the old object from the new one
-				event.delta = fmt.Sprintf("%s", strings.Join(dry(oldObj.(*apps_v1alpha.SelectiveDeployment).Spec.Controller, newObj.(*apps_v1alpha.SelectiveDeployment).Spec.Controller), "/?delta?/ "))
+				/*delta := dry(oldObj.(*apps_v1alpha.SelectiveDeployment).Spec.Controllers, newObj.(*apps_v1alpha.SelectiveDeployment).Spec.Controllers)
+				deltaJSON, err := json.Marshal(delta)
+				if err == nil {
+					event.delta = string(deltaJSON)
+				}*/
 				log.Infof("Update selectivedeployment: %s", event.key)
 				if err == nil {
 					queue.Add(event)
@@ -129,10 +127,6 @@ func Start() {
 			// Put the resource object into a key
 			event.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			event.function = delete
-			// The variable of event.delta contains the different values in the same way as UpdateFunc.
-			// In addition to that, this variable includes the name, namespace, type, controller of the deleted object.
-			event.delta = fmt.Sprintf("%s-?delta?- %s-?delta?- %s-?delta?- %s", obj.(*apps_v1alpha.SelectiveDeployment).GetName(), obj.(*apps_v1alpha.SelectiveDeployment).GetNamespace(), obj.(*apps_v1alpha.SelectiveDeployment).Spec.Type,
-				strings.Join(dry(obj.(*apps_v1alpha.SelectiveDeployment).Spec.Controller, []apps_v1alpha.Controller{}), "/?delta?/ "))
 			log.Infof("Delete selectivedeployment: %s", event.key)
 			if err == nil {
 				queue.Add(event)
@@ -172,7 +166,7 @@ func Start() {
 							if sdRow.Status.State == partial || sdRow.Status.State == success {
 							selectorLoop:
 								for _, selectorDet := range sdRow.Spec.Selector {
-									if selectorDet.Count == 0 || (selectorDet.Count != 0 && (strings.Contains(sdRow.Status.Message, "Fewer nodes issue") || strings.Contains(sdRow.Status.Message, "fewer nodes issue"))) {
+									if selectorDet.Quantity == 0 || (selectorDet.Quantity != 0 && (util.Contains(sdRow.Status.Message, "Fewer nodes issue"))) {
 										event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
 										event.function = create
 										log.Infof("SD node added: %s, recovery started for: %s", key, event.key)
@@ -206,7 +200,7 @@ func Start() {
 					if sdRow.Status.State == partial || sdRow.Status.State == success {
 					selectorLoop:
 						for _, selectorDet := range sdRow.Spec.Selector {
-							if selectorDet.Count == 0 || (selectorDet.Count != 0 && (strings.Contains(sdRow.Status.Message, "Fewer nodes issue") || strings.Contains(sdRow.Status.Message, "fewer nodes issue"))) {
+							if selectorDet.Quantity == 0 || (selectorDet.Quantity != 0 && (util.Contains(sdRow.Status.Message, "fewer nodes issue"))) {
 								event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
 								event.function = create
 								log.Infof("SD node updated: %s, recovery started for: %s", key, event.key)
@@ -227,7 +221,7 @@ func Start() {
 					log.Println(err.Error())
 					panic(err.Error())
 				}
-				ownerList, status := sdHandler.GetSelectiveDeployments(newObj.GetName())
+				ownerList, status := sdHandler.getByNode(newObj.GetName())
 				if status {
 					for _, ownerDet := range ownerList {
 						sdObj, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(ownerDet[0]).Get(ownerDet[1], metav1.GetOptions{})
@@ -251,7 +245,7 @@ func Start() {
 				log.Println(err.Error())
 				panic(err.Error())
 			}
-			ownerList, status := sdHandler.GetSelectiveDeployments(nodeObj.GetName())
+			ownerList, status := sdHandler.getByNode(nodeObj.GetName())
 			if status {
 				for _, ownerDet := range ownerList {
 					sdObj, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(ownerDet[0]).Get(ownerDet[1], metav1.GetOptions{})
@@ -271,123 +265,69 @@ func Start() {
 	})
 
 	// The selectivedeployment resources are reconfigured according to controller events in this section
-	addSDToQueue := func(sdSlice []apps_v1alpha.SelectiveDeployment, key string, ctlType string) {
-		for _, sdRow := range sdSlice {
-			event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
-			event.function = create
-			log.Infof("SD %s added: %s, recovery started for: %s", ctlType, key, event.key)
-			if err == nil {
-				queue.Add(event)
-			}
+	addToQueue := func(ownerSD *apps_v1alpha.SelectiveDeployment, key string, ctlType string) {
+		event.key, err = cache.MetaNamespaceKeyFunc(ownerSD.DeepCopyObject())
+		event.function = create
+		log.Infof("SD %s added: %s, recovery started for: %s", ctlType, key, event.key)
+		if err == nil {
+			queue.Add(event)
 		}
 	}
 	controllerAddFunc := func(obj interface{}) {
-		sdSlice, status := sdHandler.CheckControllerStatus(nil, obj, create)
-		if status {
-			switch controllerObj := obj.(type) {
-			case *appsv1.Deployment:
-				ctlObj := controllerObj
-				key, _ := cache.MetaNamespaceKeyFunc(ctlObj)
-				addSDToQueue(sdSlice, key, "Deployment")
-			case *appsv1.DaemonSet:
-				ctlObj := controllerObj
-				key, _ := cache.MetaNamespaceKeyFunc(ctlObj)
-				addSDToQueue(sdSlice, key, "DaemonSet")
-			case *appsv1.StatefulSet:
-				ctlObj := controllerObj
-				key, _ := cache.MetaNamespaceKeyFunc(ctlObj)
-				addSDToQueue(sdSlice, key, "StatefulSet")
-			}
-		}
-	}
-	controllerUpdateFunc := func(old, new interface{}) {
-		switch new.(type) {
+		switch controllerObj := obj.(type) {
 		case *appsv1.Deployment:
-			newCtl := new.(*appsv1.Deployment).DeepCopy()
-			oldCtl := old.(*appsv1.Deployment).DeepCopy()
-			if newCtl.ResourceVersion == oldCtl.ResourceVersion {
-				// Periodic resync will send update events for all known Deployments.
-				// Two different versions of the same Deployments will always have different RVs.
-				return
-			}
-			_, status := sdHandler.CheckControllerStatus(old, new, update)
-			if status {
-				key, _ := cache.MetaNamespaceKeyFunc(newCtl)
-				log.Infof("SD Deployment updated, recovery started: %s", key)
-				newCtl.Spec.Template.Spec.Affinity = oldCtl.Spec.Template.Spec.Affinity
-				newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] = ""
-				newCtl.SetResourceVersion("")
-				clientset.AppsV1().Deployments(newCtl.GetNamespace()).Update(newCtl)
+			ownerSD, exists := sdHandler.checkController(controllerObj.GetName(), "Deployment", controllerObj.GetNamespace())
+			if exists {
+				key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+				addToQueue(ownerSD.DeepCopy(), key, "Deployment")
 			}
 		case *appsv1.DaemonSet:
-			newCtl := new.(*appsv1.DaemonSet).DeepCopy()
-			oldCtl := old.(*appsv1.DaemonSet).DeepCopy()
-			if newCtl.ResourceVersion == oldCtl.ResourceVersion {
-				return
-			}
-			_, status := sdHandler.CheckControllerStatus(old, new, update)
-			if status {
-				key, _ := cache.MetaNamespaceKeyFunc(newCtl)
-				log.Infof("SD DaemonSet updated, recovery started: %s", key)
-				newCtl.Spec.Template.Spec.Affinity = oldCtl.Spec.Template.Spec.Affinity
-				newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] = ""
-				newCtl.SetResourceVersion("")
-				clientset.AppsV1().DaemonSets(newCtl.GetNamespace()).Update(newCtl)
+			ownerSD, exists := sdHandler.checkController(controllerObj.GetName(), "DaemonSet", controllerObj.GetNamespace())
+			if exists {
+				key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+				addToQueue(ownerSD.DeepCopy(), key, "DaemonSet")
 			}
 		case *appsv1.StatefulSet:
-			newCtl := new.(*appsv1.StatefulSet).DeepCopy()
-			oldCtl := old.(*appsv1.StatefulSet).DeepCopy()
-			if newCtl.ResourceVersion == oldCtl.ResourceVersion {
-				return
-			}
-			_, status := sdHandler.CheckControllerStatus(old, new, update)
-			if status {
-				key, _ := cache.MetaNamespaceKeyFunc(newCtl)
-				log.Infof("SD StatefulSet updated, recovery started: %s", key)
-				newCtl.Spec.Template.Spec.Affinity = oldCtl.Spec.Template.Spec.Affinity
-				newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] = ""
-				newCtl.SetResourceVersion("")
-				clientset.AppsV1().StatefulSets(newCtl.GetNamespace()).Update(newCtl)
+			ownerSD, exists := sdHandler.checkController(controllerObj.GetName(), "StatefulSet", controllerObj.GetNamespace())
+			if exists {
+				key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+				addToQueue(ownerSD.DeepCopy(), key, "StatefulSet")
 			}
 		}
 	}
 	controllerDeleteFunc := func(obj interface{}) {
-		sdSlice, status := sdHandler.CheckControllerStatus(nil, obj, delete)
-		if status {
-			ownerReferences := []metav1.OwnerReference{}
-			for _, sdRow := range sdSlice {
-				controllerRef := *metav1.NewControllerRef(sdRow.DeepCopy(), apps_v1alpha.SchemeGroupVersion.WithKind("SelectiveDeployment"))
-				takeControl := false
-				controllerRef.Controller = &takeControl
-				ownerReferences = append(ownerReferences, controllerRef)
+		switch controllerObj := obj.(type) {
+		case *appsv1.Deployment:
+			ownerReferences := controllerObj.GetOwnerReferences()
+			for _, reference := range ownerReferences {
+				if reference.Kind == "SelectiveDeployment" {
+					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(reference.Name, metav1.GetOptions{})
+					if err == nil {
+						key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+						addToQueue(ownerSD, key, "Deployment")
+					}
+				}
 			}
-			switch controllerObj := obj.(type) {
-			case *appsv1.Deployment:
-				ctlObj := controllerObj.DeepCopy()
-				key, _ := cache.MetaNamespaceKeyFunc(ctlObj)
-				ctlObj.SetResourceVersion("")
-				ctlObj.ObjectMeta.OwnerReferences = ownerReferences
-				if len(ctlObj.ObjectMeta.OwnerReferences) > 0 {
-					log.Infof("SD Deployment deleted, recovery started: %s", key)
-					clientset.AppsV1().Deployments(ctlObj.GetNamespace()).Create(ctlObj)
+		case *appsv1.DaemonSet:
+			ownerReferences := controllerObj.GetOwnerReferences()
+			for _, reference := range ownerReferences {
+				if reference.Kind == "SelectiveDeployment" {
+					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(reference.Name, metav1.GetOptions{})
+					if err == nil {
+						key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+						addToQueue(ownerSD, key, "DaemonSet")
+					}
 				}
-			case *appsv1.DaemonSet:
-				ctlObj := controllerObj.DeepCopy()
-				key, _ := cache.MetaNamespaceKeyFunc(ctlObj)
-				ctlObj.SetResourceVersion("")
-				ctlObj.ObjectMeta.OwnerReferences = ownerReferences
-				if len(ctlObj.ObjectMeta.OwnerReferences) > 0 {
-					log.Infof("SD DaemonSet deleted, recovery started: %s", key)
-					clientset.AppsV1().DaemonSets(ctlObj.GetNamespace()).Create(ctlObj)
-				}
-			case *appsv1.StatefulSet:
-				ctlObj := controllerObj.DeepCopy()
-				key, _ := cache.MetaNamespaceKeyFunc(ctlObj)
-				ctlObj.SetResourceVersion("")
-				ctlObj.ObjectMeta.OwnerReferences = ownerReferences
-				if len(ctlObj.ObjectMeta.OwnerReferences) > 0 {
-					log.Infof("SD StatefulSet deleted, recovery started: %s", key)
-					clientset.AppsV1().StatefulSets(ctlObj.GetNamespace()).Create(ctlObj)
+			}
+		case *appsv1.StatefulSet:
+			ownerReferences := controllerObj.GetOwnerReferences()
+			for _, reference := range ownerReferences {
+				if reference.Kind == "SelectiveDeployment" {
+					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(reference.Name, metav1.GetOptions{})
+					if err == nil {
+						key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+						addToQueue(ownerSD, key, "StatefulSet")
+					}
 				}
 			}
 		}
@@ -407,7 +347,6 @@ func Start() {
 	)
 	deploymentInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    controllerAddFunc,
-		UpdateFunc: controllerUpdateFunc,
 		DeleteFunc: controllerDeleteFunc,
 	})
 	daemonSetInformer := cache.NewSharedIndexInformer(
@@ -425,7 +364,6 @@ func Start() {
 	)
 	daemonSetInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    controllerAddFunc,
-		UpdateFunc: controllerUpdateFunc,
 		DeleteFunc: controllerDeleteFunc,
 	})
 	statefulSetInformer := cache.NewSharedIndexInformer(
@@ -443,7 +381,6 @@ func Start() {
 	)
 	statefulSetInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    controllerAddFunc,
-		UpdateFunc: controllerUpdateFunc,
 		DeleteFunc: controllerDeleteFunc,
 	})
 	controller := controller{
@@ -462,7 +399,7 @@ func Start() {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	// Run the controller loop as a background task to start processing resources
-	go controller.run(stopCh)
+	go controller.run(stopCh, clientset, edgenetClientset)
 	// A channel to observe OS signals for smooth shut down
 	sigTerm := make(chan os.Signal, 1)
 	signal.Notify(sigTerm, syscall.SIGTERM)
@@ -471,13 +408,13 @@ func Start() {
 }
 
 // Run starts the controller loop
-func (c *controller) run(stopCh <-chan struct{}) {
+func (c *controller) run(stopCh <-chan struct{}, clientset kubernetes.Interface, edgenetClientset versioned.Interface) {
 	// A Go panic which includes logging and terminating
 	defer utilruntime.HandleCrash()
 	// Shutdown after all goroutines have done
 	defer c.queue.ShutDown()
 	c.logger.Info("run: initiating")
-	c.handler.Init()
+	c.handler.Init(clientset, edgenetClientset)
 	// Run the informer to list and watch resources
 	go c.informer.Run(stopCh)
 	go c.nodeInformer.Run(stopCh)
@@ -535,7 +472,7 @@ func (c *controller) processNextItem() bool {
 	if !exists {
 		if event.(informerevent).function == delete {
 			c.logger.Infof("Controller.processNextItem: object deleted detected: %s", keyRaw)
-			c.handler.ObjectDeleted(item, event.(informerevent).delta)
+			c.handler.ObjectDeleted(item)
 		}
 	} else {
 		if event.(informerevent).function == create {
@@ -547,10 +484,6 @@ func (c *controller) processNextItem() bool {
 		}
 	}
 	c.queue.Forget(event.(informerevent).key)
-
-	if c.queue.Len() == 0 {
-		go c.handler.ConfigureControllers()
-	}
 
 	return true
 }

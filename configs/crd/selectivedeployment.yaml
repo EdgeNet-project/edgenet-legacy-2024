@@ -45,47 +45,53 @@ spec:
               type: object
               required:
                 - controller
-                - type
                 - selector
               properties:
-                controller:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      type:
-                        type: string
-                        enum:
-                          - Deployment
-                          - DaemonSet
-                          - StatefulSet
-                      name:
-                        type: string
-                  minimum: 1
-                type:
-                  type: string
-                  enum:
-                    - City
-                    - State
-                    - Country
-                    - Continent
-                    - Polygon
+                controllers:
+                  type: object
+                  properties:
+                    deployment:
+                      type: array
+                      items:
+                        type: object
+                      nullable: true
+                    daemonset:
+                      type: array
+                      items:
+                        type: object
+                      nullable: true
+                    statefulset:
+                      type: array
+                      items:
+                        type: object
+                      nullable: true
                 selector:
                   type: array
                   items:
                     type: object
                     properties:
-                      value:
+                      name:
                         type: string
+                        enum:
+                          - City
+                          - State
+                          - Country
+                          - Continent
+                          - Polygon
+                      value:
+                        type: array
+                        items:
+                          type: string
                       operator:
                         type: string
                         enum:
                           - In
                           - NotIn
-                      count:
+                      quantity:
                         type: integer
-                        description: The number of nodes that will be picked for this selector. 0 means no limitation.
-                        minimum: 0
+                        description: The count of nodes that will be picked for this selector.
+                        minimum: 1
+                        nullable: true
                   minimum: 1
             status:
               type: object
@@ -96,24 +102,6 @@ spec:
                   type: string
                 message:
                   type: string
-                crash:
-                  type: array
-                  nullable: true
-                  items:
-                    type: object
-                    properties:
-                      controller:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            type:
-                              type: string
-                            name:
-                              type: string
-                        minimum: 1
-                      reason:
-                        type: string
   scope: Namespaced
   names:
     plural: selectivedeployments
