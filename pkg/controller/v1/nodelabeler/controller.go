@@ -86,7 +86,7 @@ func Start(kubernetes kubernetes.Interface) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	// Run the controller loop as a background task to start processing resources
-	go controller.run(stopCh)
+	go controller.run(stopCh, clientset)
 	// A channel to observe OS signals for smooth shut down
 	sigTerm := make(chan os.Signal, 1)
 	signal.Notify(sigTerm, syscall.SIGTERM)
@@ -95,13 +95,13 @@ func Start(kubernetes kubernetes.Interface) {
 }
 
 // Run starts the controller loop
-func (c *controller) run(stopCh <-chan struct{}) {
+func (c *controller) run(stopCh <-chan struct{}, clientset kubernetes.Interface) {
 	// A Go panic which includes logging and terminating
 	defer utilruntime.HandleCrash()
 	// Shutdown after all goroutines have done
 	defer c.queue.ShutDown()
 	c.logger.Info("run: initiating")
-
+	c.handler.Init(clientset)
 	// Run the informer to list and watch resources
 	go c.informer.Run(stopCh)
 
