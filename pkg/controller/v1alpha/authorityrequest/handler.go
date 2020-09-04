@@ -28,6 +28,7 @@ import (
 	"edgenet/pkg/mailer"
 
 	log "github.com/Sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -176,8 +177,14 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 	exists := false
 	message := []string{}
 	// To check username on the users resource
-	authorityObj, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityRequestCopy.GetName(), metav1.GetOptions{})
-	if authorityObj == nil {
+	_, err := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityRequestCopy.GetName(), metav1.GetOptions{})
+	if errors.IsAlreadyExists(err) {
+		exists = true
+		message = append(message, fmt.Sprintf(statusDict["authority-taken"], authorityRequestCopy.GetName()))
+		if !reflect.DeepEqual(authorityRequestCopy.Status.Message, message) {
+			t.sendEmail("authority-validation-failure-name", authorityRequestCopy)
+		}
+	} else {
 		// To check email address among users
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
@@ -207,13 +214,6 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 		}
 		if exists && !reflect.DeepEqual(authorityRequestCopy.Status.Message, message) {
 			t.sendEmail("authority-validation-failure-email", authorityRequestCopy)
-
-		}
-	} else {
-		exists = true
-		message = append(message, fmt.Sprintf(statusDict["authority-taken"], authorityRequestCopy.GetName()))
-		if !reflect.DeepEqual(authorityRequestCopy.Status.Message, message) {
-			t.sendEmail("authority-validation-failure-name", authorityRequestCopy)
 		}
 	}
 	return exists, message

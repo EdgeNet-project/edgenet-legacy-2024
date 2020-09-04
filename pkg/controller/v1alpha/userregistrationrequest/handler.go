@@ -28,6 +28,7 @@ import (
 	"edgenet/pkg/mailer"
 
 	log "github.com/Sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -272,10 +273,14 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 	exists := false
 	message := []string{}
 	// To check username on the users resource
-	userObj, _ := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Get(URRCopy.GetName(), metav1.GetOptions{})
-	//userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).List(
-	//	metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", URRCopy.GetName())})
-	if userObj == nil {
+	_, err := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Get(URRCopy.GetName(), metav1.GetOptions{})
+	if errors.IsAlreadyExists(err) {
+		exists = true
+		message = append(message, fmt.Sprintf(statusDict["username-exist"], URRCopy.GetName()))
+		if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
+			t.sendEmail(URRCopy, authorityName, "user-validation-failure-name")
+		}
+	} else {
 		// To check email address
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
@@ -307,12 +312,6 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 		}
 		if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
 			t.sendEmail(URRCopy, authorityName, "user-validation-failure-email")
-		}
-	} else {
-		exists = true
-		message = append(message, fmt.Sprintf(statusDict["username-exist"], URRCopy.GetName()))
-		if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
-			t.sendEmail(URRCopy, authorityName, "user-validation-failure-name")
 		}
 	}
 	return exists, message
