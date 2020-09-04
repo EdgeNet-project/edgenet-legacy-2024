@@ -9,12 +9,12 @@ import Header from "./Header";
 import AUPText from "./AUPText";
 
 const AUP = () => {
-    const { edgenet_api, getEdgenetUser } = useContext(AuthContext)
+    const { user, edgenet_api, getEdgenetUser } = useContext(AuthContext)
 
     const acceptAUP = () => {
         console.log('accept')
         axios.patch(
-            edgenet_api + '/apis/apps.edgenet.io/v1alpha/namespaces/authority-cslash/acceptableusepolicies/ciro',
+            edgenet_api + '/apis/apps.edgenet.io/v1alpha/namespaces/authority-'+user.authority+'/acceptableusepolicies/' + user.name,
             [{ op: 'replace', path: '/spec/accepted', value: true }],
             { headers: { 'Content-Type': 'application/json-patch+json' } }
         )

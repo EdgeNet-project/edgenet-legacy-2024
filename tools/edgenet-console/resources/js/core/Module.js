@@ -12,7 +12,7 @@ const Module = ({type, resource}) => {
     console.log(resource)
 
     const Component = React.lazy(() =>
-        import('../modules/' + resource.api.type + '/' + type)
+        import('../modules/' + resource.type + '/' + type)
             .catch((err) => ({ default: () => {
                     return <ModuleNotFount error={err} />
                 }

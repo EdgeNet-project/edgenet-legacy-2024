@@ -14,6 +14,20 @@ import ResourceList from "./ResourceList";
 //
 // import {Related} from "../form";
 import {ForgotPasswordView, LoginView, ResetPasswordView, Signup, VerifyEmail} from "../auth/views";
+import {
+    ProfileNavigation,
+    PasswordForm
+} from "../views/profile";
+
+const ProfileRoutes = () =>
+    <Switch>
+        <Route path="/profile/password">
+            <PasswordForm />
+        </Route>
+        <Route>
+            <UserProfile />
+        </Route>
+    </Switch>
 
 const Routes = ({menu, theme}) =>
     <Grommet full theme={theme}>
@@ -23,7 +37,7 @@ const Routes = ({menu, theme}) =>
                     <NavigationView menu={menu}>
                         <Switch>
                             <Route path="/profile">
-                                <UserProfile />
+                                <ProfileRoutes />
                             </Route>
                             {/*<Route path={['/:resource/new', '/:resource/:id/edit']}*/}
                             {/*       component={ResourceForm}/>*/}
@@ -33,6 +47,9 @@ const Routes = ({menu, theme}) =>
                             <Redirect to="/profile" />
                         </Switch>
                         <Switch>
+                            <Route path="/profile">
+                                <ProfileNavigation />
+                            </Route>
                             {/*<Route path={'/:resource/:id/edit'} component={Related}/>*/}
                             {/*<Route path="/:resource/new" component={null}/>*/}
                             {/*<Route path={['/:resource/:id', '/:resource']} component={ResourceView}/>*/}

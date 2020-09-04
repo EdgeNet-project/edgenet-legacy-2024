@@ -73,7 +73,8 @@ class AuthProvider extends React.Component {
     }
 
     getEdgenetUser() {
-        axios.get(this.edgenet_api + '/apis/apps.edgenet.io/v1alpha/namespaces/authority-cslash/users/ciro')
+        const { user } = this.state;
+        axios.get(this.edgenet_api + '/apis/apps.edgenet.io/v1alpha/namespaces/authority-'+user.authority+'/users/' + user.name)
             .then(({data}) => this.setState({edgenet: data}))
             .catch(err => console.log(err));
     }

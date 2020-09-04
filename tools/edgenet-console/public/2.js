@@ -243,7 +243,13 @@ var List = function List(_ref) {
 var map = {
 	"./nodes/List": [
 		"./resources/js/resources/nodes/List.js",
+		9,
 		6
+	],
+	"./userregistrationrequests/List": [
+		"./resources/js/resources/userregistrationrequests/List.js",
+		7,
+		7
 	]
 };
 function webpackAsyncContext(req) {
@@ -256,8 +262,8 @@ function webpackAsyncContext(req) {
 	}
 
 	var ids = map[req], id = ids[0];
-	return __webpack_require__.e(ids[1]).then(function() {
-		return __webpack_require__(id);
+	return __webpack_require__.e(ids[2]).then(function() {
+		return __webpack_require__.t(id, ids[1])
 	});
 }
 webpackAsyncContext.keys = function webpackAsyncContextKeys() {

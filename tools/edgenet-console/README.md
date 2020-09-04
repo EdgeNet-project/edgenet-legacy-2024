@@ -29,7 +29,7 @@ current-context: webhook
 
 ```
 # you can retreive info on the api pod
-$ kubectl describe pod  kube-apiserver-XX -n kube-system
+$ kubectl describe pod kube-apiserver-XX -n kube-system
 
 ```
 

@@ -1,9 +1,9 @@
 (window["webpackJsonp"] = window["webpackJsonp"] || []).push([[7],{
 
-/***/ "./resources/js/resources/list/NodesList.js":
-/*!**************************************************!*\
-  !*** ./resources/js/resources/list/NodesList.js ***!
-  \**************************************************/
+/***/ "./resources/js/resources/userregistrationrequests/List.js":
+/*!*****************************************************************!*\
+  !*** ./resources/js/resources/userregistrationrequests/List.js ***!
+  \*****************************************************************/
 /*! exports provided: default */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
@@ -15,8 +15,9 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-var NodesList = function NodesList(_ref) {
+var List = function List(_ref) {
   var item = _ref.item,
+      resource = _ref.resource,
       _onClick = _ref.onClick;
   return /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(grommet__WEBPACK_IMPORTED_MODULE_1__["Box"], {
     pad: "small",
@@ -25,10 +26,10 @@ var NodesList = function NodesList(_ref) {
     }
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(grommet__WEBPACK_IMPORTED_MODULE_1__["Text"], {
     size: "small"
-  }, item.category), item.name);
+  }, item.metadata.uid), item.metadata.name);
 };
 
-/* harmony default export */ __webpack_exports__["default"] = (NodesList);
+/* harmony default export */ __webpack_exports__["default"] = (List);
 
 /***/ })
 

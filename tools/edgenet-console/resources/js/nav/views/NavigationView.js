@@ -31,10 +31,13 @@ const NavigationView = ({children, logo, title, menu = []}) =>
             {title ? title: document.title}
             </Box>
             {
-                menu.map((m, k) => <NavMenu key={"menu-"+k} label={m.label} path={m.path} icon={m.icon} />)
+                menu.filter(m => m.main).map((m, k) => <NavMenu key={"menu-"+k} label={m.label} path={m.path} icon={m.icon} />)
             }
             <Box flex="grow" />
             <Box pad={{vertical: 'medium'}}>
+                {
+                    menu.filter(m => !m.main).map((m, k) => <NavMenu key={"menu-"+k} label={m.label} path={m.path} icon={m.icon} />)
+                }
                 <AuthConsumer>
                     {({edgenet}) => <NavMenu label={edgenet.spec.firstname} path='/profile' icon={<User/>} />}
                 </AuthConsumer>

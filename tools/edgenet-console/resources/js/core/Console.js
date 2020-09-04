@@ -87,7 +87,9 @@ class Console extends React.Component {
 
         return (
             <ConsoleContext.Provider value={{
-                resources: resources,
+                config: {
+                    resources: resources
+                },
                 // loadComponent: this.loadComponent
             }}>
                 {children}

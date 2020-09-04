@@ -79,7 +79,7 @@ class SignupController extends Controller
                 'email' => $request->input('email'),
 
                 'name' => $username,
-                'namespace' => $authority,
+                'authority' => $authority,
 
                 'password' => Hash::make($request->input('password')),
             ])
@@ -186,10 +186,10 @@ class SignupController extends Controller
                 'firstname' => $request->input('firstname'),
                 'lastname' => $request->input('lastname'),
                 'email' => $request->input('email'),
-                'phone' => $request->input('phone', '-'),
-                'bio' => $request->input('bio','-'),
-                'url' => $request->input('url','-'),
-                'roles' => $roles,
+//                'phone' => $request->input('phone', '-'),
+//                'bio' => $request->input('bio','-'),
+//                'url' => $request->input('url','-'),
+//                'roles' => $roles,
             ],
 
         ];
@@ -210,10 +210,13 @@ class SignupController extends Controller
                 'exceptions' => false
             ]);
 
-        if ($res->getStatusCode()) {
+        Log::channel('k8s')->info('url: ' . $url);
 
+        if ($res->getStatusCode() > 208) {
+            Log::channel('k8s')->error(print_r($userSpec, true));
+            Log::channel('k8s')->error($res->getBody());
+            return false;
         }
-        Log::channel('k8s')->error($res->getStatusCode());
 
         return true;
     }

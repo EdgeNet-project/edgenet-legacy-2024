@@ -49,7 +49,9 @@ class LoginController extends Controller
      */
     protected function authenticated(Request $request, $user)
     {
-        $user->generateToken();
+        if (!$user->api_token) {
+            $user->generateToken();
+        }
 
         return new Response($user, 203);
     }
