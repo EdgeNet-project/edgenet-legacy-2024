@@ -207,7 +207,14 @@ func (t *Handler) sendEmail(subject, authority, namespace, username, fullname, e
 	collective.CommonData.Username = username
 	collective.CommonData.Name = fullname
 	collective.CommonData.Email = []string{}
-	if subject == "user-email-verified-alert" {
+	if subject == "authority-email-verification" || subject == "user-email-verification-update" ||
+		subject == "user-email-verification" {
+		collective.CommonData.Email = []string{email}
+		verifyContent := mailer.VerifyContentData{}
+		verifyContent.Code = code
+		verifyContent.CommonData = collective.CommonData
+		contentData = verifyContent
+	} else if subject == "user-email-verified-alert" {
 		// Put the email addresses of the authority-admins and authorized users in the email to be sent list
 		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(namespace).List(metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
@@ -216,16 +223,9 @@ func (t *Handler) sendEmail(subject, authority, namespace, username, fullname, e
 			}
 		}
 		contentData = collective
-	} else if subject == "user-email-verified-notification" {
+	} else {
 		collective.CommonData.Email = []string{email}
 		contentData = collective
-	} else if subject == "authority-email-verification" || subject == "user-email-verification-update" ||
-		subject == "user-email-verification" {
-		collective.CommonData.Email = []string{email}
-		verifyContent := mailer.VerifyContentData{}
-		verifyContent.Code = code
-		verifyContent.CommonData = collective.CommonData
-		contentData = verifyContent
 	}
 
 	mailer.Send(subject, contentData)
