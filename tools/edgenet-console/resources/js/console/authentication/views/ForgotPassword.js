@@ -5,26 +5,28 @@ import { Box, Heading, Text, Button, Form } from 'grommet';
 import { LoginInput } from '../components';
 
 import locale from "../locale";
-import Logo from "./Logo";
+
 import { AuthenticationContext } from "../AuthenticationContext";
+import { ConsoleLogo } from "../../index";
 
 const ForgotPasswordView = () => {
     const [email, setEmail] = useState('');
     const {message, errors, loading, sendResetLink, prefix} = useContext(AuthenticationContext)
 
-
     return (
         <Form onSubmit={() => sendResetLink(email)}>
             <Box gap="medium" align="center" justify="center">
                 <Box gap="small" width="medium">
-                    <Logo />
+                    <Box margin={{vertical:'medium'}}>
+                        <ConsoleLogo />
+                    </Box>
                     <Heading level="2" size="small" margin="none">{locale.recoverTitle}</Heading>
                     <Text size="small">
                         {locale.recoverText}
                     </Text>
                     <LoginInput value={email} disabled={loading} onChange={setEmail}/>
                     <Button alignSelf="start" type="submit" primary label={locale.recoverSubmit} disabled={loading}/>
-                    <Link to={prefix}>{locale.linkHome}</Link>
+                    <Link to="/">{locale.linkHome}</Link>
                     {message && <Text color="status-critical">{message}</Text>}
                     {errors && Object.entries(errors).map(v => v[1].join(' '))}
                 </Box>

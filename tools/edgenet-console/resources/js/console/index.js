@@ -4,6 +4,7 @@ import {Grommet, Image, Text} from "grommet";
 import theme from "./theme";
 
 import { Authentication, AuthenticationRoutes } from "./authentication";
+import { RegistrationRoutes } from "./registration";
 
 const ConsoleContext = React.createContext({
     logo: null
@@ -30,6 +31,8 @@ const Console = ({
                 <Authentication>
                     <AuthenticationRoutes />
                 </Authentication>
+
+                <RegistrationRoutes />
             </Router>
         </Grommet>
     </ConsoleContext.Provider>;
