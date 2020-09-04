@@ -1,10 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom";
-import { Console, Routes } from "./core";
-import { Edgenet } from "./edgenet";
+import { Console } from "./console";
 import { Server, ServerCluster, Chat, Organization, User } from "grommet-icons";
 
-import theme from "./theme";
 
 
 const menu = [
@@ -63,14 +61,7 @@ const config = {
 };
 
 
-const dom = document.getElementById('application');
+const dom = document.getElementById('console');
 if (dom) {
-    ReactDOM.render(
-        <Edgenet>
-            <Console resources={resources}>
-                <Routes menu={menu} theme={theme} />
-            </Console>
-        </Edgenet>,
-        dom
-    );
+    ReactDOM.render(<Console logo="/images/edgenet.png" />, dom);
 }

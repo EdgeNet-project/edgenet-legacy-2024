@@ -3,7 +3,7 @@ import {Grommet} from "grommet";
 import {BrowserRouter as Router, Route, Redirect, Switch} from "react-router-dom";
 
 import {AuthProvider} from "../auth";
-import {Authenticated, Guest} from "../auth/access";
+import { Authenticated, Guest } from "../auth/access";
 import { UserProfile } from "../auth/views";
 
 import {NavigationView} from "../nav/views";
