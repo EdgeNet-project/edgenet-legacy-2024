@@ -10,11 +10,11 @@ const AuthoritySelect = () => {
     useEffect(() => {
         axios.get('/apis/apps.edgenet.io/v1alpha/authorities')
             .then(({data}) =>
-                setAuthorities(data.items.map(item => {
+                data.items && setAuthorities(data.items.map(item => {
                         return { value: item.metadata.name, label: item.spec.fullname + ' ('+item.spec.shortname+')' }
                 }))
             )
-    }, [authorities]);
+    }, []);
 
     return (
 
