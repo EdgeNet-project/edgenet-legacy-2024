@@ -113,7 +113,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		if err == nil {
 			authorityCopy = authorityCopyUpdated
 		}
-	} else {
+	} else if !authorityCopy.Spec.Enabled && authorityCopy.Status.State == failure {
 		authorityCopy = t.authorityPreparation(authorityCopy)
 	}
 	// Check whether the authority disabled
@@ -179,7 +179,12 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		// Namespace labels indicate this namespace created by a authority, not by a team or slice
 		namespaceLabels := map[string]string{"owner": "authority", "owner-name": authorityCopy.GetName(), "authority-name": authorityCopy.GetName()}
 		authorityChildNamespace.SetLabels(namespaceLabels)
-		authorityChildNamespaceCreated, _ := t.clientset.CoreV1().Namespaces().Create(authorityChildNamespace)
+		authorityChildNamespaceCreated, err := t.clientset.CoreV1().Namespaces().Create(authorityChildNamespace)
+		if err != nil {
+			log.Infof("Couldn't create namespace for %s: %s", authorityCopy.GetName(), err)
+			authorityCopy.Status.State = failure
+			authorityCopy.Status.Message = []string{statusDict["namespace-failure"]}
+		}
 		// Create the resource quota to ban users from using this namespace for their applications
 		_, err = t.clientset.CoreV1().ResourceQuotas(authorityChildNamespaceCreated.GetName()).Create(t.resourceQuota)
 		if err != nil && !errors.IsAlreadyExists(err) {
@@ -195,9 +200,6 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		TRQHandler := totalresourcequota.Handler{}
 		TRQHandler.Init(t.clientset, t.edgenetClientset)
 		TRQHandler.Create(authorityCopy.GetName())
-		// Automatically enable authority and update authority status
-		authorityCopy.Status.State = established
-		authorityCopy.Status.Message = []string{statusDict["authority-ok"]}
 		enableAuthorityAdmin := func() {
 			t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
 			// Create a user as admin on authority
@@ -215,7 +217,12 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 			}
 		}
 		defer enableAuthorityAdmin()
-		t.sendEmail(authorityCopy, "authority-creation-successful")
+		if authorityCopy.Status.State != failure {
+			// Update authority status
+			authorityCopy.Status.State = established
+			authorityCopy.Status.Message = []string{statusDict["authority-ok"]}
+			t.sendEmail(authorityCopy, "authority-creation-successful")
+		}
 	} else if err == nil {
 		permission.CreateClusterRoles(authorityCopy)
 		TRQHandler := totalresourcequota.Handler{}

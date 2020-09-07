@@ -61,9 +61,10 @@ const established = "Established"
 
 // Dictionary of status messages
 var statusDict = map[string]string{
-	"authority-ok": "Authority successfully established",
-	"user-failed":  "User creation failed",
-	"email-exist":  "Email address, %s, already exists for another user account",
+	"authority-ok":      "Authority successfully established",
+	"namespace-failure": "Authority namespace cannot be created",
+	"user-failed":       "User creation failed",
+	"email-exist":       "Email address, %s, already exists for another user account",
 }
 
 // Start function is entry point of the controller
