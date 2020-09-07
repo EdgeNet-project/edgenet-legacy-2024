@@ -4,7 +4,7 @@ import (
 	"edgenet/pkg/node"
 
 	log "github.com/Sirupsen/logrus"
-	api_v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -30,17 +30,17 @@ func (t *Handler) Init(kubernetes kubernetes.Interface) {
 func (t *Handler) SetNodeGeolocation(obj interface{}) {
 	log.Info("Handler.ObjectCreated")
 	// Get internal and external IP addresses of the node
-	internalIP, externalIP := node.GetNodeIPAddresses(obj.(*api_v1.Node))
+	internalIP, externalIP := node.GetNodeIPAddresses(obj.(*corev1.Node))
 	result := false
 	// Check if the external IP exists to use it in the first place
 	if externalIP != "" {
 		log.Infof("External IP: %s", externalIP)
-		result = node.GetGeolocationByIP(obj.(*api_v1.Node).Name, externalIP)
+		result = node.GetGeolocationByIP(obj.(*corev1.Node).Name, externalIP)
 	}
 	// Check if the internal IP exists and
 	// the result of detecting geolocation by external IP is false
 	if internalIP != "" && result == false {
 		log.Infof("Internal IP: %s", internalIP)
-		node.GetGeolocationByIP(obj.(*api_v1.Node).Name, internalIP)
+		node.GetGeolocationByIP(obj.(*corev1.Node).Name, internalIP)
 	}
 }

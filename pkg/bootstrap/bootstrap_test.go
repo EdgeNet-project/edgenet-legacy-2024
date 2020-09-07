@@ -1,7 +1,7 @@
 package bootstrap
 
 import (
-	"flag"
+	"edgenet/pkg/util"
 	"path/filepath"
 	"testing"
 )
@@ -9,19 +9,29 @@ import (
 func TestHomeDir(t *testing.T) {
 	home := homeDir()
 	if home == "" {
-		t.Fatal("returned home directory is empty")
+		t.Fatal("Returned home directory is empty")
 	}
 	if !filepath.IsAbs(home) {
-		t.Fatalf("returned path is not absolute: %s", home)
+		t.Fatalf("Returned path is not absolute: %s", home)
 	}
 }
 
-func TestSetKubeConfig(t *testing.T) {
+func TestClientSetCreation(t *testing.T) {
 	SetKubeConfig()
-	var r string
-	flag.StringVar(&r, "r", filepath.Join(homeDir(), ".kube", "config"), "")
-	if kubeconfig != "" && kubeconfig != r {
-		t.Fatal("Error, another path has been detected")
-	}
-	flag.Parse()
+	t.Run("preparing kubeconfig file", func(t *testing.T) {
+		util.Equals(t, filepath.Join(homeDir(), ".kube", "config"), kubeconfig)
+	})
+	t.Run("create edgenet clientset", func(t *testing.T) {
+		_, err := CreateEdgeNetClientSet()
+		util.OK(t, err)
+	})
+	t.Run("create kubernetes clientset", func(t *testing.T) {
+		_, err := CreateClientSet()
+		util.OK(t, err)
+	})
+}
+
+func TestNamecheapClient(t *testing.T) {
+	_, err := CreateNamecheapClient()
+	util.OK(t, err)
 }

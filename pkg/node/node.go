@@ -21,6 +21,7 @@ package node
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -175,8 +176,15 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 func GetGeolocationByIP(hostname string, ipStr string) bool {
 	// Parse IP address
 	ip := net.ParseIP(ipStr)
+	var pathDB string
+	if flag.Lookup("geolite-path") != nil {
+		pathDB = flag.Lookup("geolite-path").Value.(flag.Getter).Get().(string)
+	}
+	if pathDB == "" {
+		pathDB = "../../assets/database/GeoLite2-City/GeoLite2-City.mmdb"
+	}
 	// Open GeoLite database
-	db, err := geoip2.Open("../../assets/database/GeoLite2-City/GeoLite2-City.mmdb")
+	db, err := geoip2.Open(pathDB)
 	if err != nil {
 		log.Fatal(err)
 		return false
