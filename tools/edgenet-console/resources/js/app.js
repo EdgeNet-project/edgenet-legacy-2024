@@ -71,12 +71,6 @@ const resources = [
 
     ]
 
-const config = {
-    resources: resources,
-
-};
-
-
 const dom = document.getElementById('console');
 if (dom) {
     ReactDOM.render(<Console settings={settings} />, dom);

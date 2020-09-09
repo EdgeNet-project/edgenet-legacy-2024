@@ -2,7 +2,7 @@ import React from "react";
 import {useHistory, useRouteMatch} from "react-router-dom";
 import {Box, Button as GrommetButton, Text} from "grommet";
 
-const Button = ({label, path, icon}) => {
+const Button = ({label, path, icon, onClick}) => {
     const history = useHistory();
     const match = useRouteMatch(path);
 

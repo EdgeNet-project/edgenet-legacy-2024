@@ -124,8 +124,7 @@ class Authentication extends React.Component {
     }
 
     logout() {
-        const { logout } = this.props;
-        axios.post(logout)
+        axios.post('/logout')
             .then((response) => {
                 this.setState({
                     user: {},
