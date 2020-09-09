@@ -14,7 +14,7 @@ const Authenticated = ({children}) => {
         return 'edgenet'
     }
 
-    if (!edgenet.status.aup) {
+    if (edgenet.status && !edgenet.status.aup) {
         return <AUP />
     }
 

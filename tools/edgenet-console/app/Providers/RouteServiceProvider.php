@@ -95,6 +95,11 @@ class RouteServiceProvider extends ServiceProvider
             ->middleware('kubernetes')
             ->namespace($this->namespace . '\Kubernetes')
             ->group(base_path('routes/kubernetes.php'));
+
+        Route::prefix('api/v1')
+            ->middleware('kubernetes')
+            ->namespace($this->namespace . '\Kubernetes')
+            ->group(base_path('routes/kubernetes_api.php'));
     }
 
     /**

@@ -3,7 +3,23 @@ import ReactDOM from "react-dom";
 import { Console } from "./console";
 import { Server, ServerCluster, Chat, Organization, User } from "grommet-icons";
 
+const settings = {
+    logo: "/images/edgenet.png",
 
+    api: {
+        server: null, // localhost
+        prefix: ''
+
+    },
+
+    navigation: [
+        {
+            label: 'Nodes',
+            path: '/nodes',
+            icon: <Server />,
+        },
+    ]
+};
 
 const menu = [
     {
@@ -63,5 +79,5 @@ const config = {
 
 const dom = document.getElementById('console');
 if (dom) {
-    ReactDOM.render(<Console logo="/images/edgenet.png" />, dom);
+    ReactDOM.render(<Console settings={settings} />, dom);
 }
