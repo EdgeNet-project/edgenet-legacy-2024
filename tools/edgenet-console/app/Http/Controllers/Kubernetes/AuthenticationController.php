@@ -3,15 +3,17 @@
 namespace App\Http\Controllers\Kubernetes;
 
 use App\Http\Controllers\Controller;
-use App\Providers\RouteServiceProvider;
 use Illuminate\Http\Request;
-
-use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Support\Facades\Log;
-use Auth;
 
 use App\User;
 
+/**
+ * Class AuthenticationController
+ * @package App\Http\Controllers\Kubernetes
+ *
+ * This controller will be used by the kubernetes API server to verify user tokens
+ */
 class AuthenticationController extends Controller
 {
     public function authenticate(Request $request)
@@ -28,8 +30,6 @@ class AuthenticationController extends Controller
         if ($request->input('kind') != 'TokenReview') {
             return response()->json($failed, 400);
         }
-
-        // apiVersion authentication.k8s.io/v1beta1
 
         if (!$request->has('spec.token')) {
             return response()->json($failed, 401);

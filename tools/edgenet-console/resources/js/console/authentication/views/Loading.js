@@ -1,13 +1,15 @@
 import React from "react";
 import {Box} from "grommet";
-import Header from "./Header";
+import { ConsoleLogo } from "../../index";
 
 
-const Loading = ({title}) =>
-    <Box align="center">
-        <Header title={title} />
+const Loading = () =>
+    <Box gap="medium" alignSelf="center" width="medium" alignContent="center" align="stretch">
+        <Box margin={{vertical:'medium'}}>
+            <ConsoleLogo />
+        </Box>
         <Box pad={{vertical:'medium'}}>
-        Please wait...
+            Please wait...
         </Box>
     </Box>
 

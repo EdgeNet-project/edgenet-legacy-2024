@@ -2,6 +2,6 @@
 
 return [
     'api' => [
-        'server' => env('KUBERNETES_API_SERVER','')
+        'server' => env('KUBERNETES_API_SERVER','https://api.edge-net.org')
     ]
 ];

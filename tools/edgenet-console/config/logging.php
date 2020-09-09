@@ -41,9 +41,9 @@ return [
             'ignore_exceptions' => false,
         ],
 
-        'k8s' => [
+        'kubernetes' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/k8s.log'),
+            'path' => storage_path('logs/kubernetes.log'),
             'level' => 'info',
             'days' => 30,
         ],

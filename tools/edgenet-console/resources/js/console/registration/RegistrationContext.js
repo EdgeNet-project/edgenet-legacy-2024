@@ -1,108 +1,64 @@
 import React, {useState} from "react";
-// import {Box, Form, Text, Button, Anchor} from "grommet";
-// import {Link} from "react-router-dom";
-// import Select from 'react-select';
 import axios from "axios";
-
-// // import { EdgenetContext } from "../../edgenet";
-// import SignupSucces from "./SignupSucces";
-// import SignupUser from "./SignupUser";
-// import SignupAuthority from "./SignuAuthority";
-// import Loading from "./Loading";
-// import Header from "./Header";
-// import Footer from "./Footer";
 
 const RegistrationContext = React.createContext({});
 const RegistrationConsumer = RegistrationContext.Consumer;
 
 const Registration = ({children}) => {
-    const [ user, setUser ] = useState({
-        firstname: '',
-        lastname: '',
-        phone: '',
-        email: '',
-        password: '',
-        password_confirmation: '',
-
-        fullname: '',
-        shortname: '',
-        street: '',
-        zip: '',
-        city: '',
-        region: '',
-        country: '',
-        url: ''
-    });
     const [ authority, setAuthority ] = useState(null);
     const [ message, setMessage ] = useState(null);
-    const [ error, setError ] = useState(null);
+    const [ errors, setErrors ] = useState({});
     const [ loading, setLoading ] = useState(null);
-
-
-    console.log('authority => ', authority)
-
+    const [ success, setSuccess ] = useState(false);
 
     const submitRegistration = ({value}) => {
 
-        console.log(value)
+        if (!authority) {
+            setMessage('Authority not selected')
+            return;
+        }
 
-        axios.post('/signup', {
+        setLoading(true)
+
+        axios.post('/register', {
             ...value,
             authority: authority
         })
-            .then(({data}) => this.setState({
-                loading: false,
-                success: true
-            }, () => console.log(data)))
+            .then(({data}) => {
+                console.log(data)
+
+                setSuccess(true)
+                setMessage(null)
+                setErrors({})
+            })
             .catch(error => {
-                this.setState({
-                    loading: false,
-                    message: error.message
-                });
+                setMessage(error.message)
+
                 if (error.response) {
-                    console.log(error.response.data);
+                    console.log(1, error.response.data);
+                    setMessage(error.response.data.message)
+                    if (error.response.data.errors) {
+                        setErrors(error.response.data.errors)
+                    }
                 } else if (error.request) {
-                    console.log(error.request);
+                    console.log(2, error.request);
                 } else {
                     console.log('client error');
-                    console.log(error);
+                    console.log(3, error);
                 }
             })
+            .finally(() => setLoading(false))
 
     }
-
-    const signupAuthority = () => {
-        const { signupAuthority } = this.state;
-
-        this.setState({
-            signupAuthority: !signupAuthority,
-            authority: null
-        })
-    }
-
-
-
-    const selectAuthority = ({value}) => {
-        this.setState({
-            authority: value,
-            signupAuthority: null
-        })
-    }
-
-
-    //
-    // if (success) {
-    //     return <SignupSucces />;
-    // }
-    //
-    // if (loading) {
-    //     return <Loading />;
-    // }
 
     return (
         <RegistrationContext.Provider value={{
             setAuthority: setAuthority,
-            submitRegistration: submitRegistration
+            submitRegistration: submitRegistration,
+            loading: loading,
+            message: message,
+            errors: errors,
+            success: success
         }}>
             {children}
         </RegistrationContext.Provider>
