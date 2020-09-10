@@ -10,6 +10,7 @@ import { Navigation } from "./navigation";
 
 import Nodes from "./resources/views/Nodes";
 import Profile from "./user/views/Profile";
+import Secrets from "./user/views/Secrets";
 import Kubernetes from "./user/views/Kubernetes";
 import Password from "./user/views/Password";
 
@@ -46,6 +47,9 @@ const Console = ({settings}) =>
 
                                 <Route exact path="/profile">
                                     <Profile />
+                                </Route>
+                                <Route exact path="/profile/secrets">
+                                    <Secrets />
                                 </Route>
                                 <Route exact path="/profile/kubernetes">
                                     <Kubernetes />

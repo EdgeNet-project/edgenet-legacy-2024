@@ -1,5 +1,5 @@
 <?php
 
-Route::post('/authentication', 'AuthenticationController@authenticate');
+Route::post('/authenticate', 'AuthenticationController@authenticate');
 
 

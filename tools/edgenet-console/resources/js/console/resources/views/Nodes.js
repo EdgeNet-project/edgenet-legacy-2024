@@ -24,12 +24,13 @@ import {
 //     );
 // }
 
-const ListComponent = () => {
+const ListComponent = ({item}) => {
     const { resource, id } = useParams();
 
+    console.log(resource)
     switch(resource) {
         case 'nodes':
-            return <NodeList resource={resource} />
+            return <NodeList resource={item} />
         default:
             return <NotFound />
     }
@@ -100,6 +101,14 @@ const Nodes = () => {
     if (loading) {
         return <Box>Loading</Box>;
     }
+    //
+    // return (
+    //     <Box overflow="auto">
+    //         {
+    //             resources.map(resource => <NodeList resource={resource} /> )
+    //         }
+    //     </Box>
+    // )
 
     return (
             <Box overflow="auto">
@@ -110,7 +119,7 @@ const Nodes = () => {
                 >
                     {(item, j) =>
                         <ListRow key={'items-' + j} item={item}>
-                            <ListComponent resource={r} />
+                            <NodeList resource={item} />
                         </ListRow>
                     }
                 </InfiniteScroll>

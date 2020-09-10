@@ -22,7 +22,7 @@ class ResourceController extends Controller
 
     public function __construct(Client $client)
     {
-        $this->api = preg_replace('#/+#','/',config('kubernetes.api.server') . config('kubernetes.api.prefix'));
+        $this->api = config('kubernetes.api.server')  . preg_replace('#/+#','/', config('kubernetes.api.prefix'));
 //        $this->token = config('edgenet.token');
         $this->client = $client;
 

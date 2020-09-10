@@ -15,7 +15,7 @@ class ResourceController extends Controller
 
     public function __construct(Client $client)
     {
-        $this->api = preg_replace('#/+#','/',config('edgenet.api.server') . config('edgenet.api.prefix'));
+        $this->api = config('edgenet.api.server')  . preg_replace('#/+#','/', config('edgenet.api.prefix'));
 //        $this->token = config('edgenet.token');
         $this->client = $client;
 

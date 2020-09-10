@@ -151,27 +151,34 @@ class RegisterController extends Controller
 
         ];
 
-        $url = env('EDGENET_API_SERVER') . '/apis/apps.edgenet.io/v1alpha/authorityrequests';
+        $url = config('edgenet.api.server') . '/apis/apps.edgenet.io/v1alpha/authorityrequests';
 
-        $res = $this->client->request('POST', $url, [
-            'headers' => [
-//                'Authorization' => 'Bearer ' . $this->token,
-                'Accept' => 'application/json',
-            ],
-            'verify' => false,
-            //'debug' => true
-            'json' => $authoritySpec,
-            'exceptions' => false
-        ]);
+        Log::channel('kubernetes')->info('User registration : ' . $url);
+        Log::channel('kubernetes')->info('User registration : ' . print_r($authoritySpec, true));
 
-        Log::channel('kubernetes')->info($url);
-        Log::channel('kubernetes')->info(print_r($authoritySpec, true));
-        Log::channel('kubernetes')->info($res->getBody());
+        try {
 
-        if ($res->getStatusCode()) {
+            $res = $this->client->request('POST', $url, [
+                'headers' => [
+    //                'Authorization' => 'Bearer ' . $this->token,
+                    'Accept' => 'application/json',
+                ],
+                'verify' => false,
+                //'debug' => true
+                'json' => $authoritySpec,
+                'exceptions' => false
+            ]);
 
+        } catch (\Exception $e) {
+
+            Log::channel('kubernetes')->error('User registration : ' . $e->getMessage());
+            return false;
         }
-        Log::channel('kubernetes')->error($res->getStatusCode());
+
+
+        Log::channel('kubernetes')->info('User registration : return status code ' . $res->getStatusCode());
+        Log::channel('kubernetes')->info('User registration : ' . $res->getBody());
+
 
         return true;
     }
@@ -203,27 +210,38 @@ class RegisterController extends Controller
         ];
         //dd($userSpec,config('edgenet.api_prefix_crd') . '/users');
 
-        $url = env('EDGENET_API_SERVER') . '/apis/apps.edgenet.io/v1alpha/userregistrationrequests';
+        $url = config('edgenet.api.server') . '/apis/apps.edgenet.io/v1alpha/userregistrationrequests';
 
         //return $this->postRequest($url, $userSpec);
 
-        $res = $this->client->request('POST', $url, [
+        Log::channel('kubernetes')->info('User registration : ' . $url);
+        Log::channel('kubernetes')->info('User registration : ' . print_r($userSpec, true));
+
+        try {
+
+            $res = $this->client->request('POST', $url, [
                 'headers' => [
 //                'Authorization' => 'Bearer ' . $this->token,
                     'Accept' => 'application/json',
                 ],
                 'verify' => false,
-                //'debug' => true
+                'debug' => true,
                 'json' => $userSpec,
                 'exceptions' => false
             ]);
 
-        Log::channel('kubernetes')->info('url: ' . $url);
+        } catch (\Exception $e) {
+
+            Log::channel('kubernetes')->error('User registration : ' . $e->getMessage());
+            return false;
+        }
+
 
         if ($res->getStatusCode() > 208) {
-            Log::channel('kubernetes')->error(print_r($userSpec, true));
-            Log::channel('kubernetes')->error($res->getBody());
+            Log::channel('kubernetes')->error('User registration : ' . $res->getBody());
             return false;
+        } else {
+            Log::channel('kubernetes')->info('User registration : ' . $res->getBody());
         }
 
         return true;

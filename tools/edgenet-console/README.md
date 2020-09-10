@@ -99,15 +99,15 @@ users:
 
 Here is the full example with creating admin user and getting token:
 
-Creating a admin / service account user called k8sadmin
+Creating a admin / service account user called console
 
-sudo kubectl create serviceaccount console -n kube-system
+kubectl create serviceaccount console -n kube-system
 
 Give the user admin privileges
 
-sudo kubectl create clusterrolebinding console --clusterrole=cluster-admin --serviceaccount=kube-system:k8sadmin
+kubectl create clusterrolebinding console --clusterrole=cluster-admin --serviceaccount=kube-system:console
 
 Get the token
 
-sudo kubectl -n kube-system describe secret $(sudo kubectl -n kube-system get secret | (grep console || echo "$_") | awk '{print $1}') | grep token: | awk '{print $2}'
+kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | (grep console || echo "$_") | awk '{print $1}') | grep token: | awk '{print $2}'
 
