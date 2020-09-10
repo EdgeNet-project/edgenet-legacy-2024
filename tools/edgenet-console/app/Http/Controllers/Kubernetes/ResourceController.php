@@ -18,13 +18,23 @@ use GuzzleHttp\Client;
  */
 class ResourceController extends Controller
 {
-    protected $api, $token, $client;
+    protected $api, $client, $headers;
 
-    public function __construct(Client $client)
+    public function __construct(Request $request, Client $client)
     {
         $this->api = config('kubernetes.api.server')  . preg_replace('#/+#','/', config('kubernetes.api.prefix'));
-//        $this->token = config('edgenet.token');
         $this->client = $client;
+
+        $this->headers = [
+            'Content-Type' => $request->headers->get('Content-Type'),
+            'Accept' => 'application/json',
+        ];
+
+        if (Auth::check()) {
+            $this->headers += [
+                'Authorization' => 'Bearer ' . Auth::user()->api_token,
+            ];
+        }
 
     }
 
@@ -32,17 +42,31 @@ class ResourceController extends Controller
     {
         try {
             $response = $this->client->request('GET', $this->api . '/' . $resource, [
-                'headers' => [
-                    'Authorization' => 'Bearer ' . Auth::user()->api_token,
-                    'Accept' => 'application/json',
-                ],
-                /*
-                 * Verify peer certificate.
-                 */
+                'headers' => $this->headers,
                 'verify' => false,
                 //'debug' => true
                 'query' => [],
                 'exceptions' => false
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage()
+            ], 500);
+        }
+
+        return response()->json(json_decode($response->getBody()), $response->getStatusCode());
+    }
+
+    public function patch(Request $request, $resource)
+    {
+        try {
+            $response = $this->client->request('PATCH', $this->api . '/' . $resource, [
+                'headers' => $this->headers,
+                'verify' => false,
+                //'debug' => true
+                'query' => [],
+                'exceptions' => false,
+                'json' => $request->all()
             ]);
         } catch (\Exception $e) {
             return response()->json([

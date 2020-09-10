@@ -14,7 +14,6 @@ const AuthenticationRoutes = () =>
             {/*<Route path="/signup">*/}
             {/*    <Signup />*/}
             {/*</Route>*/}
-            {/*<Route path="/verify/:namespace/:code" children={<VerifyEmail />}/>*/}
             <Route exact path="/">
                 <Login />
             </Route>
