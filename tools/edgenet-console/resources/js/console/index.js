@@ -9,6 +9,8 @@ import { RegistrationRoutes } from "./registration";
 import { Navigation } from "./navigation";
 
 import Nodes from "./resources/views/Nodes";
+import AuthorityRequests from "./resources/views/AuthorityRequests";
+
 import Profile from "./user/views/Profile";
 import Secrets from "./user/views/Secrets";
 import Kubernetes from "./user/views/Kubernetes";
@@ -43,6 +45,10 @@ const Console = ({settings}) =>
                             <Switch>
                                 <Route exact path="/nodes">
                                     <Nodes />
+                                </Route>
+
+                                <Route exact path="/authorityrequests">
+                                    <AuthorityRequests />
                                 </Route>
 
                                 <Route exact path="/profile">

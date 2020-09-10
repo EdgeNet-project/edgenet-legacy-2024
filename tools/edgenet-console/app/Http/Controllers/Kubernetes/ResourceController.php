@@ -18,31 +18,32 @@ use GuzzleHttp\Client;
  */
 class ResourceController extends Controller
 {
-    protected $api, $client, $headers;
+    protected $client;
 
-    public function __construct(Request $request, Client $client)
+    public function __construct(Client $client)
     {
-        $this->api = config('kubernetes.api.server')  . preg_replace('#/+#','/', config('kubernetes.api.prefix'));
         $this->client = $client;
+    }
 
-        $this->headers = [
-            'Content-Type' => $request->headers->get('Content-Type'),
+    private function headers() {
+        $headers = [
+            'Content-Type' => request()->headers->get('Content-Type','application/json'),
             'Accept' => 'application/json',
         ];
-
-        if (Auth::check()) {
-            $this->headers += [
+        if (Auth::user()) {
+            $headers += [
                 'Authorization' => 'Bearer ' . Auth::user()->api_token,
             ];
         }
 
+        return $headers;
     }
 
-    public function get($resource)
+    public function get(Request $request)
     {
         try {
-            $response = $this->client->request('GET', $this->api . '/' . $resource, [
-                'headers' => $this->headers,
+            $response = $this->client->request('GET', config('kubernetes.api.server') . '/' . $request->path(), [
+                'headers' => $this->headers(),
                 'verify' => false,
                 //'debug' => true
                 'query' => [],
@@ -57,11 +58,11 @@ class ResourceController extends Controller
         return response()->json(json_decode($response->getBody()), $response->getStatusCode());
     }
 
-    public function patch(Request $request, $resource)
+    public function patch(Request $request)
     {
         try {
-            $response = $this->client->request('PATCH', $this->api . '/' . $resource, [
-                'headers' => $this->headers,
+            $response = $this->client->request('PATCH', config('kubernetes.api.server') . '/' . $request->path(), [
+                'headers' => $this->headers(),
                 'verify' => false,
                 //'debug' => true
                 'query' => [],

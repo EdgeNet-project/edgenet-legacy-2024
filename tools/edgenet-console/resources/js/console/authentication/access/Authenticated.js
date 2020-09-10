@@ -10,11 +10,11 @@ const Authenticated = ({children}) => {
         return null;
     }
 
-    if (!edgenet) {
-        return 'edgenet'
-    }
+    // if (!edgenet) {
+    //     return 'edgenet'
+    // }
 
-    if (edgenet.status && !edgenet.status.aup) {
+    if (edgenet && edgenet.status && !edgenet.status.aup) {
         return <AUP />
     }
 

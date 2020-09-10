@@ -74,9 +74,9 @@ class Authentication extends React.Component {
 
     getEdgenetUser() {
         const { user } = this.state;
-        axios.get('/apis/apps.edgenet.io/v1alpha/namespaces/authority-'+user.authority+'/users/' + user.name)
-            .then(({data}) => this.setState({edgenet: data}))
-            .catch(err => console.log(err));
+        // axios.get('/apis/apps.edgenet.io/v1alpha/namespaces/authority-'+user.authority+'/users/' + user.name)
+        //     .then(({data}) => this.setState({edgenet: data}))
+        //     .catch(err => console.log(err));
     }
 
     setUser(user) {
@@ -143,7 +143,9 @@ class Authentication extends React.Component {
 
     isAuthenticated() {
         const { user, edgenet } = this.state;
-        return !!user.api_token && edgenet;
+        // return !!user.api_token && edgenet;
+
+        return !!user.api_token;
     }
 
     isGuest() {

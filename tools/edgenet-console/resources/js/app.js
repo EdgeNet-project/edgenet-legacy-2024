@@ -14,8 +14,15 @@ const settings = {
 
     navigation: [
         {
+            name: 'nodes',
             label: 'Nodes',
             path: '/nodes',
+            icon: <Server />,
+        },
+        {
+            name: 'requests',
+            label: 'Requests',
+            path: '/authorityrequests',
             icon: <Server />,
         },
     ]
