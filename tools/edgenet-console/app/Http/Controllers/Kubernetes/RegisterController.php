@@ -11,6 +11,7 @@ use GuzzleHttp\Client;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Auth;
 
 use App\User;
@@ -51,17 +52,21 @@ class RegisterController extends Controller
         }
 
         $authority = $request->input('authority');
+        if (!$request->has('authority')) {
+            return response()->json(['message' => 'Authority not selected'], 400);
+        }
 
-        // generates a unique name
-        $username = $this->generatName($request->input('firstname') . $request->input('lastname'));
+        // generates a unique name // . '-' . Str::random(5)
+        $username = $this->generateName($request->input('firstname') . '-' . $request->input('lastname'));
 
-        if (!$authority) {
-            $request->validate([
-                'fullname' => ['required', 'string', 'max:255'],
-                'shortname' => ['required', 'string', 'max:255'],
-            ]);
+        if ($request->has('authority.fullname') && $request->has('authority.shortname')) {
 
-            $authority = $this->generatName($request->input('shortname'));
+            $authority = $this->generateName($request->input('authority.shortname'));
+
+            // verify
+            if (!$this->verifyAuthority($authority)) {
+                return response()->json(['message' => 'Authority with the same shortname already exists'], 422);
+            }
 
             if (!$this->createKubernetesAuthority($authority, $username, $request)) {
                 return response()->json(['message' => 'Can\'t create authority (kubernetes)'], 422);
@@ -121,6 +126,11 @@ class RegisterController extends Controller
 
     protected function createKubernetesAuthority($authority, $username, $request)
     {
+        $request->validate([
+            'authority.fullname' => ['required', 'string', 'max:255'],
+            'authority.shortname' => ['required', 'string', 'max:255'],
+        ]);
+
         $authoritySpec = [
             'apiVersion' => 'apps.edgenet.io/v1alpha',
             'kind' => 'AuthorityRequest',
@@ -128,16 +138,16 @@ class RegisterController extends Controller
                 'name' => $authority,
             ],
             'spec' => [
-                'fullname' => $request->input('fullname'),
-                'shortname' => $request->input('shortname'),
-                'url' => $request->input('url', '-'),
+                'fullname' => $request->input('authority.fullname'),
+                'shortname' => $request->input('authority.shortname'),
+                'url' => $request->input('authority.url', '-'),
 
                 'address' => [
-                    'street' => $request->input('street'),
-                    'zip'  => $request->input('zip'),
-                    'city'  =>  $request->input('city'),
-                    'region'  => $request->input('region', '-'),
-                    'country'  => $request->input('country'),
+                    'street' => $request->input('authority.street'),
+                    'zip'  => $request->input('authority.zip'),
+                    'city'  =>  $request->input('authority.city'),
+                    'region'  => $request->input('authority.region', '-'),
+                    'country'  => $request->input('authority.country'),
                 ],
                 'contact' => [
                     'username' => $username,
@@ -146,15 +156,15 @@ class RegisterController extends Controller
                     'email' => $request->input('email'),
                     'phone' => $request->input('phone', '-'),
 
-                ],
+                ]
             ],
 
         ];
 
         $url = config('edgenet.api.server') . '/apis/apps.edgenet.io/v1alpha/authorityrequests';
 
-        Log::channel('kubernetes')->info('User registration : ' . $url);
-        Log::channel('kubernetes')->info('User registration : ' . print_r($authoritySpec, true));
+        Log::channel('kubernetes')->info('Authority registration : ' . $url);
+        Log::channel('kubernetes')->info('Authority registration : ' . print_r($authoritySpec, true));
 
         try {
 
@@ -171,13 +181,17 @@ class RegisterController extends Controller
 
         } catch (\Exception $e) {
 
-            Log::channel('kubernetes')->error('User registration : ' . $e->getMessage());
+            Log::channel('kubernetes')->error('Authority registration : ' . $e->getMessage());
             return false;
         }
 
 
-        Log::channel('kubernetes')->info('User registration : return status code ' . $res->getStatusCode());
-        Log::channel('kubernetes')->info('User registration : ' . $res->getBody());
+        Log::channel('kubernetes')->info('Authority registration : Status code ' . $res->getStatusCode());
+        Log::channel('kubernetes')->info('Authority registration : ' . $res->getBody());
+
+        if ($res->getStatusCode() > 208) {
+            return false;
+        }
 
 
         return true;
@@ -236,18 +250,17 @@ class RegisterController extends Controller
             return false;
         }
 
+        Log::channel('kubernetes')->error('User registration : Status code ' . $res->getStatusCode());
+        Log::channel('kubernetes')->error('User registration : ' . $res->getBody());
 
         if ($res->getStatusCode() > 208) {
-            Log::channel('kubernetes')->error('User registration : ' . $res->getBody());
             return false;
-        } else {
-            Log::channel('kubernetes')->info('User registration : ' . $res->getBody());
         }
 
         return true;
     }
 
-    private function generatName($string)
+    private function generateName($string)
     {
         return preg_replace('/[^a-z0-9]/', '', strtolower(trim($string)));
     }
