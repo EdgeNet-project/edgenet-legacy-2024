@@ -741,16 +741,16 @@
         },
         {
             "name": "laravel/framework",
-            "version": "v7.28.0",
+            "version": "v7.28.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/framework.git",
-                "reference": "5d3b4e3e62294716e3c810be3d2eb1375685b87d"
+                "reference": "f7493ab717ca2a9598b1db2d6a3bae8ac8c755e8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/framework/zipball/5d3b4e3e62294716e3c810be3d2eb1375685b87d",
-                "reference": "5d3b4e3e62294716e3c810be3d2eb1375685b87d",
+                "url": "https://api.github.com/repos/laravel/framework/zipball/f7493ab717ca2a9598b1db2d6a3bae8ac8c755e8",
+                "reference": "f7493ab717ca2a9598b1db2d6a3bae8ac8c755e8",
                 "shasum": ""
             },
             "require": {
@@ -895,7 +895,7 @@
                 "framework",
                 "laravel"
             ],
-            "time": "2020-09-08T15:10:40+00:00"
+            "time": "2020-09-09T15:02:46+00:00"
         },
         {
             "name": "laravel/tinker",
@@ -1346,16 +1346,16 @@
         },
         {
             "name": "nesbot/carbon",
-            "version": "2.39.1",
+            "version": "2.39.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/briannesbitt/Carbon.git",
-                "reference": "7af467873250583cc967a59ee9df29fabab193c1"
+                "reference": "326efde1bc09077a26cb77f6e2e32e13f06c27f2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/briannesbitt/Carbon/zipball/7af467873250583cc967a59ee9df29fabab193c1",
-                "reference": "7af467873250583cc967a59ee9df29fabab193c1",
+                "url": "https://api.github.com/repos/briannesbitt/Carbon/zipball/326efde1bc09077a26cb77f6e2e32e13f06c27f2",
+                "reference": "326efde1bc09077a26cb77f6e2e32e13f06c27f2",
                 "shasum": ""
             },
             "require": {
@@ -1431,7 +1431,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2020-09-04T13:11:37+00:00"
+            "time": "2020-09-10T12:16:42+00:00"
         },
         {
             "name": "nikic/php-parser",
@@ -2185,16 +2185,16 @@
         },
         {
             "name": "ramsey/collection",
-            "version": "1.1.0",
+            "version": "1.1.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/ramsey/collection.git",
-                "reference": "044184884e3c803e4cbb6451386cb71562939b18"
+                "reference": "24d93aefb2cd786b7edd9f45b554aea20b28b9b1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ramsey/collection/zipball/044184884e3c803e4cbb6451386cb71562939b18",
-                "reference": "044184884e3c803e4cbb6451386cb71562939b18",
+                "url": "https://api.github.com/repos/ramsey/collection/zipball/24d93aefb2cd786b7edd9f45b554aea20b28b9b1",
+                "reference": "24d93aefb2cd786b7edd9f45b554aea20b28b9b1",
                 "shasum": ""
             },
             "require": {
@@ -2250,7 +2250,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2020-08-11T00:57:21+00:00"
+            "time": "2020-09-10T20:58:17+00:00"
         },
         {
             "name": "ramsey/uuid",
