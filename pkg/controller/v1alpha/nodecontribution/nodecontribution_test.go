@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Sirupsen/logrus"
-	log "github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // Dictionary for error messages

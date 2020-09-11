@@ -1,9 +1,10 @@
 package bootstrap
 
 import (
-	"edgenet/pkg/util"
 	"path/filepath"
 	"testing"
+
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 )
 
 func TestHomeDir(t *testing.T) {

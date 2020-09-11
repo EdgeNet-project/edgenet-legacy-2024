@@ -17,6 +17,7 @@ limitations under the License.
 package namespace
 
 import (
+	"context"
 	"log"
 
 	apiv1 "k8s.io/api/core/v1"
@@ -41,7 +42,7 @@ func Create(name string) (string, error) {
 		return "", err
 	}
 	userNamespace := &apiv1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
-	result, err := Clientset.CoreV1().Namespaces().Create(userNamespace)
+	result, err := Clientset.CoreV1().Namespaces().Create(context.TODO(), userNamespace, metav1.CreateOptions{})
 	if err != nil {
 		log.Println(err)
 		return "", err
@@ -54,7 +55,7 @@ func Delete(namespace string) (string, error) {
 	// Check namespace exists or not
 	exist, err := GetNamespaceByName(namespace)
 	if err == nil && exist == "true" {
-		err := Clientset.CoreV1().Namespaces().Delete(namespace, &metav1.DeleteOptions{})
+		err := Clientset.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})
 		if err != nil {
 			log.Println(err)
 			return "", err
@@ -71,7 +72,7 @@ func Delete(namespace string) (string, error) {
 // GetList uses clientset, this function gets list of namespaces by eliminating "default", "kube-system", and "kube-public"
 func GetList() []string {
 	// FieldSelector allows getting filtered results
-	namespaceRaw, err := Clientset.CoreV1().Namespaces().List(
+	namespaceRaw, err := Clientset.CoreV1().Namespaces().List(context.TODO(),
 		metav1.ListOptions{FieldSelector: "metadata.name!=default,metadata.name!=kube-system,metadata.name!=kube-public"})
 	if err != nil {
 		log.Println(err.Error())
@@ -89,7 +90,7 @@ func GetNamespaceByName(name string) (string, error) {
 	// Examples for error handling:
 	// - Use helper functions like e.g. errors.IsNotFound()
 	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
-	_, err := Clientset.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
+	_, err := Clientset.CoreV1().Namespaces().Get(context.TODO(), name, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		log.Printf("Namespace %s not found", name)
 		return "false", err

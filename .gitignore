@@ -39,7 +39,8 @@ examples/selective-deployment/object/error-handling
 
 examples/*.txt
 examples/*/*.txt
-code-generation
+code-generator
+hack
 
 # Ignore OS X metadata files
 ._*

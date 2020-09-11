@@ -19,7 +19,6 @@ package mailer
 import (
 	"bytes"
 	"crypto/tls"
-	"edgenet/pkg/util"
 	"encoding/base64"
 	"fmt"
 	"html/template"
@@ -27,6 +26,8 @@ import (
 	"log"
 	"net/smtp"
 	"os"
+
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	yaml "gopkg.in/yaml.v2"
 )

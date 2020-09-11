@@ -1,19 +1,22 @@
 package registration
 
 import (
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/controller/v1alpha/authority"
+	"context"
 	"fmt"
 	"reflect"
 	"time"
 
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/authority"
+
 	corev1 "k8s.io/api/core/v1"
 
-	"edgenet/pkg/client/clientset/versioned"
-	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
 	"io/ioutil"
 	"log"
 	"testing"
+
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	testclient "k8s.io/client-go/kubernetes/fake"
@@ -83,7 +86,7 @@ func (g *RegistrationTestGroup) Init() {
 	// Invoke authority ObjectCreated to create namespace
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 	// Sync Clientset with fake client
 	Clientset = g.client
@@ -93,7 +96,7 @@ func TestMakeConfig(t *testing.T) {
 	g := RegistrationTestGroup{}
 	g.Init()
 	// Get the user object
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 	// Get the client certificate and key
 	clientcert, err := ioutil.ReadFile("../../assets/certs/unittest@edge-net.org.crt")
 	if err != nil {
@@ -115,7 +118,7 @@ func TestUserCreation(t *testing.T) {
 	g := RegistrationTestGroup{}
 	g.Init()
 	// Get the user object
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 	// Find the authority from the namespace in which the object is located (needed for invoking MakeUser)
 	userOwnerNamespace, _ := g.client.CoreV1().Namespaces().Get(user.GetNamespace(), metav1.GetOptions{})
 	// Mock the signer
@@ -128,10 +131,10 @@ func TestUserCreation(t *testing.T) {
 			case <-timeout:
 				break check
 			case <-ticker:
-				CSRObj, getErr := Clientset.CertificatesV1beta1().CertificateSigningRequests().Get(fmt.Sprintf("%s-%s", userOwnerNamespace.Labels["authority-name"], user.GetName()), metav1.GetOptions{})
+				CSRObj, getErr := Clientset.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", userOwnerNamespace.Labels["authority-name"], user.GetName()), metav1.GetOptions{})
 				if getErr == nil {
 					CSRObj.Status.Certificate = CSRObj.Spec.Request
-					_, updateErr := Clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateStatus(CSRObj)
+					_, updateErr := Clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateStatus(context.TODO(), CSRObj, metav1.UpdateOptions{})
 					if updateErr == nil {
 						break check
 					}
@@ -150,9 +153,9 @@ func TestCreateServiceAccount(t *testing.T) {
 	g := RegistrationTestGroup{}
 	g.Init()
 	// Get the user object
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 	// Find the authority from the namespace in which the object is (needed for invoking MakeUser)
-	userOwnerNamespace, _ := g.client.CoreV1().Namespaces().Get(user.GetNamespace(), metav1.GetOptions{})
+	userOwnerNamespace, _ := g.client.CoreV1().Namespaces().Get(context.TODO(), user.GetNamespace(), metav1.GetOptions{})
 	_, err := CreateServiceAccount(g.userObj.DeepCopy(), "User", userOwnerNamespace.GetObjectMeta().GetOwnerReferences())
 	if err != nil {
 		t.Errorf("Create service Account Failed")
@@ -164,9 +167,9 @@ func TestCreateConfig(t *testing.T) {
 	g.Init()
 	t.Run("Create config while we don't have secrets in service account", func(t *testing.T) {
 		// Get the user object
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 		// Find the userOwner from the namespace in which the object is (needed for invoking MakeUser)
-		userOwnerNamespace, _ := g.client.CoreV1().Namespaces().Get(user.GetNamespace(), metav1.GetOptions{})
+		userOwnerNamespace, _ := g.client.CoreV1().Namespaces().Get(context.TODO(), user.GetNamespace(), metav1.GetOptions{})
 		serviceAccount, _ := CreateServiceAccount(g.userObj.DeepCopy(), "User", userOwnerNamespace.GetObjectMeta().GetOwnerReferences())
 
 		output := CreateConfig(serviceAccount)
@@ -177,7 +180,7 @@ func TestCreateConfig(t *testing.T) {
 	})
 	t.Run("service account has a secrets", func(t *testing.T) {
 		// Get the user object
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 		ownerReferences := []metav1.OwnerReference{
 			metav1.OwnerReference{
 				Kind:       "OwnerRefrence",

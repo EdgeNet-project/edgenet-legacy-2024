@@ -17,8 +17,6 @@ limitations under the License.
 package util
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -30,10 +28,10 @@ import (
 	"time"
 
 	yaml "gopkg.in/yaml.v2"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/tools/clientcmd"
-	cmdconfig "k8s.io/kubernetes/pkg/kubectl/cmd/config"
-	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
+	"k8s.io/client-go/tools/clientcmd/api"
+	//cmdconfig "k8s.io/kubernetes/pkg/kubectl/cmd/config"
+	//cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 )
 
 // A part of the general structure of a kubeconfig file
@@ -68,8 +66,8 @@ type namecheap struct {
 }
 
 // This reads the kubeconfig file by admin context and returns it in json format.
-func getConfigView() (string, error) {
-	pathOptions := clientcmd.NewDefaultPathOptions()
+func getConfigView() (api.Config, error) {
+	/*pathOptions := clientcmd.NewDefaultPathOptions()
 	streamsIn := &bytes.Buffer{}
 	streamsOut := &bytes.Buffer{}
 	streamsErrOut := &bytes.Buffer{}
@@ -77,9 +75,23 @@ func getConfigView() (string, error) {
 		In:     streamsIn,
 		Out:    streamsOut,
 		ErrOut: streamsErrOut,
+	}*/
+
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	// if you want to change the loading rules (which files in which order), you can do so here
+
+	configOverrides := &clientcmd.ConfigOverrides{}
+	// if you want to change override values or bind them to flags, there are methods to help you
+
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+	rawConfig, err := kubeConfig.RawConfig()
+	if err != nil {
+		// Do something
+		return rawConfig, err
 	}
 
-	configCmd := cmdconfig.NewCmdConfigView(cmdutil.NewFactory(genericclioptions.NewConfigFlags(false)), streams, pathOptions)
+	/*configCmd := cmdconfig.NewCmdConfigView(cmdutil.NewFactory(genericclioptions.NewConfigFlags(false)), streams, pathOptions)
 	// "context" is a global flag, inherited from base kubectl command in the real world
 	configCmd.Flags().String("context", "kubernetes-admin@kubernetes", "The name of the kubeconfig context to use")
 	configCmd.Flags().Parse([]string{"--minify", "--output=json", "--raw=true"})
@@ -88,69 +100,72 @@ func getConfigView() (string, error) {
 		return "", err
 	}
 
-	output := fmt.Sprint(streams.Out)
-	return output, nil
+	fmt.Sprintf
+	output := fmt.Sprint(streams.Out)*/
+	return rawConfig, nil
 }
 
 // GetClusterServerOfCurrentContext provides cluster and server info of the current context
 func GetClusterServerOfCurrentContext() (string, string, []byte, error) {
-	configStr, err := getConfigView()
+	rawConfig, err := getConfigView()
 	if err != nil {
 		log.Printf("unexpected error executing command: %v", err)
 		return "", "", nil, err
 	}
-	var configViewDet configView
-	err = json.Unmarshal([]byte(configStr), &configViewDet)
-	if err != nil {
-		log.Printf("unexpected error executing command: %v", err)
-		return "", "", nil, err
-	}
+	/*
+		var configViewDet configView
+		err = json.Unmarshal([]byte(configStr), &configViewDet)
+		if err != nil {
+			log.Printf("unexpected error executing command: %v", err)
+			return "", "", nil, err
+		}*/
 
-	currentContext := configViewDet.CurrentContext
-	var cluster string
-	for _, contextRaw := range configViewDet.Contexts {
+	currentContext := rawConfig.CurrentContext
+
+	var cluster string = rawConfig.Contexts[currentContext].Cluster
+	/*for _, contextRaw := range rawConfig.Contexts {
 		if contextRaw.Name == currentContext {
 			cluster = contextRaw.Context.Cluster
-
 		}
-	}
-	var server string
-	var CA []byte
-	for _, clusterRaw := range configViewDet.Clusters {
+	}*/
+	var server string = rawConfig.Clusters[cluster].Server
+	var CA []byte = rawConfig.Clusters[cluster].CertificateAuthorityData
+	/*for _, clusterRaw := range rawConfig.Clusters {
 		if clusterRaw.Name == cluster {
 			server = clusterRaw.Cluster.Server
 			CA = clusterRaw.Cluster.CA
 		}
-	}
+	}*/
 	return cluster, server, CA, nil
 }
 
 // GetServerOfCurrentContext provides the server info of the current context
 func GetServerOfCurrentContext() (string, error) {
-	configStr, err := getConfigView()
+	rawConfig, err := getConfigView()
 	if err != nil {
 		log.Printf("unexpected error executing command: %v", err)
 		return "", err
 	}
-	var configViewDet configView
+	/*var configViewDet configView
 	err = json.Unmarshal([]byte(configStr), &configViewDet)
 	if err != nil {
 		log.Printf("unexpected error executing command: %v", err)
 		return "", err
-	}
-	currentContext := configViewDet.CurrentContext
-	var cluster string
-	for _, contextRaw := range configViewDet.Contexts {
+	}*/
+	currentContext := rawConfig.CurrentContext
+
+	var cluster string = rawConfig.Contexts[currentContext].Cluster
+	/*for _, contextRaw := range configViewDet.Contexts {
 		if contextRaw.Name == currentContext {
 			cluster = contextRaw.Context.Cluster
 		}
-	}
-	var server string
-	for _, clusterRaw := range configViewDet.Clusters {
+	}*/
+	var server string = rawConfig.Clusters[cluster].Server
+	/*for _, clusterRaw := range configViewDet.Clusters {
 		if clusterRaw.Name == cluster {
 			server = clusterRaw.Cluster.Server
 		}
-	}
+	}*/
 	return server, nil
 }
 

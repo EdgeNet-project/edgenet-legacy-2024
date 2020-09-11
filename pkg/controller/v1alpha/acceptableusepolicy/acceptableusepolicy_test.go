@@ -1,10 +1,6 @@
 package acceptableusepolicy
 
 import (
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
-	"edgenet/pkg/controller/v1alpha/authority"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -12,9 +8,14 @@ import (
 	"strings"
 	"testing"
 
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/authority"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
 )

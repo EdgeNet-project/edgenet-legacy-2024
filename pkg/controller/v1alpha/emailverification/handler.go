@@ -17,16 +17,17 @@ limitations under the License.
 package emailverification
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	"edgenet/pkg/mailer"
-	"edgenet/pkg/util"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	"github.com/EdgeNet-project/edgenet/pkg/mailer"
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -58,14 +59,14 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	// Create a copy of the email verification object to make changes on it
 	EVCopy := obj.(*apps_v1alpha.EmailVerification).DeepCopy()
 	// Find the authority from the namespace in which the object is
-	EVOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(EVCopy.GetNamespace(), metav1.GetOptions{})
+	EVOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), EVCopy.GetNamespace(), metav1.GetOptions{})
 	// If the object's kind is AuthorityRequest, `registration` namespace hosts the email verification object.
 	// Otherwise, the object belongs to the namespace that the authority created.
 	var authorityEnabled bool
 	if EVOwnerNamespace.GetName() == "registration" {
 		authorityEnabled = true
 	} else {
-		EVOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(EVOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+		EVOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), EVOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 		authorityEnabled = EVOwnerAuthority.Spec.Enabled
 	}
 	// Check if the authority is active
@@ -77,7 +78,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		} else if !EVCopy.Spec.Verified && EVCopy.Status.Expires == nil {
 			// Run timeout goroutine
 			go t.runVerificationTimeout(EVCopy)
-			defer t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).UpdateStatus(EVCopy)
+			defer t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).UpdateStatus(context.TODO(), EVCopy, metav1.UpdateOptions{})
 			// Set the email verification timeout which is 24 hours
 			EVCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(24 * time.Hour),
@@ -87,11 +88,11 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			if EVCopy.Status.Expires.Time.Sub(time.Now()) >= 0 {
 				go t.runVerificationTimeout(EVCopy)
 			} else {
-				t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(EVCopy.GetName(), &metav1.DeleteOptions{})
+				t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(context.TODO(), EVCopy.GetName(), metav1.DeleteOptions{})
 			}
 		}
 	} else {
-		t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(EVCopy.GetName(), &metav1.DeleteOptions{})
+		t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(context.TODO(), EVCopy.GetName(), metav1.DeleteOptions{})
 	}
 }
 
@@ -100,11 +101,11 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	log.Info("EVHandler.ObjectUpdated")
 	// Create a copy of the email verification object to make changes on it
 	EVCopy := obj.(*apps_v1alpha.EmailVerification).DeepCopy()
-	EVOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(EVCopy.GetNamespace(), metav1.GetOptions{})
+	EVOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), EVCopy.GetNamespace(), metav1.GetOptions{})
 	// Security check to prevent any kind of manipulation on the email verification
 	fieldUpdated := updated.(fields)
 	if fieldUpdated.kind || fieldUpdated.identifier {
-		t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(EVCopy.GetName(), &metav1.DeleteOptions{})
+		t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(context.TODO(), EVCopy.GetName(), metav1.DeleteOptions{})
 		if strings.ToLower(EVCopy.Spec.Kind) == "authority" {
 			t.sendEmail("authority-email-verification-dubious", EVCopy.Spec.Identifier, EVCopy.GetNamespace(), "", "", "", "")
 		} else if strings.ToLower(EVCopy.Spec.Kind) == "user" || strings.ToLower(EVCopy.Spec.Kind) == "email" {
@@ -116,7 +117,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	if EVOwnerNamespace.GetName() == "registration" {
 		authorityEnabled = true
 	} else {
-		EVOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(EVOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+		EVOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), EVOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 		authorityEnabled = EVOwnerAuthority.Spec.Enabled
 	}
 	// Check whether the authority enabled
@@ -126,7 +127,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			t.objectConfiguration(EVCopy, EVOwnerNamespace.Labels["authority-name"])
 		}
 	} else {
-		t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(EVCopy.GetName(), &metav1.DeleteOptions{})
+		t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(context.TODO(), EVCopy.GetName(), metav1.DeleteOptions{})
 	}
 }
 
@@ -152,7 +153,7 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 		emailVerification.SetName(code)
 		emailVerification.Spec.Kind = "Authority"
 		emailVerification.Spec.Identifier = authorityRequestCopy.GetName()
-		_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications("registration").Create(emailVerification.DeepCopy())
+		_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications("registration").Create(context.TODO(), emailVerification.DeepCopy(), metav1.CreateOptions{})
 		if err == nil {
 			created = true
 			t.sendEmail("authority-email-verification", authorityRequestCopy.GetName(), "", authorityRequestCopy.Spec.Contact.Username,
@@ -163,13 +164,13 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 		}
 	case *apps_v1alpha.User:
 		userCopy := obj.(*apps_v1alpha.User)
-		userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
+		userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), userCopy.GetNamespace(), metav1.GetOptions{})
 		code := "bs" + util.GenerateRandomString(16)
 		emailVerification := apps_v1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: ownerReferences}}
 		emailVerification.SetName(code)
 		emailVerification.Spec.Kind = "Email"
 		emailVerification.Spec.Identifier = userCopy.GetName()
-		_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(userCopy.GetNamespace()).Create(emailVerification.DeepCopy())
+		_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(userCopy.GetNamespace()).Create(context.TODO(), emailVerification.DeepCopy(), metav1.CreateOptions{})
 		if err == nil {
 			t.sendEmail("user-email-verification-update", userOwnerNamespace.Labels["authority-name"], userCopy.GetNamespace(), userCopy.GetName(),
 				fmt.Sprintf("%s %s", userCopy.Spec.FirstName, userCopy.Spec.LastName), userCopy.Spec.Email, code)
@@ -179,13 +180,13 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 		}
 	case *apps_v1alpha.UserRegistrationRequest:
 		URRCopy := obj.(*apps_v1alpha.UserRegistrationRequest)
-		URROwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(URRCopy.GetNamespace(), metav1.GetOptions{})
+		URROwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), URRCopy.GetNamespace(), metav1.GetOptions{})
 		code := "bs" + util.GenerateRandomString(16)
 		emailVerification := apps_v1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: ownerReferences}}
 		emailVerification.SetName(code)
 		emailVerification.Spec.Kind = "User"
 		emailVerification.Spec.Identifier = URRCopy.GetName()
-		_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(URRCopy.GetNamespace()).Create(emailVerification.DeepCopy())
+		_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(URRCopy.GetNamespace()).Create(context.TODO(), emailVerification.DeepCopy(), metav1.CreateOptions{})
 		if err == nil {
 			t.sendEmail("user-email-verification-update", URROwnerNamespace.Labels["authority-name"], URRCopy.GetNamespace(), URRCopy.GetName(),
 				fmt.Sprintf("%s %s", URRCopy.Spec.FirstName, URRCopy.Spec.LastName), URRCopy.Spec.Email, code)
@@ -216,7 +217,7 @@ func (t *Handler) sendEmail(subject, authority, namespace, username, fullname, e
 		contentData = verifyContent
 	} else if subject == "user-email-verified-alert" {
 		// Put the email addresses of the authority-admins and authorized users in the email to be sent list
-		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(namespace).List(metav1.ListOptions{})
+		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users(namespace).List(context.TODO(), metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
 			if strings.ToLower(userRow.Status.Type) == "admin" {
 				collective.CommonData.Email = append(collective.CommonData.Email, userRow.Spec.Email)
@@ -235,28 +236,28 @@ func (t *Handler) sendEmail(subject, authority, namespace, username, fullname, e
 func (t *Handler) objectConfiguration(EVCopy *apps_v1alpha.EmailVerification, authorityName string) {
 	// Update the status of request related to email verification
 	if strings.ToLower(EVCopy.Spec.Kind) == "authority" {
-		SRRObj, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().Get(EVCopy.Spec.Identifier, metav1.GetOptions{})
+		SRRObj, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().Get(context.TODO(), EVCopy.Spec.Identifier, metav1.GetOptions{})
 		SRRObj.Status.EmailVerified = true
-		t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(SRRObj)
+		t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(context.TODO(), SRRObj, metav1.UpdateOptions{})
 		// Send email to inform admins of the cluster
 		t.sendEmail("authority-email-verified-alert", EVCopy.Spec.Identifier, EVCopy.GetNamespace(), SRRObj.Spec.Contact.Username,
 			fmt.Sprintf("%s %s", SRRObj.Spec.Contact.FirstName, SRRObj.Spec.Contact.LastName), "", "")
 	} else if strings.ToLower(EVCopy.Spec.Kind) == "user" {
-		URRObj, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(EVCopy.GetNamespace()).Get(EVCopy.Spec.Identifier, metav1.GetOptions{})
+		URRObj, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(EVCopy.GetNamespace()).Get(context.TODO(), EVCopy.Spec.Identifier, metav1.GetOptions{})
 		URRObj.Status.EmailVerified = true
-		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRObj.GetNamespace()).UpdateStatus(URRObj)
+		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRObj.GetNamespace()).UpdateStatus(context.TODO(), URRObj, metav1.UpdateOptions{})
 		// Send email to inform authority-admins and authorized users
 		t.sendEmail("user-email-verified-alert", authorityName, EVCopy.GetNamespace(), EVCopy.Spec.Identifier,
 			fmt.Sprintf("%s %s", URRObj.Spec.FirstName, URRObj.Spec.LastName), "", "")
 	} else if strings.ToLower(EVCopy.Spec.Kind) == "email" {
-		userObj, _ := t.edgenetClientset.AppsV1alpha().Users(EVCopy.GetNamespace()).Get(EVCopy.Spec.Identifier, metav1.GetOptions{})
+		userObj, _ := t.edgenetClientset.AppsV1alpha().Users(EVCopy.GetNamespace()).Get(context.TODO(), EVCopy.Spec.Identifier, metav1.GetOptions{})
 		userObj.Spec.Active = true
-		t.edgenetClientset.AppsV1alpha().Users(userObj.GetNamespace()).UpdateStatus(userObj)
+		t.edgenetClientset.AppsV1alpha().Users(userObj.GetNamespace()).UpdateStatus(context.TODO(), userObj, metav1.UpdateOptions{})
 		if userObj.Status.Type == "admin" {
-			authorityObj, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityName, metav1.GetOptions{})
+			authorityObj, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), authorityName, metav1.GetOptions{})
 			if authorityObj.Spec.Contact.Username == userObj.GetName() {
 				authorityObj.Spec.Contact.Email = userObj.Spec.Email
-				t.edgenetClientset.AppsV1alpha().Authorities().Update(authorityObj)
+				t.edgenetClientset.AppsV1alpha().Authorities().Update(context.TODO(), authorityObj, metav1.UpdateOptions{})
 			}
 		}
 		// Send email to inform user
@@ -264,7 +265,7 @@ func (t *Handler) objectConfiguration(EVCopy *apps_v1alpha.EmailVerification, au
 			fmt.Sprintf("%s %s", userObj.Spec.FirstName, userObj.Spec.LastName), userObj.Spec.Email, "")
 	}
 	// Delete the unique email verification object as it gets verified
-	t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(EVCopy.GetName(), &metav1.DeleteOptions{})
+	t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(context.TODO(), EVCopy.GetName(), metav1.DeleteOptions{})
 }
 
 // runVerificationTimeout puts a procedure in place to remove requests by verification or timeout
@@ -281,7 +282,7 @@ func (t *Handler) runVerificationTimeout(EVCopy *apps_v1alpha.EmailVerification)
 	}
 
 	// Watch the events of email verification object
-	watchEV, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Watch(metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", EVCopy.GetName())})
+	watchEV, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", EVCopy.GetName())})
 	if err == nil {
 		go func() {
 			// Get events from watch interface
@@ -332,7 +333,7 @@ timeoutLoop:
 			break timeoutOptions
 		case <-timeout:
 			watchEV.Stop()
-			t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(EVCopy.GetName(), &metav1.DeleteOptions{})
+			t.edgenetClientset.AppsV1alpha().EmailVerifications(EVCopy.GetNamespace()).Delete(context.TODO(), EVCopy.GetName(), metav1.DeleteOptions{})
 			closeChannels()
 			break timeoutLoop
 		case <-terminated:

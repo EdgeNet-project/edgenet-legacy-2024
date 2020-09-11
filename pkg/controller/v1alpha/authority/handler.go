@@ -17,18 +17,19 @@ limitations under the License.
 package authority
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	"edgenet/pkg/controller/v1alpha/totalresourcequota"
-	"edgenet/pkg/mailer"
-	ns "edgenet/pkg/namespace"
-	"edgenet/pkg/permission"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/totalresourcequota"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	"github.com/EdgeNet-project/edgenet/pkg/mailer"
+	ns "github.com/EdgeNet-project/edgenet/pkg/namespace"
+	"github.com/EdgeNet-project/edgenet/pkg/permission"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -92,7 +93,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		authorityCopy.Status.State = failure
 		authorityCopy.Status.Message = []string{message}
 		authorityCopy.Spec.Enabled = false
-		t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
+		t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(context.TODO(), authorityCopy, metav1.UpdateOptions{})
 		return
 	}
 	authorityCopy = t.authorityPreparation(authorityCopy)
@@ -109,7 +110,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		authorityCopy.Status.State = failure
 		authorityCopy.Status.Message = []string{message}
 		authorityCopy.Spec.Enabled = false
-		authorityCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
+		authorityCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(context.TODO(), authorityCopy, metav1.UpdateOptions{})
 		if err == nil {
 			authorityCopy = authorityCopyUpdated
 		}
@@ -119,16 +120,16 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	// Check whether the authority disabled
 	if authorityCopy.Spec.Enabled == false {
 		// Delete all RoleBindings, Teams, and Slices in the namespace of authority
-		t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", authorityCopy.GetName())).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
-		t.edgenetClientset.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", authorityCopy.GetName())).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
-		t.clientset.RbacV1().RoleBindings(fmt.Sprintf("authority-%s", authorityCopy.GetName())).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{})
+		t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", authorityCopy.GetName())).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
+		t.edgenetClientset.AppsV1alpha().Teams(fmt.Sprintf("authority-%s", authorityCopy.GetName())).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
+		t.clientset.RbacV1().RoleBindings(fmt.Sprintf("authority-%s", authorityCopy.GetName())).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
 		// List all authority users to deactivate and to remove their cluster role binding to get the authority
-		usersRaw, _ := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", authorityCopy.GetName())).List(metav1.ListOptions{})
+		usersRaw, _ := t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", authorityCopy.GetName())).List(context.TODO(), metav1.ListOptions{})
 		for _, user := range usersRaw.Items {
 			userCopy := user.DeepCopy()
 			userCopy.Spec.Active = false
-			t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
-			t.clientset.RbacV1().ClusterRoleBindings().Delete(fmt.Sprintf("%s-%s-for-authority", userCopy.GetNamespace(), userCopy.GetName()), &metav1.DeleteOptions{})
+			t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(context.TODO(), userCopy, metav1.UpdateOptions{})
+			t.clientset.RbacV1().ClusterRoleBindings().Delete(context.TODO(), fmt.Sprintf("%s-%s-for-authority", userCopy.GetNamespace(), userCopy.GetName()), metav1.DeleteOptions{})
 		}
 	}
 }
@@ -154,10 +155,10 @@ func (t *Handler) Create(obj interface{}) bool {
 		authority.Spec.ShortName = authorityRequestCopy.Spec.ShortName
 		authority.Spec.URL = authorityRequestCopy.Spec.URL
 		authority.Spec.Enabled = true
-		_, err := t.edgenetClientset.AppsV1alpha().Authorities().Create(authority.DeepCopy())
+		_, err := t.edgenetClientset.AppsV1alpha().Authorities().Create(context.TODO(), authority.DeepCopy(), metav1.CreateOptions{})
 		if err == nil {
 			failed = false
-			t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(authorityRequestCopy.GetName(), &metav1.DeleteOptions{})
+			t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(context.TODO(), authorityRequestCopy.GetName(), metav1.DeleteOptions{})
 		}
 	}
 
@@ -168,7 +169,7 @@ func (t *Handler) Create(obj interface{}) bool {
 func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *apps_v1alpha.Authority {
 	// If the service restarts, it creates all objects again
 	// Because of that, this section covers a variety of possibilities
-	_, err := t.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("authority-%s", authorityCopy.GetName()), metav1.GetOptions{})
+	_, err := t.clientset.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("authority-%s", authorityCopy.GetName()), metav1.GetOptions{})
 	if err != nil {
 		permission.CreateClusterRoles(authorityCopy)
 		// Automatically create a namespace to host users, slices, and teams
@@ -179,20 +180,20 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		// Namespace labels indicate this namespace created by a authority, not by a team or slice
 		namespaceLabels := map[string]string{"owner": "authority", "owner-name": authorityCopy.GetName(), "authority-name": authorityCopy.GetName()}
 		authorityChildNamespace.SetLabels(namespaceLabels)
-		authorityChildNamespaceCreated, err := t.clientset.CoreV1().Namespaces().Create(authorityChildNamespace)
+		authorityChildNamespaceCreated, err := t.clientset.CoreV1().Namespaces().Create(context.TODO(), authorityChildNamespace, metav1.CreateOptions{})
 		if err != nil {
 			log.Infof("Couldn't create namespace for %s: %s", authorityCopy.GetName(), err)
 			authorityCopy.Status.State = failure
 			authorityCopy.Status.Message = []string{statusDict["namespace-failure"]}
 		}
 		// Create the resource quota to ban users from using this namespace for their applications
-		_, err = t.clientset.CoreV1().ResourceQuotas(authorityChildNamespaceCreated.GetName()).Create(t.resourceQuota)
+		_, err = t.clientset.CoreV1().ResourceQuotas(authorityChildNamespaceCreated.GetName()).Create(context.TODO(), t.resourceQuota, metav1.CreateOptions{})
 		if err != nil && !errors.IsAlreadyExists(err) {
 			log.Infof("Couldn't create resource quota in %s: %s", authorityCopy.GetName(), err)
 		}
 		childNamespaceOwnerReferences := ns.SetAsOwnerReference(authorityChildNamespaceCreated)
 		authorityCopy.ObjectMeta.OwnerReferences = childNamespaceOwnerReferences
-		authorityCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Authorities().Update(authorityCopy)
+		authorityCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Authorities().Update(context.TODO(), authorityCopy, metav1.UpdateOptions{})
 		if err == nil {
 			// To manipulate the object later
 			authorityCopy = authorityCopyUpdated
@@ -201,7 +202,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 		TRQHandler.Init(t.clientset, t.edgenetClientset)
 		TRQHandler.Create(authorityCopy.GetName())
 		enableAuthorityAdmin := func() {
-			t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(authorityCopy)
+			t.edgenetClientset.AppsV1alpha().Authorities().UpdateStatus(context.TODO(), authorityCopy, metav1.UpdateOptions{})
 			// Create a user as admin on authority
 			user := apps_v1alpha.User{}
 			user.SetName(strings.ToLower(authorityCopy.Spec.Contact.Username))
@@ -209,7 +210,7 @@ func (t *Handler) authorityPreparation(authorityCopy *apps_v1alpha.Authority) *a
 			user.Spec.FirstName = authorityCopy.Spec.Contact.FirstName
 			user.Spec.LastName = authorityCopy.Spec.Contact.LastName
 			user.Spec.Active = true
-			_, err = t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", authorityCopy.GetName())).Create(user.DeepCopy())
+			_, err = t.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", authorityCopy.GetName())).Create(context.TODO(), user.DeepCopy(), metav1.CreateOptions{})
 			if err != nil {
 				t.sendEmail(authorityCopy, "user-creation-failure")
 				authorityCopy.Status.State = failure
@@ -248,7 +249,7 @@ func (t *Handler) checkDuplicateObject(authorityCopy *apps_v1alpha.Authority) (b
 	exists := false
 	var message string
 	// To check email address
-	userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
+	userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(context.TODO(), metav1.ListOptions{})
 	for _, userRow := range userRaw.Items {
 		if userRow.Spec.Email == authorityCopy.Spec.Contact.Email {
 			if userRow.GetNamespace() == fmt.Sprintf("authority-%s", authorityCopy.GetName()) && userRow.GetName() == strings.ToLower(authorityCopy.Spec.Contact.Username) {
@@ -261,11 +262,11 @@ func (t *Handler) checkDuplicateObject(authorityCopy *apps_v1alpha.Authority) (b
 	}
 	if !exists {
 		// Update the authority requests that have duplicate values, if any
-		authorityRequestRaw, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{})
+		authorityRequestRaw, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().List(context.TODO(), metav1.ListOptions{})
 		for _, authorityRequestRow := range authorityRequestRaw.Items {
 			if authorityRequestRow.Status.State == success {
 				if authorityRequestRow.GetName() == authorityCopy.GetName() || authorityRequestRow.Spec.Contact.Email == authorityCopy.Spec.Contact.Email {
-					t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(authorityRequestRow.GetName(), &metav1.DeleteOptions{})
+					t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(context.TODO(), authorityRequestRow.GetName(), metav1.DeleteOptions{})
 				}
 			}
 		}

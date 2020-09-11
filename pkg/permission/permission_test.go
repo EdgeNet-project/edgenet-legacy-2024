@@ -1,22 +1,24 @@
 package permission
 
 import (
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"testing"
 
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+
 	corev1 "k8s.io/api/core/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	testclient "k8s.io/client-go/kubernetes/fake"
 
-	"edgenet/pkg/client/clientset/versioned"
-	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -89,12 +91,12 @@ func (g *PermissionTestGroup) Init() {
 	Clientset = g.client
 
 	// Create Authority
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
 	g.authorityObj.Status.State = metav1.StatusSuccess
 	g.authorityObj.Spec.Enabled = true
-	g.edgenetclient.AppsV1alpha().Authorities().UpdateStatus(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().UpdateStatus(context.TODO(), g.authorityObj.DeepCopy(), metav1.UpdateOptions{})
 	authorityChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", g.authorityObj.GetName())}}
-	g.client.CoreV1().Namespaces().Create(authorityChildNamespace)
+	g.client.CoreV1().Namespaces().Create(context.TODO(), authorityChildNamespace, metav1.CreateOptions{})
 }
 
 func TestCreateClusterRoles(t *testing.T) {
@@ -103,7 +105,7 @@ func TestCreateClusterRoles(t *testing.T) {
 
 	t.Run("Creation of Cluster Role", func(t *testing.T) {
 		createErr := CreateClusterRoles(g.authorityObj.DeepCopy())
-		_, err := g.client.RbacV1().ClusterRoles().Get(fmt.Sprintf("authority-%s", g.authorityObj.GetName()), metav1.GetOptions{})
+		_, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()), metav1.GetOptions{})
 		if err != nil || createErr != nil {
 			t.Errorf("Create Cluster Roles Failed")
 		}
@@ -115,7 +117,7 @@ func TestEstablishPrivateRoleBindings(t *testing.T) {
 	g.Init()
 
 	err := EstablishPrivateRoleBindings(g.userObj.DeepCopy())
-	role, _ := g.client.RbacV1().ClusterRoleBindings().Get(fmt.Sprintf("%s-%s-for-authority", g.userObj.GetNamespace(), g.userObj.GetName()), metav1.GetOptions{})
+	role, _ := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("%s-%s-for-authority", g.userObj.GetNamespace(), g.userObj.GetName()), metav1.GetOptions{})
 	if err != nil && role == nil {
 		t.Errorf("cluster rolebinding failed")
 	}
@@ -127,7 +129,7 @@ func TestEstablishRoleBindings(t *testing.T) {
 
 	t.Run("Establish Rolebindings", func(t *testing.T) {
 		err := EstablishRoleBindings(g.userObj.DeepCopy(), g.userObj.GetNamespace(), "Authority")
-		userRoleBind, errUserRoleBind := g.client.RbacV1().RoleBindings(g.userObj.GetNamespace()).Get(fmt.Sprintf("%s-%s-authority-admin", g.userObj.GetNamespace(), g.userObj.GetName()), metav1.GetOptions{})
+		userRoleBind, errUserRoleBind := g.client.RbacV1().RoleBindings(g.userObj.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-%s-authority-admin", g.userObj.GetNamespace(), g.userObj.GetName()), metav1.GetOptions{})
 		if err != nil || userRoleBind == nil || errUserRoleBind != nil {
 			t.Errorf("Establish role Bindings Failed")
 		}

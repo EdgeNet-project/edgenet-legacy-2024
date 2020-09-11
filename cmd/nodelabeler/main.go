@@ -20,9 +20,10 @@ limitations under the License.
 package main
 
 import (
-	"edgenet/pkg/bootstrap"
-	"edgenet/pkg/controller/v1/nodelabeler"
 	"log"
+
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1/nodelabeler"
 )
 
 func main() {

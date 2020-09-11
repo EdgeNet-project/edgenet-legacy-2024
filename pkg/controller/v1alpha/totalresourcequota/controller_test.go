@@ -1,6 +1,7 @@
 package totalresourcequota
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -14,18 +15,18 @@ func TestStartController(t *testing.T) {
 	go Start(g.client, g.edgenetclient)
 	// Create a resource request
 	g.TRQObj.Spec.Enabled = true
-	g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Create(g.TRQObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Create(context.TODO(), g.TRQObj.DeepCopy(), metav1.CreateOptions{})
 	// Wait for the status update of created object
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
-	TRQ, _ := g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Get(g.TRQObj.GetName(), metav1.GetOptions{})
+	TRQ, _ := g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), g.TRQObj.GetName(), metav1.GetOptions{})
 	if TRQ.Status.State != success {
 		t.Error(errorDict["add-func"])
 	}
 	// Update the TRQ
 	g.TRQObj.Spec.Enabled = false
-	g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Update(g.TRQObj.DeepCopy())
-	TRQ, _ = g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Get(g.TRQObj.GetName(), metav1.GetOptions{})
+	g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Update(context.TODO(), g.TRQObj.DeepCopy(), metav1.UpdateOptions{})
+	TRQ, _ = g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), g.TRQObj.GetName(), metav1.GetOptions{})
 	if TRQ.Status.State == success {
 		t.Error(errorDict["upd-func"])
 	}

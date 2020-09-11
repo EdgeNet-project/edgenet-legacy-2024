@@ -17,17 +17,18 @@ limitations under the License.
 package selectivedeployment
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	"edgenet/pkg/node"
-	"edgenet/pkg/util"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	"github.com/EdgeNet-project/edgenet/pkg/node"
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -107,7 +108,7 @@ func (t *SDHandler) getByNode(nodeName string) ([][]string, bool) {
 			}
 		}
 	}
-	deploymentRaw, err := t.clientset.AppsV1().Deployments("").List(metav1.ListOptions{})
+	deploymentRaw, err := t.clientset.AppsV1().Deployments("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -115,7 +116,7 @@ func (t *SDHandler) getByNode(nodeName string) ([][]string, bool) {
 	for _, deploymentRow := range deploymentRaw.Items {
 		setList(deploymentRow.Spec.Template.Spec, deploymentRow.GetOwnerReferences(), deploymentRow.GetNamespace())
 	}
-	daemonsetRaw, err := t.clientset.AppsV1().DaemonSets("").List(metav1.ListOptions{})
+	daemonsetRaw, err := t.clientset.AppsV1().DaemonSets("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -123,7 +124,7 @@ func (t *SDHandler) getByNode(nodeName string) ([][]string, bool) {
 	for _, daemonsetRow := range daemonsetRaw.Items {
 		setList(daemonsetRow.Spec.Template.Spec, daemonsetRow.GetOwnerReferences(), daemonsetRow.GetNamespace())
 	}
-	statefulsetRaw, err := t.clientset.AppsV1().StatefulSets("").List(metav1.ListOptions{})
+	statefulsetRaw, err := t.clientset.AppsV1().StatefulSets("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -138,18 +139,18 @@ func (t *SDHandler) getByNode(nodeName string) ([][]string, bool) {
 func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delta string, eventType string) {
 	// Flush the status
 	sdCopy.Status = apps_v1alpha.SelectiveDeploymentStatus{}
-	defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
+	defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(context.TODO(), sdCopy, metav1.UpdateOptions{})
 	ownerReferences := SetAsOwnerReference(sdCopy)
 	controllerCounter := 0
 	failureCounter := 0
 	if sdCopy.Spec.Controllers.Deployment != nil {
 		controllerCounter += len(sdCopy.Spec.Controllers.Deployment)
 		for _, sdDeployment := range sdCopy.Spec.Controllers.Deployment {
-			deploymentObj, err := t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Get(sdDeployment.GetName(), metav1.GetOptions{})
+			deploymentObj, err := t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Get(context.TODO(), sdDeployment.GetName(), metav1.GetOptions{})
 			if errors.IsNotFound(err) {
 				configuredDeployment, failureCount := t.configureController(sdCopy, sdDeployment, ownerReferences)
 				failureCounter += failureCount
-				_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Create(configuredDeployment.(*appsv1.Deployment))
+				_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Create(context.TODO(), configuredDeployment.(*appsv1.Deployment), metav1.CreateOptions{})
 				if err != nil {
 					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Deployment %s could not be created", sdDeployment.GetName()))
 					failureCounter++
@@ -160,7 +161,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 					// Configure the deployment according to the SD
 					configuredDeployment, failureCount := t.configureController(sdCopy, sdDeployment, ownerReferences)
 					failureCounter += failureCount
-					_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(configuredDeployment.(*appsv1.Deployment))
+					_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(context.TODO(), configuredDeployment.(*appsv1.Deployment), metav1.UpdateOptions{})
 					if err != nil {
 						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Deployment %s could not be updated", sdDeployment.GetName()))
 						failureCounter++
@@ -175,11 +176,11 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 	if sdCopy.Spec.Controllers.DaemonSet != nil {
 		controllerCounter += len(sdCopy.Spec.Controllers.DaemonSet)
 		for _, sdDaemonset := range sdCopy.Spec.Controllers.DaemonSet {
-			daemonsetObj, err := t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Get(sdDaemonset.GetName(), metav1.GetOptions{})
+			daemonsetObj, err := t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Get(context.TODO(), sdDaemonset.GetName(), metav1.GetOptions{})
 			if errors.IsNotFound(err) {
 				configuredDaemonSet, failureCount := t.configureController(sdCopy, sdDaemonset, ownerReferences)
 				failureCounter += failureCount
-				_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Create(configuredDaemonSet.(*appsv1.DaemonSet))
+				_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Create(context.TODO(), configuredDaemonSet.(*appsv1.DaemonSet), metav1.CreateOptions{})
 				if err != nil {
 					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("DaemonSet %s could not be created", sdDaemonset.GetName()))
 					failureCounter++
@@ -190,7 +191,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 					// Configure the daemonset according to the SD
 					configuredDaemonSet, failureCount := t.configureController(sdCopy, sdDaemonset, ownerReferences)
 					failureCounter += failureCount
-					_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(configuredDaemonSet.(*appsv1.DaemonSet))
+					_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(context.TODO(), configuredDaemonSet.(*appsv1.DaemonSet), metav1.UpdateOptions{})
 					if err != nil {
 						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("DaemonSet %s could not be updated", sdDaemonset.GetName()))
 						failureCounter++
@@ -205,11 +206,11 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 	if sdCopy.Spec.Controllers.StatefulSet != nil {
 		controllerCounter += len(sdCopy.Spec.Controllers.StatefulSet)
 		for _, sdStatefulset := range sdCopy.Spec.Controllers.StatefulSet {
-			statefulsetObj, err := t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Get(sdStatefulset.GetName(), metav1.GetOptions{})
+			statefulsetObj, err := t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Get(context.TODO(), sdStatefulset.GetName(), metav1.GetOptions{})
 			if errors.IsNotFound(err) {
 				configuredStatefulSet, failureCount := t.configureController(sdCopy, sdStatefulset, ownerReferences)
 				failureCounter += failureCount
-				_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Create(configuredStatefulSet.(*appsv1.StatefulSet))
+				_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Create(context.TODO(), configuredStatefulSet.(*appsv1.StatefulSet), metav1.CreateOptions{})
 				if err != nil {
 					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s could not be created", sdStatefulset.GetName()))
 					failureCounter++
@@ -220,7 +221,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 					// Configure the statefulset according to the SD
 					configuredStatefulSet, failureCount := t.configureController(sdCopy, sdStatefulset, ownerReferences)
 					failureCounter += failureCount
-					_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(configuredStatefulSet.(*appsv1.StatefulSet))
+					_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(context.TODO(), configuredStatefulSet.(*appsv1.StatefulSet), metav1.UpdateOptions{})
 					if err != nil {
 						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s could not be created", sdStatefulset.GetName()))
 						failureCounter++
@@ -332,7 +333,7 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 				}
 				labelKey := strings.ToLower(fmt.Sprintf("edge-net.io/%s%s", selectorName, labelKeySuffix))
 				// This gets the node list which includes the EdgeNet geolabels
-				nodesRaw, err := t.clientset.CoreV1().Nodes().List(metav1.ListOptions{FieldSelector: "spec.unschedulable!=true"})
+				nodesRaw, err := t.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{FieldSelector: "spec.unschedulable!=true"})
 				if err != nil {
 					log.Println(err.Error())
 					panic(err.Error())
@@ -389,7 +390,7 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 				// If the selectivedeployment key is polygon then certain calculations like geofence need to be done
 				// for being had the list of nodes that the pods will be deployed on according to the desired state.
 				// This gets the node list which includes the EdgeNet geolabels
-				nodesRaw, err := t.clientset.CoreV1().Nodes().List(metav1.ListOptions{FieldSelector: "spec.unschedulable!=true"})
+				nodesRaw, err := t.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{FieldSelector: "spec.unschedulable!=true"})
 				if err != nil {
 					log.Println(err.Error())
 					panic(err.Error())
@@ -508,7 +509,7 @@ func checkOwnerReferences(sdCopy *apps_v1alpha.SelectiveDeployment, ownerReferen
 func (t *SDHandler) checkController(controllerName, controllerKind, namespace string) (apps_v1alpha.SelectiveDeployment, bool) {
 	exists := false
 	var ownerSD apps_v1alpha.SelectiveDeployment
-	SDRaw, err := t.edgenetClientset.AppsV1alpha().SelectiveDeployments(namespace).List(metav1.ListOptions{})
+	SDRaw, err := t.edgenetClientset.AppsV1alpha().SelectiveDeployments(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return ownerSD, exists
 	}

@@ -17,17 +17,18 @@ limitations under the License.
 package user
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	"edgenet/pkg/controller/v1alpha/emailverification"
-	"edgenet/pkg/mailer"
-	"edgenet/pkg/permission"
-	"edgenet/pkg/registration"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/emailverification"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	"github.com/EdgeNet-project/edgenet/pkg/mailer"
+	"github.com/EdgeNet-project/edgenet/pkg/permission"
+	"github.com/EdgeNet-project/edgenet/pkg/registration"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,53 +62,53 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	// Create a copy of the user object to make changes on it
 	userCopy := obj.(*apps_v1alpha.User).DeepCopy()
 	// Find the authority from the namespace in which the object is
-	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
+	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), userCopy.GetNamespace(), metav1.GetOptions{})
 	// Check if the email address is already taken
 	emailExists, message := t.checkDuplicateObject(userCopy, userOwnerNamespace.Labels["authority-name"])
 
 	if emailExists {
 		userCopy.Spec.Active = false
-		userUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
+		userUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(context.TODO(), userCopy, metav1.UpdateOptions{})
 		if err == nil {
 			userCopy = userUpdated
 		}
 		userCopy.Status.State = failure
 		userCopy.Status.Message = []string{message}
-		t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+		t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(context.TODO(), userCopy, metav1.UpdateOptions{})
 		return
 	}
-	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 
-	_, serviceAccountErr := t.clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
+	_, serviceAccountErr := t.clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Get(context.TODO(), userCopy.GetName(), metav1.GetOptions{})
 	if !errors.IsNotFound(serviceAccountErr) {
 		// To demission service accounts providing user authentication
-		t.clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Delete(userCopy.GetName(), &metav1.DeleteOptions{})
+		t.clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Delete(context.TODO(), userCopy.GetName(), metav1.DeleteOptions{})
 	}
 	// Check if the authority is active
 	if (userOwnerAuthority.Spec.Enabled && userCopy.Spec.Active) || (userOwnerAuthority.Spec.Enabled && userCopy.Spec.Active && !errors.IsNotFound(serviceAccountErr)) {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
-		_, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
+		_, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Get(context.TODO(), userCopy.GetName(), metav1.GetOptions{})
 		if err != nil || !errors.IsNotFound(serviceAccountErr) {
 			// Automatically creates an acceptable use policy object belonging to the user in the authority namespace
 			// When a user is deleted, the owner references feature allows the related AUP to be automatically removed
 			userOwnerReferences := SetAsOwnerReference(userCopy)
 			userAUP := &apps_v1alpha.AcceptableUsePolicy{TypeMeta: metav1.TypeMeta{Kind: "AcceptableUsePolicy", APIVersion: "apps.edgenet.io/v1alpha"},
 				ObjectMeta: metav1.ObjectMeta{Name: userCopy.GetName(), OwnerReferences: userOwnerReferences}, Spec: apps_v1alpha.AcceptableUsePolicySpec{Accepted: false}}
-			t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Create(userAUP)
+			t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Create(context.TODO(), userAUP, metav1.CreateOptions{})
 			// Create user-specific roles regarding the resources of authority, users, and acceptableusepolicies
 			policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"authorities"}, ResourceNames: []string{userOwnerNamespace.Labels["authority-name"]},
 				Verbs: []string{"get"}}, {APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"get", "update", "patch"}}}
 			userRole := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("user-%s", userCopy.GetName()), OwnerReferences: userOwnerReferences},
 				Rules: policyRule}
-			_, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(userRole)
+			_, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(context.TODO(), userRole, metav1.CreateOptions{})
 			if err != nil {
 				log.Infof("Couldn't create user-%s role: %s", userCopy.GetName(), err)
 				if errors.IsAlreadyExists(err) {
-					currentUserRole, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Get(userRole.GetName(), metav1.GetOptions{})
+					currentUserRole, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Get(context.TODO(), userRole.GetName(), metav1.GetOptions{})
 					if err == nil {
 						currentUserRole.Rules = policyRule
-						_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Update(currentUserRole)
+						_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Update(context.TODO(), currentUserRole, metav1.UpdateOptions{})
 						if err == nil {
 							log.Infof("User-%s role updated", userCopy.GetName())
 						}
@@ -119,21 +120,21 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				Verbs: []string{"get", "update", "patch"}}}
 			userRole = &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("user-aup-%s", userCopy.GetName()), OwnerReferences: userOwnerReferences},
 				Rules: policyRule}
-			_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(userRole)
+			_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(context.TODO(), userRole, metav1.CreateOptions{})
 			if err != nil {
 				log.Infof("Couldn't create user-aup-%s role: %s", userCopy.GetName(), err)
 				if errors.IsAlreadyExists(err) {
-					currentUserRole, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Get(userRole.GetName(), metav1.GetOptions{})
+					currentUserRole, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Get(context.TODO(), userRole.GetName(), metav1.GetOptions{})
 					if err == nil {
 						currentUserRole.Rules = policyRule
-						_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Update(currentUserRole)
+						_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Update(context.TODO(), currentUserRole, metav1.UpdateOptions{})
 						if err == nil {
 							log.Infof("User-aup-%s role updated", userCopy.GetName())
 						}
 					}
 				}
 			}
-			defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+			defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(context.TODO(), userCopy, metav1.UpdateOptions{})
 			if userOwnerAuthority.Spec.Contact.Username == userCopy.GetName() && userOwnerAuthority.Spec.Contact.Email == userCopy.Spec.Email {
 				userCopy.Status.Type = "admin"
 			} else {
@@ -160,13 +161,13 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			userCopy.Status.Message = []string{statusDict["cert-ok"]}
 			t.sendEmail(userCopy, userOwnerNamespace.Labels["authority-name"], "user-registration-successful")
 
-			slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(metav1.ListOptions{})
-			teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(userCopy.GetNamespace()).List(metav1.ListOptions{})
+			slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{})
+			teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(userCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{})
 			t.createRoleBindings(userCopy, slicesRaw, teamsRaw, userOwnerAuthority.GetName())
 			t.createAUPRoleBinding(userCopy)
 		}
 	} else if userOwnerAuthority.Spec.Enabled == false && userCopy.Spec.Active == true {
-		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
+		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(context.TODO(), userCopy, metav1.UpdateOptions{})
 		userCopy.Spec.Active = false
 	}
 }
@@ -176,28 +177,28 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	log.Info("UserHandler.ObjectUpdated")
 	// Create a copy of the user object to make changes on it
 	userCopy := obj.(*apps_v1alpha.User).DeepCopy()
-	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(userCopy.GetNamespace(), metav1.GetOptions{})
+	userOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), userCopy.GetNamespace(), metav1.GetOptions{})
 	// Check if the email address is already taken
 	emailExists, message := t.checkDuplicateObject(userCopy, userOwnerNamespace.Labels["authority-name"])
 	if emailExists {
 		userCopy.Spec.Active = false
-		userUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
+		userUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(context.TODO(), userCopy, metav1.UpdateOptions{})
 		if err == nil {
 			userCopy = userUpdated
 		}
 		userCopy.Status.State = failure
 		userCopy.Status.Message = []string{message}
-		t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+		t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(context.TODO(), userCopy, metav1.UpdateOptions{})
 		return
 	}
-	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	fieldUpdated := updated.(fields)
 	// Security check to prevent any kind of manipulation on the AUP
 	if fieldUpdated.aup {
-		userAUP, _ := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Get(userCopy.GetName(), metav1.GetOptions{})
+		userAUP, _ := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Get(context.TODO(), userCopy.GetName(), metav1.GetOptions{})
 		if userAUP.Spec.Accepted != userCopy.Status.AUP {
 			userCopy.Status.AUP = userAUP.Spec.Accepted
-			userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+			userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(context.TODO(), userCopy, metav1.UpdateOptions{})
 			if err == nil {
 				userCopy = userCopyUpdated
 			}
@@ -206,7 +207,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	if userOwnerAuthority.Spec.Enabled {
 		if fieldUpdated.email {
 			userCopy.Spec.Active = false
-			userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
+			userCopyUpdated, err := t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(context.TODO(), userCopy, metav1.UpdateOptions{})
 			if err == nil {
 				userCopy = userCopyUpdated
 			} else {
@@ -225,7 +226,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 				userCopy.Status.Message = []string{statusDict["email-fail"]}
 			}
 
-			userCopyUpdated, err = t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(userCopy)
+			userCopyUpdated, err = t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(context.TODO(), userCopy, metav1.UpdateOptions{})
 			if err == nil {
 				userCopy = userCopyUpdated
 			}
@@ -234,8 +235,8 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 		if userCopy.Spec.Active && userCopy.Status.AUP {
 			// To manipulate role bindings according to the changes
 			if fieldUpdated.active || fieldUpdated.aup || fieldUpdated.role {
-				slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(metav1.ListOptions{})
-				teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(userCopy.GetNamespace()).List(metav1.ListOptions{})
+				slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{})
+				teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(userCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{})
 				if fieldUpdated.role {
 					t.deleteRoleBindings(userCopy, slicesRaw, teamsRaw)
 				}
@@ -247,8 +248,8 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 		} else if !userCopy.Spec.Active || !userCopy.Status.AUP {
 			// To manipulate role bindings according to the changes
 			if (userCopy.Spec.Active == false && fieldUpdated.active) || (userCopy.Status.AUP == false && fieldUpdated.aup) {
-				slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(metav1.ListOptions{})
-				teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(userCopy.GetNamespace()).List(metav1.ListOptions{})
+				slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{})
+				teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(userCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{})
 				t.deleteRoleBindings(userCopy, slicesRaw, teamsRaw)
 			}
 			// To create AUP role binding for the user
@@ -257,7 +258,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			}
 		}
 	} else if userOwnerAuthority.Spec.Enabled == false && userCopy.Spec.Active == true {
-		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(userCopy)
+		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(context.TODO(), userCopy, metav1.UpdateOptions{})
 		userCopy.Spec.Active = false
 	}
 }
@@ -283,10 +284,10 @@ func (t *Handler) Create(obj interface{}) bool {
 		user.Spec.LastName = URRCopy.Spec.LastName
 		user.Spec.URL = URRCopy.Spec.URL
 		user.Spec.Active = true
-		_, err := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Create(user.DeepCopy())
+		_, err := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Create(context.TODO(), user.DeepCopy(), metav1.CreateOptions{})
 		if err == nil {
 			failed = false
-			t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})
+			t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(context.TODO(), URRCopy.GetName(), metav1.DeleteOptions{})
 		}
 	}
 
@@ -324,7 +325,7 @@ func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 			}
 		}
 		// List the slices in the team namespace
-		teamSlicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName())).List(metav1.ListOptions{})
+		teamSlicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName())).List(context.TODO(), metav1.ListOptions{})
 		createLoop(teamSlicesRaw, fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName()))
 	}
 }
@@ -332,14 +333,14 @@ func (t *Handler) createRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 // deleteRoleBindings removes user role bindings in the namespaces related
 func (t *Handler) deleteRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *apps_v1alpha.SliceList, teamsRaw *apps_v1alpha.TeamList) {
 	// To delete the cluster role binding which allows user to get the authority object
-	t.clientset.RbacV1().ClusterRoleBindings().Delete(fmt.Sprintf("%s-%s-for-authority", userCopy.GetNamespace(), userCopy.GetName()), &metav1.DeleteOptions{})
+	t.clientset.RbacV1().ClusterRoleBindings().Delete(context.TODO(), fmt.Sprintf("%s-%s-for-authority", userCopy.GetNamespace(), userCopy.GetName()), metav1.DeleteOptions{})
 	// This part deletes the rolebindings one by one
 	deletionLoop := func(roleBindings *rbacv1.RoleBindingList) {
 		for _, roleBindingRow := range roleBindings.Items {
 			for _, roleBindingSubject := range roleBindingRow.Subjects {
 				if roleBindingSubject.Kind == "User" && (roleBindingSubject.Name == userCopy.Spec.Email) &&
 					roleBindingSubject.Namespace == userCopy.GetNamespace() {
-					t.clientset.RbacV1().RoleBindings(roleBindingRow.GetNamespace()).Delete(roleBindingRow.GetName(), &metav1.DeleteOptions{})
+					t.clientset.RbacV1().RoleBindings(roleBindingRow.GetNamespace()).Delete(context.TODO(), roleBindingRow.GetName(), metav1.DeleteOptions{})
 					break
 				}
 			}
@@ -351,21 +352,21 @@ func (t *Handler) deleteRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 		roleBindingListOptions = metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name!=%s-user-aup-%s", userCopy.GetNamespace(), userCopy.GetName())}
 	}
 	// List the rolebindings in the authority namespace
-	roleBindings, _ := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).List(roleBindingListOptions)
+	roleBindings, _ := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).List(context.TODO(), roleBindingListOptions)
 	deletionLoop(roleBindings)
 	// List the rolebindings in the slice namespaces which directly created by slices in the authority namespace
 	for _, sliceRow := range slicesRaw.Items {
-		roleBindings, _ := t.clientset.RbacV1().RoleBindings(fmt.Sprintf("%s-slice-%s", userCopy.GetNamespace(), sliceRow.GetName())).List(metav1.ListOptions{})
+		roleBindings, _ := t.clientset.RbacV1().RoleBindings(fmt.Sprintf("%s-slice-%s", userCopy.GetNamespace(), sliceRow.GetName())).List(context.TODO(), metav1.ListOptions{})
 		deletionLoop(roleBindings)
 	}
 	for _, teamRow := range teamsRaw.Items {
 		// List the rolebindings in the team namespace
-		roleBindings, _ := t.clientset.RbacV1().RoleBindings(teamRow.GetNamespace()).List(metav1.ListOptions{})
+		roleBindings, _ := t.clientset.RbacV1().RoleBindings(teamRow.GetNamespace()).List(context.TODO(), metav1.ListOptions{})
 		deletionLoop(roleBindings)
 		// List the rolebindings in the slice namespaces which created by slices in the team namespace
-		teamSlicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName())).List(metav1.ListOptions{})
+		teamSlicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(fmt.Sprintf("%s-team-%s", userCopy.GetNamespace(), teamRow.GetName())).List(context.TODO(), metav1.ListOptions{})
 		for _, teamSliceRow := range teamSlicesRaw.Items {
-			roleBindings, _ := t.clientset.RbacV1().RoleBindings(fmt.Sprintf("%s-team-%s-slice-%s", userCopy.GetNamespace(), teamRow.GetName(), teamSliceRow.GetName())).List(metav1.ListOptions{})
+			roleBindings, _ := t.clientset.RbacV1().RoleBindings(fmt.Sprintf("%s-team-%s-slice-%s", userCopy.GetNamespace(), teamRow.GetName(), teamSliceRow.GetName())).List(context.TODO(), metav1.ListOptions{})
 			deletionLoop(roleBindings)
 		}
 	}
@@ -373,7 +374,7 @@ func (t *Handler) deleteRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 
 // createAUPRoleBinding links the AUP up with the user
 func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) error {
-	_, err := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Get(fmt.Sprintf("%s-%s", userCopy.GetNamespace(),
+	_, err := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-%s", userCopy.GetNamespace(),
 		fmt.Sprintf("user-aup-%s", userCopy.GetName())), metav1.GetOptions{})
 	if err != nil {
 		// roleName to get user-specific AUP role which allows user to only get the AUP object related to itself
@@ -385,15 +386,15 @@ func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) error {
 		// When a user is deleted, the owner references feature allows the related role binding to be automatically removed
 		userOwnerReferences := SetAsOwnerReference(userCopy)
 		roleBind.ObjectMeta.OwnerReferences = userOwnerReferences
-		_, err = t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Create(roleBind)
+		_, err = t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Create(context.TODO(), roleBind, metav1.CreateOptions{})
 		if err != nil {
 			log.Infof("Couldn't create user-aup-%s role: %s", userCopy.GetName(), err)
 			if errors.IsAlreadyExists(err) {
-				userRoleBind, err := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Get(roleBind.GetName(), metav1.GetOptions{})
+				userRoleBind, err := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Get(context.TODO(), roleBind.GetName(), metav1.GetOptions{})
 				if err == nil {
 					userRoleBind.Subjects = rbSubjects
 					userRoleBind.RoleRef = roleRef
-					_, err = t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Update(userRoleBind)
+					_, err = t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Update(context.TODO(), userRoleBind, metav1.UpdateOptions{})
 					if err == nil {
 						log.Infof("Completed: user-aup-%s role updated", userCopy.GetName())
 					}
@@ -420,7 +421,7 @@ func (t *Handler) checkDuplicateObject(userCopy *apps_v1alpha.User, authorityNam
 	exists := false
 	var message string
 	// To check email address
-	userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
+	userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(context.TODO(), metav1.ListOptions{})
 	for _, userRow := range userRaw.Items {
 		if userRow.Spec.Email == userCopy.Spec.Email && userRow.GetUID() != userCopy.GetUID() {
 			exists = true
@@ -430,17 +431,17 @@ func (t *Handler) checkDuplicateObject(userCopy *apps_v1alpha.User, authorityNam
 	}
 	if !exists {
 		// Delete the user registration requests which have duplicate values, if any
-		URRRaw, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests("").List(metav1.ListOptions{})
+		URRRaw, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests("").List(context.TODO(), metav1.ListOptions{})
 		for _, URRRow := range URRRaw.Items {
 			if URRRow.Spec.Email == userCopy.Spec.Email {
-				t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRRow.GetNamespace()).Delete(URRRow.GetName(), &metav1.DeleteOptions{})
+				t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRRow.GetNamespace()).Delete(context.TODO(), URRRow.GetName(), metav1.DeleteOptions{})
 			}
 		}
 		// Delete the user registration requests which have duplicate values in the same namespace, if any
-		URRRaw, _ = t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(userCopy.GetNamespace()).List(metav1.ListOptions{})
+		URRRaw, _ = t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(userCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{})
 		for _, URRRow := range URRRaw.Items {
 			if URRRow.GetName() == userCopy.GetName() || URRRow.Spec.Email == userCopy.Spec.Email {
-				t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRRow.GetNamespace()).Delete(URRRow.GetName(), &metav1.DeleteOptions{})
+				t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRRow.GetNamespace()).Delete(context.TODO(), URRRow.GetName(), metav1.DeleteOptions{})
 			}
 		}
 	} else if exists && !reflect.DeepEqual(userCopy.Status.Message, message) {

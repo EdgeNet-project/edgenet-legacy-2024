@@ -17,6 +17,7 @@ limitations under the License.
 package nodecontribution
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -24,12 +25,12 @@ import (
 	"syscall"
 	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	appsinformer_v1 "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
-	"edgenet/pkg/node"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	appsinformer_v1 "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/node"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -132,11 +133,11 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		&cache.ListWatch{
 			// The main purpose of listing is to attach geo labels to whole nodes at the beginning
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return clientset.CoreV1().Nodes().List(options)
+				return clientset.CoreV1().Nodes().List(context.TODO(), options)
 			},
 			// This function watches all changes/updates of nodes
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return clientset.CoreV1().Nodes().Watch(options)
+				return clientset.CoreV1().Nodes().Watch(context.TODO(), options)
 			},
 		},
 		&corev1.Node{},
@@ -153,13 +154,13 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			}
 			for _, owner := range nodeObj.GetOwnerReferences() {
 				if owner.Kind == "Namespace" {
-					NCRaw, err := edgenetClientset.AppsV1alpha().NodeContributions(owner.Name).List(metav1.ListOptions{})
+					NCRaw, err := edgenetClientset.AppsV1alpha().NodeContributions(owner.Name).List(context.TODO(), metav1.ListOptions{})
 					if err == nil {
 						if len(NCRaw.Items) == 0 {
 							log.Println("No Node Contribution Attached The Node")
-							clientset.CoreV1().Nodes().Delete(nodeObj.GetName(), &metav1.DeleteOptions{})
+							clientset.CoreV1().Nodes().Delete(context.TODO(), nodeObj.GetName(), metav1.DeleteOptions{})
 						} else {
-							NCOwnerNamespace, _ := clientset.CoreV1().Namespaces().Get(owner.Name, metav1.GetOptions{})
+							NCOwnerNamespace, _ := clientset.CoreV1().Namespaces().Get(context.TODO(), owner.Name, metav1.GetOptions{})
 							exist := false
 							for _, NCRow := range NCRaw.Items {
 								nodeName := fmt.Sprintf("%s.%s.edge-net.io", NCOwnerNamespace.Labels["authority-name"], NCRow.GetName())
@@ -168,7 +169,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 								}
 							}
 							if !exist {
-								clientset.CoreV1().Nodes().Delete(nodeObj.GetName(), &metav1.DeleteOptions{})
+								clientset.CoreV1().Nodes().Delete(context.TODO(), nodeObj.GetName(), metav1.DeleteOptions{})
 							}
 						}
 					}
@@ -183,13 +184,13 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			for _, owner := range newObj.GetOwnerReferences() {
 				for _, owner := range newObj.GetOwnerReferences() {
 					if owner.Kind == "Namespace" {
-						NCRaw, err := edgenetClientset.AppsV1alpha().NodeContributions(owner.Name).List(metav1.ListOptions{})
+						NCRaw, err := edgenetClientset.AppsV1alpha().NodeContributions(owner.Name).List(context.TODO(), metav1.ListOptions{})
 						if err == nil {
 							if len(NCRaw.Items) == 0 {
 								log.Println("No Node Contribution Attached The Node")
-								clientset.CoreV1().Nodes().Delete(newObj.GetName(), &metav1.DeleteOptions{})
+								clientset.CoreV1().Nodes().Delete(context.TODO(), newObj.GetName(), metav1.DeleteOptions{})
 							} else {
-								NCOwnerNamespace, _ := clientset.CoreV1().Namespaces().Get(owner.Name, metav1.GetOptions{})
+								NCOwnerNamespace, _ := clientset.CoreV1().Namespaces().Get(context.TODO(), owner.Name, metav1.GetOptions{})
 								for _, NCRow := range NCRaw.Items {
 									nodeName := fmt.Sprintf("%s.%s.edge-net.io", NCOwnerNamespace.Labels["authority-name"], NCRow.GetName())
 									if NCRow.GetName() == nodeName {
@@ -203,14 +204,14 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 												} else {
 													NCRow.Status.Message = append(NCRow.Status.Message, "Node is ready")
 												}
-												edgenetClientset.AppsV1alpha().NodeContributions(NCRow.GetNamespace()).UpdateStatus(NCRow)
+												edgenetClientset.AppsV1alpha().NodeContributions(NCRow.GetNamespace()).UpdateStatus(context.TODO(), NCRow, metav1.UpdateOptions{})
 											}
 										} else if (oldReady == trueStr && newReady == falseStr) ||
 											(oldReady == trueStr && newReady == unknownStr) {
 											if NCRow.Status.State != failure {
 												NCRow.Status.State = failure
 												NCRow.Status.Message = append(NCRow.Status.Message, "Node is not ready")
-												edgenetClientset.AppsV1alpha().NodeContributions(NCRow.GetNamespace()).UpdateStatus(NCRow)
+												edgenetClientset.AppsV1alpha().NodeContributions(NCRow.GetNamespace()).UpdateStatus(context.TODO(), NCRow, metav1.UpdateOptions{})
 											}
 										}
 
@@ -229,7 +230,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 
 				if owner.Kind == "NodeContribution" {
 					NCRaw, err := edgenetClientset.AppsV1alpha().NodeContributions("").
-						List(metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", owner.Name)})
+						List(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", owner.Name)})
 					if err == nil {
 						for _, NCRow := range NCRaw.Items {
 							if NCRow.GetUID() == owner.UID {

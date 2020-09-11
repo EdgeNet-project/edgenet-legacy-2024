@@ -1,15 +1,16 @@
 package nodelabeler
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"edgenet/pkg/node"
+	"github.com/EdgeNet-project/edgenet/pkg/node"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	core_v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -39,11 +40,11 @@ func Start(kubernetes kubernetes.Interface) {
 		&cache.ListWatch{
 			// The main purpose of listing is to attach geo labels to whole nodes at the beginning
 			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return clientset.CoreV1().Nodes().List(options)
+				return clientset.CoreV1().Nodes().List(context.TODO(), options)
 			},
 			// This function watches all changes/updates of nodes
 			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return clientset.CoreV1().Nodes().Watch(options)
+				return clientset.CoreV1().Nodes().Watch(context.TODO(), options)
 			},
 		},
 		&core_v1.Node{},

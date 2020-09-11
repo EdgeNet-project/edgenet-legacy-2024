@@ -17,17 +17,18 @@ limitations under the License.
 package authorityrequest
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	"edgenet/pkg/controller/v1alpha/authority"
-	"edgenet/pkg/controller/v1alpha/emailverification"
-	"edgenet/pkg/mailer"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/authority"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/emailverification"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -59,7 +60,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	log.Info("authorityRequestHandler.ObjectCreated")
 	// Create a copy of the authority request object to make changes on it
 	authorityRequestCopy := obj.(*apps_v1alpha.AuthorityRequest).DeepCopy()
-	defer t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(authorityRequestCopy)
+	defer t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(context.TODO(), authorityRequestCopy, metav1.UpdateOptions{})
 	// Check if the email address of user or authority name is already taken
 	exists, message := t.checkDuplicateObject(authorityRequestCopy)
 	if exists {
@@ -151,7 +152,7 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		changeStatus = true
 	}
 	if changeStatus {
-		t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(authorityRequestCopy)
+		t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(context.TODO(), authorityRequestCopy, metav1.UpdateOptions{})
 	}
 }
 
@@ -177,7 +178,7 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 	exists := false
 	message := []string{}
 	// To check username on the users resource
-	_, err := t.edgenetClientset.AppsV1alpha().Authorities().Get(authorityRequestCopy.GetName(), metav1.GetOptions{})
+	_, err := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), authorityRequestCopy.GetName(), metav1.GetOptions{})
 	if errors.IsAlreadyExists(err) {
 		exists = true
 		message = append(message, fmt.Sprintf(statusDict["authority-taken"], authorityRequestCopy.GetName()))
@@ -186,7 +187,7 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 		}
 	} else {
 		// To check email address among users
-		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
+		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(context.TODO(), metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
 			if userRow.Spec.Email == authorityRequestCopy.Spec.Contact.Email {
 				exists = true
@@ -195,7 +196,7 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 			}
 		}
 		// To check email address among user registration requests
-		URRRaw, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests("").List(metav1.ListOptions{})
+		URRRaw, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests("").List(context.TODO(), metav1.ListOptions{})
 		for _, URRRow := range URRRaw.Items {
 			if URRRow.Spec.Email == authorityRequestCopy.Spec.Contact.Email {
 				exists = true
@@ -204,7 +205,7 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 			}
 		}
 		// To check email address given at authority request
-		authorityRequestRaw, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{})
+		authorityRequestRaw, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().List(context.TODO(), metav1.ListOptions{})
 		for _, authorityRequestRow := range authorityRequestRaw.Items {
 			if authorityRequestRow.Spec.Contact.Email == authorityRequestCopy.Spec.Contact.Email && authorityRequestRow.GetUID() != authorityRequestCopy.GetUID() {
 				exists = true
@@ -235,7 +236,7 @@ func (t *Handler) runApprovalTimeout(authorityRequestCopy *apps_v1alpha.Authorit
 	}
 
 	// Watch the events of authority request object
-	watchauthorityRequest, err := t.edgenetClientset.AppsV1alpha().AuthorityRequests().Watch(metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", authorityRequestCopy.GetName())})
+	watchauthorityRequest, err := t.edgenetClientset.AppsV1alpha().AuthorityRequests().Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", authorityRequestCopy.GetName())})
 	if err == nil {
 		go func() {
 			// Get events from watch interface
@@ -287,7 +288,7 @@ timeoutLoop:
 		case <-timeout:
 			watchauthorityRequest.Stop()
 			closeChannels()
-			t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(authorityRequestCopy.GetName(), &metav1.DeleteOptions{})
+			t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(context.TODO(), authorityRequestCopy.GetName(), metav1.DeleteOptions{})
 			break timeoutLoop
 		case <-terminated:
 			watchauthorityRequest.Stop()

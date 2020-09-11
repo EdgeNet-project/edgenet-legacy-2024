@@ -1,16 +1,18 @@
 package totalresourcequota
 
 import (
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/Sirupsen/logrus"
-	log "github.com/Sirupsen/logrus"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
+
+	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -116,14 +118,14 @@ func (g *TRQTestGroup) Init() {
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
 	// Create Authority
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
 	g.authorityObj.Status.State = success
 	g.authorityObj.Spec.Enabled = true
 	// Update Authority status
-	g.edgenetclient.AppsV1alpha().Authorities().UpdateStatus(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().UpdateStatus(context.TODO(), g.authorityObj.DeepCopy(), metav1.UpdateOptions{})
 	authorityChildNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", g.authorityObj.GetName())}}
 	// Create Authority child namepace
-	g.client.CoreV1().Namespaces().Create(authorityChildNamespace)
+	g.client.CoreV1().Namespaces().Create(context.TODO(), authorityChildNamespace, metav1.CreateOptions{})
 
 }
 
@@ -148,16 +150,16 @@ func TestTRQCreate(t *testing.T) {
 	// Creation of Total resource quota
 	t.Run("creation of total resource quota", func(t *testing.T) {
 		g.TRQObj.Spec.Enabled = true
-		g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Create(g.TRQObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Create(context.TODO(), g.TRQObj.DeepCopy(), metav1.CreateOptions{})
 		g.handler.ObjectCreated(g.TRQObj.DeepCopy())
-		TRQ, _ := g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Get(g.TRQObj.GetName(), metav1.GetOptions{})
+		TRQ, _ := g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), g.TRQObj.GetName(), metav1.GetOptions{})
 		if TRQ.Status.State != success {
 			t.Error(errorDict["TRQ-failed"])
 		}
 	})
 	t.Run("creation of resource quota", func(t *testing.T) {
 		g.handler.Create("testquota")
-		TRQ, _ := g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Get("testquota", metav1.GetOptions{})
+		TRQ, _ := g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), "testquota", metav1.GetOptions{})
 		if TRQ.Spec.Claim == nil {
 			t.Error(errorDict["TRQ-failed"])
 		}
@@ -182,10 +184,10 @@ func TestTRQupdate(t *testing.T) {
 			},
 		}
 		// Create a slice
-		g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.sliceObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.sliceObj.DeepCopy(), metav1.CreateOptions{})
 		// Create Slice child namespace with resource quota
 		sliceChildNamespaceStr := fmt.Sprintf("%s-slice-%s", g.sliceObj.GetNamespace(), g.sliceObj.GetName())
-		g.client.CoreV1().ResourceQuotas(sliceChildNamespaceStr).Create(g.handler.resourceQuota)
+		g.client.CoreV1().ResourceQuotas(sliceChildNamespaceStr).Create(context.TODO(), g.handler.resourceQuota, metav1.CreateOptions{})
 		// Set a tiny claim for TRQ so handler triggers exceeded mechanism
 		g.TRQObj.Spec.Claim = []apps_v1alpha.TotalResourceDetails{
 			{
@@ -198,10 +200,10 @@ func TestTRQupdate(t *testing.T) {
 		g.TRQObj.Spec.Enabled = true
 		var field fields
 		field.spec = true
-		g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Update(g.TRQObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().TotalResourceQuotas().Update(context.TODO(), g.TRQObj.DeepCopy(), metav1.UpdateOptions{})
 		// Triggering quota exceeded
 		g.handler.ObjectUpdated(g.TRQObj.DeepCopy(), field)
-		slice, _ := g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.sliceObj.GetName(), metav1.GetOptions{})
+		slice, _ := g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.sliceObj.GetName(), metav1.GetOptions{})
 		if slice != nil {
 			t.Error(errorDict["TRQ-update"])
 		}

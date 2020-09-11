@@ -23,10 +23,10 @@ import (
 	"syscall"
 	"time"
 
-	"edgenet/pkg/client/clientset/versioned"
-	appsinformer_v1 "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	appsinformer_v1 "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"

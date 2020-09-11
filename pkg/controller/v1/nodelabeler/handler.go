@@ -1,9 +1,9 @@
 package nodelabeler
 
 import (
-	"edgenet/pkg/node"
+	"github.com/EdgeNet-project/edgenet/pkg/node"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 )

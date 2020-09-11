@@ -1,8 +1,8 @@
 package main
 
 import (
-	"edgenet/pkg/bootstrap"
-	"edgenet/pkg/controller/v1alpha/slice"
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/slice"
 	"log"
 )
 

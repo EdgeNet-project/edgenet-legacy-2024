@@ -1,10 +1,12 @@
 package nodelabeler
 
 import (
-	"edgenet/pkg/util"
+	"context"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,17 +76,17 @@ func TestStartingController(t *testing.T) {
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
 			if tc.Operation == "create" {
-				g.client.CoreV1().Nodes().Create(tc.Node.DeepCopy())
+				g.client.CoreV1().Nodes().Create(context.TODO(), tc.Node.DeepCopy(), metav1.CreateOptions{})
 			} else if tc.Operation == "update" {
-				g.client.CoreV1().Nodes().Create(tc.Node.DeepCopy())
+				g.client.CoreV1().Nodes().Create(context.TODO(), tc.Node.DeepCopy(), metav1.CreateOptions{})
 				// Wait for the object to be up to date
 				time.Sleep(time.Millisecond * 500)
-				updatedNode, _ := g.client.CoreV1().Nodes().Get(tc.Node.GetName(), metav1.GetOptions{})
-				g.client.CoreV1().Nodes().Update(updatedNode)
+				updatedNode, _ := g.client.CoreV1().Nodes().Get(context.TODO(), tc.Node.GetName(), metav1.GetOptions{})
+				g.client.CoreV1().Nodes().Update(context.TODO(), updatedNode, metav1.UpdateOptions{})
 			}
 			// Wait for the object to be up to date
 			time.Sleep(time.Millisecond * 500)
-			node, _ := g.client.CoreV1().Nodes().Get(tc.Node.GetName(), metav1.GetOptions{})
+			node, _ := g.client.CoreV1().Nodes().Get(context.TODO(), tc.Node.GetName(), metav1.GetOptions{})
 			if !reflect.DeepEqual(node.Labels, tc.Expected) {
 				for actualKey, actualValue := range node.Labels {
 					for expectedKey, expectedValue := range tc.Expected {

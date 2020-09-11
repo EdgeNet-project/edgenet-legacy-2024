@@ -17,7 +17,7 @@ limitations under the License.
 package registration
 
 import (
-	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -31,8 +31,7 @@ import (
 	"regexp"
 	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/util"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
 
 	yaml "gopkg.in/yaml.v2"
 	"k8s.io/api/certificates/v1beta1"
@@ -41,9 +40,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/util/cert"
-	kubeconfigutil "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig"
-	cmdconfig "k8s.io/kubernetes/pkg/kubectl/cmd/config"
+	//cmdconfig "k8s.io/kubernetes/pkg/kubectl/cmd/config"
 )
 
 // headnode implementation
@@ -95,9 +94,9 @@ func MakeUser(authority, username, email string) ([]byte, []byte, error) {
 	CSRObject := v1beta1.CertificateSigningRequest{}
 	CSRObject.Name = fmt.Sprintf("%s-%s", authority, username)
 	CSRObject.Spec.Groups = []string{"system:authenticated"}
-	CSRObject.Spec.Usages = []v1beta1.KeyUsage{"digital signature", "key encipherment", "server auth", "client auth"}
+	CSRObject.Spec.Usages = []v1beta1.KeyUsage{"client auth"}
 	CSRObject.Spec.Request = csr
-	CSRCopyCreated, err := Clientset.CertificatesV1beta1().CertificateSigningRequests().Create(&CSRObject)
+	CSRCopyCreated, err := Clientset.CertificatesV1beta1().CertificateSigningRequests().Create(context.TODO(), &CSRObject, metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -108,7 +107,7 @@ func MakeUser(authority, username, email string) ([]byte, []byte, error) {
 		Message:        "This CSR was approved automatically by EdgeNet",
 		LastUpdateTime: metav1.Now(),
 	})
-	_, err = Clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(CSRCopy)
+	_, err = Clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(context.TODO(), CSRCopy, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -120,7 +119,7 @@ check:
 		case <-timeout:
 			return nil, nil, err
 		case <-ticker:
-			CSRCopy, err = Clientset.CertificatesV1beta1().CertificateSigningRequests().Get(CSRCopy.GetName(), metav1.GetOptions{})
+			CSRCopy, err = Clientset.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), CSRCopy.GetName(), metav1.GetOptions{})
 			if err != nil {
 				return nil, nil, err
 			}
@@ -137,7 +136,27 @@ check:
 	if err != nil {
 		return nil, nil, err
 	}
-	pathOptions := clientcmd.NewDefaultPathOptions()
+
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	// if you want to change the loading rules (which files in which order), you can do so here
+
+	configOverrides := &clientcmd.ConfigOverrides{}
+	// if you want to change override values or bind them to flags, there are methods to help you
+
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+	rawConfig, err := kubeConfig.RawConfig()
+	if err != nil {
+		// Log the error to debug
+		return CSRCopy.Status.Certificate, pemdata, nil
+	}
+	authInfo := api.AuthInfo{}
+	authInfo.Username = email
+	authInfo.ClientCertificate = fmt.Sprintf("/var/www/edgenet/assets/certs/%s.crt", email)
+	authInfo.ClientKey = fmt.Sprintf("/var/www/edgenet/assets/certs/%s.key", email)
+	//rawConfig.AuthInfos = append(rawConfig.AuthInfos, authInfo)
+	log.Println(rawConfig.AuthInfos)
+	/*pathOptions := clientcmd.NewDefaultPathOptions()
 	buf := bytes.NewBuffer([]byte{})
 	kcmd := cmdconfig.NewCmdConfigSetAuthInfo(buf, pathOptions)
 	kcmd.SetArgs([]string{email})
@@ -149,7 +168,7 @@ check:
 	if err := kcmd.Execute(); err != nil {
 		log.Printf("Couldn't set auth info on the kubeconfig file: %s", username)
 		return nil, nil, err
-	}
+	}*/
 	return CSRCopy.Status.Certificate, pemdata, nil
 }
 
@@ -157,21 +176,56 @@ check:
 // to use them on the creation of kubeconfig. Then generates kubeconfig by certs.
 func MakeConfig(authority, username, email string, clientCert, clientKey []byte) error {
 	// Define the cluster and server by taking advantage of the current config file
-	cluster, server, CA, err := util.GetClusterServerOfCurrentContext()
+	/*cluster, server, CA, err := util.GetClusterServerOfCurrentContext()
 	if err != nil {
 		log.Println(err)
 		return err
-	}
+	}*/
 	// Put the collected data into new kubeconfig file
-	newKubeConfig := kubeconfigutil.CreateWithCerts(server, cluster, email, CA, clientKey, clientCert)
+	/*newKubeConfig := kubeconfigutil.CreateWithCerts(server, cluster, email, CA, clientKey, clientCert)
 	newKubeConfig.Contexts[newKubeConfig.CurrentContext].Namespace = fmt.Sprintf("authority-%s", authority)
-	kubeconfigutil.WriteToDisk(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", authority, username), newKubeConfig)
+	kubeconfigutil.WriteToDisk(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", authority, username), newKubeConfig)*/
 	// Check if the creation process is completed
+	/*_, err = ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", authority, username))
+	if err != nil {
+		log.Println(err)
+		return err
+	}*/
+
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	// if you want to change the loading rules (which files in which order), you can do so here
+
+	configOverrides := &clientcmd.ConfigOverrides{}
+	// if you want to change override values or bind them to flags, there are methods to help you
+
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+	rawConfig, err := kubeConfig.RawConfig()
+	if err != nil {
+		// Log the error to debug
+		return err
+	}
+	rawConfig.AuthInfos = map[string]*api.AuthInfo{}
+	userContext := rawConfig.Contexts[rawConfig.CurrentContext]
+	userContext.Namespace = fmt.Sprintf("authority-%s", authority)
+	userContext.AuthInfo = email
+	rawConfig.Contexts = map[string]*api.Context{}
+	rawConfig.Contexts[authority] = userContext
+	rawConfig.CurrentContext = authority
+
+	authInfo := api.AuthInfo{}
+	authInfo.Username = email
+	authInfo.ClientCertificate = fmt.Sprintf("/var/www/edgenet/assets/certs/%s.crt", email)
+	authInfo.ClientKey = fmt.Sprintf("/var/www/edgenet/assets/certs/%s.key", email)
+	rawConfig.AuthInfos[email] = &authInfo
+
+	clientcmd.WriteToFile(rawConfig, fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", authority, username))
 	_, err = ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", authority, username))
 	if err != nil {
 		log.Println(err)
 		return err
 	}
+
 	return nil
 }
 
@@ -180,7 +234,7 @@ func CreateServiceAccount(userCopy *apps_v1alpha.User, accountType string, owner
 	// Set the name of service account according to the type
 	name := userCopy.GetName()
 	serviceAccount := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: name, OwnerReferences: ownerReferences}}
-	serviceAccountCreated, err := Clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Create(serviceAccount)
+	serviceAccountCreated, err := Clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Create(context.TODO(), serviceAccount, metav1.CreateOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
@@ -206,7 +260,7 @@ func CreateConfig(serviceAccount *corev1.ServiceAccount) string {
 		log.Printf("Serviceaccount %s in %s doesn't have a serviceaccount token", serviceAccount.GetName(), serviceAccount.GetNamespace())
 		return fmt.Sprintf("Serviceaccount %s doesn't have a serviceaccount token\n", serviceAccount.GetName())
 	}
-	secret, err := Clientset.CoreV1().Secrets(serviceAccount.GetNamespace()).Get(accountSecretName, metav1.GetOptions{})
+	secret, err := Clientset.CoreV1().Secrets(serviceAccount.GetNamespace()).Get(context.TODO(), accountSecretName, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		log.Printf("Secret for %s in %s not found", serviceAccount.GetName(), serviceAccount.GetNamespace())
 		return fmt.Sprintf("Secret %s not found\n", serviceAccount.GetName())
@@ -218,7 +272,7 @@ func CreateConfig(serviceAccount *corev1.ServiceAccount) string {
 		panic(err.Error())
 	}
 	// Define the cluster and server by taking advantage of the current config file
-	cluster, server, _, err := util.GetClusterServerOfCurrentContext()
+	/*cluster, server, _, err := util.GetClusterServerOfCurrentContext()
 	if err != nil {
 		log.Println(err)
 		return fmt.Sprintf("Err: %s", err)
@@ -227,11 +281,46 @@ func CreateConfig(serviceAccount *corev1.ServiceAccount) string {
 	newKubeConfig := kubeconfigutil.CreateWithToken(server, cluster, serviceAccount.GetName(), secret.Data["ca.crt"], string(secret.Data["token"]))
 	newKubeConfig.Contexts[newKubeConfig.CurrentContext].Namespace = serviceAccount.GetNamespace()
 	kubeconfigutil.WriteToDisk(fmt.Sprintf("../../assets/kubeconfigs/edgenet-%s-%s.cfg", serviceAccount.GetNamespace(), serviceAccount.GetName()), newKubeConfig)
+	*/
+
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	// if you want to change the loading rules (which files in which order), you can do so here
+
+	configOverrides := &clientcmd.ConfigOverrides{}
+	// if you want to change override values or bind them to flags, there are methods to help you
+
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+	rawConfig, err := kubeConfig.RawConfig()
+	if err != nil {
+		// Log the error to debug
+		return fmt.Sprintf("Err: %s", err)
+	}
+	rawConfig.AuthInfos = map[string]*api.AuthInfo{}
+	userContext := rawConfig.Contexts[rawConfig.CurrentContext]
+	userContext.Namespace = serviceAccount.GetNamespace()
+	userContext.AuthInfo = serviceAccount.GetName()
+	rawConfig.Contexts = map[string]*api.Context{}
+	rawConfig.Contexts[serviceAccount.GetNamespace()] = userContext
+	rawConfig.CurrentContext = serviceAccount.GetNamespace()
+
+	authInfo := api.AuthInfo{}
+	authInfo.Username = serviceAccount.GetName()
+	authInfo.Token = string(secret.Data["token"])
+	rawConfig.AuthInfos[serviceAccount.GetName()] = &authInfo
+
+	clientcmd.WriteToFile(rawConfig, fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", serviceAccount.GetNamespace(), serviceAccount.GetName()))
 	// Check whether the creation process is completed
-	dat, err := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet-%s-%s.cfg", serviceAccount.GetNamespace(), serviceAccount.GetName()))
+	dat, err := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", serviceAccount.GetNamespace(), serviceAccount.GetName()))
 	if err != nil {
 		log.Println(err)
 		return fmt.Sprintf("Err: %s", err)
 	}
+
+	/*dat, err := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet-%s-%s.cfg", serviceAccount.GetNamespace(), serviceAccount.GetName()))
+	if err != nil {
+		log.Println(err)
+		return fmt.Sprintf("Err: %s", err)
+	}*/
 	return string(dat)
 }

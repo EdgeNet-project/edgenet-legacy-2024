@@ -1,18 +1,20 @@
 package userregistrationrequest
 
 import (
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
-	"edgenet/pkg/controller/v1alpha/authority"
-	"edgenet/pkg/controller/v1alpha/user"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/Sirupsen/logrus"
-	log "github.com/Sirupsen/logrus"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/authority"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/user"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
+
+	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
@@ -124,7 +126,7 @@ func (g *URRTestGroup) Init() {
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
@@ -149,9 +151,9 @@ func TestURRCreate(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetclient)
 	// Creation of Authority reques
 	t.Run("creation of Authority request", func(t *testing.T) {
-		g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userRegistrationObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userRegistrationObj.DeepCopy(), metav1.CreateOptions{})
 		g.handler.ObjectCreated(g.userRegistrationObj.DeepCopy())
-		userRequest, _ := g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userRegistrationObj.GetName(), metav1.GetOptions{})
+		userRequest, _ := g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userRegistrationObj.GetName(), metav1.GetOptions{})
 		if userRequest.Status.Expires == nil {
 			t.Errorf("Failed to update approval timeout of user Request")
 		}
@@ -164,19 +166,19 @@ func TestURRUpdate(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetclient)
 	t.Run("checking duplicate user names and emails", func(t *testing.T) {
 		// Create user registration request
-		g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userRegistrationObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userRegistrationObj.DeepCopy(), metav1.CreateOptions{})
 		g.handler.ObjectCreated(g.userRegistrationObj.DeepCopy())
 		// Create a user
 		userHandler := user.Handler{}
 		userHandler.Init(g.client, g.edgenetclient)
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
 		userHandler.ObjectCreated(g.userObj.DeepCopy())
 		// Set user Request object email equal to existing user email
 		g.userRegistrationObj.Spec.Email = "userName@edge-net.org"
 		// Update server's representation of user registration request
-		g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.userRegistrationObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(context.TODO(), g.userRegistrationObj.DeepCopy(), metav1.UpdateOptions{})
 		g.handler.ObjectUpdated(g.userRegistrationObj.DeepCopy())
-		URR, _ := g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userRegistrationObj.GetName(), metav1.GetOptions{})
+		URR, _ := g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userRegistrationObj.GetName(), metav1.GetOptions{})
 		if URR.Status.Message == nil {
 			t.Error(ErrorDict["usr-email-coll"])
 		}
@@ -187,11 +189,11 @@ func TestURRUpdate(t *testing.T) {
 		g.userRegistrationObj.Spec.Approved = true
 		g.userRegistrationObj.Spec.Email = "URR@edge-net.org"
 		// Updating the user registration object
-		g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.userRegistrationObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(context.TODO(), g.userRegistrationObj.DeepCopy(), metav1.UpdateOptions{})
 		// Requesting server to update internal representation of user registration object and transition it to user
 		g.handler.ObjectUpdated(g.userRegistrationObj.DeepCopy())
 		// Checking if handler created user from user registration
-		User, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.userRegistrationObj.GetName(), metav1.GetOptions{})
+		User, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userRegistrationObj.GetName(), metav1.GetOptions{})
 		if User == nil {
 			t.Error(ErrorDict["usr-approv"])
 		}

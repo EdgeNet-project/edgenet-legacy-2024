@@ -1,7 +1,7 @@
 package nodelabeler
 
 import (
-	"edgenet/pkg/util"
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -10,7 +10,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/EdgeNet-project/edgenet/pkg/util"
+
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -133,9 +135,9 @@ func TestAssigningGeoLabels(t *testing.T) {
 
 	for k, tc := range cases {
 		t.Run(fmt.Sprintf("%s", k), func(t *testing.T) {
-			g.client.CoreV1().Nodes().Create(tc.Node.DeepCopy())
+			g.client.CoreV1().Nodes().Create(context.TODO(), tc.Node.DeepCopy(), metav1.CreateOptions{})
 			g.handler.SetNodeGeolocation(tc.Node.DeepCopy())
-			node, _ := g.client.CoreV1().Nodes().Get(tc.Node.GetName(), metav1.GetOptions{})
+			node, _ := g.client.CoreV1().Nodes().Get(context.TODO(), tc.Node.GetName(), metav1.GetOptions{})
 			if !reflect.DeepEqual(node.Labels, tc.Expected) {
 				for actualKey, actualValue := range node.Labels {
 					for expectedKey, expectedValue := range tc.Expected {

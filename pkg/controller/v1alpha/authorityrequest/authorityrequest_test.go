@@ -1,19 +1,21 @@
 package authorityrequest
 
 import (
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
-	"edgenet/pkg/controller/v1alpha/authority"
-	"edgenet/pkg/controller/v1alpha/user"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/Sirupsen/logrus"
-	log "github.com/Sirupsen/logrus"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/authority"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/user"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
+
+	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
@@ -140,7 +142,7 @@ func (g *ARTestGroup) Init() {
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
@@ -165,9 +167,9 @@ func TestARCreate(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetclient)
 	// Creation of Authority request
 	t.Run("creation of Authority request", func(t *testing.T) {
-		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(context.TODO(), g.authorityRequestObj.DeepCopy(), metav1.CreateOptions{})
 		g.handler.ObjectCreated(g.authorityRequestObj.DeepCopy())
-		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
+		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(context.TODO(), g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authorityRequest.Status.Expires == nil {
 			t.Errorf(errorDict["auth-timeout"])
 		}
@@ -176,10 +178,10 @@ func TestARCreate(t *testing.T) {
 		// Set Authority Request object name equal to existing Authority object name
 		g.authorityRequestObj.SetName("edgenet")
 		// Create Authority Request
-		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(context.TODO(), g.authorityRequestObj.DeepCopy(), metav1.CreateOptions{})
 		// Triggering collision
 		g.handler.ObjectCreated(g.authorityRequestObj.DeepCopy())
-		AR, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
+		AR, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(context.TODO(), g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		// Status message should have error
 		if AR.Status.Message == nil {
 			t.Error(errorDict["auth-coll"])
@@ -194,18 +196,18 @@ func TestARUpdate(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetclient)
 	t.Run("checking duplicate emails and Authority names", func(t *testing.T) {
 		// Create Authority request
-		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(context.TODO(), g.authorityRequestObj.DeepCopy(), metav1.CreateOptions{})
 		g.handler.ObjectCreated(g.authorityRequestObj.DeepCopy())
 		// Create user
 		userHandler := user.Handler{}
 		userHandler.Init(g.client, g.edgenetclient)
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
 		userHandler.ObjectCreated(g.userObj.DeepCopy())
 		// Set contact email in authority request obj equal to user email to cause collision
 		g.authorityRequestObj.Spec.Contact.Email = "userName@edge-net.org"
-		g.edgenetclient.AppsV1alpha().AuthorityRequests().Update(g.authorityRequestObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().AuthorityRequests().Update(context.TODO(), g.authorityRequestObj.DeepCopy(), metav1.UpdateOptions{})
 		g.handler.ObjectUpdated(g.authorityRequestObj.DeepCopy())
-		AR, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
+		AR, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(context.TODO(), g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if AR.Status.Message == nil && strings.Contains(AR.Status.Message[0], "Email address") {
 			t.Error(errorDict["email-coll"])
 		}
@@ -215,12 +217,12 @@ func TestARUpdate(t *testing.T) {
 		g.authorityRequestObj.Spec.Contact.Email = "JohnDoe@edge-net.org"
 		g.authorityRequestObj.Spec.Approved = true
 		// Updating the authority registration object
-		g.edgenetclient.AppsV1alpha().AuthorityRequests().Update(g.authorityRequestObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().AuthorityRequests().Update(context.TODO(), g.authorityRequestObj.DeepCopy(), metav1.UpdateOptions{})
 		// Requesting server to update internal representation of authority registration object and transition it to authority
 		g.handler.ObjectUpdated(g.authorityRequestObj.DeepCopy())
 		// Checking if handler created authority from authority request
-		g.edgenetclient.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{})
-		authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
+		g.edgenetclient.AppsV1alpha().AuthorityRequests().List(context.TODO(), metav1.ListOptions{})
+		authority, _ := g.edgenetclient.AppsV1alpha().Authorities().Get(context.TODO(), g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authority == nil {
 			t.Error(errorDict["auth-approv"])
 		}

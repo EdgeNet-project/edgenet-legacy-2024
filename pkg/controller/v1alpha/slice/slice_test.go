@@ -1,6 +1,7 @@
 package slice
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -8,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
-	"edgenet/pkg/controller/v1alpha/authority"
-	"edgenet/pkg/controller/v1alpha/user"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/authority"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/user"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/client-go/kubernetes"
@@ -135,7 +136,7 @@ func (g *SliceTestGroup) Init() {
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
@@ -169,15 +170,15 @@ func TestSliceCreate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
 	// Create Slice
-	g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.sliceObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.sliceObj.DeepCopy(), metav1.CreateOptions{})
 	g.handler.ObjectCreated(g.sliceObj.DeepCopy())
 	// Creation of slice
 	t.Run("creation of slice", func(t *testing.T) {
-		sliceChildNamespace, _ := g.handler.clientset.CoreV1().Namespaces().Get(fmt.Sprintf("%s-slice-%s", g.sliceObj.GetNamespace(), g.sliceObj.GetName()), metav1.GetOptions{})
+		sliceChildNamespace, _ := g.handler.clientset.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-slice-%s", g.sliceObj.GetNamespace(), g.sliceObj.GetName()), metav1.GetOptions{})
 		if sliceChildNamespace == nil {
 			t.Error(errorDict["slice-child-nmspce"])
 		}
-		resourceQuota, _ := g.client.CoreV1().ResourceQuotas(sliceChildNamespace.GetName()).List(metav1.ListOptions{})
+		resourceQuota, _ := g.client.CoreV1().ResourceQuotas(sliceChildNamespace.GetName()).List(context.TODO(), metav1.ListOptions{})
 		if resourceQuota == nil {
 			t.Error(errorDict["slice-quota"])
 		}
@@ -191,7 +192,7 @@ func TestSliceUpdate(t *testing.T) {
 	userHandler := user.Handler{}
 	userHandler.Init(g.client, g.edgenetclient)
 	// Create slice to update later
-	g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.sliceObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.sliceObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoke ObjectCreated func to create a slice
 	g.handler.ObjectCreated(g.sliceObj.DeepCopy())
 	t.Run("Update existing slice profile ", func(t *testing.T) {
@@ -200,11 +201,11 @@ func TestSliceUpdate(t *testing.T) {
 		var field fields
 		field.profile.status, field.profile.old = true, "Low"
 		// Requesting server to Update internal representation of slice
-		g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.sliceObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(context.TODO(), g.sliceObj.DeepCopy(), metav1.UpdateOptions{})
 		// Invoking ObjectUpdated to update slice resource quota
 		g.handler.ObjectUpdated(g.sliceObj.DeepCopy(), field)
 		// Verifying slice expiration time is updated in server's representation of slice
-		slice, _ := g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.sliceObj.GetName(), metav1.GetOptions{})
+		slice, _ := g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.sliceObj.GetName(), metav1.GetOptions{})
 		if slice.Spec.Profile != "Medium" {
 			t.Error(errorDict["slice-prof"])
 		}
@@ -233,15 +234,15 @@ func TestSliceUpdate(t *testing.T) {
 		field.users.added = `[{"Authority": "edgenet", "Username": "user1" }]`
 		g.userObj.Spec.Active, g.userObj.Status.AUP = true, true
 		// Creating User before updating requesting server to update internal representation of slice
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.userObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
 		userHandler.ObjectCreated(g.userObj.DeepCopy())
 		// Requesting server to update internal representation of slice
-		g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.sliceObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().Slices(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(context.TODO(), g.sliceObj.DeepCopy(), metav1.UpdateOptions{})
 		// Invoking ObjectUpdated to send emails to users removed or added to slice
 		g.handler.ObjectUpdated(g.sliceObj.DeepCopy(), field)
 		// Check user rolebinding in slice child namespace
-		user, _ := g.handler.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get("user1", metav1.GetOptions{})
-		roleBindings, _ := g.client.RbacV1().RoleBindings(fmt.Sprintf("%s-slice-%s", g.sliceObj.GetNamespace(), g.sliceObj.GetName())).Get(fmt.Sprintf("%s-%s-slice-%s", user.GetNamespace(), user.GetName(), "user"), metav1.GetOptions{})
+		user, _ := g.handler.edgenetClientset.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), "user1", metav1.GetOptions{})
+		roleBindings, _ := g.client.RbacV1().RoleBindings(fmt.Sprintf("%s-slice-%s", g.sliceObj.GetNamespace(), g.sliceObj.GetName())).Get(context.TODO(), fmt.Sprintf("%s-%s-slice-%s", user.GetNamespace(), user.GetName(), "user"), metav1.GetOptions{})
 		// Verifying server created rolebinding for new user in slice's child namespace
 		if roleBindings == nil {
 			t.Error(errorDict["slice-user-rolebinding"])

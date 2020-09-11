@@ -17,17 +17,18 @@ limitations under the License.
 package userregistrationrequest
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	"edgenet/pkg/controller/v1alpha/emailverification"
-	"edgenet/pkg/controller/v1alpha/user"
-	"edgenet/pkg/mailer"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/emailverification"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/user"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -60,7 +61,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	// Create a copy of the user registration request object to make changes on it
 	URRCopy := obj.(*apps_v1alpha.UserRegistrationRequest).DeepCopy()
 	// Find the authority from the namespace in which the object is
-	URROwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(URRCopy.GetNamespace(), metav1.GetOptions{})
+	URROwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), URRCopy.GetNamespace(), metav1.GetOptions{})
 	// Check if the email address is already taken
 	exists, message := t.checkDuplicateObject(URRCopy, URROwnerNamespace.Labels["authority-name"])
 	if exists {
@@ -72,10 +73,10 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		URRCopy.Status.Expires = &metav1.Time{
 			Time: time.Now().Add(24 * time.Hour),
 		}
-		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(URRCopy)
+		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(context.TODO(), URRCopy, metav1.UpdateOptions{})
 		return
 	}
-	URROwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(URROwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	URROwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), URROwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	// Check if the authority is active
 	if URROwnerAuthority.Spec.Enabled {
 		if URRCopy.Spec.Approved {
@@ -88,7 +89,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "user-creation-failure")
 				URRCopy.Status.State = failure
 				URRCopy.Status.Message = []string{statusDict["user-failed"]}
-				URRCopyUpdated, err := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(URRCopy)
+				URRCopyUpdated, err := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(context.TODO(), URRCopy, metav1.UpdateOptions{})
 				if err == nil {
 					URRCopy = URRCopyUpdated
 				}
@@ -99,7 +100,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		if URRCopy.Status.Expires == nil {
 			// Run timeout goroutine
 			go t.runApprovalTimeout(URRCopy)
-			defer t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(URRCopy)
+			defer t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(context.TODO(), URRCopy, metav1.UpdateOptions{})
 			// Set the approval timeout which is 72 hours
 			URRCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(72 * time.Hour),
@@ -119,7 +120,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			go t.runApprovalTimeout(URRCopy)
 		}
 	} else {
-		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})
+		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(context.TODO(), URRCopy.GetName(), metav1.DeleteOptions{})
 	}
 }
 
@@ -129,8 +130,8 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 	// Create a copy of the user registration request object to make changes on it
 	URRCopy := obj.(*apps_v1alpha.UserRegistrationRequest).DeepCopy()
 	changeStatus := false
-	URROwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(URRCopy.GetNamespace(), metav1.GetOptions{})
-	URROwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(URROwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	URROwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), URRCopy.GetNamespace(), metav1.GetOptions{})
+	URROwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), URROwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	if URROwnerAuthority.Spec.Enabled {
 		// Check again if the email address is already taken
 		exists, message := t.checkDuplicateObject(URRCopy, URROwnerNamespace.Labels["authority-name"])
@@ -165,10 +166,10 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 			changeStatus = true
 		}
 		if changeStatus {
-			t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(URRCopy)
+			t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(context.TODO(), URRCopy, metav1.UpdateOptions{})
 		}
 	} else {
-		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})
+		t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(context.TODO(), URRCopy.GetName(), metav1.DeleteOptions{})
 	}
 }
 
@@ -205,7 +206,7 @@ func (t *Handler) runApprovalTimeout(URRCopy *apps_v1alpha.UserRegistrationReque
 	}
 
 	// Watch the events of user registration request object
-	watchURR, err := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Watch(metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", URRCopy.GetName())})
+	watchURR, err := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", URRCopy.GetName())})
 	if err == nil {
 		go func() {
 			// Get events from watch interface
@@ -257,7 +258,7 @@ timeoutLoop:
 			break timeoutOptions
 		case <-timeout:
 			watchURR.Stop()
-			t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(URRCopy.GetName(), &metav1.DeleteOptions{})
+			t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).Delete(context.TODO(), URRCopy.GetName(), metav1.DeleteOptions{})
 			closeChannels()
 			break timeoutLoop
 		case <-terminated:
@@ -273,7 +274,7 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 	exists := false
 	message := []string{}
 	// To check username on the users resource
-	_, err := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Get(URRCopy.GetName(), metav1.GetOptions{})
+	_, err := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Get(context.TODO(), URRCopy.GetName(), metav1.GetOptions{})
 	if errors.IsAlreadyExists(err) {
 		exists = true
 		message = append(message, fmt.Sprintf(statusDict["username-exist"], URRCopy.GetName()))
@@ -282,7 +283,7 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 		}
 	} else {
 		// To check email address
-		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(metav1.ListOptions{})
+		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(context.TODO(), metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
 			if userRow.Spec.Email == URRCopy.Spec.Email {
 				exists = true
@@ -292,7 +293,7 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 		}
 		if !exists {
 			// To check email address
-			URRRaw, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests("").List(metav1.ListOptions{})
+			URRRaw, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests("").List(context.TODO(), metav1.ListOptions{})
 			for _, URRRow := range URRRaw.Items {
 				if URRRow.Spec.Email == URRCopy.Spec.Email && URRRow.GetUID() != URRCopy.GetUID() {
 					exists = true
@@ -301,7 +302,7 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 			}
 			if !exists {
 				// To check email address given at authorityRequest
-				authorityRequestRaw, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().List(metav1.ListOptions{})
+				authorityRequestRaw, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().List(context.TODO(), metav1.ListOptions{})
 				for _, authorityRequestRow := range authorityRequestRaw.Items {
 					if authorityRequestRow.Spec.Contact.Email == URRCopy.Spec.Email {
 						exists = true

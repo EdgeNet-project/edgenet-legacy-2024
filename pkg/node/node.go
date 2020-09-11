@@ -20,6 +20,7 @@ limitations under the License.
 package node
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -29,8 +30,8 @@ import (
 	"strings"
 	"time"
 
-	"edgenet/pkg/bootstrap"
-	"edgenet/pkg/node/infrastructure"
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
+	"github.com/EdgeNet-project/edgenet/pkg/node/infrastructure"
 
 	namecheap "github.com/billputer/go-namecheap"
 	geoip2 "github.com/oschwald/geoip2-golang"
@@ -103,7 +104,7 @@ func Boundbox(points [][]float64) []float64 {
 
 // GetKubeletVersion looks at the head node to decide which version of Kubernetes to install
 func GetKubeletVersion() string {
-	nodeRaw, err := Clientset.CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master"})
+	nodeRaw, err := Clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master"})
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -127,7 +128,7 @@ func SetOwnerReferences(nodeName string, ownerReferences []metav1.OwnerReference
 	nodePatchJSON, _ := json.Marshal(nodePatchArr)
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
-	_, err := Clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
+	_, err := Clientset.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.JSONPatchType, nodePatchJSON, metav1.PatchOptions{})
 	return err
 }
 
@@ -143,7 +144,7 @@ func SetNodeScheduling(nodeName string, unschedulable bool) error {
 	nodePatchJSON, _ := json.Marshal(nodePatchArr)
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
-	_, err := Clientset.CoreV1().Nodes().Patch(nodeName, types.JSONPatchType, nodePatchJSON)
+	_, err := Clientset.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.JSONPatchType, nodePatchJSON, metav1.PatchOptions{})
 	return err
 }
 
@@ -164,7 +165,7 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 	nodesJSON, _ := json.Marshal(nodePatchArr)
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
-	_, err := Clientset.CoreV1().Nodes().Patch(hostname, types.JSONPatchType, nodesJSON)
+	_, err := Clientset.CoreV1().Nodes().Patch(context.TODO(), hostname, types.JSONPatchType, nodesJSON, metav1.PatchOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -303,7 +304,7 @@ func CreateJoinToken(ttl string, hostname string) string {
 
 // GetList uses clientset to get node list of the cluster
 func GetList() []string {
-	nodesRaw, err := Clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodesRaw, err := Clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -333,12 +334,12 @@ func GetStatusList(clientset kubernetes.Interface) []byte {
 		Lat        string   `json:"lat"`
 	}
 
-	nodesRaw, err := Clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodesRaw, err := Clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	podsRaw, err := Clientset.CoreV1().Pods("").List(metav1.ListOptions{})
+	podsRaw, err := Clientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -404,7 +405,7 @@ func getNodeByHostname(hostname string) (string, error) {
 	// Examples for error handling:
 	// - Use helper functions like e.g. errors.IsNotFound()
 	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
-	_, err := Clientset.CoreV1().Nodes().Get(hostname, metav1.GetOptions{})
+	_, err := Clientset.CoreV1().Nodes().Get(context.TODO(), hostname, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		log.Printf("Node %s not found", hostname)
 		return "false", err

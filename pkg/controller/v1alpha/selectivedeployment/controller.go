@@ -17,6 +17,7 @@ limitations under the License.
 package selectivedeployment
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -25,13 +26,13 @@ import (
 	"syscall"
 	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	appsinformer_v1alpha "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
-	"edgenet/pkg/node"
-	"edgenet/pkg/util"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	appsinformer_v1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/node"
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -154,11 +155,11 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		&cache.ListWatch{
 			// The main purpose of listing is to attach geo labels to whole nodes at the beginning
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return clientset.CoreV1().Nodes().List(options)
+				return clientset.CoreV1().Nodes().List(context.TODO(), options)
 			},
 			// This function watches all changes/updates of nodes
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return clientset.CoreV1().Nodes().Watch(options)
+				return clientset.CoreV1().Nodes().Watch(context.TODO(), options)
 			},
 		},
 		&corev1.Node{},
@@ -176,7 +177,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 							log.Println(err.Error())
 							panic(err.Error())
 						}
-						sdRaw, _ := edgenetClientset.AppsV1alpha().SelectiveDeployments("").List(metav1.ListOptions{})
+						sdRaw, _ := edgenetClientset.AppsV1alpha().SelectiveDeployments("").List(context.TODO(), metav1.ListOptions{})
 						for _, sdRow := range sdRaw.Items {
 							if sdRow.Status.State == partial || sdRow.Status.State == success {
 							selectorLoop:
@@ -210,7 +211,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 					log.Println(err.Error())
 					panic(err.Error())
 				}
-				sdRaw, _ := edgenetClientset.AppsV1alpha().SelectiveDeployments("").List(metav1.ListOptions{})
+				sdRaw, _ := edgenetClientset.AppsV1alpha().SelectiveDeployments("").List(context.TODO(), metav1.ListOptions{})
 				for _, sdRow := range sdRaw.Items {
 					if sdRow.Status.State == partial || sdRow.Status.State == success {
 					selectorLoop:
@@ -239,7 +240,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 				ownerList, status := sdHandler.getByNode(newObj.GetName())
 				if status {
 					for _, ownerDet := range ownerList {
-						sdObj, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(ownerDet[0]).Get(ownerDet[1], metav1.GetOptions{})
+						sdObj, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(ownerDet[0]).Get(context.TODO(), ownerDet[1], metav1.GetOptions{})
 						if err != nil {
 							continue
 						}
@@ -263,7 +264,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			ownerList, status := sdHandler.getByNode(nodeObj.GetName())
 			if status {
 				for _, ownerDet := range ownerList {
-					sdObj, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(ownerDet[0]).Get(ownerDet[1], metav1.GetOptions{})
+					sdObj, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(ownerDet[0]).Get(context.TODO(), ownerDet[1], metav1.GetOptions{})
 					if err != nil {
 						log.Println(err.Error())
 						continue
@@ -316,7 +317,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			ownerReferences := controllerObj.GetOwnerReferences()
 			for _, reference := range ownerReferences {
 				if reference.Kind == "SelectiveDeployment" {
-					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(reference.Name, metav1.GetOptions{})
+					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(context.TODO(), reference.Name, metav1.GetOptions{})
 					if err == nil {
 						key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
 						addToQueue(ownerSD, key, "Deployment")
@@ -327,7 +328,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			ownerReferences := controllerObj.GetOwnerReferences()
 			for _, reference := range ownerReferences {
 				if reference.Kind == "SelectiveDeployment" {
-					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(reference.Name, metav1.GetOptions{})
+					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(context.TODO(), reference.Name, metav1.GetOptions{})
 					if err == nil {
 						key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
 						addToQueue(ownerSD, key, "DaemonSet")
@@ -338,7 +339,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			ownerReferences := controllerObj.GetOwnerReferences()
 			for _, reference := range ownerReferences {
 				if reference.Kind == "SelectiveDeployment" {
-					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(reference.Name, metav1.GetOptions{})
+					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(context.TODO(), reference.Name, metav1.GetOptions{})
 					if err == nil {
 						key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
 						addToQueue(ownerSD, key, "StatefulSet")
@@ -350,10 +351,10 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	deploymentInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return clientset.AppsV1().Deployments("").List(options)
+				return clientset.AppsV1().Deployments("").List(context.TODO(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return clientset.AppsV1().Deployments("").Watch(options)
+				return clientset.AppsV1().Deployments("").Watch(context.TODO(), options)
 			},
 		},
 		&appsv1.Deployment{},
@@ -367,10 +368,10 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	daemonSetInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return clientset.AppsV1().DaemonSets("").List(options)
+				return clientset.AppsV1().DaemonSets("").List(context.TODO(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return clientset.AppsV1().DaemonSets("").Watch(options)
+				return clientset.AppsV1().DaemonSets("").Watch(context.TODO(), options)
 			},
 		},
 		&appsv1.DaemonSet{},
@@ -384,10 +385,10 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	statefulSetInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return clientset.AppsV1().StatefulSets("").List(options)
+				return clientset.AppsV1().StatefulSets("").List(context.TODO(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return clientset.AppsV1().StatefulSets("").Watch(options)
+				return clientset.AppsV1().StatefulSets("").Watch(context.TODO(), options)
 			},
 		},
 		&appsv1.StatefulSet{},

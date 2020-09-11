@@ -1,6 +1,7 @@
 package authority
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -8,11 +9,11 @@ import (
 	"reflect"
 	"testing"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/client-go/kubernetes"
@@ -179,17 +180,17 @@ func TestAuthorityCreate(t *testing.T) {
 
 	t.Run("creation of user, total resource quota, cluster role", func(t *testing.T) {
 		g.handler.ObjectCreated(g.authorityObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 		if user == nil {
 			t.Error(errorDict["user-gen"])
 		}
 
-		TRQ, _ := g.handler.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(g.authorityObj.GetName(), metav1.GetOptions{})
+		TRQ, _ := g.handler.edgenetClientset.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), g.authorityObj.GetName(), metav1.GetOptions{})
 		if TRQ == nil {
 			t.Error(errorDict["TRQ-create"])
 		}
 
-		clusterRole, _ := g.handler.clientset.RbacV1().ClusterRoles().Get(fmt.Sprintf("authority-%s", g.authorityObj.GetName()), metav1.GetOptions{})
+		clusterRole, _ := g.handler.clientset.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()), metav1.GetOptions{})
 		if clusterRole == nil {
 			t.Error(errorDict["cluster-role"])
 		}
@@ -199,7 +200,7 @@ func TestAuthorityCreate(t *testing.T) {
 		// Change the authority object name to make comparison with the user-created above
 		g.authorityObj.Name = "different"
 		g.handler.ObjectCreated(g.authorityObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
+		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 		if user != nil {
 			t.Error(errorDict["dupl-val"])
 		}
@@ -211,17 +212,17 @@ func TestAuthorityUpdate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
 	// Create an authority to update later
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoke ObjectCreated func to create a user
 	g.handler.ObjectCreated(g.authorityObj.DeepCopy())
 	// Create another user
 	g.userObj.Spec.Email = "check"
-	g.edgenetclient.AppsV1alpha().Users("default").Create(g.userObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Users("default").Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
 	// Use the same email address with the user created above
 	g.authorityObj.Spec.Contact.Email = "check"
 	g.authorityObj.Spec.Enabled = true
 	g.handler.ObjectUpdated(g.authorityObj.DeepCopy())
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
+	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 	if user.Spec.Email == "check" {
 		t.Error(errorDict["dupl-val"])
 	}
@@ -236,66 +237,66 @@ func TestDuplicateValue(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetclient)
 	t.Run("authority request: same name", func(t *testing.T) {
 		// Create an authority request for comparison
-		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(context.TODO(), g.authorityRequestObj.DeepCopy(), metav1.CreateOptions{})
 		exists, _ := g.handler.checkDuplicateObject(g.authorityObj.DeepCopy())
 		if exists == true {
 			t.Error(errorDict["auth-name-coll"])
 		}
 		// Check if the authority request exists
-		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
+		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(context.TODO(), g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authorityRequest != nil {
 			t.Error(errorDict["auth-req-coll"])
-			g.edgenetclient.AppsV1alpha().AuthorityRequests().Delete(g.authorityRequestObj.GetName(), &metav1.DeleteOptions{})
+			g.edgenetclient.AppsV1alpha().AuthorityRequests().Delete(context.TODO(), g.authorityRequestObj.GetName(), metav1.DeleteOptions{})
 		}
 	})
 	t.Run("authority request: same email address", func(t *testing.T) {
 		g.authorityRequestObj.Name = "different"
-		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(context.TODO(), g.authorityRequestObj.DeepCopy(), metav1.CreateOptions{})
 		exists, _ := g.handler.checkDuplicateObject(g.authorityObj.DeepCopy())
 		if exists == true {
 			t.Error(errorDict["auth-name-coll"])
 		}
-		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
+		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(context.TODO(), g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authorityRequest != nil {
 			t.Error(errorDict["auth-email-coll"])
-			g.edgenetclient.AppsV1alpha().AuthorityRequests().Delete(g.authorityRequestObj.GetName(), &metav1.DeleteOptions{})
+			g.edgenetclient.AppsV1alpha().AuthorityRequests().Delete(context.TODO(), g.authorityRequestObj.GetName(), metav1.DeleteOptions{})
 		}
 	})
 	t.Run("authority request: different", func(t *testing.T) {
 		g.authorityRequestObj.Name = "different"
 		g.authorityRequestObj.Spec.Contact.Email = "different"
 		// Create another authority request with a different name and an email address
-		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(g.authorityRequestObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().AuthorityRequests().Create(context.TODO(), g.authorityRequestObj.DeepCopy(), metav1.CreateOptions{})
 		exists, _ := g.handler.checkDuplicateObject(g.authorityObj.DeepCopy())
 		if exists == true {
 			t.Error(errorDict["auth-name-coll"])
 		}
-		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(g.authorityRequestObj.GetName(), metav1.GetOptions{})
+		authorityRequest, _ := g.edgenetclient.AppsV1alpha().AuthorityRequests().Get(context.TODO(), g.authorityRequestObj.GetName(), metav1.GetOptions{})
 		if authorityRequest == nil {
 			t.Error(errorDict["auth-info-del"])
 		} else {
-			g.edgenetclient.AppsV1alpha().AuthorityRequests().Delete(g.authorityRequestObj.GetName(), &metav1.DeleteOptions{})
+			g.edgenetclient.AppsV1alpha().AuthorityRequests().Delete(context.TODO(), g.authorityRequestObj.GetName(), metav1.DeleteOptions{})
 		}
 	})
 	t.Run("user: same email address", func(t *testing.T) {
 		// Create a user for comparison
-		g.edgenetclient.AppsV1alpha().Users("default").Create(g.userObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().Users("default").Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
 		exists, _ := g.handler.checkDuplicateObject(g.authorityObj.DeepCopy())
 		if exists != true {
 			t.Error(errorDict["user-coll-failed"])
 		}
-		g.edgenetclient.AppsV1alpha().Users("default").Delete(g.userObj.GetName(), &metav1.DeleteOptions{})
+		g.edgenetclient.AppsV1alpha().Users("default").Delete(context.TODO(), g.userObj.GetName(), metav1.DeleteOptions{})
 	})
 
 	t.Run("user: different", func(t *testing.T) {
 		// Create a user for comparison with different email address
 		g.userObj.Spec.Email = "different"
-		g.edgenetclient.AppsV1alpha().Users("default").Create(g.userObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().Users("default").Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
 		exists, _ := g.handler.checkDuplicateObject(g.authorityObj.DeepCopy())
 		if exists == true {
 			t.Error(errorDict["user-conflict"])
 		}
-		g.edgenetclient.AppsV1alpha().Users("default").Delete(g.userObj.GetName(), &metav1.DeleteOptions{})
+		g.edgenetclient.AppsV1alpha().Users("default").Delete(context.TODO(), g.userObj.GetName(), metav1.DeleteOptions{})
 	})
 }
 

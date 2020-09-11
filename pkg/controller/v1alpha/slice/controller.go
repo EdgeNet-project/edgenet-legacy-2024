@@ -17,6 +17,7 @@ limitations under the License.
 package slice
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -25,11 +26,11 @@ import (
 	"syscall"
 	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	appsinformer_v1 "edgenet/pkg/client/informers/externalversions/apps/v1alpha"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	appsinformer_v1 "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -162,14 +163,14 @@ func Start(clientset kubernetes.Interface, edgenetClientset versioned.Interface)
 		{APIGroups: []string{""}, Resources: []string{"events", "controllerrevisions"}, Verbs: []string{"get", "list", "watch"}}}
 	sliceRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "slice-admin"},
 		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(sliceRole)
+	_, err = clientset.RbacV1().ClusterRoles().Create(context.TODO(), sliceRole, metav1.CreateOptions{})
 	if err != nil {
 		log.Infof("Couldn't create slice-admin cluster role: %s", err)
 	}
 	// Authority User
 	sliceRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "slice-user"},
 		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(sliceRole)
+	_, err = clientset.RbacV1().ClusterRoles().Create(context.TODO(), sliceRole, metav1.CreateOptions{})
 	if err != nil {
 		log.Infof("Couldn't create slice-user cluster role: %s", err)
 	}

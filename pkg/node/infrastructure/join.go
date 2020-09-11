@@ -17,22 +17,27 @@ limitations under the License.
 package infrastructure
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
-	s "strings"
+	"strings"
 	"time"
 
-	"edgenet/pkg/util"
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	namecheap "github.com/billputer/go-namecheap"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/cert"
+	bootstrapapi "k8s.io/cluster-bootstrap/token/api"
 	bootstraputil "k8s.io/cluster-bootstrap/token/util"
-	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
-	nodebootstraptokenphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/node"
+	//nodebootstraptokenphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/node"
+
+	kubeadmtypes "sigs.k8s.io/cluster-api/bootstrap/kubeadm/types/v1beta1"
 )
 
 // CreateToken creates the token to be used to add node
@@ -43,12 +48,20 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 		log.Printf("Error generating token to upload certs: %s", err)
 		return "", err
 	}
-	token, err := kubeadmapi.NewBootstrapTokenString(tokenStr)
+	token, err := kubeadmtypes.NewBootstrapTokenString(tokenStr)
 	if err != nil {
 		log.Printf("Error creating upload certs token: %s", err)
 		return "", err
 	}
-	tokens := []kubeadmapi.BootstrapToken{{
+	bootstrapToken := kubeadmtypes.BootstrapToken{}
+	bootstrapToken.Description = fmt.Sprintf("EdgeNet token for adding node called %s", hostname)
+	bootstrapToken.TTL = &metav1.Duration{
+		Duration: duration,
+	}
+	bootstrapToken.Usages = []string{"authentication", "signing"}
+	bootstrapToken.Groups = []string{"system:bootstrappers:kubeadm:default-node-token"}
+	bootstrapToken.Token = token
+	/*tokens := []kubeadmapi.BootstrapToken{{
 		Token:       token,
 		Description: fmt.Sprintf("EdgeNet token for adding node called %s", hostname),
 		TTL: &metav1.Duration{
@@ -56,20 +69,43 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 		},
 		Usages: []string{"authentication", "signing"},
 		Groups: []string{"system:bootstrappers:kubeadm:default-node-token"},
-	}}
-
-	if err := nodebootstraptokenphase.CreateNewTokens(clientset, tokens); err != nil {
-		log.Printf("Error creating token: %s", err)
+	}}*/
+	secret, err := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(context.TODO(), token.ID, metav1.GetOptions{})
+	if secret != nil && err == nil {
 		return "", err
 	}
+	secret = &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      token.ID,
+			Namespace: metav1.NamespaceSystem,
+		},
+		Type: corev1.SecretType(bootstrapapi.SecretTypeBootstrapToken),
+		Data: encodeTokenSecretData(bootstrapToken.DeepCopy(), time.Now()),
+	}
+
+	if _, err := clientset.CoreV1().Secrets(secret.ObjectMeta.Namespace).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return "", err
+		}
+
+		if _, err := clientset.CoreV1().Secrets(secret.ObjectMeta.Namespace).Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
+			return "", err
+		}
+	}
+
+	/*if err := nodebootstraptokenphase.CreateNewTokens(clientset, tokens); err != nil {
+		log.Printf("Error creating token: %s", err)
+		return "", err
+	}*/
+
 	// This reads server info of the current context from the config file
 	server, err := util.GetServerOfCurrentContext()
 	if err != nil {
 		log.Println(err)
 		return "", err
 	}
-	server = s.Trim(server, "https://")
-	server = s.Trim(server, "http://")
+	server = strings.Trim(server, "https://")
+	server = strings.Trim(server, "http://")
 	// This reads CA cert to be hashed
 	certs, err := cert.CertsFromFile("/etc/kubernetes/pki/ca.crt")
 	if err != nil {
@@ -84,7 +120,7 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 		}
 	}
 
-	joinCommand := fmt.Sprintf("kubeadm join %s --token %s --discovery-token-ca-cert-hash %s", server, tokens[0].Token.String(), CA)
+	joinCommand := fmt.Sprintf("kubeadm join %s --token %s --discovery-token-ca-cert-hash %s", server, tokenStr, CA)
 	return joinCommand, nil
 }
 
@@ -131,4 +167,42 @@ func SetHostname(client *namecheap.Client, hostRecord namecheap.DomainDNSHost) (
 		return false, "unknown"
 	}
 	return true, ""
+}
+
+// encodeTokenSecretData takes the token discovery object and an optional duration and returns the .Data for the Secret
+// now is passed in order to be able to used in unit testing
+func encodeTokenSecretData(token *kubeadmtypes.BootstrapToken, now time.Time) map[string][]byte {
+	data := map[string][]byte{
+		bootstrapapi.BootstrapTokenIDKey:     []byte(token.Token.ID),
+		bootstrapapi.BootstrapTokenSecretKey: []byte(token.Token.Secret),
+	}
+
+	if len(token.Description) > 0 {
+		data[bootstrapapi.BootstrapTokenDescriptionKey] = []byte(token.Description)
+	}
+
+	// If for some strange reason both token.TTL and token.Expires would be set
+	// (they are mutually exclusive in validation so this shouldn't be the case),
+	// token.Expires has higher priority, as can be seen in the logic here.
+	if token.Expires != nil {
+		// Format the expiration date accordingly
+		// TODO: This maybe should be a helper function in bootstraputil?
+		expirationString := token.Expires.Time.Format(time.RFC3339)
+		data[bootstrapapi.BootstrapTokenExpirationKey] = []byte(expirationString)
+
+	} else if token.TTL != nil && token.TTL.Duration > 0 {
+		// Only if .Expires is unset, TTL might have an effect
+		// Get the current time, add the specified duration, and format it accordingly
+		expirationString := now.Add(token.TTL.Duration).Format(time.RFC3339)
+		data[bootstrapapi.BootstrapTokenExpirationKey] = []byte(expirationString)
+	}
+
+	for _, usage := range token.Usages {
+		data[bootstrapapi.BootstrapTokenUsagePrefix+usage] = []byte("true")
+	}
+
+	if len(token.Groups) > 0 {
+		data[bootstrapapi.BootstrapTokenExtraGroupsKey] = []byte(strings.Join(token.Groups, ","))
+	}
+	return data
 }

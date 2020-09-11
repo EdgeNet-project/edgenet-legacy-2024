@@ -17,4 +17,4 @@ limitations under the License.
 // +k8s:deepcopy-gen=package
 // +groupName=apps.edgenet.io
 
-package v1alpha
+package v1alpha // import "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"

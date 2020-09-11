@@ -1,17 +1,19 @@
 package emailverification
 
 import (
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/client/clientset/versioned"
-	edgenettestclient "edgenet/pkg/client/clientset/versioned/fake"
-	"edgenet/pkg/controller/v1alpha/authority"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/Sirupsen/logrus"
-	log "github.com/Sirupsen/logrus"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/authority"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
+
+	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
@@ -95,7 +97,7 @@ func (g *EVTestGroup) Init() {
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
@@ -120,20 +122,20 @@ func TestEVCreate(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetclient)
 	// Creation of Email verification obj
 	t.Run("creation of Email verification", func(t *testing.T) {
-		g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.EVObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.EVObj.DeepCopy(), metav1.CreateOptions{})
 		g.handler.ObjectCreated(g.EVObj.DeepCopy())
 		// Handler will update expiration time
-		EV, _ := g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.EVObj.GetName(), metav1.GetOptions{})
+		EV, _ := g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.EVObj.GetName(), metav1.GetOptions{})
 		if EV.Status.Expires == nil {
 			t.Error(errorDict["EV-create"])
 		}
 	})
 	t.Run("creation of Email verification already verified", func(t *testing.T) {
 		g.EVObj.Spec.Verified = true
-		g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.EVObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.EVObj.DeepCopy(), metav1.CreateOptions{})
 		g.handler.ObjectCreated(g.EVObj.DeepCopy())
 		// Handler will delete EV if verified
-		EV, _ := g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.EVObj.GetName(), metav1.GetOptions{})
+		EV, _ := g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.EVObj.GetName(), metav1.GetOptions{})
 		if EV != nil {
 			t.Error(errorDict["EV-del-fail"])
 		}
@@ -145,7 +147,7 @@ func TestEVUpdate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
 	// Creation of Email verification obj
-	g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.EVObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.EVObj.DeepCopy(), metav1.CreateOptions{})
 	g.handler.ObjectCreated(g.EVObj.DeepCopy())
 	t.Run("Update of Email verification", func(t *testing.T) {
 		g.EVObj.Spec.Verified = true
@@ -153,7 +155,7 @@ func TestEVUpdate(t *testing.T) {
 		field.kind = true
 		g.handler.ObjectUpdated(g.EVObj.DeepCopy(), field)
 		// Handler will delete EV if verified
-		EV, _ := g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.EVObj.GetName(), metav1.GetOptions{})
+		EV, _ := g.edgenetclient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.EVObj.GetName(), metav1.GetOptions{})
 		if EV != nil {
 			t.Error(errorDict["EV-del-fail"])
 		}
