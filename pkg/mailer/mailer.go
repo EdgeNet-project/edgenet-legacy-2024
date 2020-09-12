@@ -114,41 +114,7 @@ func Send(subject string, contentData interface{}) error {
 	}
 
 	// This section determines which email to send whom
-	to := []string{}
-	var body bytes.Buffer
-	switch subject {
-	case "user-email-verification", "user-email-verification-update":
-		to, body = setUserEmailVerificationContent(contentData, smtpServer.From, subject)
-	case "user-email-verified-alert", "user-email-verified-notification":
-		to, body = setUserVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
-	case "user-registration-successful":
-		to, body = setUserRegistrationContent(contentData, smtpServer.From)
-	case "authority-email-verification":
-		to, body = setAuthorityEmailVerificationContent(contentData, smtpServer.From)
-	case "authority-email-verified-alert":
-		to, body = setAuthorityVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To})
-	case "authority-creation-successful":
-		to, body = setAuthorityRequestContent(contentData, smtpServer.From)
-	case "acceptable-use-policy-accepted":
-		to, body = setAUPConfirmationContent(contentData, smtpServer.From)
-	case "acceptable-use-policy-renewal":
-		to, body = setAUPRenewalContent(contentData, smtpServer.From)
-	case "acceptable-use-policy-expired":
-		to, body = setAUPExpiredContent(contentData, smtpServer.From)
-	case "slice-creation", "slice-removal", "slice-reminder", "slice-deletion", "slice-crash", "slice-total-quota-exceeded", "slice-lack-of-quota",
-		"slice-deletion-failed", "slice-collection-deletion-failed":
-		to, body = setSliceContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
-	case "team-creation", "team-removal", "team-deletion", "team-crash":
-		to, body = setTeamContent(contentData, smtpServer.From, subject)
-	case "node-contribution-successful", "node-contribution-failure", "node-contribution-failure-support":
-		to, body = setNodeContributionContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
-	case "authority-validation-failure-name", "authority-validation-failure-email", "authority-email-verification-malfunction",
-		"authority-creation-failure", "authority-email-verification-dubious":
-		to, body = setAuthorityFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
-	case "user-validation-failure-name", "user-validation-failure-email", "user-email-verification-malfunction", "user-creation-failure", "user-cert-failure",
-		"user-kubeconfig-failure", "user-email-verification-dubious", "user-email-verification-update-malfunction", "user-deactivation-failure":
-		to, body = setUserFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
-	}
+	to, body := prepareNotification(subject, contentData, smtpServer)
 
 	// Create a new Client connected to the SMTP server
 	client, err := smtp.Dial(smtpServer.address())
@@ -206,6 +172,45 @@ func Send(subject string, contentData interface{}) error {
 	client.Quit()
 	log.Printf("Mailer: email sent to  %s!", to)
 	return err
+}
+
+func prepareNotification(subject string, contentData interface{}, smtpServer smtpServer) ([]string, bytes.Buffer) {
+	to := []string{}
+	var body bytes.Buffer
+	switch subject {
+	case "user-email-verification", "user-email-verification-update":
+		to, body = setUserEmailVerificationContent(contentData, smtpServer.From, subject)
+	case "user-email-verified-alert", "user-email-verified-notification":
+		to, body = setUserVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
+	case "user-registration-successful":
+		to, body = setUserRegistrationContent(contentData, smtpServer.From)
+	case "authority-email-verification":
+		to, body = setAuthorityEmailVerificationContent(contentData, smtpServer.From)
+	case "authority-email-verified-alert":
+		to, body = setAuthorityVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To})
+	case "authority-creation-successful":
+		to, body = setAuthorityRequestContent(contentData, smtpServer.From)
+	case "acceptable-use-policy-accepted":
+		to, body = setAUPConfirmationContent(contentData, smtpServer.From)
+	case "acceptable-use-policy-renewal":
+		to, body = setAUPRenewalContent(contentData, smtpServer.From)
+	case "acceptable-use-policy-expired":
+		to, body = setAUPExpiredContent(contentData, smtpServer.From)
+	case "slice-creation", "slice-removal", "slice-reminder", "slice-deletion", "slice-crash", "slice-total-quota-exceeded", "slice-lack-of-quota",
+		"slice-deletion-failed", "slice-collection-deletion-failed":
+		to, body = setSliceContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
+	case "team-creation", "team-removal", "team-deletion", "team-crash":
+		to, body = setTeamContent(contentData, smtpServer.From, subject)
+	case "node-contribution-successful", "node-contribution-failure", "node-contribution-failure-support":
+		to, body = setNodeContributionContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
+	case "authority-validation-failure-name", "authority-validation-failure-email", "authority-email-verification-malfunction",
+		"authority-creation-failure", "authority-email-verification-dubious":
+		to, body = setAuthorityFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
+	case "user-validation-failure-name", "user-validation-failure-email", "user-email-verification-malfunction", "user-creation-failure", "user-cert-failure",
+		"user-kubeconfig-failure", "user-email-verification-dubious", "user-email-verification-update-malfunction", "user-deactivation-failure":
+		to, body = setUserFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
+	}
+	return to, body
 }
 
 // setCommonEmailHeaders to create an email body by subject and common headers
