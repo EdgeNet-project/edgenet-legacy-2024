@@ -54,6 +54,8 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 	log.Info("UserHandler.Init")
 	t.clientset = kubernetes
 	t.edgenetClientset = edgenet
+	permission.Clientset = t.clientset
+	registration.Clientset = t.clientset
 }
 
 // ObjectCreated is called when an object is created

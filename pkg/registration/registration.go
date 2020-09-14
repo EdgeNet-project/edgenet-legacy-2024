@@ -34,7 +34,7 @@ import (
 	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
 
 	yaml "gopkg.in/yaml.v2"
-	"k8s.io/api/certificates/v1beta1"
+	certv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -90,24 +90,25 @@ func MakeUser(authority, username, email string) ([]byte, []byte, error) {
 
 	csr, _ := cert.MakeCSR(key, &subject, dnsSANs, ipSANs)
 
-	var CSRCopy *v1beta1.CertificateSigningRequest
-	CSRObject := v1beta1.CertificateSigningRequest{}
+	var CSRCopy *certv1.CertificateSigningRequest
+	CSRObject := certv1.CertificateSigningRequest{}
 	CSRObject.Name = fmt.Sprintf("%s-%s", authority, username)
-	CSRObject.Spec.Groups = []string{"system:authenticated"}
-	CSRObject.Spec.Usages = []v1beta1.KeyUsage{"client auth"}
+	CSRObject.Spec.Usages = []certv1.KeyUsage{"client auth"}
 	CSRObject.Spec.Request = csr
-	CSRCopyCreated, err := Clientset.CertificatesV1beta1().CertificateSigningRequests().Create(context.TODO(), &CSRObject, metav1.CreateOptions{})
+	CSRObject.Spec.SignerName = "kubernetes.io/kube-apiserver-client"
+	CSRCopy, err = Clientset.CertificatesV1().CertificateSigningRequests().Create(context.TODO(), &CSRObject, metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
-	CSRCopy = CSRCopyCreated
-	CSRCopy.Status.Conditions = append(CSRCopy.Status.Conditions, v1beta1.CertificateSigningRequestCondition{
-		Type:           v1beta1.CertificateApproved,
+	CSRCopy.Status.Conditions = append(CSRCopy.Status.Conditions, certv1.CertificateSigningRequestCondition{
+		Type:           certv1.CertificateApproved,
 		Reason:         "User creation is completed",
 		Message:        "This CSR was approved automatically by EdgeNet",
+		Status:         "True",
 		LastUpdateTime: metav1.Now(),
 	})
-	_, err = Clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(context.TODO(), CSRCopy, metav1.UpdateOptions{})
+
+	_, err = Clientset.CertificatesV1().CertificateSigningRequests().UpdateApproval(context.TODO(), CSRCopy.GetName(), CSRCopy, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -119,7 +120,7 @@ check:
 		case <-timeout:
 			return nil, nil, err
 		case <-ticker:
-			CSRCopy, err = Clientset.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), CSRCopy.GetName(), metav1.GetOptions{})
+			CSRCopy, err = Clientset.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), CSRCopy.GetName(), metav1.GetOptions{})
 			if err != nil {
 				return nil, nil, err
 			}
@@ -148,14 +149,19 @@ check:
 	rawConfig, err := kubeConfig.RawConfig()
 	if err != nil {
 		// Log the error to debug
-		return CSRCopy.Status.Certificate, pemdata, nil
+		log.Println(err)
+		return nil, nil, err
 	}
 	authInfo := api.AuthInfo{}
 	authInfo.Username = email
-	authInfo.ClientCertificate = fmt.Sprintf("/var/www/edgenet/assets/certs/%s.crt", email)
-	authInfo.ClientKey = fmt.Sprintf("/var/www/edgenet/assets/certs/%s.key", email)
-	//rawConfig.AuthInfos = append(rawConfig.AuthInfos, authInfo)
-	log.Println(rawConfig.AuthInfos)
+	authInfo.ClientCertificateData = CSRCopy.Status.Certificate
+	authInfo.ClientKeyData = pemdata
+	rawConfig.AuthInfos[email] = &authInfo
+	err = clientcmd.ModifyConfig(kubeConfig.ConfigAccess(), rawConfig, false)
+	if err != nil {
+		log.Println(err)
+		return nil, nil, err
+	}
 	/*pathOptions := clientcmd.NewDefaultPathOptions()
 	buf := bytes.NewBuffer([]byte{})
 	kcmd := cmdconfig.NewCmdConfigSetAuthInfo(buf, pathOptions)
@@ -169,6 +175,7 @@ check:
 		log.Printf("Couldn't set auth info on the kubeconfig file: %s", username)
 		return nil, nil, err
 	}*/
+
 	return CSRCopy.Status.Certificate, pemdata, nil
 }
 
@@ -215,8 +222,8 @@ func MakeConfig(authority, username, email string, clientCert, clientKey []byte)
 
 	authInfo := api.AuthInfo{}
 	authInfo.Username = email
-	authInfo.ClientCertificate = fmt.Sprintf("/var/www/edgenet/assets/certs/%s.crt", email)
-	authInfo.ClientKey = fmt.Sprintf("/var/www/edgenet/assets/certs/%s.key", email)
+	authInfo.ClientCertificateData = clientCert
+	authInfo.ClientKeyData = clientKey
 	rawConfig.AuthInfos[email] = &authInfo
 
 	clientcmd.WriteToFile(rawConfig, fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", authority, username))

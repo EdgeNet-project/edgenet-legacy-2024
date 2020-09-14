@@ -120,7 +120,7 @@ func TestUserCreation(t *testing.T) {
 	// Get the user object
 	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
 	// Find the authority from the namespace in which the object is located (needed for invoking MakeUser)
-	userOwnerNamespace, _ := g.client.CoreV1().Namespaces().Get(user.GetNamespace(), metav1.GetOptions{})
+	userOwnerNamespace, _ := g.client.CoreV1().Namespaces().Get(context.TODO(), user.GetNamespace(), metav1.GetOptions{})
 	// Mock the signer
 	go func() {
 		timeout := time.After(10 * time.Second)
@@ -131,10 +131,10 @@ func TestUserCreation(t *testing.T) {
 			case <-timeout:
 				break check
 			case <-ticker:
-				CSRObj, getErr := Clientset.CertificatesV1beta1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", userOwnerNamespace.Labels["authority-name"], user.GetName()), metav1.GetOptions{})
+				CSRObj, getErr := Clientset.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", userOwnerNamespace.Labels["authority-name"], user.GetName()), metav1.GetOptions{})
 				if getErr == nil {
 					CSRObj.Status.Certificate = CSRObj.Spec.Request
-					_, updateErr := Clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateStatus(context.TODO(), CSRObj, metav1.UpdateOptions{})
+					_, updateErr := Clientset.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), CSRObj, metav1.UpdateOptions{})
 					if updateErr == nil {
 						break check
 					}
