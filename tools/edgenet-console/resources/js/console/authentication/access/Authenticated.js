@@ -14,10 +14,10 @@ const Authenticated = ({children}) => {
     }
 
     if (!edgenet) {
-        return 'edgenet'
+        return 'edgenet error'
     }
 
-    if (!aup.accepted) {
+    if (aup && !aup.accepted) {
         return <AUP />
     }
 

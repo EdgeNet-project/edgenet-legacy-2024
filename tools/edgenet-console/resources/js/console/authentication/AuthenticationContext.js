@@ -197,6 +197,8 @@ const Authentication = ({children}) => {
             loading: loading,
             message: message,
 
+            getAUP: getAUP
+
         }}>
             {children}
         </AuthenticationContext.Provider>
