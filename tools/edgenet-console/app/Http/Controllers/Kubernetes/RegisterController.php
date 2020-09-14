@@ -224,7 +224,7 @@ class RegisterController extends Controller
         ];
         //dd($userSpec,config('edgenet.api_prefix_crd') . '/users');
 
-        $url = config('edgenet.api.server') . '/apis/apps.edgenet.io/v1alpha/userregistrationrequests';
+        $url = config('edgenet.api.server') . '/apis/apps.edgenet.io/v1alpha/namespaces/'.$namespace.'/userregistrationrequests';
 
         //return $this->postRequest($url, $userSpec);
 

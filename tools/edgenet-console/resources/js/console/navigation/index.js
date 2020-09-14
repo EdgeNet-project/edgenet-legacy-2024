@@ -1,6 +1,6 @@
 import Navigation from "./views/Navigation";
-import Button from "./components/Button";
+import NavigationButton from "./components/NavigationButton";
 
 export {
-    Navigation, Button
+    Navigation, NavigationButton
 }

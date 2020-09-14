@@ -10,6 +10,7 @@ import { Navigation } from "./navigation";
 
 import Nodes from "./resources/views/Nodes";
 import AuthorityRequests from "./resources/views/AuthorityRequests";
+import UserRequests from "./resources/views/UserRequests";
 
 import Profile from "./user/views/Profile";
 import Secrets from "./user/views/Secrets";
@@ -49,6 +50,9 @@ const Console = ({settings}) =>
 
                                 <Route exact path="/authorityrequests">
                                     <AuthorityRequests />
+                                </Route>
+                                <Route exact path="/userrequests">
+                                    <UserRequests />
                                 </Route>
 
                                 <Route exact path="/profile">

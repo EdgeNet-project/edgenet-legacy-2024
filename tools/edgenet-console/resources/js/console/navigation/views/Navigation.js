@@ -1,12 +1,22 @@
 import React, {useContext} from "react";
-import {Box, Grid} from "grommet";
+import {Grid, Box, Nav, Text } from "grommet";
 
 import Panel from "./Panel";
 import Logo from "../components/Logo";
-import Button from "../components/Button";
+import NavigationButton from "../components/NavigationButton";
 import {User} from "grommet-icons";
 import {ConsoleContext} from "../../index";
 import {AuthenticationContext} from "../../authentication";
+
+const NavigationSection = ({section}) =>
+    <Nav gap="none">
+        {section.label && <Box border={{side:'top',color:'light-4'}} pad={{horizontal:'medium', vertical:'small'}} margin={{top:'small'}}>
+            <Text size="small">{section.label}</Text>
+        </Box>}
+        {section.menu.map((menu, k) =>
+            <NavigationButton key={"menu-" + k} label={menu.label} path={menu.path} icon={menu.icon} />
+        )}
+    </Nav>;
 
 const Navigation = ({children}) => {
     const { navigation } = useContext(ConsoleContext);
@@ -17,10 +27,10 @@ const Navigation = ({children}) => {
               areas={[{name: 'nav', start: [0, 0], end: [0, 0]}, {name: 'main', start: [1, 0], end: [1, 0]},]}>
             <Box gridArea="nav" background="light-1" fill>
                 <Logo />
-                { navigation.map(resource => <Button key={"menu-" + resource.name} label={resource.label} path={resource.path} icon={resource.icon} />) }
+                { navigation.map((section, j) => <NavigationSection  key={"menu-section-" + j} section={section} />) }
                 <Box flex="grow"/>
                 <Box pad={{vertical: 'medium'}}>
-                    <Button label={user.name} path='/profile' icon={<User/>}/>
+                    <NavigationButton label={user.name} path='/profile' icon={<User/>}/>
                 </Box>
                 {/*{menu && <NavigationLayer setClose={() => setMenu(false)} />}*/}
             </Box>

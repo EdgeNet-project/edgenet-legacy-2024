@@ -1,64 +1,50 @@
-import React from 'react';
+import React, {useContext, useState} from "react";
+import { Link, useParams } from "react-router-dom";
+import { Box, Heading, Text, Button, Form } from "grommet";
+import { LoginInput, PasswordInput } from "../components";
 
-import { Box, Text, Button, Image, Form } from 'grommet';
-import { LoginInput, PasswordInput } from '../components';
+import locale from "../locale";
+import {ConsoleLogo} from "../../index";
 
 import { AuthenticationContext } from "../AuthenticationContext";
-import Header from "./Header";
-import Footer from "./Footer";
 
-class ResetPasswordView extends React.Component {
+const ResetPasswordView = () => {
+    const [ email, setEmail ] = useState((new URLSearchParams(window.location.search)).get('email') || '');
+    const [ password, setPassword ] = useState('');
+    const [ password_confirmation, setPasswordConfirmation ] = useState('');
+    const { message, errors, loading, resetPassword, prefix } = useContext(AuthenticationContext);
+    const { token } = useParams();
 
-    constructor(props) {
-        super(props);
-        this.state = {
-            email: '',
-            password: '',
-            password_confirmation: '',
-        };
+    if (!token) {
+        return 'no token';
     }
 
-    componentDidMount() {
-        this.setState({
-            email: (new URLSearchParams(window.location.search)).get('email') || ''
-        })
-    }
-
-    render() {
-        const { email, password, password_confirmation } = this.state;
-        const { message, loading, resetPassword } = this.context;
-        const { title, logo, token } = this.props;
-
-        if (!token) {
-            return 'no token';
-        }
-
-        return (
-            <Form onSubmit={() => resetPassword(email, token, password, password_confirmation)}>
-                <Box gap="medium" align="center" justify="center">
-                    <Header title="Password reset" />
-
-                    <Box gap="small" width="medium">
-                        <LoginInput value={email} disabled={loading}
-                                    onChange={(value) => this.setState({email: value})}
-                        />
-                        <PasswordInput disabled={loading} placeholder="New password"
-                                       onChange={(value) => this.setState({password: value})} />
-                        <PasswordInput disabled={loading} placeholder="Confirm password"
-                                       onChange={(value) => this.setState({password_confirmation: value})} />
+    return (
+        <Form onSubmit={() => resetPassword(email, token, password, password_confirmation)}>
+            <Box gap="medium" align="center" justify="center">
+                <Box gap="small" width="medium">
+                    <Box margin={{vertical:'medium'}}>
+                        <ConsoleLogo />
                     </Box>
-                    <Box direction="row">
-                        <Button type="submit" primary label="Reset Password" disabled={loading} />
-                    </Box>
-                    <Footer />
+                    <Heading level="2" size="small" margin="none">{locale.resetTitle}</Heading>
+                    <Text size="small">
+                        {locale.resetText}
+                    </Text>
+                    <LoginInput value={email} disabled={loading} required onChange={setEmail} />
+                    <PasswordInput disabled={loading} placeholder={locale.resetNewPassword} required
+                                   onChange={setPassword} />
+                    <PasswordInput disabled={loading} placeholder={locale.resetConfirmPassword} required
+                                   onChange={setPasswordConfirmation} />
+
+                    <Button alignSelf="start" type="submit" primary label={locale.recoverSubmit} disabled={loading} />
+                    <Link to='/'>{locale.linkHome}</Link>
                     {message && <Text color="status-critical">{message}</Text>}
+                    {errors && Object.entries(errors).map(v => v[1].join(' '))}
                 </Box>
-            </Form>
-        );
+            </Box>
+        </Form>
+    );
 
-    }
 }
-
-ResetPasswordView.contextType = AuthenticationContext;
 
 export default ResetPasswordView;

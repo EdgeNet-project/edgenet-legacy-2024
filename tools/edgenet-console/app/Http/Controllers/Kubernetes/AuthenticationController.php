@@ -41,27 +41,29 @@ class AuthenticationController extends Controller
 
         Log::channel('kubernetes')->info('User ' . $user->name . ' authenticated');
 
-        return response()->json(
-            [
-                'apiVersion' => 'authentication.k8s.io/v1beta1',
-                'kind' => 'TokenReview',
-                'status' => [
-                    'authenticated' => true,
-                    'user' => [
-                        'username' => $user->email,
+        $response = [
+            'apiVersion' => 'authentication.k8s.io/v1beta1',
+            'kind' => 'TokenReview',
+            'status' => [
+                'authenticated' => true,
+                'user' => [
+                    'username' => $user->email,
 //                        'uid' => '42',
-                        'groups' => [
+                    'groups' => [
 //                            'default:readonlyuser'
-                        ],
+                    ],
 //                        'extra' => [
 //                            'extrafield1' => [
 //                                'extravalue1',
 //                                'extravalue2'
 //                            ]
 //                        ]
-                    ]
                 ]
             ]
-        );
+        ];
+
+        Log::channel('kubernetes')->info(print_r($response, true));
+
+        return response()->json($response);
     }
 }

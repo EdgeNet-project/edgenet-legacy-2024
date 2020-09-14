@@ -14,17 +14,57 @@ const settings = {
 
     navigation: [
         {
-            name: 'nodes',
-            label: 'Nodes',
-            path: '/nodes',
-            icon: <Server />,
+            menu: [
+                {
+                    name: 'nodes',
+                    label: 'Nodes',
+                    path: '/nodes',
+                    icon: <Server />,
+                },
+            ]
         },
         {
-            name: 'requests',
-            label: 'Requests',
-            path: '/authorityrequests',
-            icon: <Server />,
+            label: 'My Authority',
+            menu: [
+                {
+                    name: 'slices',
+                    label: 'Slices',
+                    path: '/slices',
+                    icon: <ServerCluster />,
+                },
+                {
+                    name: 'users',
+                    label: 'Users',
+                    path: '/users',
+                    icon: <User />,
+                },
+                {
+                    name: 'authority',
+                    label: 'My Authority',
+                    path: '/authority',
+                    icon: <Organization />,
+                },
+            ]
         },
+        {
+            label: 'Requests',
+            menu: [
+                {
+                    name: 'userrequests',
+                    label: 'Users',
+                    path: '/userrequests',
+                    icon: <User />,
+                },
+                {
+                    name: 'authorityrequests',
+                    label: 'Authorities',
+                    path: '/authorityrequests',
+                    icon: <Organization />,
+                },
+            ]
+        }
+
+
     ]
 };
 

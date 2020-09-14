@@ -4410,7 +4410,7 @@
   };
 
   exports.Alert = Alert;
-  exports.Button = Button;
+  exports.NavigationButton = Button;
   exports.Carousel = Carousel;
   exports.Collapse = Collapse;
   exports.Dropdown = Dropdown;

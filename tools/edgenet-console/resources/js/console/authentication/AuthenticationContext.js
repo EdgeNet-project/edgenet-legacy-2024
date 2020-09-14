@@ -1,54 +1,50 @@
-import React from 'react';
+import React, {useState, useEffect} from 'react';
 import axios from 'axios';
 
 const AuthenticationContext = React.createContext({});
 const AuthenticationConsumer = AuthenticationContext.Consumer;
 
-class Authentication extends React.Component {
+const Authentication = ({children}) => {
+    const [ token, setToken ] = useState(sessionStorage.getItem('api_token', null));
+    const [ user, setUser ] = useState({});
+    const [ aup, setAup ] = useState(null);
+    const [ edgenet, setEdgenet ] = useState({});
+    const [ message, setMessage ] = useState(null);
+    const [ loading, setLoading ] = useState(true);
 
-    constructor(props) {
-        super(props);
-        this.state = {
-            user: {},
-            edgenet: null,
-            message: '',
-            loading: true
-        };
+    useEffect(() => {
+        (token) ? getUser() : setLoading(false);
+    }, [token]);
 
-        this.edgenet_api = document.querySelector('meta[name="k8s-api-server"]')?.getAttribute('content');
-        if (!this.edgenet_api) {
-            throw ('API endpoint configuration not found: a meta tag k8s-api-server with the K8s API server address and port should exist');
-        }
+    useEffect(() => {
+            if (user && user.api_token) {
+                axios.defaults.headers.common = {
+                    Authorization: "Bearer " + user.api_token
+                };
+                sessionStorage.setItem('api_token', user.api_token);
 
-        axios.defaults.headers.common = {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        };
+                axios.all([getAUP(), getEdgenet()]).finally(() => setLoading(false))
+            }
+        },
+        [user]);
 
-        this.token = sessionStorage.getItem('api_token');
+    // axios.defaults.headers.common = {
+    //     'Accept': 'application/json',
+    //     'Content-Type': 'application/json'
+    // };
 
-        this.getUser = this.getUser.bind(this);
-        this.getEdgenetUser = this.getEdgenetUser.bind(this);
-        this.setUser = this.setUser.bind(this);
-        this.login = this.login.bind(this);
-        this.logout = this.logout.bind(this);
-        this.isAuthenticated = this.isAuthenticated.bind(this);
-        this.isGuest = this.isGuest.bind(this);
-        this.sendResetLink = this.sendResetLink.bind(this);
-        this.resetPassword = this.resetPassword.bind(this);
 
-    }
 
-    componentDidMount() {
-        (this.token) ? this.getUser() : this.setState({loading: false});
-    }
+    const getUser = () => {
+        return axios.get('/api/user', { headers: { Authorization: "Bearer " + token } })
+            .then(({data}) => {
+                if (!data.api_token) {
+                    error('invalid token');
+                } else {
+                    setUser(data);
+                }
 
-    componentWillUnmount() {
-    }
-
-    getUser() {
-        axios.get('/api/user', { headers: { Authorization: "Bearer " + this.token } })
-            .then(({data}) => this.setUser(data))
+            })
             .catch(error => {
                 if (error.response) {
                     // The request was made and the server responded with a status code
@@ -66,177 +62,146 @@ class Authentication extends React.Component {
                     console.log('Error', error.message);
                 }
                 console.log(error.config);
-                this.setState({
-                    user: {}, loading: false,
-                }, () => sessionStorage.removeItem('api_token'))
+
+                setUser({});
+                sessionStorage.removeItem('api_token')
             });
     }
 
-    getEdgenetUser() {
-        const { user } = this.state;
-        // axios.get('/apis/apps.edgenet.io/v1alpha/namespaces/authority-'+user.authority+'/users/' + user.name)
-        //     .then(({data}) => this.setState({edgenet: data}))
-        //     .catch(err => console.log(err));
+    const getAUP = () => {
+        return axios.get('/apis/apps.edgenet.io/v1alpha/namespaces/authority-' + user.authority + '/acceptableusepolicies/' + user.name)
+            .then(({data}) => setAup(data.spec))
+            .catch(error => console.log(error))
     }
 
-    setUser(user) {
-        if (!user.api_token) {
-            this.error('invalid token');
-            return false;
-        }
-
-        axios.defaults.headers.common = {
-            Authorization: "Bearer " + user.api_token
-        };
-
-        this.setState({
-            user: user,
-            loading: false
-        }, () => {
-            this.getEdgenetUser();
-            this.token = null;
-            sessionStorage.setItem('api_token', user.api_token);
-        });
+    const getEdgenet = () => {
+        return axios.get('/apis/apps.edgenet.io/v1alpha/namespaces/authority-' + user.authority + '/users/' + user.name)
+            .then(({data}) => setEdgenet(data))
+            .catch(err => console.log(err));
     }
 
-    error(message) {
-        this.setState({ message: message, loading: false })
+    const error = (message) => {
+        setMessage(message)
+        setLoading(false)
     }
 
-    login(email, password) {
+    const login = (email, password) => {
+        setLoading(true)
+        axios.post('/login', {
+            email: email,
+            password: password,
+        })
+        .then(({data}) => setUser(data))
+        .catch((error) => {
+            if (error.response) {
+                error(error.response.data.message || '');
+            } else if (error.request) {
+                error('server is not responding, try later');
+            } else {
+                error('client error');
+            }
+        })
+        .finally(() => setLoading(false))
 
-        this.setState({ loading: true }, () =>
-            axios.post('/login', {
-                email: email,
-                password: password,
-            })
-                .then(({data}) => this.setUser(data))
-                .catch((error) => {
-                    if (error.response) {
-                        this.error(error.response.data.message || '');
-                    } else if (error.request) {
-                        this.error('server is not responding, try later');
-                    } else {
-                        this.error('client error');
-                    }
-                })
-        );
     }
 
-    logout() {
+    const logout = () => {
+        setLoading(true)
         axios.post('/logout')
-            .then((response) => {
-                this.setState({
-                    user: {},
-                }, () => sessionStorage.removeItem('api_token'))
-            })
-            .catch((error) => {
-                if (error.response) {
-                    this.error(error.response.data.message || '');
-                } else if (error.request) {
-                    this.error('server is not responding, try later');
-                } else {
-                    this.error('client error');
-                }
-            });
+        .then((response) => {
+            setUser({});
+            sessionStorage.removeItem('api_token');
+        })
+        .catch((error) => {
+            if (error.response) {
+                error(error.response.data.message || '');
+            } else if (error.request) {
+                error('server is not responding, try later');
+            } else {
+                error('client error');
+            }
+        })
+        .finally(() => setLoading(false));
     }
 
-    isAuthenticated() {
-        const { user, edgenet } = this.state;
-        // return !!user.api_token && edgenet;
+    const isAuthenticated = () => {
 
         return !!user.api_token;
     }
 
-    isGuest() {
-        return !this.isAuthenticated();
+    const isGuest = () => {
+        return !isAuthenticated();
     }
 
-    sendResetLink(email) {
-        this.setState({ loading: true }, () =>
-            axios.post('/password/email', {
-                email: email,
-            })
-                .then(({data}) => this.setState({
-                    loading: false,
-                    message: "an email will be sent to you"
-                }))
-                .catch((error) => {
-                    if (error.response) {
-                        this.error(error.response.data.message || '');
-                    } else if (error.request) {
-                        this.error('server is not responding, try later');
-                    } else {
-                        this.error('client error');
-                    }
-                })
-        );
+    const sendResetLink = (email) => {
+        setLoading(true)
+        axios.post('/password/email', {
+            email: email,
+        })
+        .then(({data}) => setMessage("an email will be sent to you"))
+        .catch((error) => {
+            if (error.response) {
+                error(error.response.data.message || '');
+            } else if (error.request) {
+                error('server is not responding, try later');
+            } else {
+                error('client error');
+            }
+        })
+        .finally(() => setLoading(false));
     }
 
-    resetPassword(email, token, password, password_confirmation) {
-        this.setState({ loading: true }, () =>
-            axios.post('/password/reset', {
-                email: email,
-                token: token,
-                password: password,
-                password_confirmation: password_confirmation
-            })
-                .then(({data}) => this.setState({
-                    loading: false,
-                    message: "password updated succesfully"
-                }))
-                .catch((error) => {
-                    if (error.response) {
-                        this.error(error.response.data.message || '');
-                    } else if (error.request) {
-                        this.error('server is not responding, try later');
-                    } else {
-                        this.error('client error');
-                    }
-                })
-        );
+    const resetPassword = (email, token, password, password_confirmation) => {
+        axios.post('/password/reset', {
+            email: email,
+            token: token,
+            password: password,
+            password_confirmation: password_confirmation
+        })
+        .then(({data}) => setMessage("password updated succesfully"))
+        .catch((error) => {
+            if (error.response) {
+                error(error.response.data.message || '');
+            } else if (error.request) {
+                error('server is not responding, try later');
+            } else {
+                error('client error');
+            }
+        })
+        .finally(() => setLoading(false))
     }
 
-    render() {
-        let { children } = this.props;
-        let { user, edgenet, message, loading } = this.state;
 
-        if (this.token && !this.isAuthenticated()) {
-            // checking if token is valid
-            return null;
-        }
 
-        return (
-            <AuthenticationContext.Provider value={{
-                user: user,
-                edgenet: edgenet,
+    if (token && !isAuthenticated()) {
+        // checking if token is valid
+        return null;
+    }
 
-                edgenet_api: this.edgenet_api,
+    return (
+        <AuthenticationContext.Provider value={{
+            user: user,
+            aup: aup,
+            edgenet: edgenet,
 
-                login: this.login,
-                logout: this.logout,
 
-                isAuthenticated: this.isAuthenticated,
-                isGuest: this.isGuest,
+            login: login,
+            logout: logout,
 
-                sendResetLink: this.sendResetLink,
-                resetPassword: this.resetPassword,
+            isAuthenticated: isAuthenticated,
+            isGuest: isGuest,
 
-                loading: loading,
-                message: message,
+            sendResetLink: sendResetLink,
+            resetPassword: resetPassword,
 
-                getEdgenetUser: this.getEdgenetUser
-            }}>
-                {children}
-            </AuthenticationContext.Provider>
+            loading: loading,
+            message: message,
+
+        }}>
+            {children}
+        </AuthenticationContext.Provider>
     );
-    }
+
 }
-
-Authentication.propTypes = {
-};
-
-Authentication.defaultProps = {
-};
 
 export { Authentication, AuthenticationContext, AuthenticationConsumer };

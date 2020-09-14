@@ -4,24 +4,18 @@ import axios from "axios";
 import { AuthenticationContext } from "../AuthenticationContext";
 
 import Header from "./Header";
-// import Loading from "./Loading";
-// import Footer from "./Footer";
 import AUPText from "./AUPText";
 
 const AUP = () => {
-    const { user, edgenet_api, getEdgenetUser } = useContext(AuthenticationContext)
+    const { user, getAUP } = useContext(AuthenticationContext)
 
     const acceptAUP = () => {
-        console.log('accept')
         axios.patch(
-            edgenet_api + '/apis/apps.edgenet.io/v1alpha/namespaces/authority-'+user.authority+'/acceptableusepolicies/' + user.name,
+            '/apis/apps.edgenet.io/v1alpha/namespaces/authority-'+user.authority+'/acceptableusepolicies/' + user.name,
             [{ op: 'replace', path: '/spec/accepted', value: true }],
             { headers: { 'Content-Type': 'application/json-patch+json' } }
         )
-            .then(res => {
-                getEdgenetUser();
-                console.log(res)
-            })
+            .then(res => getAUP())
             .catch(err => console.log(err.message))
     }
 

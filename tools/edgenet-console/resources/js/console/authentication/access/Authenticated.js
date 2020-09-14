@@ -3,18 +3,21 @@ import { AuthenticationContext } from "../AuthenticationContext";
 import AUP from "../views/AUP";
 
 const Authenticated = ({children}) => {
-    const { isAuthenticated, edgenet } = useContext(AuthenticationContext);
-
+    const { isAuthenticated, aup, edgenet, loading } = useContext(AuthenticationContext);
 
     if (!isAuthenticated()) {
         return null;
     }
 
-    // if (!edgenet) {
-    //     return 'edgenet'
-    // }
+    if (loading) {
+        return null;
+    }
 
-    if (edgenet && edgenet.status && !edgenet.status.aup) {
+    if (!edgenet) {
+        return 'edgenet'
+    }
+
+    if (!aup.accepted) {
         return <AUP />
     }
 

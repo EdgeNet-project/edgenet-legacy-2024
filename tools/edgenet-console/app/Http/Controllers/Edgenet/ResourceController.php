@@ -35,7 +35,7 @@ class ResourceController extends Controller
         return $headers;
     }
 
-    public function get(Request $request, $any)
+    public function get(Request $request, $any = null)
     {
         try {
             $response = $this->client->request('GET', config('edgenet.api.server') . '/' . $request->path(), [
