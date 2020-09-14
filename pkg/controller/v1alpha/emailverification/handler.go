@@ -188,7 +188,7 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 		emailVerification.Spec.Identifier = URRCopy.GetName()
 		_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(URRCopy.GetNamespace()).Create(context.TODO(), emailVerification.DeepCopy(), metav1.CreateOptions{})
 		if err == nil {
-			t.sendEmail("user-email-verification-update", URROwnerNamespace.Labels["authority-name"], URRCopy.GetNamespace(), URRCopy.GetName(),
+			t.sendEmail("user-email-verification", URROwnerNamespace.Labels["authority-name"], URRCopy.GetNamespace(), URRCopy.GetName(),
 				fmt.Sprintf("%s %s", URRCopy.Spec.FirstName, URRCopy.Spec.LastName), URRCopy.Spec.Email, code)
 		} else {
 			t.sendEmail("user-email-verification-malfunction", URROwnerNamespace.Labels["authority-name"], URRCopy.GetNamespace(), URRCopy.GetName(),
