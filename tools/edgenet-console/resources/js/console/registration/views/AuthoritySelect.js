@@ -1,10 +1,8 @@
-import React, {useState, useContext, useEffect} from "react";
+import React, {useState, useEffect} from "react";
 import axios from "axios";
 import Select from "react-select";
-import { RegistrationContext } from "../RegistrationContext";
 
-const AuthoritySelect = () => {
-    const { setAuthority } = useContext(RegistrationContext);
+const AuthoritySelect = ({setAuthority}) => {
     const [ authorities, setAuthorities ] = useState([]);
 
     useEffect(() => {

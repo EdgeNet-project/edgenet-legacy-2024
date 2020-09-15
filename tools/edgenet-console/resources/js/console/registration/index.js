@@ -1,5 +1,6 @@
-import RegistrationRoutes from "./RegistrationRoutes";
+import UserRegistration from "./views/UserRegistration";
+import VerifyEmail from "./views/VerifyEmail";
 
 export {
-    RegistrationRoutes
+    UserRegistration, VerifyEmail
 }

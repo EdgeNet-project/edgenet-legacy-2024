@@ -1,7 +1,9 @@
 import { AuthenticationContext, AuthenticationConsumer, Authentication } from "./AuthenticationContext";
-import AuthenticationRoutes from "./AuthenticationRoutes";
+import Login from "./views/Login";
+import ForgotPassword from "./views/ForgotPassword";
+import ResetPasswordView from "./views/ResetPasswordView";
 
 export {
     AuthenticationContext, AuthenticationConsumer, Authentication,
-    AuthenticationRoutes
+    Login, ForgotPassword, ResetPasswordView,
 }

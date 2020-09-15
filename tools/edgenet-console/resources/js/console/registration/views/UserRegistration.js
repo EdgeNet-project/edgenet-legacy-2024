@@ -3,14 +3,58 @@ import {Anchor, Box, Button, Form, FormField, Text, TextInput} from "grommet";
 import {Link} from "react-router-dom";
 import { ConsoleLogo } from "../../index";
 
-import { RegistrationContext } from "../RegistrationContext";
 import AuthorityRegistration from "./AuthorityRegistration";
 import AuthoritySelect from "./AuthoritySelect";
 import Succes from "./Succes";
+import axios from "axios";
 
 const UserRegistration = () => {
     const [ createAuthority, setCreateAuthority ] = useState(false);
-    const { submitRegistration, loading, message, errors, success } = useContext(RegistrationContext);
+    const [ authority, setAuthority ] = useState(null);
+    const [ message, setMessage ] = useState(null);
+    const [ errors, setErrors ] = useState({});
+    const [ loading, setLoading ] = useState(null);
+    const [ success, setSuccess ] = useState(false);
+
+    const submitRegistration = ({value}) => {
+
+        if (!authority) {
+            setMessage('Authority not selected')
+            return;
+        }
+
+        setLoading(true)
+
+        axios.post('/register', {
+            ...value,
+            authority: authority
+        })
+            .then(({data}) => {
+                console.log(data)
+
+                setSuccess(true)
+                setMessage(null)
+                setErrors({})
+            })
+            .catch(error => {
+                setMessage(error.message)
+
+                if (error.response) {
+                    console.log(1, error.response.data);
+                    setMessage(error.response.data.message)
+                    if (error.response.data.errors) {
+                        setErrors(error.response.data.errors)
+                    }
+                } else if (error.request) {
+                    console.log(2, error.request);
+                } else {
+                    console.log('client error');
+                    console.log(3, error);
+                }
+            })
+            .finally(() => setLoading(false))
+
+    }
 
     if (success) {
         return <Succes />;
@@ -25,7 +69,7 @@ const UserRegistration = () => {
                 <Box border={{side: 'bottom', color: 'brand', size: 'small'}}
                      pad={{vertical: 'medium'}} gap="small">
 
-                    {createAuthority ? <AuthorityRegistration /> : <AuthoritySelect />}
+                    {createAuthority ? <AuthorityRegistration setAuthority={setAuthority} /> : <AuthoritySelect setAuthority={setAuthority} />}
 
                     <Anchor onClick={() => setCreateAuthority(!createAuthority)}>
                         {createAuthority ? "I want to select an existing institution" : "My institution is not on the list" }

@@ -3,7 +3,6 @@ import {Link} from "react-router-dom";
 import { useParams } from "react-router";
 import {Box} from "grommet";
 import axios from "axios";
-// import { EdgenetContext } from "../../edgenet";
 
 import {ConsoleLogo} from "../../index";
 

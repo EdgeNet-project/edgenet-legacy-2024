@@ -1,11 +1,11 @@
 import React, {useContext} from "react";
-import {BrowserRouter as Router, Redirect, Route, Switch} from "react-router-dom";
-import {Grommet, Image, Box, Text} from "grommet";
+import {BrowserRouter as Router, Route, Switch} from "react-router-dom";
+import {Grommet, Image, Text} from "grommet";
 import theme from "./theme";
 
-import { Authentication, AuthenticationRoutes } from "./authentication";
-import { Authenticated, Guest } from "./authentication/access"
-import { RegistrationRoutes } from "./registration";
+import ConsoleRoutes from "./routes";
+import { Authentication } from "./authentication";
+import { Authenticated } from "./authentication/access"
 import { Navigation } from "./navigation";
 
 import Nodes from "./resources/views/Nodes";
@@ -39,7 +39,8 @@ const Console = ({settings}) =>
         <Grommet full theme={theme}>
             <Router>
                 <Authentication>
-                    <AuthenticationRoutes />
+
+                    <ConsoleRoutes />
 
                     <Authenticated>
                         <Navigation>
@@ -79,9 +80,6 @@ const Console = ({settings}) =>
                         </Navigation>
                     </Authenticated>
 
-                    <Guest>
-                        <RegistrationRoutes />
-                    </Guest>
                 </Authentication>
             </Router>
         </Grommet>

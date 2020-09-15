@@ -1,10 +1,7 @@
-import React, { useContext } from "react";
+import React from "react";
 import {Box, Form, FormField, Text} from "grommet";
 
-import { RegistrationContext } from "../RegistrationContext";
-
-const AuthorityRegistration = () => {
-    const { setAuthority } = useContext(RegistrationContext);
+const AuthorityRegistration = ({setAuthority}) => {
 
     return (
         <Form onSubmit={null} onChange={(value) => setAuthority(value)} value={null}>
