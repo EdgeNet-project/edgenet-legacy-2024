@@ -125,12 +125,15 @@ const Authentication = ({children}) => {
     }
 
     const isAuthenticated = () => {
-
         return !!user.api_token;
     }
 
     const isGuest = () => {
         return !isAuthenticated();
+    }
+
+    const isAdmin = () => {
+        return isAuthenticated() && edgenet.status && edgenet.status.type === 'admin';
     }
 
     const sendResetLink = (email) => {
@@ -190,6 +193,7 @@ const Authentication = ({children}) => {
 
             isAuthenticated: isAuthenticated,
             isGuest: isGuest,
+            isAdmin: isAdmin,
 
             sendResetLink: sendResetLink,
             resetPassword: resetPassword,

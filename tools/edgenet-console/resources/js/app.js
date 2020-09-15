@@ -25,6 +25,7 @@ const settings = {
         },
         {
             label: 'My Authority',
+            access: ['admin'],
             menu: [
                 {
                     name: 'slices',
@@ -48,6 +49,7 @@ const settings = {
         },
         {
             label: 'Requests',
+            access: ['admin'],
             menu: [
                 {
                     name: 'userrequests',
@@ -60,6 +62,7 @@ const settings = {
                     label: 'Authorities',
                     path: '/authorityrequests',
                     icon: <Organization />,
+                    access: ['root'],
                 },
             ]
         }
