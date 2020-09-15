@@ -28,12 +28,17 @@ spec:
         violation[{"msg": msg, "details": {"restricted_values": restricted_values}}] {
         	restricted_values[value]
         	count(restricted_values) > 0
+          creation
         	not admin
         	msg := sprintf("Request cannot hold approved status at creation: %v", [restricted_values])
         }
 
         admin {
         	"system:masters" == input.review.userInfo.groups[_]
+        }
+
+        creation {
+          "CREATE" == input.review.operation
         }
 
         restricted_values[value] {
