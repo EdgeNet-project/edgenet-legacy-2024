@@ -1,14 +1,16 @@
 package remoteip
 
 import (
-	"log"
+	"fmt"
 	"net"
 	"net/http"
 	"testing"
+
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 )
 
 func TestIpRange(t *testing.T) {
-	var tests = []struct {
+	cases := []struct {
 		input    ipRange
 		adress   net.IP
 		expected bool
@@ -28,16 +30,14 @@ func TestIpRange(t *testing.T) {
 		{ipRange{net.ParseIP("192.0.2.128"), net.ParseIP("192.0.2.250")}, net.ParseIP("::ffff:192.0.2.130"), true},
 		{ipRange{net.ParseIP("192.0.2.128"), net.ParseIP("192.0.2.250")}, net.ParseIP("::ffff:192.0.2.130"), true},
 	}
-
-	for _, test := range tests {
-		if output := inRange(test.input, test.adress); output != test.expected {
-			t.Error("Ip ", test.adress, "doesn't belong to range")
-		}
+	for _, tc := range cases {
+		output := inRange(tc.input, tc.adress)
+		util.Equals(t, tc.expected, output)
 	}
 }
 
 func TestIsPrivateSubnet(t *testing.T) {
-	var tests = []struct {
+	cases := []struct {
 		input    net.IP
 		expected bool
 	}{
@@ -49,27 +49,35 @@ func TestIsPrivateSubnet(t *testing.T) {
 		{net.ParseIP("224.43.65.67"), false},
 		{net.ParseIP("192.168.17.87"), true},
 	}
-	for _, test := range tests {
-		if output := isPrivateSubnet(test.input); output != test.expected {
-			t.Error("Private Ip ", test.input, "doesn't belong to range")
-		}
+	for _, tc := range cases {
+		output := isPrivateSubnet(tc.input)
+		util.Equals(t, tc.expected, output)
 	}
 }
 
 func TestGetIPAdress(t *testing.T) {
-	request, err := http.NewRequest("GET", "http://localhost:8080", nil)
-	if err != nil {
-		log.Fatalln(err)
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"60.30.210.210", "60.30.210.210"},
+		{"100.64.0.1", ""},
+		{"172.32.45.53", "172.32.45.53"},
+		{"192.0.0.0", ""},
+		{"192.168.0.0", ""},
+		{"localhost", ""},
 	}
-	if GetIPAdress(request) != "" {
-		t.Errorf("Problem in GetIpAdress function")
+	for _, tc := range cases {
+		request, err := http.NewRequest("GET", fmt.Sprintf("http://%s:8080", tc.input), nil)
+		util.OK(t, err)
+		request.Header.Add("X-Real-Ip", tc.input)
+		util.Equals(t, tc.expected, getIPAdress(request))
 	}
 }
 
 func TestGetRecordType(t *testing.T) {
 	ipV4 := "98.139.180.149"
 	ipV6 := "2607:f0d0:1002:51::4"
-	if (GetRecordType(ipV4) != "A") || (GetRecordType(ipV6) != "AAAA") {
-		t.Errorf("IP type detection failed")
-	}
+	util.Equals(t, "A", GetRecordType(ipV4))
+	util.Equals(t, "AAAA", GetRecordType(ipV6))
 }

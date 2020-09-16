@@ -17,7 +17,6 @@ limitations under the License.
 package authority
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -26,11 +25,9 @@ import (
 
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	appsinformer_v1 "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/permission"
 
 	log "github.com/sirupsen/logrus"
-	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -122,46 +119,10 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		handler:  authorityHandler,
 	}
 
-	// Cluster Roles for Authorities
-	// Authority Admin
-	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users", "userregistrationrequests",
-		"userregistrationrequests/status", "slices", "slices/status", "teams", "teams/status", "nodecontributions"}, Verbs: []string{"*"}},
-		{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"acceptableusepolicies"}, Verbs: []string{"get", "list"}},
-		{APIGroups: []string{"rbac.authorization.k8s.io"}, Resources: []string{"roles", "rolebindings"}, Verbs: []string{"*"}}}
-	authorityRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "authority-admin"},
-		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(context.TODO(), authorityRole, metav1.CreateOptions{})
-	if err != nil {
-		log.Infof("Couldn't create authority-admin cluster role: %s", err)
-		if errors.IsAlreadyExists(err) {
-			authorityClusterRole, err := clientset.RbacV1().ClusterRoles().Get(context.TODO(), authorityRole.GetName(), metav1.GetOptions{})
-			if err == nil {
-				authorityClusterRole.Rules = policyRule
-				_, err = clientset.RbacV1().ClusterRoles().Update(context.TODO(), authorityClusterRole, metav1.UpdateOptions{})
-				if err == nil {
-					log.Infoln("Authority-admin cluster role updated")
-				}
-			}
-		}
-	}
-	// Authority User
-	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "teams", "nodecontributions"}, Verbs: []string{"get", "list"}}}
-	authorityRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "authority-user"},
-		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(context.TODO(), authorityRole, metav1.CreateOptions{})
-	if err != nil {
-		log.Infof("Couldn't create authority-user cluster role: %s", err)
-		if errors.IsAlreadyExists(err) {
-			authorityClusterRole, err := clientset.RbacV1().ClusterRoles().Get(context.TODO(), authorityRole.GetName(), metav1.GetOptions{})
-			if err == nil {
-				authorityClusterRole.Rules = policyRule
-				_, err = clientset.RbacV1().ClusterRoles().Update(context.TODO(), authorityClusterRole, metav1.UpdateOptions{})
-				if err == nil {
-					log.Infoln("Authority-user cluster role updated")
-				}
-			}
-		}
-	}
+	// Create the roles of EdgeNet users
+	permission.Clientset = clientset
+	permission.CreateAuthorityAdminRole()
+	permission.CreateAuthorityUserRole()
 
 	// A channel to terminate elegantly
 	stopCh := make(chan struct{})

@@ -1,221 +1,654 @@
 package node
 
 import (
+	"context"
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"os"
 	"reflect"
 	"testing"
 
+	"github.com/EdgeNet-project/edgenet/pkg/util"
+	"github.com/Sirupsen/logrus"
+
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
-func TestUnique(t *testing.T) {
-	var tests = []struct {
-		input  []string
-		expect []string
-	}{
-		{[]string{"test1", "test1", "test2", "test2", "test3", "t"}, []string{"test1", "test2", "test3", "t"}},
-		{[]string{"test1", "test1", "test3", "test2", "test3", "test4", "test444", "r"}, []string{"test1", "test3", "test2", "test4", "test444", "r"}},
-		{[]string{"test2", "test4", "test4", "test4", "test5", "test7", "test"}, []string{"test2", "test4", "test5", "test7", "test"}},
-		{[]string{"test3", "test33", "ttest6", "test6", "test6"}, []string{"test3", "test33", "ttest6", "test6"}},
+// The main structure of test group
+type testGroup struct {
+	client  kubernetes.Interface
+	nodeObj corev1.Node
+}
+
+func TestMain(m *testing.M) {
+	flag.String("ca-path", "../../configs/ca_sample.crt", "Set CA path.")
+	flag.Parse()
+
+	log.SetOutput(ioutil.Discard)
+	logrus.SetOutput(ioutil.Discard)
+	os.Exit(m.Run())
+}
+
+// Init syncs the test group
+func (g *testGroup) Init() {
+	g.client = testclient.NewSimpleClientset()
+	Clientset = g.client
+	g.nodeObj = corev1.Node{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Node",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		Status: corev1.NodeStatus{
+			Capacity: corev1.ResourceList{
+				corev1.ResourceMemory:           resource.MustParse("3781924"),
+				corev1.ResourceCPU:              resource.MustParse("2"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("51493088"),
+				corev1.ResourcePods:             resource.MustParse("100"),
+			},
+			Allocatable: corev1.ResourceList{
+				corev1.ResourceMemory:           resource.MustParse("3781924"),
+				corev1.ResourceCPU:              resource.MustParse("2"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("51493088"),
+				corev1.ResourcePods:             resource.MustParse("100"),
+			},
+			Conditions: []corev1.NodeCondition{
+				corev1.NodeCondition{
+					Type:   "Ready",
+					Status: "True",
+				},
+			},
+		},
 	}
-	for _, v := range tests {
-		ret := unique(v.input)
-		ok := reflect.DeepEqual(ret, v.expect)
-		if ok {
-			t.Logf("pass")
-		} else {
-			t.Errorf("fail, want %+v, get %+v\n", v.expect, ret)
-		}
+}
+
+func TestUnique(t *testing.T) {
+	cases := []struct {
+		input    []string
+		expected []string
+	}{
+		{
+			[]string{"test1", "test1", "test2", "test2", "test3", "t", "test-1"},
+			[]string{"test1", "test2", "test3", "t", "test-1"},
+		},
+		{
+			[]string{"test1", "test1", "test3", "test2", "test3", "test4", "test444", "r"},
+			[]string{"test1", "test3", "test2", "test4", "test444", "r"},
+		},
+		{
+			[]string{"test2", "test4", "test4", "test4", "test5", "test7", "test"},
+			[]string{"test2", "test4", "test5", "test7", "test"},
+		},
+		{
+			[]string{"test3", "test33", "ttest6", "test-2", "test6", "test6", "test-2"},
+			[]string{"test3", "test33", "ttest6", "test-2", "test6"},
+		},
+	}
+	for _, tc := range cases {
+		util.Equals(t, tc.expected, unique(tc.input))
 	}
 }
 
 func TestBoundbox(t *testing.T) {
-	var tests = []struct {
-		inputPoint  [][]float64
-		expectBound []float64
+	cases := []struct {
+		points   [][]float64
+		expected []float64
 	}{
-		{[][]float64{{2.352700, 48.854300}, {-0.039305, 51.421792}, {10.035233, 51.780464}}, []float64{-0.039305, 10.035233, 48.8543, 51.780464}},
+		{
+			[][]float64{{2.352700, 48.854300}, {-0.039305, 51.421792}, {10.035233, 51.780464}},
+			[]float64{-0.039305, 10.035233, 48.8543, 51.780464},
+		},
+		{
+			[][]float64{{12.422600, 38.854300}, {-4.032105, 21.621372}, {11.126233, 0.780464}, {13.012115, -8.120456}},
+			[]float64{-4.032105, 13.012115, -8.120456, 38.854300},
+		},
+		{
+			[][]float64{{2.325100, 8.152300}, {-0.032105, 0.621372}},
+			[]float64{-0.032105, 2.325100, 0.621372, 8.152300},
+		},
 	}
-
-	for _, data := range tests {
-		if !reflect.DeepEqual(Boundbox(data.inputPoint), data.expectBound) {
-			t.Errorf("fail, get %v, expect %v\n", Boundbox(data.inputPoint), data.expectBound)
-		}
+	for _, tc := range cases {
+		util.Equals(t, tc.expected, Boundbox(tc.points))
 	}
+}
 
+func TestGeofence(t *testing.T) {
+	cases := []struct {
+		point    []float64
+		polygon  [][]float64
+		expected bool
+	}{
+		{
+			[]float64{41.0121814, 28.977277},
+			[][]float64{
+				{40.9700482, 28.9009094},
+				{41.0387075, 28.9160156},
+				{41.0503595, 28.9874268},
+				{41.0293844, 29.0196991},
+				{41.0014072, 29.0550613},
+				{40.9796389, 29.0670776},
+				{40.9612339, 29.0543747},
+				{40.9625302, 29.0334320},
+				{40.9716035, 29.0227890},
+				{40.9868958, 29.0138626},
+				{41.0059413, 29.0059662},
+				{41.0074958, 28.9942932},
+				{41.0029618, 28.9872551},
+				{40.9992047, 28.9754105},
+				{40.9697890, 28.9014244},
+			},
+			true,
+		},
+		{
+			[]float64{41.0121814, 28.977277},
+			[][]float64{
+				{40.9990104, 28.9692307},
+				{41.0191534, 28.9744663},
+				{41.0186353, 28.9861393},
+				{41.0161096, 28.9889717},
+				{41.0087912, 28.9891434},
+				{41.0073015, 29.0071678},
+				{40.9931153, 29.0106869},
+				{40.9786669, 29.0171242},
+				{40.9791205, 29.0361786},
+				{41.0282189, 29.0329170},
+				{41.0262764, 29.0110302},
+				{41.0327512, 28.9923191},
+				{41.0258231, 28.9671707},
+				{41.0021197, 28.9524078},
+				{40.9977796, 28.9548969},
+				{40.9941519, 28.9700890},
+				{41.0063299, 28.9918900},
+				{41.0080140, 28.9898300},
+				{41.0080787, 28.9878559},
+				{41.0000145, 28.9770842},
+				{40.9988485, 28.9693165},
+			},
+			false,
+		},
+		{
+			[]float64{38.3845201, 26.7419811},
+			[][]float64{
+				{38.4965935, 26.9178772},
+				{38.3459645, 26.9480896},
+				{38.3384248, 27.2158813},
+				{38.4396066, 27.3449707},
+				{38.5223841, 27.0524597},
+				{38.4976683, 26.9165039},
+			},
+			false,
+		},
+	}
+	for _, tc := range cases {
+		util.Equals(t, tc.expected, GeoFence(Boundbox(tc.polygon), tc.polygon, tc.point[0], tc.point[1]))
+	}
 }
 
 func TestGetList(t *testing.T) {
-	data := []struct {
-		clientset    kubernetes.Interface
-		expectedNode []string
-	}{
-		{clientset: testclient.NewSimpleClientset(&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "node1",
-				Namespace: "default",
-			},
-		}, &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "node2",
-				Namespace: "default"},
-		}),
-			expectedNode: []string{"node1", "node2"},
-		},
-		{clientset: testclient.NewSimpleClientset(&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "node3",
-				Namespace: "default"},
-		}, &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "node4",
-				Namespace: "default"},
-		}),
-			expectedNode: []string{"node3", "node4"},
-		}}
+	g := testGroup{}
+	g.Init()
+	node1 := g.nodeObj
+	node1.SetName("node-1")
+	node2 := g.nodeObj
+	node2.SetName("node-2")
+	node3 := g.nodeObj
+	node3.SetName("node-3")
+	node4 := g.nodeObj
+	node4.SetName("node-4")
 
-	for _, single := range data {
-		Clientset = single.clientset
-		if !reflect.DeepEqual(GetList(), single.expectedNode) {
-			t.Fatal("error")
-		}
+	cases := []struct {
+		node     corev1.Node
+		expected []string
+	}{
+		{
+			node1,
+			[]string{"node-1"},
+		},
+		{
+			node2,
+			[]string{"node-1", "node-2"},
+		},
+		{
+			node3,
+			[]string{"node-1", "node-2", "node-3"},
+		},
+		{
+			node4,
+			[]string{"node-1", "node-2", "node-3", "node-4"},
+		},
+	}
+	for _, tc := range cases {
+		_, err := g.client.CoreV1().Nodes().Create(context.TODO(), tc.node.DeepCopy(), metav1.CreateOptions{})
+		util.OK(t, err)
+		util.Equals(t, tc.expected, GetList())
 	}
 }
 
 func TestGetNodeByHostname(t *testing.T) {
-	data := []struct {
-		clientset kubernetes.Interface
-		node      string
-		expected  string
+	g := testGroup{}
+	g.Init()
+	node1 := g.nodeObj
+	node1.SetName("node-1")
+	node2 := g.nodeObj
+	node2.SetName("node-2")
+	node3 := g.nodeObj
+	node3.SetName("node-3")
+	node4 := g.nodeObj
+	node4.SetName("node-4")
+
+	cases := []struct {
+		node     corev1.Node
+		name     string
+		expected bool
 	}{
-		{clientset: testclient.NewSimpleClientset(&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "node1",
-				Namespace: "default"},
-		}, &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "node2",
-				Namespace: "default"},
-		}),
-			node:     "node1",
-			expected: "true"},
-		{clientset: testclient.NewSimpleClientset(&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "node3",
-				Namespace: "default"},
-		}, &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "node4",
-				Namespace: "default"},
-		}),
-			node:     "node4",
-			expected: "true"},
-		{clientset: testclient.NewSimpleClientset(&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "node5",
-				Namespace: "default"},
-		}, &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "node6",
-				Namespace: "default",
-			},
-		}),
-			node:     "node4",
-			expected: "false",
+		{
+			node1,
+			"node-1",
+			true,
+		},
+		{
+			node2,
+			"node-2",
+			true,
+		},
+		{
+			node3,
+			"node-3",
+			true,
+		},
+		{
+			node4,
+			"node5",
+			false,
 		},
 	}
+	for _, tc := range cases {
+		_, err := g.client.CoreV1().Nodes().Create(context.TODO(), tc.node.DeepCopy(), metav1.CreateOptions{})
+		util.OK(t, err)
 
-	for _, test := range data {
-		Clientset = test.clientset
-		if output, err := getNodeByHostname(test.node); output != test.expected {
-			t.Error(err)
-		}
+		_, err = getNodeByHostname(tc.name)
+		util.Equals(t, tc.expected, !errors.IsNotFound(err))
 	}
 }
 
 func TestGetNodeIPAddresses(t *testing.T) {
-	node1 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1", UID: "01"},
-		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.1", Type: "InternalIP"}, {Address: "10.0.0.1", Type: "ExternalIP"}}}}
-	node2 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-2", UID: "01"},
-		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.2", Type: "InternalIP"}, {Address: "10.0.0.2", Type: "ExternalIP"}}}}
-	data := []struct {
-		node       *corev1.Node
-		expectedip []string
+	g := testGroup{}
+	g.Init()
+	node1 := g.nodeObj
+	node1.SetName("node-1")
+	node1.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "InternalIP",
+			Address: "192.168.0.1",
+		},
+		corev1.NodeAddress{
+			Type:    "ExternalIP",
+			Address: "10.0.0.1",
+		},
+	}
+	node2 := g.nodeObj
+	node2.SetName("node-2")
+	node2.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "InternalIP",
+			Address: "192.168.0.2",
+		},
+		corev1.NodeAddress{
+			Type:    "ExternalIP",
+			Address: "10.0.0.2",
+		},
+	}
+	node3 := g.nodeObj
+	node3.SetName("node-3")
+	node3.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "InternalIP",
+			Address: "192.168.0.3",
+		},
+		corev1.NodeAddress{
+			Type:    "ExternalIP",
+			Address: "10.0.0.3",
+		},
+	}
+	node4 := g.nodeObj
+	node4.SetName("node-4")
+	node4.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "InternalIP",
+			Address: "192.168.0.4",
+		},
+		corev1.NodeAddress{
+			Type:    "ExternalIP",
+			Address: "10.0.0.4",
+		},
+	}
+
+	cases := []struct {
+		node     corev1.Node
+		expected []string
 	}{
-		{&node1, []string{"192.168.0.1", "10.0.0.1"}},
-		{&node2, []string{"192.168.0.2", "10.0.0.2"}},
+		{
+			node1,
+			[]string{"192.168.0.1", "10.0.0.1"},
+		},
+		{
+			node2,
+			[]string{"192.168.0.2", "10.0.0.2"},
+		},
+		{
+			node3,
+			[]string{"192.168.0.3", "10.0.0.3"},
+		},
+		{
+			node4,
+			[]string{"192.168.0.4", "10.0.0.4"},
+		},
 	}
-
-	for _, test := range data {
-		if outputInternal, outputExternal := GetNodeIPAddresses(test.node); !reflect.DeepEqual([]string{outputInternal, outputExternal}, test.expectedip) {
-			t.Error("error")
-		}
+	for _, tc := range cases {
+		internal, external := GetNodeIPAddresses(tc.node.DeepCopy())
+		util.Equals(t, tc.expected, []string{internal, external})
 	}
-
 }
 
 func TestCompareIPAddresses(t *testing.T) {
-	node1 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1", UID: "01"},
-		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.1", Type: "InternalIP"}, {Address: "10.0.0.1", Type: "ExternalIP"}}}}
-	node2 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-2", UID: "02"},
-		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.2", Type: "InternalIP"}, {Address: "10.0.0.2", Type: "ExternalIP"}}}}
+	g := testGroup{}
+	g.Init()
+	node1 := g.nodeObj
+	node1.SetName("node-1")
+	node1.SetUID("01")
+	node1.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "InternalIP",
+			Address: "192.168.0.1",
+		},
+		corev1.NodeAddress{
+			Type:    "ExternalIP",
+			Address: "10.0.0.1",
+		},
+	}
+	node1Updated := node1
+	node1Updated.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "InternalIP",
+			Address: "192.168.0.10",
+		},
+		corev1.NodeAddress{
+			Type:    "ExternalIP",
+			Address: "10.0.0.10",
+		},
+	}
+	node2 := g.nodeObj
+	node2.SetName("node-2")
+	node2.SetUID("02")
+	node2.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "InternalIP",
+			Address: "192.168.0.2",
+		},
+	}
+	node2Updated := node2
+	node2Updated.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "InternalIP",
+			Address: "192.168.0.3",
+		},
+	}
+	node3 := g.nodeObj
+	node3.SetName("node-3")
+	node3.SetUID("03")
+	node3.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "ExternalIP",
+			Address: "10.0.0.3",
+		},
+	}
+	node3Updated := node3
+	node3Updated.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "ExternalIP",
+			Address: "10.0.0.30",
+		},
+	}
 
-	node3 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-3", UID: "03"},
-		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.1", Type: "InternalIP"}, {Address: "10.0.0.6", Type: "ExternalIP"}}}}
-	node4 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-4", UID: "04"},
-		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.5", Type: "InternalIP"}, {Address: "10.0.0.2", Type: "ExternalIP"}}}}
-	data := []struct {
-		oldnode  *corev1.Node
-		newnode  *corev1.Node
+	cases := []struct {
+		oldObj   corev1.Node
+		newObj   corev1.Node
 		expected bool
 	}{
-		{&node1, &node1, false},
-		{&node2, &node1, true},
-		{&node2, &node4, true},
-		{&node1, &node3, true},
+		{
+			node1,
+			node1Updated,
+			true,
+		},
+		{
+			node1,
+			node1,
+			false,
+		},
+		{
+			node2,
+			node2Updated,
+			true,
+		},
+		{
+			node2,
+			node2,
+			false,
+		},
+		{
+			node3,
+			node3,
+			false,
+		},
+		{
+			node3,
+			node3Updated,
+			true,
+		},
 	}
-
-	for _, test := range data {
-		if output := CompareIPAddresses(test.oldnode, test.newnode); output != test.expected {
-			t.Error("error")
-		}
+	for _, tc := range cases {
+		util.Equals(t, tc.expected, CompareIPAddresses(tc.oldObj.DeepCopy(), tc.newObj.DeepCopy()))
 	}
-
 }
 
 func TestGetConditionReadyStatus(t *testing.T) {
-	node1 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1", UID: "01"},
-		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.1", Type: "InternalIP"}, {Address: "10.0.0.1", Type: "ExternalIP"}},
-			Conditions: []corev1.NodeCondition{{Type: "Ready"}}},
+	g := testGroup{}
+	g.Init()
+	node1 := g.nodeObj
+	node1.SetName("node-1")
+	node1.SetUID("01")
+	node1.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "InternalIP",
+			Address: "192.168.0.1",
+		},
+		corev1.NodeAddress{
+			Type:    "ExternalIP",
+			Address: "10.0.0.1",
+		},
 	}
-	node2 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-2", UID: "02"},
-		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.2", Type: "InternalIP"}, {Address: "10.0.0.2", Type: "ExternalIP"}},
-			Conditions: []corev1.NodeCondition{{Status: "true", Type: "Ready"}}},
-	}
-	node3 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-3", UID: "03"},
-		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.3", Type: "InternalIP"}, {Address: "10.0.0.3", Type: "ExternalIP"}},
-			Conditions: []corev1.NodeCondition{{Status: "unknown", Type: "on"}}},
-	}
-	node4 := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-4", UID: "04"},
-		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Address: "192.168.0.4", Type: "InternalIP"}, {Address: "10.0.0.4", Type: "ExternalIP"}},
-			Conditions: []corev1.NodeCondition{{Status: "", Type: "Ready"}}},
-	}
-	data := []struct {
-		node     *corev1.Node
+	node1.Status.Conditions = []corev1.NodeCondition{{Status: "True", Type: "Ready"}}
+	node2 := g.nodeObj
+	node2.SetName("node-2")
+	node2.SetUID("02")
+	node2.Status.Conditions = []corev1.NodeCondition{{Status: "False", Type: "Ready"}}
+	node3 := g.nodeObj
+	node3.SetName("node-3")
+	node3.SetUID("03")
+	node3.Status.Conditions = []corev1.NodeCondition{{Status: "Unknown", Type: "Ready"}}
+	node4 := g.nodeObj
+	node4.SetName("node-4")
+	node4.SetUID("04")
+	node4.Status.Conditions = []corev1.NodeCondition{}
+
+	cases := []struct {
+		node     corev1.Node
 		expected string
 	}{
-		{&node1, ""},
-		{&node2, "true"},
-		{&node3, ""},
-		{&node4, ""},
+		{
+			node1,
+			"True",
+		},
+		{
+			node2,
+			"False",
+		},
+		{
+			node3,
+			"Unknown",
+		},
+		{
+			node4,
+			"",
+		},
+	}
+	for _, tc := range cases {
+		util.Equals(t, tc.expected, GetConditionReadyStatus(tc.node.DeepCopy()))
+	}
+}
+
+func TestGeolocationByIP(t *testing.T) {
+	g := testGroup{}
+	g.Init()
+	// Prepare cases
+	nodeFR := g.nodeObj
+	nodeFR.ObjectMeta = metav1.ObjectMeta{
+		Name: "fr.edge-net.io",
+		Labels: map[string]string{
+			"kubernetes.io/hostname": "fr.edge-net.io",
+		},
+	}
+	nodeFR.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "InternalIP",
+			Address: "51.75.127.152",
+		},
+	}
+	geolabelsFR := map[string]string{
+		"edge-net.io/continent":   "Europe",
+		"edge-net.io/state-iso":   "IDF",
+		"edge-net.io/country-iso": "FR",
+		"edge-net.io/city":        "Paris",
+		"edge-net.io/lat":         "n48.858200",
+		"edge-net.io/lon":         "e2.338700",
+	}
+	nodeUS := g.nodeObj
+	nodeUS.ObjectMeta = metav1.ObjectMeta{
+		Name: "us.edge-net.io",
+		Labels: map[string]string{
+			"kubernetes.io/hostname": "us.edge-net.io",
+		},
+	}
+	nodeUS.Status.Addresses = []corev1.NodeAddress{
+		corev1.NodeAddress{
+			Type:    "ExternalIP",
+			Address: "206.196.180.220",
+		},
+	}
+	geolabelsUS := map[string]string{
+		"edge-net.io/continent":   "North_America",
+		"edge-net.io/state-iso":   "MD",
+		"edge-net.io/country-iso": "US",
+		"edge-net.io/city":        "College_Park",
+		"edge-net.io/lat":         "n38.989600",
+		"edge-net.io/lon":         "w-76.945700",
 	}
 
-	for _, test := range data {
-		if output := GetConditionReadyStatus(test.node); output != test.expected {
-			t.Error("error")
-		}
+	cases := map[string]struct {
+		Node     corev1.Node
+		Expected map[string]string
+	}{
+		"fr": {nodeFR, geolabelsFR},
+		"us": {nodeUS, geolabelsUS},
 	}
 
+	for k, tc := range cases {
+		t.Run(fmt.Sprintf("%s", k), func(t *testing.T) {
+			g.client.CoreV1().Nodes().Create(context.TODO(), tc.Node.DeepCopy(), metav1.CreateOptions{})
+			internalIP, externalIP := GetNodeIPAddresses(tc.Node.DeepCopy())
+			result := false
+			if externalIP != "" {
+				result = GetGeolocationByIP(tc.Node.GetName(), externalIP)
+			}
+			if internalIP != "" && result == false {
+				GetGeolocationByIP(tc.Node.GetName(), internalIP)
+			}
+			node, _ := g.client.CoreV1().Nodes().Get(context.TODO(), tc.Node.GetName(), metav1.GetOptions{})
+			if !reflect.DeepEqual(node.Labels, tc.Expected) {
+				for actualKey, actualValue := range node.Labels {
+					for expectedKey, expectedValue := range tc.Expected {
+						if actualKey == expectedKey {
+							util.Equals(t, expectedValue, actualValue)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestSetOwnerReferences(t *testing.T) {
+	g := testGroup{}
+	g.Init()
+	// Prepare cases
+	node1 := g.nodeObj
+	node1.SetName("node-1")
+	node2 := g.nodeObj
+	node2.SetName("node-2")
+
+	newRef := *metav1.NewControllerRef(node2.DeepCopy(), corev1.SchemeGroupVersion.WithKind("Node"))
+	takeControl := false
+	newRef.Controller = &takeControl
+	ownerReferences := []metav1.OwnerReference{newRef}
+
+	g.client.CoreV1().Nodes().Create(context.TODO(), node1.DeepCopy(), metav1.CreateOptions{})
+	g.client.CoreV1().Nodes().Create(context.TODO(), node2.DeepCopy(), metav1.CreateOptions{})
+
+	err := SetOwnerReferences(node1.GetName(), ownerReferences)
+	util.OK(t, err)
+
+	node, err := g.client.CoreV1().Nodes().Get(context.TODO(), node1.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, ownerReferences, node.GetOwnerReferences())
+}
+
+func TestSetNodeScheduling(t *testing.T) {
+	g := testGroup{}
+	g.Init()
+	// Prepare cases
+	node1 := g.nodeObj
+	node1.SetName("node-1")
+
+	g.client.CoreV1().Nodes().Create(context.TODO(), node1.DeepCopy(), metav1.CreateOptions{})
+
+	cases := map[string]struct {
+		input    bool
+		expected bool
+	}{
+		"true":  {true, true},
+		"false": {false, false},
+	}
+
+	for k, tc := range cases {
+		t.Run(fmt.Sprintf("%s", k), func(t *testing.T) {
+			err := SetNodeScheduling(node1.GetName(), tc.input)
+			util.OK(t, err)
+			node, err := g.client.CoreV1().Nodes().Get(context.TODO(), node1.GetName(), metav1.GetOptions{})
+			util.OK(t, err)
+			util.Equals(t, tc.expected, node.Spec.Unschedulable)
+		})
+	}
+}
+
+func TestCreateJoinToken(t *testing.T) {
+	token := CreateJoinToken("600s", "test.edgenet.io")
+	if token == "error" {
+		t.Errorf("Token cannot be created")
+	}
 }

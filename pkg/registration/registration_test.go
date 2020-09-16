@@ -3,35 +3,36 @@ package registration
 import (
 	"context"
 	"fmt"
-	"reflect"
+	"os"
+	"strings"
+	"testing"
 	"time"
 
 	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/authority"
-
-	corev1 "k8s.io/api/core/v1"
-
-	"io/ioutil"
-	"log"
-	"testing"
-
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	testclient "k8s.io/client-go/kubernetes/fake"
-
 	"k8s.io/client-go/kubernetes"
+	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
-type RegistrationTestGroup struct {
+type TestGroup struct {
 	authorityObj  apps_v1alpha.Authority
 	userObj       apps_v1alpha.User
 	client        kubernetes.Interface
 	edgenetclient versioned.Interface
 }
 
-func (g *RegistrationTestGroup) Init() {
+func TestMain(m *testing.M) {
+	//log.SetOutput(ioutil.Discard)
+	//logrus.SetOutput(ioutil.Discard)
+	os.Exit(m.Run())
+}
+
+func (g *TestGroup) Init() {
 	authorityObj := apps_v1alpha.Authority{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Authority",
@@ -51,13 +52,13 @@ func (g *RegistrationTestGroup) Init() {
 				ZIP:     "75005",
 			},
 			Contact: apps_v1alpha.Contact{
-				Email:     "unittest@edge-net.org",
-				FirstName: "unit",
-				LastName:  "testing",
-				Phone:     "+33NUMBER",
-				Username:  "unittesting",
+				Email:     "john.doe@edge-net.org",
+				FirstName: "John",
+				LastName:  "Doe",
+				Phone:     "+333333333",
+				Username:  "johndoe",
 			},
-			Enabled: false,
+			Enabled: true,
 		},
 	}
 	userObj := apps_v1alpha.User{
@@ -66,143 +67,122 @@ func (g *RegistrationTestGroup) Init() {
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "unittesting",
+			Name:      "johndoe",
 			Namespace: "authority-edgenet",
 		},
 		Spec: apps_v1alpha.UserSpec{
 			FirstName: "EdgeNet",
 			LastName:  "EdgeNet",
-			Email:     "unittest@edge-net.org",
+			Email:     "john.doe@edge-net.org",
 			Active:    true,
 		},
 		Status: apps_v1alpha.UserStatus{
-			Type: "Admin",
+			Type: "admin",
 		},
 	}
 	g.authorityObj = authorityObj
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
-	// Invoke authority ObjectCreated to create namespace
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	g.edgenetclient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
-	// Sync Clientset with fake client
 	Clientset = g.client
 }
 
-func TestMakeConfig(t *testing.T) {
-	g := RegistrationTestGroup{}
+func TestKubeconfigWithUser(t *testing.T) {
+	g := TestGroup{}
 	g.Init()
-	// Get the user object
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
-	// Get the client certificate and key
-	clientcert, err := ioutil.ReadFile("../../assets/certs/unittest@edge-net.org.crt")
-	if err != nil {
-		log.Printf("Registration: unexpected error executing command: %v", err)
-	}
-	clientkey, err := ioutil.ReadFile("../../assets/certs/unittest@edge-net.org.key")
-	if err != nil {
-		log.Printf("Registration: unexpected error executing command: %v", err)
-	}
-	// call the MakeConfig function
-	err = MakeConfig(g.authorityObj.GetName(), user.GetName(), user.Spec.Email, clientcert, clientkey)
-	if err != nil {
-		t.Errorf("MakeConfig Failed")
-	}
 
-}
-
-func TestUserCreation(t *testing.T) {
-	g := RegistrationTestGroup{}
-	g.Init()
-	// Get the user object
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
-	// Find the authority from the namespace in which the object is located (needed for invoking MakeUser)
-	userOwnerNamespace, _ := g.client.CoreV1().Namespaces().Get(context.TODO(), user.GetNamespace(), metav1.GetOptions{})
-	// Mock the signer
-	go func() {
-		timeout := time.After(10 * time.Second)
-		ticker := time.Tick(1 * time.Second)
-	check:
-		for {
-			select {
-			case <-timeout:
-				break check
-			case <-ticker:
-				CSRObj, getErr := Clientset.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", userOwnerNamespace.Labels["authority-name"], user.GetName()), metav1.GetOptions{})
-				if getErr == nil {
-					CSRObj.Status.Certificate = CSRObj.Spec.Request
-					_, updateErr := Clientset.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), CSRObj, metav1.UpdateOptions{})
-					if updateErr == nil {
-						break check
+	t.Run("create user with client certificates", func(t *testing.T) {
+		// Mock the signer
+		go func() {
+			timeout := time.After(10 * time.Second)
+			ticker := time.Tick(1 * time.Second)
+		check:
+			for {
+				select {
+				case <-timeout:
+					break check
+				case <-ticker:
+					CSRObj, getErr := Clientset.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", g.authorityObj.GetName(), g.userObj.GetName()), metav1.GetOptions{})
+					if getErr == nil {
+						CSRObj.Status.Certificate = CSRObj.Spec.Request
+						_, updateErr := Clientset.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), CSRObj, metav1.UpdateOptions{})
+						if updateErr == nil {
+							break check
+						}
 					}
 				}
 			}
-		}
-	}()
-	_, _, err := MakeUser(userOwnerNamespace.Labels["authority-name"], user.GetName(), user.Spec.Email)
-	if err != nil {
-		t.Log(err)
-		t.Errorf("MakeUser Failed")
-	}
-}
+		}()
 
-func TestCreateServiceAccount(t *testing.T) {
-	g := RegistrationTestGroup{}
-	g.Init()
-	// Get the user object
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
-	// Find the authority from the namespace in which the object is (needed for invoking MakeUser)
-	userOwnerNamespace, _ := g.client.CoreV1().Namespaces().Get(context.TODO(), user.GetNamespace(), metav1.GetOptions{})
-	_, err := CreateServiceAccount(g.userObj.DeepCopy(), "User", userOwnerNamespace.GetObjectMeta().GetOwnerReferences())
-	if err != nil {
-		t.Errorf("Create service Account Failed")
-	}
-}
+		cert, key, err := MakeUser(g.authorityObj.GetName(), g.userObj.GetName(), g.userObj.Spec.Email)
+		util.OK(t, err)
 
-func TestCreateConfig(t *testing.T) {
-	g := RegistrationTestGroup{}
-	g.Init()
-	t.Run("Create config while we don't have secrets in service account", func(t *testing.T) {
-		// Get the user object
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
-		// Find the userOwner from the namespace in which the object is (needed for invoking MakeUser)
-		userOwnerNamespace, _ := g.client.CoreV1().Namespaces().Get(context.TODO(), user.GetNamespace(), metav1.GetOptions{})
-		serviceAccount, _ := CreateServiceAccount(g.userObj.DeepCopy(), "User", userOwnerNamespace.GetObjectMeta().GetOwnerReferences())
-
-		output := CreateConfig(serviceAccount)
-		if !reflect.DeepEqual(output, "Serviceaccount unittesting doesn't have a serviceaccount token\n") {
-			t.Log(output)
-			t.Errorf("failed")
-		}
+		t.Run("generate config", func(t *testing.T) {
+			err = MakeConfig(g.authorityObj.GetName(), g.userObj.GetName(), g.userObj.Spec.Email, cert, key)
+			util.OK(t, err)
+		})
 	})
-	t.Run("service account has a secrets", func(t *testing.T) {
-		// Get the user object
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
-		ownerReferences := []metav1.OwnerReference{
-			metav1.OwnerReference{
-				Kind:       "OwnerRefrence",
-				APIVersion: "apps.edgenet.io/v1alpha",
-				Name:       "unittest",
+}
+
+func TestKubeconfigWithServiceAccount(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	t.Run("create service account", func(t *testing.T) {
+		serviceAccount, err := CreateServiceAccount(g.userObj.DeepCopy(), "User", []metav1.OwnerReference{})
+
+		util.OK(t, err)
+		t.Run("generate config without secret", func(t *testing.T) {
+			output := CreateConfig(serviceAccount)
+			util.Equals(t, fmt.Sprintf("Serviceaccount %s doesn't have a token", g.userObj.GetName()), output)
+		})
+	})
+
+	t.Run("generate config with service account containing token", func(t *testing.T) {
+		secret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-token-1234",
+				Namespace: g.userObj.GetNamespace(),
 			},
 		}
-		serviceAccount := &corev1.ServiceAccount{
+		secret.Data = make(map[string][]byte)
+		secret.Data["token"] = []byte("test1234token")
+		serviceAccount := corev1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:            user.GetName(),
-				OwnerReferences: ownerReferences,
+				Name:      g.userObj.GetName(),
+				Namespace: g.userObj.GetNamespace(),
 			},
 			Secrets: []corev1.ObjectReference{
 				corev1.ObjectReference{
-					Name: "test-token-test",
+					Name:      "test-token-1234",
+					Namespace: g.userObj.GetNamespace(),
 				},
 			},
 		}
-		output := CreateConfig(serviceAccount)
-		if !reflect.DeepEqual(output, "Secret unittesting not found\n") {
-			t.Log(output)
-			t.Errorf("failed")
+		_, err := g.client.CoreV1().Secrets(secret.Namespace).Create(context.TODO(), &secret, metav1.CreateOptions{})
+		util.OK(t, err)
+		output := CreateConfig(&serviceAccount)
+
+		list := []string{
+			"certificate-authority-data",
+			"clusters",
+			"cluster",
+			"server",
+			"contexts",
+			"context",
+			"current-context",
+			"namespace",
+			secret.Namespace,
+			"user",
+			g.userObj.GetName(),
+			string(secret.Data["token"]),
+			"kind",
+			"Config",
+			"apiVersion",
+		}
+		for _, expected := range list {
+			if !strings.Contains(output, expected) {
+				t.Errorf("Config malformed. Expected \"%s\" in the config not found", expected)
+			}
 		}
 	})
 }

@@ -95,7 +95,7 @@ func (g *URRTestGroup) Init() {
 		},
 		Status: apps_v1alpha.UserStatus{
 			State: success,
-			Type:  "Admin",
+			Type:  "admin",
 		},
 	}
 	URRObj := apps_v1alpha.UserRegistrationRequest{

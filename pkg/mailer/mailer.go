@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/base64"
+	"flag"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -100,6 +101,13 @@ func (s *smtpServer) address() string {
 func Send(subject string, contentData interface{}) error {
 	// The code below inits the SMTP configuration for sending emails
 	// The path of the yaml config file of smtp server
+	var pathSMTP string
+	if flag.Lookup("smtp-path") != nil {
+		pathSMTP = flag.Lookup("smtp-path").Value.(flag.Getter).Get().(string)
+	}
+	if pathSMTP == "" {
+		pathSMTP = "../../configs/smtp.yaml"
+	}
 	file, err := os.Open("../../configs/smtp.yaml")
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)

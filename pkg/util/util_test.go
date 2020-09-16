@@ -1,43 +1,28 @@
 package util
 
 import (
-	"log"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestGetConfigView(t *testing.T) {
-	result, err := getConfigView()
-	log.Println(result)
-	/*if result == nil {
-		t.Errorf("fail")
-	}*/
-	if err != nil {
-		t.Errorf("fail error")
-	}
-}
-
-func TestGetClusterServerOfCurrentContext(t *testing.T) {
-	_, _, _, err := GetClusterServerOfCurrentContext()
-	if err != nil {
-		t.Errorf("get cluster server of current context failed")
-	}
-}
-
-func TestGetServerOfCurrentContext(t *testing.T) {
-	_, err := GetServerOfCurrentContext()
-	if err != nil {
-		t.Errorf("get server of current context failed")
-	}
-}
-
-func TestGetNamecheapCredentials(t *testing.T) {
-	_, _, _, err := GetNamecheapCredentials()
-	if err != nil {
-		t.Log(err)
-		t.Errorf("Get namecheap credentials failed")
-	}
+func TestGetOperations(t *testing.T) {
+	t.Run("config view", func(t *testing.T) {
+		_, err := getConfigView()
+		OK(t, err)
+	})
+	t.Run("cluster-server of current context", func(t *testing.T) {
+		_, _, _, err := GetClusterServerOfCurrentContext()
+		OK(t, err)
+	})
+	t.Run("server from current context", func(t *testing.T) {
+		_, err := GetServerOfCurrentContext()
+		OK(t, err)
+	})
+	t.Run("namecheap credentials", func(t *testing.T) {
+		_, _, _, err := GetNamecheapCredentials()
+		OK(t, err)
+	})
 }
 
 func TestGenerateRandomString(t *testing.T) {

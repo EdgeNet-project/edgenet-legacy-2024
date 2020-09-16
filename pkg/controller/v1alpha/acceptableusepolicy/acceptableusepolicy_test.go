@@ -1,6 +1,7 @@
 package acceptableusepolicy
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -95,7 +96,7 @@ func (g *AUPTestGroup) Init() {
 	authorityHandler := authority.Handler{}
 	authorityHandler.Init(g.client, g.edgenetclient)
 	// Create Authority
-	g.edgenetclient.AppsV1alpha().Authorities().Create(g.authorityObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoke ObjectCreated to create namespace
 	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
@@ -122,9 +123,9 @@ func TestAUPCreate(t *testing.T) {
 	t.Run("creation of AUP", func(t *testing.T) {
 		// Create AUP
 		g.AUPObj.Spec.Accepted = true
-		g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.AUPObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.AUPObj.DeepCopy(), metav1.CreateOptions{})
 		g.handler.ObjectCreated(g.AUPObj.DeepCopy())
-		AUP, _ := g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.AUPObj.GetName(), metav1.GetOptions{})
+		AUP, _ := g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.AUPObj.GetName(), metav1.GetOptions{})
 		if AUP.Status.State != success && AUP.Status.Expires != nil {
 			t.Errorf(errorDict["AUP-create"])
 		}
@@ -136,7 +137,7 @@ func TestAUPUpdate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetclient)
 	// Create AUP to update later
-	g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(g.AUPObj.DeepCopy())
+	g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.AUPObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoke ObjectCreated func to create a AUP
 	g.handler.ObjectCreated(g.AUPObj.DeepCopy())
 	// Update of AUP status
@@ -145,10 +146,10 @@ func TestAUPUpdate(t *testing.T) {
 		// Building field parameter
 		var field fields
 		// Requesting server to Update internal representation of AUP
-		g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(g.AUPObj.DeepCopy())
+		g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(context.TODO(), g.AUPObj.DeepCopy(), metav1.UpdateOptions{})
 		g.handler.ObjectUpdated(g.AUPObj.DeepCopy(), field)
 		// Verifying server triggered changes
-		AUP, _ := g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(g.AUPObj.GetName(), metav1.GetOptions{})
+		AUP, _ := g.edgenetclient.AppsV1alpha().AcceptableUsePolicies(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.AUPObj.GetName(), metav1.GetOptions{})
 		if AUP.Status.State != success && AUP.Status.Expires != nil && strings.Contains(AUP.Status.Message[0], "Agreed and Renewed") {
 			t.Errorf(errorDict["AUP-update"])
 		}

@@ -264,16 +264,16 @@ func CreateConfig(serviceAccount *corev1.ServiceAccount) string {
 	}
 	// If there is no matching secret terminate this function as generating kubeconfig file is not possible
 	if accountSecretName == "" {
-		log.Printf("Serviceaccount %s in %s doesn't have a serviceaccount token", serviceAccount.GetName(), serviceAccount.GetNamespace())
-		return fmt.Sprintf("Serviceaccount %s doesn't have a serviceaccount token\n", serviceAccount.GetName())
+		log.Printf("Serviceaccount %s in %s doesn't have a token", serviceAccount.GetName(), serviceAccount.GetNamespace())
+		return fmt.Sprintf("Serviceaccount %s doesn't have a token", serviceAccount.GetName())
 	}
 	secret, err := Clientset.CoreV1().Secrets(serviceAccount.GetNamespace()).Get(context.TODO(), accountSecretName, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		log.Printf("Secret for %s in %s not found", serviceAccount.GetName(), serviceAccount.GetNamespace())
-		return fmt.Sprintf("Secret %s not found\n", serviceAccount.GetName())
+		return fmt.Sprintf("Secret %s not found", serviceAccount.GetName())
 	} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
 		log.Printf("Error getting secret %s in %s: %v", serviceAccount.GetName(), serviceAccount.GetNamespace(), statusError.ErrStatus)
-		return fmt.Sprintf("Error getting secret %s: %v\n", serviceAccount.GetName(), statusError.ErrStatus)
+		return fmt.Sprintf("Error getting secret %s: %v", serviceAccount.GetName(), statusError.ErrStatus)
 	} else if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

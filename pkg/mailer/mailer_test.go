@@ -1,6 +1,7 @@
 package mailer
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -16,6 +17,9 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	flag.String("smtp-path", "../../configs/smtp_test.yaml", "Set SMTP path.")
+	flag.Parse()
+
 	log.SetOutput(ioutil.Discard)
 	logrus.SetOutput(ioutil.Discard)
 	os.Exit(m.Run())
@@ -25,7 +29,7 @@ func TestSend(t *testing.T) {
 	var smtpServer smtpServer
 	// The code below inits the SMTP configuration for sending emails
 	// The path of the yaml config file of test smtp server
-	file, err := os.Open("../../configs/smtp_test.yaml")
+	file, err := os.Open(flag.Lookup("smtp-path").Value.(flag.Getter).Get().(string))
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
 		return
@@ -114,7 +118,7 @@ func TestSend(t *testing.T) {
 		"authority-email-verification-dubious":       {contentData, []string{contentData.CommonData.Authority}},
 		"user-validation-failure-name":               {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
 		"user-validation-failure-email":              {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"user-email-verification-malfunction":        {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"user-email-verification-malfunction":        {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username}},
 		"user-creation-failure":                      {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
 		"user-cert-failure":                          {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
 		"user-kubeconfig-failure":                    {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},

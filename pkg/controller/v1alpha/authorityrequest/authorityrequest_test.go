@@ -130,7 +130,7 @@ func (g *ARTestGroup) Init() {
 			Active:    false,
 		},
 		Status: apps_v1alpha.UserStatus{
-			Type:  "Admin",
+			Type:  "admin",
 			State: success,
 		},
 	}

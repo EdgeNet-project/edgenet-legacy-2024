@@ -98,43 +98,15 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			userAUP := &apps_v1alpha.AcceptableUsePolicy{TypeMeta: metav1.TypeMeta{Kind: "AcceptableUsePolicy", APIVersion: "apps.edgenet.io/v1alpha"},
 				ObjectMeta: metav1.ObjectMeta{Name: userCopy.GetName(), OwnerReferences: userOwnerReferences}, Spec: apps_v1alpha.AcceptableUsePolicySpec{Accepted: false}}
 			t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(userCopy.GetNamespace()).Create(context.TODO(), userAUP, metav1.CreateOptions{})
-			// Create user-specific roles regarding the resources of authority, users, and acceptableusepolicies
-			policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"authorities"}, ResourceNames: []string{userOwnerNamespace.Labels["authority-name"]},
-				Verbs: []string{"get"}}, {APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"users"}, ResourceNames: []string{userCopy.GetName()}, Verbs: []string{"get", "update", "patch"}}}
-			userRole := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("user-%s", userCopy.GetName()), OwnerReferences: userOwnerReferences},
-				Rules: policyRule}
-			_, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(context.TODO(), userRole, metav1.CreateOptions{})
+			// Create user specific roles
+			err = permission.CreateUserSpecificRole(userCopy, userOwnerNamespace, userOwnerReferences)
 			if err != nil {
-				log.Infof("Couldn't create user-%s role: %s", userCopy.GetName(), err)
-				if errors.IsAlreadyExists(err) {
-					currentUserRole, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Get(context.TODO(), userRole.GetName(), metav1.GetOptions{})
-					if err == nil {
-						currentUserRole.Rules = policyRule
-						_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Update(context.TODO(), currentUserRole, metav1.UpdateOptions{})
-						if err == nil {
-							log.Infof("User-%s role updated", userCopy.GetName())
-						}
-					}
-				}
+				// TBD
 			}
-			// Create a dedicated role to allow the user access to accept/reject AUP, even if the AUP is rejected
-			policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"acceptableusepolicies", "acceptableusepolicies/status"}, ResourceNames: []string{userCopy.GetName()},
-				Verbs: []string{"get", "update", "patch"}}}
-			userRole = &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("user-aup-%s", userCopy.GetName()), OwnerReferences: userOwnerReferences},
-				Rules: policyRule}
-			_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Create(context.TODO(), userRole, metav1.CreateOptions{})
+			// Create the AUP role
+			err = permission.CreateUserAUPRole(userCopy, userOwnerReferences)
 			if err != nil {
-				log.Infof("Couldn't create user-aup-%s role: %s", userCopy.GetName(), err)
-				if errors.IsAlreadyExists(err) {
-					currentUserRole, err := t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Get(context.TODO(), userRole.GetName(), metav1.GetOptions{})
-					if err == nil {
-						currentUserRole.Rules = policyRule
-						_, err = t.clientset.RbacV1().Roles(userCopy.GetNamespace()).Update(context.TODO(), currentUserRole, metav1.UpdateOptions{})
-						if err == nil {
-							log.Infof("User-aup-%s role updated", userCopy.GetName())
-						}
-					}
-				}
+				// TBD
 			}
 			defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(context.TODO(), userCopy, metav1.UpdateOptions{})
 			if userOwnerAuthority.Spec.Contact.Username == userCopy.GetName() && userOwnerAuthority.Spec.Contact.Email == userCopy.Spec.Email {
@@ -166,7 +138,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			slicesRaw, _ := t.edgenetClientset.AppsV1alpha().Slices(userCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{})
 			teamsRaw, _ := t.edgenetClientset.AppsV1alpha().Teams(userCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{})
 			t.createRoleBindings(userCopy, slicesRaw, teamsRaw, userOwnerAuthority.GetName())
-			t.createAUPRoleBinding(userCopy)
+			permission.CreateAUPRoleBinding(userCopy, userOwnerReferences)
 		}
 	} else if userOwnerAuthority.Spec.Enabled == false && userCopy.Spec.Active == true {
 		defer t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).Update(context.TODO(), userCopy, metav1.UpdateOptions{})
@@ -233,7 +205,8 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 				userCopy = userCopyUpdated
 			}
 		}
-
+		// When a user is deleted, the owner references feature allows the related role binding to be automatically removed
+		userOwnerReferences := SetAsOwnerReference(userCopy)
 		if userCopy.Spec.Active && userCopy.Status.AUP {
 			// To manipulate role bindings according to the changes
 			if fieldUpdated.active || fieldUpdated.aup || fieldUpdated.role {
@@ -244,7 +217,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 				}
 				t.createRoleBindings(userCopy, slicesRaw, teamsRaw, userOwnerAuthority.GetName())
 				if fieldUpdated.active {
-					t.createAUPRoleBinding(userCopy)
+					permission.CreateAUPRoleBinding(userCopy, userOwnerReferences)
 				}
 			}
 		} else if !userCopy.Spec.Active || !userCopy.Status.AUP {
@@ -256,7 +229,7 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			}
 			// To create AUP role binding for the user
 			if userCopy.Spec.Active && fieldUpdated.active {
-				t.createAUPRoleBinding(userCopy)
+				permission.CreateAUPRoleBinding(userCopy, userOwnerReferences)
 			}
 		}
 	} else if userOwnerAuthority.Spec.Enabled == false && userCopy.Spec.Active == true {
@@ -372,39 +345,6 @@ func (t *Handler) deleteRoleBindings(userCopy *apps_v1alpha.User, slicesRaw *app
 			deletionLoop(roleBindings)
 		}
 	}
-}
-
-// createAUPRoleBinding links the AUP up with the user
-func (t *Handler) createAUPRoleBinding(userCopy *apps_v1alpha.User) error {
-	_, err := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-%s", userCopy.GetNamespace(),
-		fmt.Sprintf("user-aup-%s", userCopy.GetName())), metav1.GetOptions{})
-	if err != nil {
-		// roleName to get user-specific AUP role which allows user to only get the AUP object related to itself
-		roleName := fmt.Sprintf("user-aup-%s", userCopy.GetName())
-		roleRef := rbacv1.RoleRef{Kind: "Role", Name: roleName}
-		rbSubjects := []rbacv1.Subject{{Kind: "User", Name: userCopy.Spec.Email, APIGroup: "rbac.authorization.k8s.io"}}
-		roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: userCopy.GetNamespace(), Name: fmt.Sprintf("%s-%s", userCopy.GetNamespace(), roleName)},
-			Subjects: rbSubjects, RoleRef: roleRef}
-		// When a user is deleted, the owner references feature allows the related role binding to be automatically removed
-		userOwnerReferences := SetAsOwnerReference(userCopy)
-		roleBind.ObjectMeta.OwnerReferences = userOwnerReferences
-		_, err = t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Create(context.TODO(), roleBind, metav1.CreateOptions{})
-		if err != nil {
-			log.Infof("Couldn't create user-aup-%s role: %s", userCopy.GetName(), err)
-			if errors.IsAlreadyExists(err) {
-				userRoleBind, err := t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Get(context.TODO(), roleBind.GetName(), metav1.GetOptions{})
-				if err == nil {
-					userRoleBind.Subjects = rbSubjects
-					userRoleBind.RoleRef = roleRef
-					_, err = t.clientset.RbacV1().RoleBindings(userCopy.GetNamespace()).Update(context.TODO(), userRoleBind, metav1.UpdateOptions{})
-					if err == nil {
-						log.Infof("Completed: user-aup-%s role updated", userCopy.GetName())
-					}
-				}
-			}
-		}
-	}
-	return err
 }
 
 // sendEmail to send notification to participants

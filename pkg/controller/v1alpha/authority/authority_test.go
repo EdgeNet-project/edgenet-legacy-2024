@@ -137,7 +137,7 @@ func (g *AuthorityTestGroup) Init() {
 			Active:    true,
 		},
 		Status: apps_v1alpha.UserStatus{
-			Type:  "Admin",
+			Type:  "admin",
 			State: success,
 		},
 	}

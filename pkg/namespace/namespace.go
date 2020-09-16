@@ -20,7 +20,6 @@ import (
 	"context"
 	"log"
 
-	apiv1 "k8s.io/api/core/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,47 +29,8 @@ import (
 // Clientset to be synced by the custom resources
 var Clientset kubernetes.Interface
 
-// Create function checks namespace occupied or not and uses clientset to create a namespace
-func Create(name string) (string, error) {
-	// Check namespace occupied or not
-	exist, err := GetNamespaceByName(name)
-	if (err == nil && exist == "true") || (err != nil && exist == "error") {
-		if err == nil {
-			err = errors.NewGone(exist)
-			log.Println(err)
-		}
-		return "", err
-	}
-	userNamespace := &apiv1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
-	result, err := Clientset.CoreV1().Namespaces().Create(context.TODO(), userNamespace, metav1.CreateOptions{})
-	if err != nil {
-		log.Println(err)
-		return "", err
-	}
-	return result.GetObjectMeta().GetName(), nil
-}
-
-// Delete function checks whether namespace exists, and uses clientset to delete the namespace
-func Delete(namespace string) (string, error) {
-	// Check namespace exists or not
-	exist, err := GetNamespaceByName(namespace)
-	if err == nil && exist == "true" {
-		err := Clientset.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})
-		if err != nil {
-			log.Println(err)
-			return "", err
-		}
-		return "deleted", nil
-	}
-	if err == nil {
-		err = errors.NewGone(exist)
-		log.Println(err)
-	}
-	return "", err
-}
-
-// GetList uses clientset, this function gets list of namespaces by eliminating "default", "kube-system", and "kube-public"
-func GetList() []string {
+// List uses clientset, this function provides the list of namespaces by eliminating "default", "kube-system", and "kube-public"
+func List() []string {
 	// FieldSelector allows getting filtered results
 	namespaceRaw, err := Clientset.CoreV1().Namespaces().List(context.TODO(),
 		metav1.ListOptions{FieldSelector: "metadata.name!=default,metadata.name!=kube-system,metadata.name!=kube-public"})
@@ -85,24 +45,23 @@ func GetList() []string {
 	return namespaces
 }
 
-// GetNamespaceByName uses clientset to get namespace requested
-func GetNamespaceByName(name string) (string, error) {
+// GetNamespace uses clientset to get namespace requested
+func GetNamespace(name string) (*corev1.Namespace, error) {
 	// Examples for error handling:
 	// - Use helper functions like e.g. errors.IsNotFound()
 	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
-	_, err := Clientset.CoreV1().Namespaces().Get(context.TODO(), name, metav1.GetOptions{})
+	namespace, err := Clientset.CoreV1().Namespaces().Get(context.TODO(), name, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		log.Printf("Namespace %s not found", name)
-		return "false", err
+		return nil, err
 	} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
 		log.Printf("Error getting namespace %s: %v", name, statusError.ErrStatus)
-		return "error", err
+		return nil, err
 	} else if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
-	} else {
-		return "true", nil
 	}
+	return namespace, nil
 }
 
 // SetAsOwnerReference returns the namespace as owner

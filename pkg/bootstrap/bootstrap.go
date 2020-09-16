@@ -88,7 +88,7 @@ func CreateClientSet() (*kubernetes.Clientset, error) {
 	return clientset, err
 }
 
-// CreateNameCheapClient generates the client to interact with Namecheap API
+// CreateNamecheapClient generates the client to interact with Namecheap API
 func CreateNamecheapClient() (*namecheap.Client, error) {
 	apiuser, apitoken, username, err := util.GetNamecheapCredentials()
 	if err != nil {

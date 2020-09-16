@@ -17,7 +17,6 @@ limitations under the License.
 package slice
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,9 +28,9 @@ import (
 	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	appsinformer_v1 "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/permission"
 
 	log "github.com/sirupsen/logrus"
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -151,29 +150,9 @@ func Start(clientset kubernetes.Interface, edgenetClientset versioned.Interface)
 		handler:  sliceHandler,
 	}
 
-	// Cluster Roles for Slices
-	// Authority Admin
-	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"selectivedeployments"}, Verbs: []string{"*"}},
-		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "replicationcontrollers", "services", "secrets"}, Verbs: []string{"*"}},
-		{APIGroups: []string{"apps"}, Resources: []string{"daemonsets", "deployments", "replicasets", "statefulsets"}, Verbs: []string{"*"}},
-		{APIGroups: []string{"autoscaling"}, Resources: []string{"horizontalpodautoscalers"}, Verbs: []string{"*"}},
-		{APIGroups: []string{"batch"}, Resources: []string{"cronjobs", "jobs"}, Verbs: []string{"*"}},
-		{APIGroups: []string{"extensions"}, Resources: []string{"daemonsets", "deployments", "ingresses", "networkpolicies", "replicasets", "replicationcontrollers"}, Verbs: []string{"*"}},
-		{APIGroups: []string{"networking.k8s.io"}, Resources: []string{"ingresses", "networkpolicies"}, Verbs: []string{"*"}},
-		{APIGroups: []string{""}, Resources: []string{"events", "controllerrevisions"}, Verbs: []string{"get", "list", "watch"}}}
-	sliceRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "slice-admin"},
-		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(context.TODO(), sliceRole, metav1.CreateOptions{})
-	if err != nil {
-		log.Infof("Couldn't create slice-admin cluster role: %s", err)
-	}
-	// Authority User
-	sliceRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "slice-user"},
-		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(context.TODO(), sliceRole, metav1.CreateOptions{})
-	if err != nil {
-		log.Infof("Couldn't create slice-user cluster role: %s", err)
-	}
+	// Create the roles of EdgeNet users
+	permission.Clientset = clientset
+	permission.CreateSliceRoles()
 
 	// A channel to terminate elegantly
 	stopCh := make(chan struct{})

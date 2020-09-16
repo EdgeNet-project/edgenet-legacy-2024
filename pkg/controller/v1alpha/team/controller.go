@@ -17,7 +17,6 @@ limitations under the License.
 package team
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,9 +28,9 @@ import (
 	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	appsinformer_v1 "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/permission"
 
 	log "github.com/sirupsen/logrus"
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -159,23 +158,9 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		handler:  teamHandler,
 	}
 
-	// Cluster Roles for Teams
-	// Authority admin
-	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "slices/status"}, Verbs: []string{"*"}}}
-	teamRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "team-admin"},
-		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(context.TODO(), teamRole, metav1.CreateOptions{})
-	if err != nil {
-		log.Infof("Couldn't create team-admin cluster role: %s", err)
-	}
-	// Authority User
-	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "slices/status"}, Verbs: []string{"*"}}}
-	teamRole = &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "team-user"},
-		Rules: policyRule}
-	_, err = clientset.RbacV1().ClusterRoles().Create(context.TODO(), teamRole, metav1.CreateOptions{})
-	if err != nil {
-		log.Infof("Couldn't create team-user cluster role: %s", err)
-	}
+	// Create the roles of EdgeNet users
+	permission.Clientset = clientset
+	permission.CreateTeamRoles()
 
 	// A channel to terminate elegantly
 	stopCh := make(chan struct{})

@@ -171,7 +171,7 @@ func (g *UserTestGroup) Init() {
 		},
 		Status: apps_v1alpha.UserStatus{
 			State: success,
-			Type:  "Admin",
+			Type:  "admin",
 		},
 	}
 	urrObj := apps_v1alpha.UserRegistrationRequest{
@@ -355,18 +355,5 @@ func TestDeleteRoleBindings(t *testing.T) {
 	roleBindingsResult, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-user-aup-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
 	if roleBindingsResult != nil {
 		t.Error(errorDict["user-rolebinding-delete"])
-	}
-}
-
-func TestCreateAUPRoleBinding(t *testing.T) {
-	g := UserTestGroup{}
-	g.Init()
-	g.handler.Init(g.client, g.edgenetclient)
-	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
-	g.handler.ObjectCreated(g.userObj.DeepCopy())
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.GetName(), metav1.GetOptions{})
-	err := g.handler.createAUPRoleBinding(user)
-	if err != nil {
-		t.Error(errorDict["AUP-binding"])
 	}
 }
