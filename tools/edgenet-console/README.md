@@ -13,7 +13,7 @@ kind: Config
 clusters:
   - name: authn
     cluster:
-      server: https://edgenet-test.planet-lab.eu/kubernetes/authentication
+      server: https://edgenet-test.planet-lab.eu/kubernetes/authenticate
       insecure-skip-tls-verify: true
 users:
   - name: kube-apiserver
