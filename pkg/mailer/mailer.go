@@ -92,6 +92,8 @@ type console struct {
 	URL string `yaml:"url"`
 }
 
+var dir = "../.."
+
 // address to get URI of smtp server
 func (s *smtpServer) address() string {
 	return fmt.Sprintf("%s:%s", s.Host, s.Port)
@@ -100,15 +102,18 @@ func (s *smtpServer) address() string {
 // Send function consumed by the custom resources to send emails
 func Send(subject string, contentData interface{}) error {
 	// The code below inits the SMTP configuration for sending emails
+	if flag.Lookup("dir") != nil {
+		dir = flag.Lookup("dir").Value.(flag.Getter).Get().(string)
+	}
 	// The path of the yaml config file of smtp server
 	var pathSMTP string
 	if flag.Lookup("smtp-path") != nil {
 		pathSMTP = flag.Lookup("smtp-path").Value.(flag.Getter).Get().(string)
 	}
 	if pathSMTP == "" {
-		pathSMTP = "../../configs/smtp.yaml"
+		pathSMTP = fmt.Sprintf("%s/configs/smtp.yaml", dir)
 	}
-	file, err := os.Open("../../configs/smtp.yaml")
+	file, err := os.Open(pathSMTP)
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
 		return err
@@ -256,7 +261,7 @@ func setCommonEmailHeaders(subject string, from string, to []string, delimiter s
 func setUserFailureContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
 	NCData := contentData.(CommonContentData)
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	title := "[EdgeNet Admin] User Creation Failure"
 	if subject == "user-validation-failure-name" || subject == "user-validation-failure-email" ||
@@ -275,7 +280,7 @@ func setUserFailureContent(contentData interface{}, from string, to []string, su
 func setAuthorityFailureContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
 	NCData := contentData.(CommonContentData)
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	title := "[EdgeNet Admin] Authority Establishment Failure"
 	if subject == "authority-validation-failure-name" || subject == "authority-validation-failure-email" {
@@ -293,7 +298,7 @@ func setAuthorityFailureContent(contentData interface{}, from string, to []strin
 func setNodeContributionContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
 	NCData := contentData.(MultiProviderData)
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	title := "[EdgeNet] Node contribution event"
 	switch subject {
@@ -319,7 +324,7 @@ func setTeamContent(contentData interface{}, from, subject string) ([]string, by
 	// This represents receivers' email addresses
 	to := teamData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	title := "[EdgeNet] Team event"
 	switch subject {
@@ -342,7 +347,7 @@ func setTeamContent(contentData interface{}, from, subject string) ([]string, by
 func setSliceContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
 	sliceData := contentData.(ResourceAllocationData)
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	title := "[EdgeNet] Slice event"
 	switch subject {
@@ -383,7 +388,7 @@ func setAUPConfirmationContent(contentData interface{}, from string) ([]string, 
 	// This represents receivers' email addresses
 	to := AUPData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-confirmation.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/acceptable-use-policy-confirmation.html", dir))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] Acceptable Use Policy Confirmed", from, to, delimiter)
 	t.Execute(&body, AUPData)
@@ -397,7 +402,7 @@ func setAUPExpiredContent(contentData interface{}, from string) ([]string, bytes
 	// This represents receivers' email addresses
 	to := AUPData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-expired.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/acceptable-use-policy-expired.html", dir))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] Acceptable Use Policy Expired", from, to, delimiter)
 	t.Execute(&body, AUPData)
@@ -411,7 +416,7 @@ func setAUPRenewalContent(contentData interface{}, from string) ([]string, bytes
 	// This represents receivers' email addresses
 	to := AUPData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-renewal.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/acceptable-use-policy-renewal.html", dir))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] Acceptable Use Policy Expiring", from, to, delimiter)
 	t.Execute(&body, AUPData)
@@ -425,7 +430,7 @@ func setAuthorityRequestContent(contentData interface{}, from string) ([]string,
 	// This represents receivers' email addresses
 	to := registrationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/authority-creation.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/authority-creation.html", dir))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] Authority Successfully Created", from, to, delimiter)
 	t.Execute(&body, registrationData)
@@ -436,7 +441,7 @@ func setAuthorityRequestContent(contentData interface{}, from string) ([]string,
 // setAuthorityEmailVerificationContent to create an email body related to the email verification
 func setAuthorityEmailVerificationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
-	file, err := os.Open("../../configs/console.yaml")
+	file, err := os.Open(fmt.Sprintf("%s/configs/console.yaml", dir))
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
 	}
@@ -450,7 +455,7 @@ func setAuthorityEmailVerificationContent(contentData interface{}, from string) 
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verification.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/authority-email-verification.html", dir))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] Authority Registration Request - Do You Confirm?", from, to, delimiter)
 	t.Execute(&body, verificationData)
@@ -462,7 +467,7 @@ func setAuthorityEmailVerificationContent(contentData interface{}, from string) 
 func setAuthorityVerifiedAlertContent(contentData interface{}, from string, to []string) ([]string, bytes.Buffer) {
 	alertData := contentData.(CommonContentData)
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verified-alert.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/authority-email-verified-alert.html", dir))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet Admin] Authority Request - Email Verified", from, to, delimiter)
 	t.Execute(&body, alertData)
@@ -476,7 +481,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 	// This represents receivers' email addresses
 	to := registrationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/user-registration.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/user-registration.html", dir))
 	delimiter := util.GenerateRandomString(10)
 	body := setCommonEmailHeaders("[EdgeNet] User Registration Successful", from, to, delimiter)
 	t.Execute(&body, registrationData)
@@ -487,7 +492,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 	headers += "Content-Disposition: attachment;filename=\"edgenet-kubeconfig.cfg\"\r\n"
 	// Read the kubeconfig file created for web authentication
 	// It will be in the attachment of email
-	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", registrationData.CommonData.Authority,
+	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, registrationData.CommonData.Authority,
 		registrationData.CommonData.Username))
 	if fileErr != nil {
 		log.Panic(fileErr)
@@ -501,7 +506,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 // setUserEmailVerificationContent to create an email body related to the email verification
 func setUserEmailVerificationContent(contentData interface{}, from, subject string) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
-	file, err := os.Open("../../configs/console.yaml")
+	file, err := os.Open(fmt.Sprintf("%s/configs/console.yaml", dir))
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
 	}
@@ -515,7 +520,7 @@ func setUserEmailVerificationContent(contentData interface{}, from, subject stri
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	title := "[EdgeNet] Email Verification"
 	switch subject {
@@ -538,7 +543,7 @@ func setUserVerifiedAlertContent(contentData interface{}, from string, to []stri
 		to = alertData.CommonData.Email
 	}
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] User Email Verified", from, to, delimiter)
 	t.Execute(&body, alertData)

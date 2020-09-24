@@ -8,9 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/util"
 	"github.com/sirupsen/logrus"
 
 	yaml "gopkg.in/yaml.v2"
@@ -25,7 +23,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestSend(t *testing.T) {
+func TestNotification(t *testing.T) {
 	var smtpServer smtpServer
 	// The code below inits the SMTP configuration for sending emails
 	// The path of the yaml config file of test smtp server
@@ -68,15 +66,15 @@ func TestSend(t *testing.T) {
 	createKubeconfig := func(contentData interface{}, done chan bool) {
 		registrationData := contentData.(CommonContentData)
 		// Creating temp config file to be consumed by setUserRegistrationContent()
-		var file, err = os.Create(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", registrationData.CommonData.Authority,
+		var file, err = os.Create(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, registrationData.CommonData.Authority,
 			registrationData.CommonData.Username))
 		if err != nil {
-			t.Errorf("Failed to create temp ../../assets/kubeconfigs/%s-%s.cfg file", registrationData.CommonData.Authority,
+			t.Errorf("Failed to create temp %s/assets/kubeconfigs/%s-%s.cfg file", dir, registrationData.CommonData.Authority,
 				registrationData.CommonData.Username)
 		}
 		<-done
 		file.Close()
-		os.Remove(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", registrationData.CommonData.Authority,
+		os.Remove(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, registrationData.CommonData.Authority,
 			registrationData.CommonData.Username))
 	}
 
@@ -131,19 +129,25 @@ func TestSend(t *testing.T) {
 		t.Run(fmt.Sprintf("%s", k), func(t *testing.T) {
 			if k == "user-registration-successful" {
 				done := make(chan bool)
-				createKubeconfig(tc.Content, done)
+				go createKubeconfig(tc.Content, done)
 				defer func() { done <- true }()
 			}
-			_, body := prepareNotification(k, tc.Content, smtpServer)
-			bodyString := body.String()
-			for _, expected := range tc.Expected {
-				if !strings.Contains(bodyString, expected) {
-					t.Errorf("Email template %v.html failed. Template malformed. Expected \"%v\" in the template not found\n", k, expected)
+
+			t.Run("template", func(t *testing.T) {
+				_, body := prepareNotification(k, tc.Content, smtpServer)
+				bodyString := body.String()
+				for _, expected := range tc.Expected {
+					if !strings.Contains(bodyString, expected) {
+						t.Errorf("Email template %v.html failed. Template malformed. Expected \"%v\" in the template not found\n", k, expected)
+					}
 				}
-			}
-			err = Send(k, tc.Content)
-			util.OK(t, err)
-			time.Sleep(200 * time.Millisecond)
+			})
+
+			/*t.Run("send", func(t *testing.T) {
+				err = Send(k, tc.Content)
+				util.OK(t, err)
+				time.Sleep(200 * time.Millisecond)
+			})*/
 		})
 	}
 }
