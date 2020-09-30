@@ -102,8 +102,8 @@ spec:
               <pre class="pre"><code>kubectl describe nodecontribution ple-1 -n authority-lip6-lab --kubeconfig ./edgenet-kubeconfig.cfg</code></pre>
               <h4 id="in-case-of-failure">In case of failure</h4>
               <p>If you encounter the state of <strong>Failure</strong> on the status of your node contribution, please make sure that you follow the instructions correctly. When you make sure you correctly follow the instructions, you can delete the node contribution object and recreate it as below:</p>
-              <pre class="pre"><code>kubectl create -f ./nodecontribution.yaml --kubeconfig ./edgenet-kubeconfig.cfg</code></pre>
               <pre class="pre"><code>kubectl delete -f ./nodecontribution.yaml --kubeconfig ./edgenet-kubeconfig.cfg</code></pre>
+              <pre class="pre"><code>kubectl create -f ./nodecontribution.yaml --kubeconfig ./edgenet-kubeconfig.cfg</code></pre>
               <p>In case of any other issue, please contact us by the live support widget:</p>
               <div class="control-group">
                 <a class="custom-button-flat pulse-danger" target="_blank" href="https://tawk.to/edgenet">
