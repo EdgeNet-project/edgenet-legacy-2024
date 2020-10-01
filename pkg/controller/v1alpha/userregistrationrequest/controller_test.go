@@ -6,32 +6,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/EdgeNet-project/edgenet/pkg/util"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestStartController(t *testing.T) {
-	g := URRTestGroup{}
+	g := TestGroup{}
 	g.Init()
 	// Run the controller in a goroutine
-	go Start(g.client, g.edgenetclient)
+	go Start(g.client, g.edgenetClient)
 	// Create a user registration object
-	g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userRegistrationObj.DeepCopy(), metav1.CreateOptions{})
+	g.edgenetClient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userRegistrationObj.DeepCopy(), metav1.CreateOptions{})
 	// Wait for the status update of created object
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
-	AR, _ := g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userRegistrationObj.GetName(), metav1.GetOptions{})
-	if AR.Status.Expires == nil || AR.Status.Message == nil {
-		t.Error(ErrorDict["add-func"])
+	URRCopy, _ := g.edgenetClient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userRegistrationObj.GetName(), metav1.GetOptions{})
+	expected := metav1.Time{
+		Time: time.Now().Add(72 * time.Hour),
 	}
+	util.Equals(t, expected.Day(), URRCopy.Status.Expires.Day())
+	util.Equals(t, expected.Month(), URRCopy.Status.Expires.Month())
+	util.Equals(t, expected.Year(), URRCopy.Status.Expires.Year())
+	util.EqualsMultipleExp(t, []string{statusDict["email-ok"], statusDict["email-fail"]}, URRCopy.Status.Message[0])
 	// Update a Authority request
-	// Update contact email
-	g.userRegistrationObj.Spec.Email = "URR@edge-net.org"
-	g.userRegistrationObj.Spec.Approved = true
-	g.edgenetclient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(context.TODO(), g.userRegistrationObj.DeepCopy(), metav1.UpdateOptions{})
+	URRCopy.Spec.Approved = true
+	g.edgenetClient.AppsV1alpha().UserRegistrationRequests(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(context.TODO(), URRCopy, metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
 	// Checking if user registration transitioned to user after update
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userRegistrationObj.GetName(), metav1.GetOptions{})
-	if user == nil {
-		t.Error(ErrorDict["upd-func"])
-	}
+	_, err := g.edgenetClient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), URRCopy.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
 }

@@ -239,3 +239,75 @@ func Equals(tb testing.TB, exp, act interface{}) {
 		tb.Fail()
 	}
 }
+
+// NotEquals fails the test if exp is equal to act.
+func NotEquals(tb testing.TB, exp, act interface{}) {
+	if reflect.DeepEqual(exp, act) {
+		_, file, line, _ := runtime.Caller(1)
+		fmt.Printf("\033[31m%s:%d:\n\n\texp different from: %#v\n\n\tgot: %#v\033[39m\n\n", filepath.Base(file), line, exp, act)
+		//tb.FailNow()
+		tb.Fail()
+	}
+}
+
+// EqualsMultipleExp fails the test if exp is not equal to one of act.
+func EqualsMultipleExp(tb testing.TB, exp interface{}, act interface{}) {
+	check := func(exp, act interface{}) bool {
+		fail := true
+		if !reflect.DeepEqual(exp, act) {
+			_, file, line, _ := runtime.Caller(1)
+			fmt.Printf("\033[31m%s:%d:\n\n\texp: %#v\n\n\tgot: %#v\033[39m\n\n", filepath.Base(file), line, exp, act)
+		} else {
+			fail = false
+		}
+		return fail
+	}
+	if reflect.TypeOf(exp).Kind() == reflect.Slice {
+		val := reflect.ValueOf(exp)
+		expRaw, ok := val.Interface().([]string)
+		if !ok {
+			expRaw, ok := val.Interface().([]int)
+			if !ok {
+				expRaw, ok := val.Interface().([]bool)
+				if !ok {
+					Equals(tb, exp, act)
+				} else {
+					fail := true
+					for _, expRow := range expRaw {
+						fail = check(expRow, act)
+						if !fail {
+							break
+						}
+					}
+					if fail {
+						tb.Fail()
+					}
+				}
+			} else {
+				fail := true
+				for _, expRow := range expRaw {
+					fail = check(expRow, act)
+					if !fail {
+						break
+					}
+				}
+				if fail {
+					tb.Fail()
+				}
+			}
+		} else {
+			fail := true
+			for _, expRow := range expRaw {
+				fail = check(expRow, act)
+				if !fail {
+					break
+				}
+			}
+			if fail {
+				tb.Fail()
+			}
+		}
+	} else {
+		Equals(tb, exp, act)
+	}
+}

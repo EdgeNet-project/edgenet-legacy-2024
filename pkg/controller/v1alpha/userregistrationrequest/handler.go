@@ -85,14 +85,13 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			created := !userHandler.Create(URRCopy)
 			if created {
 				return
-			} else {
-				t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "user-creation-failure")
-				URRCopy.Status.State = failure
-				URRCopy.Status.Message = []string{statusDict["user-failed"]}
-				URRCopyUpdated, err := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(context.TODO(), URRCopy, metav1.UpdateOptions{})
-				if err == nil {
-					URRCopy = URRCopyUpdated
-				}
+			}
+			t.sendEmail(URRCopy, URROwnerNamespace.Labels["authority-name"], "user-creation-failure")
+			URRCopy.Status.State = failure
+			URRCopy.Status.Message = []string{statusDict["user-failed"]}
+			URRCopyUpdated, err := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(context.TODO(), URRCopy, metav1.UpdateOptions{})
+			if err == nil {
+				URRCopy = URRCopyUpdated
 			}
 		}
 		// If the service restarts, it creates all objects again
@@ -101,6 +100,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			// Run timeout goroutine
 			go t.runApprovalTimeout(URRCopy)
 			defer t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(URRCopy.GetNamespace()).UpdateStatus(context.TODO(), URRCopy, metav1.UpdateOptions{})
+
 			// Set the approval timeout which is 72 hours
 			URRCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(72 * time.Hour),
@@ -275,7 +275,7 @@ func (t *Handler) checkDuplicateObject(URRCopy *apps_v1alpha.UserRegistrationReq
 	message := []string{}
 	// To check username on the users resource
 	_, err := t.edgenetClientset.AppsV1alpha().Users(URRCopy.GetNamespace()).Get(context.TODO(), URRCopy.GetName(), metav1.GetOptions{})
-	if errors.IsAlreadyExists(err) {
+	if !errors.IsNotFound(err) {
 		exists = true
 		message = append(message, fmt.Sprintf(statusDict["username-exist"], URRCopy.GetName()))
 		if exists && !reflect.DeepEqual(URRCopy.Status.Message, message) {
