@@ -79,6 +79,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		t.edgenetClientset.AppsV1alpha().Users(userCopy.GetNamespace()).UpdateStatus(context.TODO(), userCopy, metav1.UpdateOptions{})
 		return
 	}
+
 	userOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), userOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 
 	_, serviceAccountErr := t.clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Get(context.TODO(), userCopy.GetName(), metav1.GetOptions{})
@@ -103,6 +104,7 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			if err != nil {
 				// TBD
 			}
+
 			// Create the AUP role
 			err = permission.CreateUserAUPRole(userCopy, userOwnerReferences)
 			if err != nil {
@@ -367,7 +369,7 @@ func (t *Handler) checkDuplicateObject(userCopy *apps_v1alpha.User, authorityNam
 	for _, userRow := range userRaw.Items {
 		if userRow.Spec.Email == userCopy.Spec.Email && userRow.GetUID() != userCopy.GetUID() {
 			exists = true
-			message = fmt.Sprintf("Email address, %s, already exists for another user account", userCopy.Spec.Email)
+			message = fmt.Sprintf(statusDict["email-exists"], userCopy.Spec.Email)
 			break
 		}
 	}

@@ -73,6 +73,7 @@ var statusDict = map[string]string{
 	"kubeconfig-fail": "Kubeconfig file creation failed for user %s",
 	"email-ok":        "Everything is OK, verification email sent",
 	"email-fail":      "Couldn't send verification email",
+	"email-exists":    "Email address, %s, already exists for another user account",
 }
 
 // Start function is entry point of the controller

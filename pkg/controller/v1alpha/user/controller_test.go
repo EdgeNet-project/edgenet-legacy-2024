@@ -6,43 +6,37 @@ import (
 	"testing"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/authority"
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestStartController(t *testing.T) {
-	g := UserTestGroup{}
+	g := TestGroup{}
 	g.Init()
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	g.authorityObj.Spec.Enabled = true
-	g.edgenetclient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 
 	// Run the controller in a goroutine
-	go Start(g.client, g.edgenetclient)
+	go Start(g.client, g.edgenetClient)
 	// Create a user
-	g.edgenetclient.AppsV1alpha().Users(g.userObj.GetNamespace()).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
+	g.edgenetClient.AppsV1alpha().Users(g.userObj.GetNamespace()).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
+	g.mockSigner(g.authorityObj.GetName(), g.userObj.GetName())
 	// Wait for the status update of created object
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(time.Millisecond * 15000)
 	// Get the object and check the status
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.GetName(), metav1.GetOptions{})
-	if !user.Spec.Active {
-		t.Errorf(errorDict["add-func"])
-	}
-	// Update a user
-	g.userObj.Spec.FirstName = "newName"
-	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(context.TODO(), g.userObj.DeepCopy(), metav1.UpdateOptions{})
-	user, _ = g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.GetName(), metav1.GetOptions{})
-	if user.Spec.FirstName != "newName" {
-		t.Errorf(errorDict["upd-func"])
-	}
-	// Delete a user
-	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(context.TODO(), g.userObj.GetName(), metav1.DeleteOptions{})
-	user, _ = g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.GetName(), metav1.GetOptions{})
-	if user != nil {
-		t.Errorf(errorDict["del-func"])
-	}
+	user, _ := g.edgenetClient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.GetName(), metav1.GetOptions{})
+	util.Equals(t, true, user.Spec.Active)
+	util.Equals(t, success, user.Status.State)
 
+	// Update a user
+	user.Spec.Email = "update@edge-net.org"
+	g.edgenetClient.AppsV1alpha().Users(user.GetNamespace()).Update(context.TODO(), user.DeepCopy(), metav1.UpdateOptions{})
+	time.Sleep(time.Millisecond * 5000)
+	user, _ = g.edgenetClient.AppsV1alpha().Users(user.GetNamespace()).Get(context.TODO(), user.GetName(), metav1.GetOptions{})
+	util.Equals(t, false, user.Spec.Active)
+
+	// Delete a user
+	g.edgenetClient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(context.TODO(), g.userObj.GetName(), metav1.DeleteOptions{})
+	_, err := g.edgenetClient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.GetName(), metav1.GetOptions{})
+	util.Equals(t, true, errors.IsNotFound(err))
 }

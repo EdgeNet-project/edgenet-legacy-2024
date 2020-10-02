@@ -2,64 +2,51 @@ package user
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"testing"
+	"time"
 
 	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/authority"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
-
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 	"github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
-// Dictionary for error messages
-var errorDict = map[string]string{
-	"k8-sync":                 "Kubernetes clientset sync problem",
-	"edgnet-sync":             "EdgeNet clientset sync problem",
-	"dupl-val":                "Duplicate value cannot be detected",
-	"user-gen":                "User generation failed when an authority created",
-	"user-role":               "User role cannot be created",
-	"user-rolebinding":        "RoleBinding Creation failed",
-	"user-rolebinding-delete": "RoleBinding deletion failed",
-	"user-deact":              "User cannot be deactivated",
-	"user-email":              "Updating user email failed",
-	"user-active":             "User is still Active after changing its email",
-	"user-create":             "User creation failed by Create function which can be used by other resources",
-	"AUP-binding":             "Create AUPRolebinding failed",
-	"add-func":                "Add func of event handler doesn't work properly",
-	"upd-func":                "Update func of event handler doesn't work properly",
-	"del-func":                "Delete func of event handler doesn't work properly",
-}
-
 //The main structure of test group
-type UserTestGroup struct {
+type TestGroup struct {
 	authorityObj  apps_v1alpha.Authority
 	teamList      apps_v1alpha.TeamList
 	sliceList     apps_v1alpha.SliceList
 	userObj       apps_v1alpha.User
 	urrObj        apps_v1alpha.UserRegistrationRequest
 	client        kubernetes.Interface
-	edgenetclient versioned.Interface
+	edgenetClient versioned.Interface
 	handler       Handler
 }
 
 func TestMain(m *testing.M) {
+	flag.String("dir", "../../../..", "Override the directory.")
+	flag.String("smtp-path", "../../../../configs/smtp_test.yaml", "Set SMTP path.")
+	flag.Parse()
+
 	log.SetOutput(ioutil.Discard)
 	logrus.SetOutput(ioutil.Discard)
 	os.Exit(m.Run())
 }
 
 //Init syncs the test group
-func (g *UserTestGroup) Init() {
-
+func (g *TestGroup) Init() {
 	authorityObj := apps_v1alpha.Authority{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Authority",
@@ -79,11 +66,11 @@ func (g *UserTestGroup) Init() {
 				ZIP:     "75005",
 			},
 			Contact: apps_v1alpha.Contact{
-				Email:     "unittest@edge-net.org",
-				FirstName: "unit",
-				LastName:  "testing",
+				Email:     "john.doe@edge-net.org",
+				FirstName: "John",
+				LastName:  "Doe",
 				Phone:     "+33NUMBER",
-				Username:  "unittesting",
+				Username:  "johndoe",
 			},
 			Enabled: true,
 		},
@@ -104,16 +91,16 @@ func (g *UserTestGroup) Init() {
 					APIVersion: "apps.edgenet.io/v1alpha",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "edgenetTeam",
+					Name: "team",
 				},
 				Spec: apps_v1alpha.TeamSpec{
 					Users: []apps_v1alpha.TeamUsers{
 						{
 							Authority: "authority-edgenet",
-							Username:  "unittestingTeamObj",
+							Username:  "johnsmith",
 						},
 					},
-					Description: "This is a Teamtest description",
+					Description: "This is a team description",
 					Enabled:     true,
 				},
 				Status: apps_v1alpha.TeamStatus{
@@ -138,16 +125,16 @@ func (g *UserTestGroup) Init() {
 					APIVersion: "apps.edgenet.io/v1alpha",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "edgenetSlice",
+					Name: "slice",
 				},
 				Spec: apps_v1alpha.SliceSpec{
 					Users: []apps_v1alpha.SliceUsers{
 						{
 							Authority: "authority-edgenet",
-							Username:  "unittestingSliceObj",
+							Username:  "johnsmith",
 						},
 					},
-					Description: "This is a Slicetest description",
+					Description: "This is a slice description",
 				},
 			},
 		},
@@ -158,20 +145,20 @@ func (g *UserTestGroup) Init() {
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "unittestingObj",
+			Name:       "johnsmith",
 			Namespace:  "authority-edgenet",
 			UID:        "TestUID",
 			Generation: 1,
 		},
 		Spec: apps_v1alpha.UserSpec{
-			FirstName: "EdgeNetFirstName",
-			LastName:  "EdgeNetLastName",
-			Email:     "userObj@email.com",
+			FirstName: "John",
+			LastName:  "Smith",
+			Email:     "john.smith@edge-net.org",
 			Active:    true,
 		},
 		Status: apps_v1alpha.UserStatus{
 			State: success,
-			Type:  "admin",
+			Type:  "user",
 		},
 	}
 	urrObj := apps_v1alpha.UserRegistrationRequest{
@@ -180,15 +167,13 @@ func (g *UserTestGroup) Init() {
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "urrName",
+			Name:      "joepublic",
 			Namespace: "authority-edgenet",
 		},
 		Spec: apps_v1alpha.UserRegistrationRequestSpec{
-			Bio:       "urrBio",
-			Email:     "urrEmail",
-			FirstName: "URRFirstName",
-			LastName:  "URRLastname",
-			URL:       "",
+			Email:     "joe.public@edge-net.org",
+			FirstName: "Joe",
+			LastName:  "Public",
 		},
 		Status: apps_v1alpha.UserRegistrationRequestStatus{
 			EmailVerified: false,
@@ -200,160 +185,131 @@ func (g *UserTestGroup) Init() {
 	g.userObj = userObj
 	g.urrObj = urrObj
 	g.client = testclient.NewSimpleClientset()
-	g.edgenetclient = edgenettestclient.NewSimpleClientset()
+	g.edgenetClient = edgenettestclient.NewSimpleClientset()
 	// Invoke authority ObjectCreated to create namespace
-	authorityHandler := authority.Handler{}
-	authorityHandler.Init(g.client, g.edgenetclient)
-	g.edgenetclient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
-	authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
+	// authorityHandler := authority.Handler{}
+	// authorityHandler.Init(g.client, g.edgenetClient)
+	g.edgenetClient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
+	namespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", g.authorityObj.GetName())}}
+	namespaceLabels := map[string]string{"owner": "authority", "owner-name": g.authorityObj.GetName(), "authority-name": g.authorityObj.GetName()}
+	namespace.SetLabels(namespaceLabels)
+	g.client.CoreV1().Namespaces().Create(context.TODO(), &namespace, metav1.CreateOptions{})
+	// authorityHandler.ObjectCreated(g.authorityObj.DeepCopy())
 }
 
 // TestHandlerInit for handler initialization
 func TestHandlerInit(t *testing.T) {
 	// Sync the test group
-	g := UserTestGroup{}
+	g := TestGroup{}
 	g.Init()
 	// Initialize the handler
-	g.handler.Init(g.client, g.edgenetclient)
-	if g.handler.clientset != g.client {
-		t.Error(errorDict["k8-sync"])
-	}
-	if g.handler.edgenetClientset != g.edgenetclient {
-		t.Error(errorDict["edgnet-sync"])
-	}
+	g.handler.Init(g.client, g.edgenetClient)
+	util.Equals(t, g.client, g.handler.clientset)
+	util.Equals(t, g.edgenetClient, g.handler.edgenetClientset)
 }
 
-func TestUserCreate(t *testing.T) {
-	g := UserTestGroup{}
+func TestCollision(t *testing.T) {
+	g := TestGroup{}
 	g.Init()
-	g.handler.Init(g.client, g.edgenetclient)
+	g.handler.Init(g.client, g.edgenetClient)
 
-	t.Run("Creation of user from authority", func(t *testing.T) {
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.authorityObj.Spec.Contact.Username, metav1.GetOptions{})
-		if user == nil {
-			t.Error(errorDict["user-gen"])
-		}
-	})
-	t.Run("Creation of user", func(t *testing.T) {
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
-		g.handler.ObjectCreated(g.userObj.DeepCopy())
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.GetName(), metav1.GetOptions{})
-		user.Spec.Active = true
-		var field fields
-		field.active = true
-		g.handler.ObjectUpdated(user.DeepCopy(), field)
-		currentUserRole, _ := g.handler.clientset.RbacV1().Roles(user.GetNamespace()).Get(context.TODO(), fmt.Sprintf("user-%s", user.GetName()), metav1.GetOptions{})
-		if currentUserRole == nil {
-			t.Error(errorDict["user-role"])
-		}
-		roleBinding, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-user-aup-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
-		if roleBinding == nil {
-			t.Error(errorDict["user-rolebinding"])
-		}
-	})
-	t.Run("Check dublicate object", func(t *testing.T) {
-		// Change the user object name to make comparison with the user-created above
-		g.userObj.Name = "different"
-		g.userObj.UID = "differentUID"
-		// Create user
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
-		// Invoke the ObjectCreated()
-		g.handler.ObjectCreated(g.userObj.DeepCopy())
-		// Check if the user created successfully or not
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.Name, metav1.GetOptions{})
-		if user.Status.Message == nil {
-			t.Error(errorDict["dupl-val"])
-		}
-	})
-}
+	urr1 := g.urrObj
+	urr1.Spec.Email = g.userObj.Spec.Email
+	urr2 := g.urrObj
+	urr2.SetName(g.userObj.GetName())
+	urr3 := g.urrObj
+	urr3.SetNamespace("different")
+	urr3.Spec.Email = g.userObj.Spec.Email
+	urr4 := g.urrObj
+	urr4.SetNamespace("different")
+	urr5 := g.urrObj
 
-func TestUserUpdate(t *testing.T) {
-	g := UserTestGroup{}
-	g.Init()
-	g.handler.Init(g.client, g.edgenetclient)
+	cases := map[string]struct {
+		request  apps_v1alpha.UserRegistrationRequest
+		expected bool
+	}{
+		"urr/email/same-namespace":         {urr1, true},
+		"urr/username/same-namespace":      {urr2, true},
+		"urr/email/different-namespace":    {urr3, true},
+		"urr/username/different-namespace": {urr4, false},
+		"urr/none/same-namespace":          {urr5, false},
+	}
+	for k, tc := range cases {
+		t.Run(k, func(t *testing.T) {
+			_, err := g.edgenetClient.AppsV1alpha().UserRegistrationRequests(tc.request.GetNamespace()).Create(context.TODO(), tc.request.DeepCopy(), metav1.CreateOptions{})
+			util.OK(t, err)
+			g.handler.checkDuplicateObject(g.userObj.DeepCopy(), g.authorityObj.GetName())
+			_, err = g.edgenetClient.AppsV1alpha().UserRegistrationRequests(tc.request.GetNamespace()).Get(context.TODO(), tc.request.GetName(), metav1.GetOptions{})
+			util.Equals(t, tc.expected, errors.IsNotFound(err))
+			g.edgenetClient.AppsV1alpha().UserRegistrationRequests(tc.request.GetNamespace()).Delete(context.TODO(), tc.request.GetName(), metav1.DeleteOptions{})
+		})
+	}
 
-	t.Run("Updating Email and Checking the Duplication", func(t *testing.T) {
-		// Creating a user
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
-		g.handler.ObjectCreated(g.userObj.DeepCopy())
-		// Changing the user email as the same as the authority default created user
-		g.userObj.Spec.Email = "unittest@edge-net.org"
-		var field fields
-		g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.Name, metav1.GetOptions{})
-		if user.Status.Message == nil {
-			t.Error(errorDict["dupl-val"])
-		}
-		if user.Spec.Active {
-			t.Error(errorDict["user-deact"])
-		}
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(context.TODO(), g.userObj.Name, metav1.DeleteOptions{})
-	})
-	t.Run("Updating Email", func(t *testing.T) {
-		// Creating a user
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
-		g.handler.ObjectCreated(g.userObj.DeepCopy())
-		// Updateing the email
-		g.userObj.Spec.Email = "NewUserObj@email.com"
-		var field fields
-		field.email = true
-		g.handler.ObjectUpdated(g.userObj.DeepCopy(), field)
-		user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.Name, metav1.GetOptions{})
-		if user.Spec.Email != "NewUserObj@email.com" {
-			t.Error(errorDict["user-rolebinding"])
-		}
-		if user.Spec.Active != false {
-			t.Error(errorDict["user-active"])
-		}
-		g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Delete(context.TODO(), g.userObj.Name, metav1.DeleteOptions{})
+	user := g.userObj
+	user.SetNamespace("different")
+	user.SetUID("UID")
+	t.Run("user/email/different-namespace", func(t *testing.T) {
+		g.edgenetClient.AppsV1alpha().Users(user.GetNamespace()).Create(context.TODO(), user.DeepCopy(), metav1.CreateOptions{})
+
+		emailExists, _ := g.handler.checkDuplicateObject(g.userObj.DeepCopy(), g.authorityObj.GetName())
+		util.Equals(t, true, emailExists)
 	})
 }
 
-func TestCreate(t *testing.T) {
-	g := UserTestGroup{}
+func TestCreateUser(t *testing.T) {
+	g := TestGroup{}
 	g.Init()
-	g.handler.Init(g.client, g.edgenetclient)
-	result := g.handler.Create(g.urrObj.DeepCopy())
-	if result {
-		t.Errorf(errorDict["user-create"])
-	}
+	g.handler.Init(g.client, g.edgenetClient)
+	failed := g.handler.Create(g.urrObj.DeepCopy())
+	util.Equals(t, false, failed)
 }
 
 func TestCreateRoleBindings(t *testing.T) {
-	g := UserTestGroup{}
+	g := TestGroup{}
 	g.Init()
-	g.handler.Init(g.client, g.edgenetclient)
-	// Creating User from userObj
-	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
-	g.handler.ObjectCreated(g.userObj.DeepCopy())
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.Name, metav1.GetOptions{})
+	g.handler.Init(g.client, g.edgenetClient)
 	// Invoking createRoleBindings
-	g.handler.createRoleBindings(user.DeepCopy(), g.sliceList.DeepCopy(), g.teamList.DeepCopy(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
+	g.handler.createRoleBindings(g.userObj.DeepCopy(), g.sliceList.DeepCopy(), g.teamList.DeepCopy(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
 	// Check the creation of use role Binding
-	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-user-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
-	if roleBindings == nil {
-		t.Error(errorDict["user-rolebinding"])
-	}
+	_, err := g.handler.clientset.RbacV1().RoleBindings(g.userObj.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-user-%s", g.userObj.GetNamespace(), g.userObj.GetName()), metav1.GetOptions{})
+	util.OK(t, err)
 }
 
 func TestDeleteRoleBindings(t *testing.T) {
-	g := UserTestGroup{}
+	g := TestGroup{}
 	g.Init()
-	g.handler.Init(g.client, g.edgenetclient)
-	// Creating User from userObj
-	g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
-	g.handler.ObjectCreated(g.userObj.DeepCopy())
-	user, _ := g.edgenetclient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.Name, metav1.GetOptions{})
+	g.handler.Init(g.client, g.edgenetClient)
 	// Invoking createRoleBindings
-	g.handler.createRoleBindings(user, g.sliceList.DeepCopy(), g.teamList.DeepCopy(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
+	g.handler.createRoleBindings(g.userObj.DeepCopy(), g.sliceList.DeepCopy(), g.teamList.DeepCopy(), fmt.Sprintf("authority-%s", g.authorityObj.GetName()))
 	// Check the creation of use role Binding
-	roleBindings, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-user-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
-	if roleBindings == nil {
-		t.Error(errorDict["user-rolebinding"])
-	}
-	g.handler.deleteRoleBindings(user, g.sliceList.DeepCopy(), g.teamList.DeepCopy())
-	roleBindingsResult, _ := g.handler.clientset.RbacV1().RoleBindings(user.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-user-aup-%s", user.GetNamespace(), user.GetName()), metav1.GetOptions{})
-	if roleBindingsResult != nil {
-		t.Error(errorDict["user-rolebinding-delete"])
-	}
+	_, err := g.handler.clientset.RbacV1().RoleBindings(g.userObj.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-user-%s", g.userObj.GetNamespace(), g.userObj.GetName()), metav1.GetOptions{})
+	util.OK(t, err)
+
+	g.handler.deleteRoleBindings(g.userObj.DeepCopy(), g.sliceList.DeepCopy(), g.teamList.DeepCopy())
+	_, err = g.handler.clientset.RbacV1().RoleBindings(g.userObj.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-user-aup-%s", g.userObj.GetNamespace(), g.userObj.GetName()), metav1.GetOptions{})
+	util.Equals(t, true, errors.IsNotFound(err))
+}
+
+func (g *TestGroup) mockSigner(authority, user string) {
+	// Mock the signer
+	go func() {
+		timeout := time.After(10 * time.Second)
+		ticker := time.Tick(1 * time.Second)
+	check:
+		for {
+			select {
+			case <-timeout:
+				break check
+			case <-ticker:
+				CSRObj, err := g.client.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", authority, user), metav1.GetOptions{})
+				if err == nil {
+					CSRObj.Status.Certificate = CSRObj.Spec.Request
+					_, err = g.client.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), CSRObj, metav1.UpdateOptions{})
+					if err == nil {
+						break check
+					}
+				}
+			}
+		}
+	}()
 }
