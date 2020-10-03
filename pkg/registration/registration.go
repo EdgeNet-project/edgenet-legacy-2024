@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -53,10 +54,15 @@ type headnode struct {
 
 // Clientset to be synced by the custom resources
 var Clientset kubernetes.Interface
+var dir = "../.."
 
 // MakeUser generates key and certificate and then set user credentials into the config file.
 func MakeUser(authority, username, email string) ([]byte, []byte, error) {
-	path := fmt.Sprintf("../../assets/certs/%s", email)
+	// The code below inits dir
+	if flag.Lookup("dir") != nil {
+		dir = flag.Lookup("dir").Value.(flag.Getter).Get().(string)
+	}
+	path := fmt.Sprintf("%s/assets/certs/%s", dir, email)
 	reader := rand.Reader
 	bitSize := 4096
 
@@ -73,7 +79,7 @@ func MakeUser(authority, username, email string) ([]byte, []byte, error) {
 		Organization: []string{authority},
 	}
 	// Opening the default path for headnode
-	file, err := os.Open("../../configs/headnode.yaml")
+	file, err := os.Open(fmt.Sprintf("%s/configs/headnode.yaml", dir))
 	if err != nil {
 		log.Printf("Registration: unexpected error executing command: %v", err)
 		return nil, nil, err
@@ -198,6 +204,10 @@ func MakeConfig(authority, username, email string, clientCert, clientKey []byte)
 		log.Println(err)
 		return err
 	}*/
+	// The code below inits dir
+	if flag.Lookup("dir") != nil {
+		dir = flag.Lookup("dir").Value.(flag.Getter).Get().(string)
+	}
 
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	// if you want to change the loading rules (which files in which order), you can do so here
@@ -226,8 +236,8 @@ func MakeConfig(authority, username, email string, clientCert, clientKey []byte)
 	authInfo.ClientKeyData = clientKey
 	rawConfig.AuthInfos[email] = &authInfo
 
-	clientcmd.WriteToFile(rawConfig, fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", authority, username))
-	_, err = ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", authority, username))
+	clientcmd.WriteToFile(rawConfig, fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, authority, username))
+	_, err = ioutil.ReadFile(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, authority, username))
 	if err != nil {
 		log.Println(err)
 		return err
@@ -316,9 +326,9 @@ func CreateConfig(serviceAccount *corev1.ServiceAccount) string {
 	authInfo.Token = string(secret.Data["token"])
 	rawConfig.AuthInfos[serviceAccount.GetName()] = &authInfo
 
-	clientcmd.WriteToFile(rawConfig, fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", serviceAccount.GetNamespace(), serviceAccount.GetName()))
+	clientcmd.WriteToFile(rawConfig, fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, serviceAccount.GetNamespace(), serviceAccount.GetName()))
 	// Check whether the creation process is completed
-	dat, err := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", serviceAccount.GetNamespace(), serviceAccount.GetName()))
+	dat, err := ioutil.ReadFile(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, serviceAccount.GetNamespace(), serviceAccount.GetName()))
 	if err != nil {
 		log.Println(err)
 		return fmt.Sprintf("Err: %s", err)

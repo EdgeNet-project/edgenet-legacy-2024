@@ -250,7 +250,6 @@ func TestCollision(t *testing.T) {
 	user.SetUID("UID")
 	t.Run("user/email/different-namespace", func(t *testing.T) {
 		g.edgenetClient.AppsV1alpha().Users(user.GetNamespace()).Create(context.TODO(), user.DeepCopy(), metav1.CreateOptions{})
-
 		emailExists, _ := g.handler.checkDuplicateObject(g.userObj.DeepCopy(), g.authorityObj.GetName())
 		util.Equals(t, true, emailExists)
 	})
