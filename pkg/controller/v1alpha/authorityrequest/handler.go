@@ -179,7 +179,7 @@ func (t *Handler) checkDuplicateObject(authorityRequestCopy *apps_v1alpha.Author
 	message := []string{}
 	// To check username on the users resource
 	_, err := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), authorityRequestCopy.GetName(), metav1.GetOptions{})
-	if errors.IsAlreadyExists(err) {
+	if !errors.IsNotFound(err) {
 		exists = true
 		message = append(message, fmt.Sprintf(statusDict["authority-taken"], authorityRequestCopy.GetName()))
 		if !reflect.DeepEqual(authorityRequestCopy.Status.Message, message) {
@@ -236,11 +236,11 @@ func (t *Handler) runApprovalTimeout(authorityRequestCopy *apps_v1alpha.Authorit
 	}
 
 	// Watch the events of authority request object
-	watchauthorityRequest, err := t.edgenetClientset.AppsV1alpha().AuthorityRequests().Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", authorityRequestCopy.GetName())})
+	watchAuthorityRequest, err := t.edgenetClientset.AppsV1alpha().AuthorityRequests().Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", authorityRequestCopy.GetName())})
 	if err == nil {
 		go func() {
 			// Get events from watch interface
-			for authorityRequestEvent := range watchauthorityRequest.ResultChan() {
+			for authorityRequestEvent := range watchAuthorityRequest.ResultChan() {
 				// Get updated authority request object
 				updatedAuthorityRequest, status := authorityRequestEvent.Object.(*apps_v1alpha.AuthorityRequest)
 				if authorityRequestCopy.GetUID() == updatedAuthorityRequest.GetUID() {
@@ -280,18 +280,18 @@ timeoutLoop:
 	timeoutOptions:
 		select {
 		case <-registrationApproved:
-			watchauthorityRequest.Stop()
+			watchAuthorityRequest.Stop()
 			closeChannels()
 			break timeoutLoop
 		case <-timeoutRenewed:
 			break timeoutOptions
 		case <-timeout:
-			watchauthorityRequest.Stop()
+			watchAuthorityRequest.Stop()
 			closeChannels()
 			t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(context.TODO(), authorityRequestCopy.GetName(), metav1.DeleteOptions{})
 			break timeoutLoop
 		case <-terminated:
-			watchauthorityRequest.Stop()
+			watchAuthorityRequest.Stop()
 			closeChannels()
 			break timeoutLoop
 		}
