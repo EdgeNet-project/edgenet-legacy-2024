@@ -172,6 +172,7 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 		emailVerification.Spec.Identifier = userCopy.GetName()
 		_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(userCopy.GetNamespace()).Create(context.TODO(), emailVerification.DeepCopy(), metav1.CreateOptions{})
 		if err == nil {
+			created = true
 			t.sendEmail("user-email-verification-update", userOwnerNamespace.Labels["authority-name"], userCopy.GetNamespace(), userCopy.GetName(),
 				fmt.Sprintf("%s %s", userCopy.Spec.FirstName, userCopy.Spec.LastName), userCopy.Spec.Email, code)
 		} else {
@@ -188,6 +189,7 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 		emailVerification.Spec.Identifier = URRCopy.GetName()
 		_, err := t.edgenetClientset.AppsV1alpha().EmailVerifications(URRCopy.GetNamespace()).Create(context.TODO(), emailVerification.DeepCopy(), metav1.CreateOptions{})
 		if err == nil {
+			created = true
 			t.sendEmail("user-email-verification", URROwnerNamespace.Labels["authority-name"], URRCopy.GetNamespace(), URRCopy.GetName(),
 				fmt.Sprintf("%s %s", URRCopy.Spec.FirstName, URRCopy.Spec.LastName), URRCopy.Spec.Email, code)
 		} else {
@@ -236,12 +238,12 @@ func (t *Handler) sendEmail(subject, authority, namespace, username, fullname, e
 func (t *Handler) objectConfiguration(EVCopy *apps_v1alpha.EmailVerification, authorityName string) {
 	// Update the status of request related to email verification
 	if strings.ToLower(EVCopy.Spec.Kind) == "authority" {
-		SRRObj, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().Get(context.TODO(), EVCopy.Spec.Identifier, metav1.GetOptions{})
-		SRRObj.Status.EmailVerified = true
-		t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(context.TODO(), SRRObj, metav1.UpdateOptions{})
+		ARObj, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().Get(context.TODO(), EVCopy.Spec.Identifier, metav1.GetOptions{})
+		ARObj.Status.EmailVerified = true
+		t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(context.TODO(), ARObj, metav1.UpdateOptions{})
 		// Send email to inform admins of the cluster
-		t.sendEmail("authority-email-verified-alert", EVCopy.Spec.Identifier, EVCopy.GetNamespace(), SRRObj.Spec.Contact.Username,
-			fmt.Sprintf("%s %s", SRRObj.Spec.Contact.FirstName, SRRObj.Spec.Contact.LastName), "", "")
+		t.sendEmail("authority-email-verified-alert", EVCopy.Spec.Identifier, EVCopy.GetNamespace(), ARObj.Spec.Contact.Username,
+			fmt.Sprintf("%s %s", ARObj.Spec.Contact.FirstName, ARObj.Spec.Contact.LastName), "", "")
 	} else if strings.ToLower(EVCopy.Spec.Kind) == "user" {
 		URRObj, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests(EVCopy.GetNamespace()).Get(context.TODO(), EVCopy.Spec.Identifier, metav1.GetOptions{})
 		URRObj.Status.EmailVerified = true
@@ -342,14 +344,4 @@ timeoutLoop:
 			break timeoutLoop
 		}
 	}
-}
-
-// To check whether user is holder of a role
-func containsRole(roles []string, value string) bool {
-	for _, ele := range roles {
-		if strings.ToLower(value) == strings.ToLower(ele) {
-			return true
-		}
-	}
-	return false
 }
