@@ -77,6 +77,7 @@ type objectData struct {
 const create = "create"
 const update = "update"
 const delete = "delete"
+const success = "Successful"
 
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
