@@ -9,6 +9,7 @@ import { Authenticated } from "./authentication/access"
 import { Navigation } from "./navigation";
 
 import Nodes from "./resources/views/Nodes";
+import Slices from "./resources/views/Slices";
 import AuthorityRequests from "./resources/views/AuthorityRequests";
 import UserRequests from "./resources/views/UserRequests";
 
@@ -48,6 +49,9 @@ const Console = ({settings}) =>
                             <Switch>
                                 <Route exact path="/nodes">
                                     <Nodes />
+                                </Route>
+                                <Route exact path="/slices">
+                                    <Slices />
                                 </Route>
 
                                 <Route exact path="/authorityrequests">

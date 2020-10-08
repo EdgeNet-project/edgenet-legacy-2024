@@ -33,7 +33,11 @@ class CreateUsersTable extends Migration
             $table->string('password');
 
             $table->string('api_token', 60)->nullable()->unique();
-            
+
+            $table->boolean('admin')->default(false);
+
+            $table->boolean('nodemanager')->default(false);
+
         });
     }
 

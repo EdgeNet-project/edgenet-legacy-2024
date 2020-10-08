@@ -41,6 +41,22 @@ class AuthenticationController extends Controller
 
         Log::channel('kubernetes')->info('User ' . $user->name . ' authenticated');
 
+        $groups = [];
+
+        /*
+         * Cluster admins
+         */
+        if ($user->admin) {
+            $groups[] = 'system:masters';
+        }
+
+        /*
+         * Nodemanagers can contribute nodes and view node stats
+         */
+        if ($user->nodemanager) {
+            $groups[] = 'edgenet:nodemanagers';
+        }
+
         $response = [
             'apiVersion' => 'authentication.k8s.io/v1beta1',
             'kind' => 'TokenReview',
@@ -48,16 +64,7 @@ class AuthenticationController extends Controller
                 'authenticated' => true,
                 'user' => [
                     'username' => $user->email,
-//                        'uid' => '42',
-                    'groups' => [
-//                            'default:readonlyuser'
-                    ],
-//                        'extra' => [
-//                            'extrafield1' => [
-//                                'extravalue1',
-//                                'extravalue2'
-//                            ]
-//                        ]
+                    'groups' => $groups,
                 ]
             ]
         ];

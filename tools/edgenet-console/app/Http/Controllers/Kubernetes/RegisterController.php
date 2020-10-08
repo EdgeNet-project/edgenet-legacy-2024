@@ -57,7 +57,7 @@ class RegisterController extends Controller
         }
 
         // generates a unique name // . '-' . Str::random(5)
-        $username = $this->generateName($request->input('firstname') . '-' . $request->input('lastname'));
+        $username = $this->generateName($request->input('firstname') . '-' . $request->input('lastname')) . $this->generateRandomCode();
 
         if ($request->has('authority.fullname') && $request->has('authority.shortname')) {
 
@@ -263,5 +263,15 @@ class RegisterController extends Controller
     private function generateName($string)
     {
         return preg_replace('/[^a-z0-9]/', '', strtolower(trim($string)));
+    }
+
+    private function generateRandomCode($length = 5) {
+        $characters = 'abcdefghijklmnopqrstuvwxyz';
+        $charactersLength = strlen($characters);
+        $randomString = '';
+        for ($i = 0; $i < $length; $i++) {
+            $randomString .= $characters[rand(0, $charactersLength - 1)];
+        }
+        return $randomString;
     }
 }
