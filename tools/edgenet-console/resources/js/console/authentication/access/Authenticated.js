@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { AuthenticationContext } from "../AuthenticationContext";
 import AUP from "../views/AUP";
+import UserNotActive from "../views/UserNotActive";
 
 const Authenticated = ({children}) => {
     const { isAuthenticated, aup, edgenet, loading } = useContext(AuthenticationContext);
@@ -14,7 +15,7 @@ const Authenticated = ({children}) => {
     }
 
     if (!edgenet) {
-        return 'edgenet error'
+        return <UserNotActive />
     }
 
     if (aup && !aup.accepted) {

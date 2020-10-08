@@ -37,6 +37,8 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'admin' => 'boolean',
+        'nodemanager' => 'boolean',
     ];
 
     public function generateToken()

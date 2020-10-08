@@ -55,7 +55,7 @@ spec:
   - command:
     - kube-apiserver
     - ...
-    - --authentication-token-webhook-config-file=/etc/authn-config.yaml
+    - --authentication-token-webhook-config-file=/etc/kubernetes/pki/authn-config.yaml
     - ...
 [...]
 ```

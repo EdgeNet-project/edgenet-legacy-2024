@@ -2,9 +2,9 @@ import React, { useContext } from 'react';
 import { AuthenticationContext } from "../AuthenticationContext";
 
 const Admin = ({children}) => {
-    const { isAdmin } = useContext(AuthenticationContext);
+    const { isAdmin, isClusterAdmin } = useContext(AuthenticationContext);
 
-    if (!isAdmin()) {
+    if (!isAdmin() && !isClusterAdmin()) {
         return null;
     }
 

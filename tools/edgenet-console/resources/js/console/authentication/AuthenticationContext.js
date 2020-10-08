@@ -8,7 +8,7 @@ const Authentication = ({children}) => {
     const [ token, setToken ] = useState(sessionStorage.getItem('api_token', null));
     const [ user, setUser ] = useState({});
     const [ aup, setAup ] = useState(null);
-    const [ edgenet, setEdgenet ] = useState({});
+    const [ edgenet, setEdgenet ] = useState(null);
     const [ message, setMessage ] = useState(null);
     const [ loading, setLoading ] = useState(true);
 
@@ -136,6 +136,10 @@ const Authentication = ({children}) => {
         return isAuthenticated() && edgenet.status && edgenet.status.type === 'admin';
     }
 
+    const isClusterAdmin = () => {
+        return isAuthenticated() && user.admin;
+    }
+
     const sendResetLink = (email) => {
         setLoading(true)
         axios.post('/password/email', {
@@ -181,6 +185,7 @@ const Authentication = ({children}) => {
         return null;
     }
 
+    console.log(edgenet);
     return (
         <AuthenticationContext.Provider value={{
             user: user,
@@ -194,6 +199,7 @@ const Authentication = ({children}) => {
             isAuthenticated: isAuthenticated,
             isGuest: isGuest,
             isAdmin: isAdmin,
+            isClusterAdmin: isClusterAdmin,
 
             sendResetLink: sendResetLink,
             resetPassword: resetPassword,
