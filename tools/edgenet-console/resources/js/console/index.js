@@ -67,12 +67,12 @@ const Console = ({settings}) =>
                                 <Route exact path="/configuration">
                                     <Configuration />
                                 </Route>
+                                <Route exact path="/kubernetes">
+                                    <Kubernetes />
+                                </Route>
 
                                 <Route exact path="/profile/secrets">
                                     <Secrets />
-                                </Route>
-                                <Route exact path="/profile/kubernetes">
-                                    <Kubernetes />
                                 </Route>
                                 <Route exact path="/profile/password">
                                     <Password />

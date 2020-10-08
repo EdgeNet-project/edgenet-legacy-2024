@@ -8,7 +8,7 @@ import {StatusGood, StatusDisabled, Validate} from "grommet-icons";
 
 import User from "../components/User";
 
-const UserRequest = ({resource, approveUser}) =>
+const UserRequest = ({resource, approveUser, loading}) =>
     <Box pad="small" direction="row" justify="between">
         <Box gap="small">
             <User resource={resource} />
@@ -25,7 +25,7 @@ const UserRequest = ({resource, approveUser}) =>
 
             </Box>
             <Box align="end">
-                <Button label="Approve" icon={<Validate />} onClick={() => approveUser(resource.metadata)} />
+                <Button disabled={loading} label="Approve" icon={<Validate />} onClick={() => approveUser(resource.metadata)} />
             </Box>
         </Box>
     </Box>;
@@ -60,6 +60,7 @@ const UserRequests = () => {
     }
 
     const approveUser = (user) => {
+        setLoading(true)
         axios.patch(
             '/apis/apps.edgenet.io/v1alpha/namespaces/' + user.namespace + '/userregistrationrequests/' + user.name,
             [{ op: 'replace', path: '/spec/approved', value: true }],
@@ -70,19 +71,8 @@ const UserRequests = () => {
                 console.log(res)
             })
             .catch(err => console.log(err.message))
+            .finally(() => setLoading(false))
     }
-
-    // if (loading) {
-    //     return <Box>Loading</Box>;
-    // }
-    //
-    // return (
-    //     <Box overflow="auto">
-    //         {
-    //             resources.map(resource => <NodeList resource={resource} /> )
-    //         }
-    //     </Box>
-    // )
 
     return (
         <Box overflow="auto" pad="medium">
@@ -95,7 +85,7 @@ const UserRequests = () => {
                     //  background={background}
                      border={{side:'bottom', color:'light-4'}}
                      flex={false}>
-                    <UserRequest resource={resource} approveUser={approveUser} />
+                    <UserRequest loading={loading} resource={resource} approveUser={approveUser} />
                 </Box>
             )}
         </Box>

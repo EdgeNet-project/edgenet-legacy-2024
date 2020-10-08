@@ -9,7 +9,6 @@ const UserMenu = () => {
 
     return (
         <Box pad={{vertical:'medium'}}>
-            <NavigationButton label="Kubernetes" path="/profile/kubernetes" icon={<System />} />
             <NavigationButton label="Secrets" path="/profile/secrets" icon={<License />} />
             <NavigationButton label="Update Password" path="/profile/password" icon={<Lock />} />
             <Box border={{side:'top'}} pad={{top:'medium'}} margin={{top:'medium'}}>
