@@ -7,15 +7,29 @@ const AuthoritySelect = ({setAuthority}) => {
 
     useEffect(() => {
         axios.get('/apis/apps.edgenet.io/v1alpha/authorities')
-            .then(({data}) =>
-                data.items && setAuthorities(data.items.map(item => {
+            .then(({data}) => {
+                if (data.items) {
+                    data.items.sort(compare)
+                    setAuthorities(data.items.map(item => {
                         return {
                             value: item.metadata.name,
-                            label: item.spec.fullname + ' ('+item.spec.shortname+')'
+                            label: item.spec.fullname + ' (' + item.spec.shortname + ')'
                         }
-                }))
-            )
+                    }));
+                }
+            })
     }, []);
+
+    const compare = ( a, b ) => {
+        if ( a.spec.fullname  < b.spec.fullname) {
+            return -1;
+        }
+        if ( a.spec.fullname  > b.spec.fullname) {
+            return 1;
+        }
+        return 0;
+    }
+
 
     const selectAuthority = (selected) => {
         if (selected && selected.value) {
