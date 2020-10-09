@@ -185,7 +185,6 @@ const Authentication = ({children}) => {
         return null;
     }
 
-    console.log(edgenet);
     return (
         <AuthenticationContext.Provider value={{
             user: user,

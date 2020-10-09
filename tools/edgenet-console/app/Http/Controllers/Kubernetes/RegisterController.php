@@ -35,9 +35,9 @@ class RegisterController extends Controller
      */
     public function register(Request $request)
     {
-        if (!$request->wantsJson()) {
-            return response()->json(['message' => 'wrong header, json required'], 422);
-        }
+//        if (!$request->wantsJson()) {
+//            return response()->json(['message' => 'wrong header, json required'], 422);
+//        }
 
         $request->validate([
             'firstname' => ['required', 'string', 'max:255'],
