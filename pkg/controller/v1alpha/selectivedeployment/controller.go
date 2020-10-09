@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -30,7 +31,6 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	appsinformer_v1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/node"
-	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	log "github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
@@ -62,7 +62,6 @@ type controller struct {
 type informerevent struct {
 	key      string
 	function string
-	delta    string
 }
 
 // Definitions of the state of the selectivedeployment resource (failure, partial, success)
@@ -79,17 +78,15 @@ const unknownStr = "Unknown"
 
 // Dictionary of status messages
 var statusDict = map[string]string{
-	"controller-notavail":       "%d controller(s) are already under the control of any different resource object(s) with the same type, %d controller(s) couldn't be found",
-	"controller-notfound":       "No controllers found",
-	"controller-usedSameType":   "All controllers are already under the control of any different resource object(s) with the same type",
-	"sd-runs":                   "SelectiveDeployment runs precisely to ensure that the actual state of the cluster matches the desired state",
-	"controller-usedSameTypeII": "%d controller(s) are already under the control of any different resource object(s) with the same type",
-	"controller-notfoundII":     "%d controller(s) couldn't be found",
-	"nodes-fewer":               "Fewer nodes issue, %d node(s) found instead of %d for %s%s",
-	"nodes-fewerIssue":          "Fewer nodes issue",
-	"nodes-fewerIssueII":        ", fewer nodes issue",
-	"GeoJSON-err":               "%s%s has a GeoJSON format error",
-	"GeoJSON-errII":             "%s, %s%s has a GeoJSON format error",
+	"sd-success":                   "The selective deployment smoothly created the controllers",
+	"deployment-creation-failure":  "Deployment %s could not be created",
+	"deployment-in-use":            "Deployment %s is already under the control of another selective deployment",
+	"daemonset-creation-failure":   "DaemonSet %s could not be created",
+	"daemonset-in-use":             "DaemonSet %s is already under the control of another selective deployment",
+	"statefulset-creation-failure": "StatefulSet %s could not be created",
+	"statefulset-in-use":           "StatefulSet %s is already under the control of another selective deployment",
+	"nodes-fewer":                  "Fewer nodes issue, %d node(s) found instead of %d for %s%s",
+	"GeoJSON-err":                  "%s%s has a GeoJSON format error",
 }
 
 // Start function is entry point of the controller
@@ -179,12 +176,18 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 						}
 						sdRaw, _ := edgenetClientset.AppsV1alpha().SelectiveDeployments("").List(context.TODO(), metav1.ListOptions{})
 						for _, sdRow := range sdRaw.Items {
-							if sdRow.Status.State == partial || sdRow.Status.State == success {
+							if sdRow.Status.State == partial || sdRow.Status.State == failure {
 							selectorLoop:
 								for _, selectorDet := range sdRow.Spec.Selector {
-									if selectorDet.Quantity == 0 || (selectorDet.Quantity != 0 && (util.Contains(sdRow.Status.Message, "Fewer nodes issue"))) {
+									fewerNodes := false
+									for _, message := range sdRow.Status.Message {
+										if strings.Contains(message, "Fewer nodes issue") {
+											fewerNodes = true
+										}
+									}
+									if selectorDet.Quantity == 0 || (selectorDet.Quantity != 0 && fewerNodes) {
 										event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
-										event.function = create
+										event.function = update
 										log.Infof("SD node added: %s, recovery started for: %s", key, event.key)
 										if err == nil {
 											queue.Add(event)
@@ -213,12 +216,18 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 				}
 				sdRaw, _ := edgenetClientset.AppsV1alpha().SelectiveDeployments("").List(context.TODO(), metav1.ListOptions{})
 				for _, sdRow := range sdRaw.Items {
-					if sdRow.Status.State == partial || sdRow.Status.State == success {
+					if sdRow.Status.State == partial || sdRow.Status.State == failure {
 					selectorLoop:
 						for _, selectorDet := range sdRow.Spec.Selector {
-							if selectorDet.Quantity == 0 || (selectorDet.Quantity != 0 && (util.Contains(sdRow.Status.Message, "fewer nodes issue"))) {
+							fewerNodes := false
+							for _, message := range sdRow.Status.Message {
+								if strings.Contains(message, "Fewer nodes issue") {
+									fewerNodes = true
+								}
+							}
+							if selectorDet.Quantity == 0 || (selectorDet.Quantity != 0 && fewerNodes) {
 								event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
-								event.function = create
+								event.function = update
 								log.Infof("SD node updated: %s, recovery started for: %s", key, event.key)
 								if err == nil {
 									queue.Add(event)
@@ -245,7 +254,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 							continue
 						}
 						event.key, err = cache.MetaNamespaceKeyFunc(sdObj.DeepCopyObject())
-						event.function = create
+						event.function = update
 						log.Infof("SD node updated: %s, recovery started for: %s", key, event.key)
 						if err == nil {
 							queue.Add(event)
@@ -270,7 +279,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 						continue
 					}
 					event.key, err = cache.MetaNamespaceKeyFunc(sdObj.DeepCopyObject())
-					event.function = create
+					event.function = update
 					log.Infof("SD node deleted: %s, recovery started for: %s", key, event.key)
 					if err == nil {
 						queue.Add(event)
@@ -283,31 +292,65 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	// The selectivedeployment resources are reconfigured according to controller events in this section
 	addToQueue := func(ownerSD *apps_v1alpha.SelectiveDeployment, key string, ctlType string) {
 		event.key, err = cache.MetaNamespaceKeyFunc(ownerSD.DeepCopyObject())
-		event.function = create
+		event.function = update
 		log.Infof("SD %s added: %s, recovery started for: %s", ctlType, key, event.key)
 		if err == nil {
 			queue.Add(event)
 		}
 	}
+
 	controllerAddFunc := func(obj interface{}) {
 		switch controllerObj := obj.(type) {
 		case *appsv1.Deployment:
-			ownerSD, exists := sdHandler.checkController(controllerObj.GetName(), "Deployment", controllerObj.GetNamespace())
-			if exists {
-				key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
-				addToQueue(ownerSD.DeepCopy(), key, "Deployment")
+			var sdName string
+			underControl := false
+			ownerReferences := controllerObj.GetOwnerReferences()
+			for _, reference := range ownerReferences {
+				if reference.Kind == "SelectiveDeployment" {
+					underControl = true
+					sdName = reference.Name
+				}
+			}
+			if !underControl {
+				ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(context.TODO(), sdName, metav1.GetOptions{})
+				if err == nil {
+					key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+					addToQueue(ownerSD, key, "Deployment")
+				}
 			}
 		case *appsv1.DaemonSet:
-			ownerSD, exists := sdHandler.checkController(controllerObj.GetName(), "DaemonSet", controllerObj.GetNamespace())
-			if exists {
-				key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
-				addToQueue(ownerSD.DeepCopy(), key, "DaemonSet")
+			var sdName string
+			underControl := false
+			ownerReferences := controllerObj.GetOwnerReferences()
+			for _, reference := range ownerReferences {
+				if reference.Kind == "SelectiveDeployment" {
+					underControl = true
+					sdName = reference.Name
+				}
+			}
+			if !underControl {
+				ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(context.TODO(), sdName, metav1.GetOptions{})
+				if err == nil {
+					key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+					addToQueue(ownerSD, key, "DaemonSet")
+				}
 			}
 		case *appsv1.StatefulSet:
-			ownerSD, exists := sdHandler.checkController(controllerObj.GetName(), "StatefulSet", controllerObj.GetNamespace())
-			if exists {
-				key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
-				addToQueue(ownerSD.DeepCopy(), key, "StatefulSet")
+			var sdName string
+			underControl := false
+			ownerReferences := controllerObj.GetOwnerReferences()
+			for _, reference := range ownerReferences {
+				if reference.Kind == "SelectiveDeployment" {
+					underControl = true
+					sdName = reference.Name
+				}
+			}
+			if !underControl {
+				ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(context.TODO(), sdName, metav1.GetOptions{})
+				if err == nil {
+					key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+					addToQueue(ownerSD, key, "StatefulSet")
+				}
 			}
 		}
 	}
@@ -496,7 +539,7 @@ func (c *controller) processNextItem() bool {
 			c.handler.ObjectCreated(item)
 		} else if event.(informerevent).function == update {
 			c.logger.Infof("Controller.processNextItem: object updated detected: %s", keyRaw)
-			c.handler.ObjectUpdated(item, event.(informerevent).delta)
+			c.handler.ObjectUpdated(item)
 		}
 	}
 	c.queue.Forget(event.(informerevent).key)

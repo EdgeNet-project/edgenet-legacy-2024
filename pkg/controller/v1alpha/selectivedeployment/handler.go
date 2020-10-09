@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -40,7 +41,7 @@ import (
 type HandlerInterface interface {
 	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
-	ObjectUpdated(obj interface{}, delta string)
+	ObjectUpdated(obj interface{})
 	ObjectDeleted(obj interface{})
 }
 
@@ -62,15 +63,15 @@ func (t *SDHandler) ObjectCreated(obj interface{}) {
 	log.Info("SDHandler.ObjectCreated")
 	// Create a copy of the selectivedeployment object to make changes on it
 	sdCopy := obj.(*apps_v1alpha.SelectiveDeployment).DeepCopy()
-	t.applyCriteria(sdCopy, "", "create")
+	t.applyCriteria(sdCopy, "create")
 }
 
 // ObjectUpdated is called when an object is updated
-func (t *SDHandler) ObjectUpdated(obj interface{}, delta string) {
+func (t *SDHandler) ObjectUpdated(obj interface{}) {
 	log.Info("SDHandler.ObjectUpdated")
 	// Create a copy of the selectivedeployment object to make changes on it
 	sdCopy := obj.(*apps_v1alpha.SelectiveDeployment).DeepCopy()
-	t.applyCriteria(sdCopy, delta, "update")
+	t.applyCriteria(sdCopy, "update")
 }
 
 // ObjectDeleted is called when an object is deleted
@@ -96,7 +97,9 @@ func (t *SDHandler) getByNode(nodeName string) ([][]string, bool) {
 								for _, owner := range ownerReferences {
 									if owner.Kind == "SelectiveDeployment" {
 										ownerDet := []string{namespace, owner.Name}
-										ownerList = append(ownerList, ownerDet)
+										if !util.SliceContains(ownerList, ownerDet) {
+											ownerList = append(ownerList, ownerDet)
+										}
 										status = true
 									}
 								}
@@ -136,10 +139,17 @@ func (t *SDHandler) getByNode(nodeName string) ([][]string, bool) {
 }
 
 // applyCriteria used by ObjectCreated, ObjectUpdated, and recoverSelectiveDeployments functions
-func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delta string, eventType string) {
+func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, eventType string) {
+	oldStatus := sdCopy.Status
+	statusUpdate := func() {
+		if !reflect.DeepEqual(oldStatus, sdCopy.Status) {
+			t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(context.TODO(), sdCopy, metav1.UpdateOptions{})
+		}
+	}
+	defer statusUpdate()
 	// Flush the status
 	sdCopy.Status = apps_v1alpha.SelectiveDeploymentStatus{}
-	defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(context.TODO(), sdCopy, metav1.UpdateOptions{})
+
 	ownerReferences := SetAsOwnerReference(sdCopy)
 	controllerCounter := 0
 	failureCounter := 0
@@ -152,7 +162,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 				failureCounter += failureCount
 				_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Create(context.TODO(), configuredDeployment.(*appsv1.Deployment), metav1.CreateOptions{})
 				if err != nil {
-					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Deployment %s could not be created", sdDeployment.GetName()))
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDeployment.GetName()))
 					failureCounter++
 				}
 			} else {
@@ -163,11 +173,11 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(context.TODO(), configuredDeployment.(*appsv1.Deployment), metav1.UpdateOptions{})
 					if err != nil {
-						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Deployment %s could not be updated", sdDeployment.GetName()))
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDeployment.GetName()))
 						failureCounter++
 					}
 				} else {
-					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Deployment %s is already under the control of another selective deployment", sdDeployment.GetName()))
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["deployment-in-use"], sdDeployment.GetName()))
 					failureCounter++
 				}
 			}
@@ -182,7 +192,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 				failureCounter += failureCount
 				_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Create(context.TODO(), configuredDaemonSet.(*appsv1.DaemonSet), metav1.CreateOptions{})
 				if err != nil {
-					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("DaemonSet %s could not be created", sdDaemonset.GetName()))
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDaemonset.GetName()))
 					failureCounter++
 				}
 			} else {
@@ -193,11 +203,11 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(context.TODO(), configuredDaemonSet.(*appsv1.DaemonSet), metav1.UpdateOptions{})
 					if err != nil {
-						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("DaemonSet %s could not be updated", sdDaemonset.GetName()))
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDaemonset.GetName()))
 						failureCounter++
 					}
 				} else {
-					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("DaemonSet %s is already under the control of another selective deployment", sdDaemonset.GetName()))
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-in-use"], sdDaemonset.GetName()))
 					failureCounter++
 				}
 			}
@@ -212,7 +222,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 				failureCounter += failureCount
 				_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Create(context.TODO(), configuredStatefulSet.(*appsv1.StatefulSet), metav1.CreateOptions{})
 				if err != nil {
-					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s could not be created", sdStatefulset.GetName()))
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-creation-failure"], sdStatefulset.GetName()))
 					failureCounter++
 				}
 			} else {
@@ -223,11 +233,11 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(context.TODO(), configuredStatefulSet.(*appsv1.StatefulSet), metav1.UpdateOptions{})
 					if err != nil {
-						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s could not be created", sdStatefulset.GetName()))
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-creation-failure"], sdStatefulset.GetName()))
 						failureCounter++
 					}
 				} else {
-					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("StatefulSet %s is already under the control of another selective deployment", sdStatefulset.GetName()))
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-in-use"], sdStatefulset.GetName()))
 					failureCounter++
 				}
 			}
@@ -236,12 +246,13 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, delt
 
 	if failureCounter == 0 {
 		sdCopy.Status.State = success
+		sdCopy.Status.Message = []string{statusDict["sd-success"]}
 	} else if controllerCounter == failureCounter {
 		sdCopy.Status.State = failure
 	} else {
 		sdCopy.Status.State = partial
 	}
-	sdCopy.Status.Ready = fmt.Sprintf("%d/%d", failureCounter, controllerCounter)
+	sdCopy.Status.Ready = fmt.Sprintf("%d/%d", (controllerCounter - failureCounter), controllerCounter)
 }
 
 // configureController manipulate the controller by selectivedeployments to match the desired state that users supplied
@@ -277,7 +288,7 @@ func (t *SDHandler) configureController(sdCopy *apps_v1alpha.SelectiveDeployment
 			}
 		}
 		controllerObj.ObjectMeta.OwnerReferences = ownerReferences
-		log.Printf("%s/Deployment/%s: %s", controllerObj.GetNamespace(), controllerObj.GetName(), nodeAffinity)
+		//log.Printf("%s/Deployment/%s: %s", controllerObj.GetNamespace(), controllerObj.GetName(), nodeAffinity)
 		controllerCopy = controllerObj.DeepCopy()
 		//t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(controllerCopy)
 	case appsv1.DaemonSet:
@@ -291,7 +302,7 @@ func (t *SDHandler) configureController(sdCopy *apps_v1alpha.SelectiveDeployment
 			}
 		}
 		controllerObj.ObjectMeta.OwnerReferences = ownerReferences
-		log.Printf("%s/DaemonSet/%s: %s", controllerObj.GetNamespace(), controllerObj.GetName(), nodeAffinity)
+		//log.Printf("%s/DaemonSet/%s: %s", controllerObj.GetNamespace(), controllerObj.GetName(), nodeAffinity)
 		controllerCopy = controllerObj.DeepCopy()
 		//t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(controllerCopy)
 	case appsv1.StatefulSet:
@@ -305,7 +316,7 @@ func (t *SDHandler) configureController(sdCopy *apps_v1alpha.SelectiveDeployment
 			}
 		}
 		controllerObj.ObjectMeta.OwnerReferences = ownerReferences
-		log.Printf("%s/StatefulSet/%s: %s", controllerObj.GetNamespace(), controllerObj.GetName(), nodeAffinity)
+		//log.Printf("%s/StatefulSet/%s: %s", controllerObj.GetNamespace(), controllerObj.GetName(), nodeAffinity)
 		controllerCopy = controllerObj.DeepCopy()
 		//t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(controllerCopy)
 	}
@@ -338,11 +349,11 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 					log.Println(err.Error())
 					panic(err.Error())
 				}
+				counter := 0
 				// This loop allows us to process each value defined at the object of selectivedeployment resource
+			valueLoop:
 				for _, selectorValue := range selectorRow.Value {
-					counter := 0
 					// The loop to process each node separately
-				cityNodeLoop:
 					for _, nodeRow := range nodesRaw.Items {
 						taintBlock := false
 						for _, taint := range nodeRow.Spec.Taints {
@@ -368,20 +379,20 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 								counter++
 							}
 							if selectorRow.Quantity != 0 && selectorRow.Quantity == counter {
-								break cityNodeLoop
+								break valueLoop
 							}
 						}
 					}
-					if selectorRow.Quantity != 0 && selectorRow.Quantity > counter {
-						strLen := 16
-						strSuffix := "..."
-						if len(selectorRow.Value) <= strLen {
-							strLen = len(selectorRow.Value)
-							strSuffix = ""
-						}
-						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix))
-						failureCounter++
+				}
+				if selectorRow.Quantity != 0 && selectorRow.Quantity > counter {
+					strLen := 16
+					strSuffix := "..."
+					if len(selectorRow.Value) <= strLen {
+						strLen = len(selectorRow.Value)
+						strSuffix = ""
 					}
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["nodes-fewer"], counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix))
+					failureCounter++
 				}
 			}
 		case "polygon":
@@ -398,8 +409,9 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 
 				var polygon [][]float64
 				// This loop allows us to process each polygon defined at the object of selectivedeployment resource
+				counter := 0
+			polyValueLoop:
 				for _, selectorValue := range selectorRow.Value {
-					counter := 0
 					err = json.Unmarshal([]byte(selectorValue), &polygon)
 					if err != nil {
 						strLen := 16
@@ -408,12 +420,11 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 							strLen = len(selectorRow.Value)
 							strSuffix = ""
 						}
-						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("%s%s has a GeoJSON format error", selectorValue[0:strLen], strSuffix))
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["GeoJSON-err"], selectorValue[0:strLen], strSuffix))
 						failureCounter++
 						continue
 					}
 					// The loop to process each node separately
-				polyNodeLoop:
 					for _, nodeRow := range nodesRaw.Items {
 						taintBlock := false
 						for _, taint := range nodeRow.Spec.Taints {
@@ -458,20 +469,20 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 								}
 							}
 							if selectorRow.Quantity != 0 && selectorRow.Quantity == counter {
-								break polyNodeLoop
+								break polyValueLoop
 							}
 						}
 					}
-					if selectorRow.Quantity != 0 && selectorRow.Quantity > counter {
-						strLen := 16
-						strSuffix := "..."
-						if len(selectorRow.Value) <= strLen {
-							strLen = len(selectorRow.Value)
-							strSuffix = ""
-						}
-						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf("Fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix))
-						failureCounter++
+				}
+				if selectorRow.Quantity != 0 && selectorRow.Quantity > counter {
+					strLen := 16
+					strSuffix := "..."
+					if len(selectorRow.Value) <= strLen {
+						strLen = len(selectorRow.Value)
+						strSuffix = ""
 					}
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["nodes-fewer"], counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix))
+					failureCounter++
 				}
 			}
 		default:
@@ -505,55 +516,3 @@ func checkOwnerReferences(sdCopy *apps_v1alpha.SelectiveDeployment, ownerReferen
 	}
 	return underControl
 }
-
-func (t *SDHandler) checkController(controllerName, controllerKind, namespace string) (apps_v1alpha.SelectiveDeployment, bool) {
-	exists := false
-	var ownerSD apps_v1alpha.SelectiveDeployment
-	SDRaw, err := t.edgenetClientset.AppsV1alpha().SelectiveDeployments(namespace).List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return ownerSD, exists
-	}
-	for _, SDRow := range SDRaw.Items {
-		if controllerKind == "Deployment" {
-			for _, deployment := range SDRow.Spec.Controllers.Deployment {
-				if controllerName == deployment.GetName() {
-					exists = true
-					ownerSD = SDRow
-				}
-			}
-		} else if controllerKind == "DaemonSet" {
-			for _, daemonset := range SDRow.Spec.Controllers.DaemonSet {
-				if controllerName == daemonset.GetName() {
-					exists = true
-					ownerSD = SDRow
-				}
-			}
-		} else if controllerKind == "StatefulSet" {
-			for _, statefulset := range SDRow.Spec.Controllers.StatefulSet {
-				if controllerName == statefulset.GetName() {
-					exists = true
-					ownerSD = SDRow
-				}
-			}
-		}
-	}
-	return ownerSD, exists
-}
-
-// dry function remove the same values of the old and new objects from the old object to have
-// the slice of deleted values.
-/*func dry(oldSlice []apps_v1alpha.Controllers, newSlice []apps_v1alpha.Controllers) []string {
-	var uniqueSlice []string
-	for _, oldValue := range oldSlice {
-		exists := false
-		for _, newValue := range newSlice {
-			if oldValue.Type == newValue.Type && oldValue.Name == newValue.Name {
-				exists = true
-			}
-		}
-		if !exists {
-			uniqueSlice = append(uniqueSlice, fmt.Sprintf("%s?/delta/? %s", oldValue.Type, oldValue.Name))
-		}
-	}
-	return uniqueSlice
-}*/

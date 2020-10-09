@@ -6,75 +6,153 @@ import (
 	"time"
 
 	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestStartController(t *testing.T) {
-	g := SDTestGroup{}
+	g := TestGroup{}
 	g.Init()
 	// Run the controller in a goroutine
-	go Start(g.client, g.edgenetclient)
-	// Creating four nodes
-	g.client.CoreV1().Nodes().Create(context.TODO(), g.nodeFRObj.DeepCopy(), metav1.CreateOptions{})
-	g.client.CoreV1().Nodes().Create(context.TODO(), g.nodeUSObj.DeepCopy(), metav1.CreateOptions{})
-	g.client.CoreV1().Nodes().Create(context.TODO(), g.nodeUSSecondObj.DeepCopy(), metav1.CreateOptions{})
-	g.client.CoreV1().Nodes().Create(context.TODO(), g.nodeUSThirdObj.DeepCopy(), metav1.CreateOptions{})
-	// Invoking the Create function of SD
-	g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(context.TODO(), g.sdObjDeployment.DeepCopy(), metav1.CreateOptions{})
+	go Start(g.client, g.edgenetClient)
+	// Creating nodes
+	nodeParis := g.nodeObj
+	nodeParis.SetName("edgenet.planet-lab.eu")
+	nodeParis.ObjectMeta.Labels = map[string]string{
+		"kubernetes.io/hostname":  "edgenet.planet-lab.eu",
+		"edge-net.io/city":        "Paris",
+		"edge-net.io/country-iso": "FR",
+		"edge-net.io/state-iso":   "IDF",
+		"edge-net.io/continent":   "Europe",
+		"edge-net.io/lon":         "e2.34",
+		"edge-net.io/lat":         "n48.86",
+	}
+	g.client.CoreV1().Nodes().Create(context.TODO(), nodeParis.DeepCopy(), metav1.CreateOptions{})
+	g.client.AppsV1().Deployments("").Create(context.TODO(), g.deploymentObj.DeepCopy(), metav1.CreateOptions{})
+	g.client.AppsV1().DaemonSets("").Create(context.TODO(), g.daemonsetObj.DeepCopy(), metav1.CreateOptions{})
+	g.client.AppsV1().StatefulSets("").Create(context.TODO(), g.statefulsetObj.DeepCopy(), metav1.CreateOptions{})
+	// Invoking the create function
+	sdObj := g.sdObj.DeepCopy()
+	g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Create(context.TODO(), sdObj.DeepCopy(), metav1.CreateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	sd, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), g.sdObjDeployment.GetName(), metav1.GetOptions{})
-	// Get the selectiveDeployment
-	if sd.Status.State != success {
-		t.Errorf("Add func of event handler doesn't work properly")
-	}
-	// Invoking the Create function of SD
-	g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(context.TODO(), g.sdObjDaemonset.DeepCopy(), metav1.CreateOptions{})
+	sdCopy, err := g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), sdObj.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, success, sdCopy.Status.State)
+	util.Equals(t, "3/3", sdCopy.Status.Ready)
+
+	g.client.AppsV1().Deployments("").Delete(context.TODO(), g.deploymentObj.GetName(), metav1.DeleteOptions{})
+	g.client.AppsV1().DaemonSets("").Delete(context.TODO(), g.daemonsetObj.GetName(), metav1.DeleteOptions{})
+	g.client.AppsV1().StatefulSets("").Delete(context.TODO(), g.statefulsetObj.GetName(), metav1.DeleteOptions{})
 	time.Sleep(time.Millisecond * 500)
-	// Get the selectiveDeployment
-	sd, _ = g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), g.sdObjDaemonset.GetName(), metav1.GetOptions{})
-	if sd.Status.State != success {
-		t.Errorf("Add func of event handler doesn't work properly")
-	}
-	// Creating a service for StatefulSet
-	g.client.CoreV1().Services("").Create(context.TODO(), g.statefulsetService.DeepCopy(), metav1.CreateOptions{})
-	// Invoking the Create function of SD
-	g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Create(context.TODO(), g.sdObjStatefulset.DeepCopy(), metav1.CreateOptions{})
+	sdCopy, err = g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), sdObj.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, success, sdCopy.Status.State)
+	util.Equals(t, "3/3", sdCopy.Status.Ready)
+	_, err = g.client.AppsV1().Deployments("").Get(context.TODO(), g.deploymentObj.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	_, err = g.client.AppsV1().DaemonSets("").Get(context.TODO(), g.daemonsetObj.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	_, err = g.client.AppsV1().StatefulSets("").Get(context.TODO(), g.statefulsetObj.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+
+	useu := g.selector
+	useu.Value = []string{"US", "FR"}
+	useu.Quantity = 2
+	useu.Name = "Country"
+	countryUSEU := []apps_v1alpha.Selector{useu}
+	sdCopy.Spec.Selector = countryUSEU
+	g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Update(context.TODO(), sdCopy.DeepCopy(), metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	sdStatefulSet, _ := g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), g.sdObjStatefulset.GetName(), metav1.GetOptions{})
-	if sdStatefulSet.Status.State != success {
-		t.Errorf("Add func of event handler doesn't work properly")
+	sdCopy, err = g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), sdCopy.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, failure, sdCopy.Status.State)
+	util.Equals(t, "0/3", sdCopy.Status.Ready)
+
+	nodeRichardson := g.nodeObj
+	nodeRichardson.SetName("utdallas-1.edge-net.io")
+	nodeRichardson.ObjectMeta.Labels = map[string]string{
+		"kubernetes.io/hostname":  "utdallas-1.edge-net.io",
+		"edge-net.io/city":        "Richardson",
+		"edge-net.io/country-iso": "US",
+		"edge-net.io/state-iso":   "TX",
+		"edge-net.io/continent":   "North America",
+		"edge-net.io/lon":         "w-96.78",
+		"edge-net.io/lat":         "n32.77",
 	}
-	g.sdObjDeployment.Spec.Controllers.Deployment[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.0"
-	g.sdObjDeployment.Spec.Selector = []apps_v1alpha.Selector{
-		{
-			Value:    []string{"US"},
-			Operator: "In",
-			Quantity: 2,
-			Name:     "Country",
-		},
-	}
-	// Apending the second deployment object
-	g.deploymentObj.Name = "deployment2"
-	g.sdObjDeployment.Spec.Controllers.Deployment = append(g.sdObjDeployment.Spec.Controllers.Deployment, g.deploymentObj)
-	g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Update(context.TODO(), g.sdObjDeployment.DeepCopy(), metav1.UpdateOptions{})
+	g.client.CoreV1().Nodes().Create(context.TODO(), nodeRichardson.DeepCopy(), metav1.CreateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	sd, _ = g.edgenetclient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), g.sdObjDeployment.GetName(), metav1.GetOptions{})
-	// Get the selectiveDeployment
-	if sd.Spec.Controllers.Deployment[0].Spec.Template.Spec.Containers[0].Image != "nginx:1.8.0" {
-		t.Errorf("update func of event handler doesn't work properly")
+	sdCopy, err = g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), sdCopy.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, success, sdCopy.Status.State)
+	util.Equals(t, "3/3", sdCopy.Status.Ready)
+
+	nodeSeaside := g.nodeObj
+	nodeSeaside.SetName("nps-1.edge-net.io")
+	nodeSeaside.ObjectMeta.Labels = map[string]string{
+		"kubernetes.io/hostname":  "nps-1.edge-net.io",
+		"edge-net.io/city":        "Seaside",
+		"edge-net.io/country-iso": "US",
+		"edge-net.io/state-iso":   "CA",
+		"edge-net.io/continent":   "North America",
+		"edge-net.io/lon":         "w-121.79",
+		"edge-net.io/lat":         "n36.62",
 	}
-	// Checking the node name
-	deploymentOne, _ := g.client.AppsV1().Deployments("").Get(context.TODO(), g.sdObjDeployment.Spec.Controllers.Deployment[0].GetName(), metav1.GetOptions{})
-	deploymentNodeNameOne := deploymentOne.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
-	deploymentTwo, _ := g.client.AppsV1().Deployments("").Get(context.TODO(), g.sdObjDeployment.Spec.Controllers.Deployment[1].GetName(), metav1.GetOptions{})
-	deploymentNodeNameTwo := deploymentTwo.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[1]
-	usNodesNames := map[string]bool{
-		g.nodeUSObj.GetName():       true,
-		g.nodeUSSecondObj.GetName(): true,
-		g.nodeUSThirdObj.GetName():  true,
+	nodeSeaside.Status.Conditions[0].Type = "NotReady"
+	g.client.CoreV1().Nodes().Create(context.TODO(), nodeSeaside.DeepCopy(), metav1.CreateOptions{})
+
+	useu = g.selector
+	useu.Value = []string{"US", "FR"}
+	useu.Quantity = 3
+	useu.Name = "Country"
+	countryUSEU = []apps_v1alpha.Selector{useu}
+	sdCopy.Spec.Selector = countryUSEU
+	g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Update(context.TODO(), sdCopy.DeepCopy(), metav1.UpdateOptions{})
+	time.Sleep(time.Millisecond * 500)
+	sdCopy, err = g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), sdCopy.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, failure, sdCopy.Status.State)
+	util.Equals(t, "0/3", sdCopy.Status.Ready)
+
+	nodeSeaside.Status.Conditions[0].Type = "Ready"
+	g.client.CoreV1().Nodes().Update(context.TODO(), nodeSeaside.DeepCopy(), metav1.UpdateOptions{})
+	time.Sleep(time.Millisecond * 500)
+	sdCopy, err = g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), sdCopy.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, success, sdCopy.Status.State)
+	util.Equals(t, "3/3", sdCopy.Status.Ready)
+
+	nodeCopy, _ := g.client.CoreV1().Nodes().Get(context.TODO(), nodeSeaside.GetName(), metav1.GetOptions{})
+	nodeCopy.Status.Conditions[0].Type = "NotReady"
+	g.client.CoreV1().Nodes().Update(context.TODO(), nodeCopy.DeepCopy(), metav1.UpdateOptions{})
+	time.Sleep(time.Millisecond * 500)
+	sdCopy, err = g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), sdCopy.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, failure, sdCopy.Status.State)
+	util.Equals(t, "0/3", sdCopy.Status.Ready)
+
+	nodeCollegePark := g.nodeObj
+	nodeCollegePark.SetName("maxgigapop-1.edge-net.io")
+	nodeCollegePark.ObjectMeta.Labels = map[string]string{
+		"kubernetes.io/hostname":  "maxgigapop-1.edge-net.io",
+		"edge-net.io/city":        "College Park",
+		"edge-net.io/country-iso": "US",
+		"edge-net.io/state-iso":   "MD",
+		"edge-net.io/continent":   "North America",
+		"edge-net.io/lon":         "w-76.94",
+		"edge-net.io/lat":         "n38.99",
 	}
-	if !usNodesNames[deploymentNodeNameOne] || !usNodesNames[deploymentNodeNameTwo] {
-		t.Errorf("update func of event handler doesn't work properly")
-	}
+	g.client.CoreV1().Nodes().Create(context.TODO(), nodeCollegePark.DeepCopy(), metav1.CreateOptions{})
+	time.Sleep(time.Millisecond * 500)
+	sdCopy, err = g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), sdCopy.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, success, sdCopy.Status.State)
+	util.Equals(t, "3/3", sdCopy.Status.Ready)
+
+	g.client.CoreV1().Nodes().Delete(context.TODO(), nodeCollegePark.GetName(), metav1.DeleteOptions{})
+	time.Sleep(time.Millisecond * 1500)
+	sdCopy, err = g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), sdCopy.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, failure, sdCopy.Status.State)
+	util.Equals(t, "0/3", sdCopy.Status.Ready)
 }

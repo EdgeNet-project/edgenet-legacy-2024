@@ -44,7 +44,7 @@ spec:
             spec:
               type: object
               required:
-                - controller
+                - controllers
                 - selector
               properties:
                 controllers:
