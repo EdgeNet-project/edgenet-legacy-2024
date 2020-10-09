@@ -92,7 +92,7 @@ func TestAssigningGeoLabels(t *testing.T) {
 	nodeFR.Status.Addresses = []corev1.NodeAddress{
 		corev1.NodeAddress{
 			Type:    "InternalIP",
-			Address: "51.75.127.152",
+			Address: "132.227.123.51",
 		},
 	}
 	geolabelsFR := map[string]string{
@@ -100,8 +100,8 @@ func TestAssigningGeoLabels(t *testing.T) {
 		"edge-net.io/state-iso":   "IDF",
 		"edge-net.io/country-iso": "FR",
 		"edge-net.io/city":        "Paris",
-		"edge-net.io/lat":         "n48.858200",
-		"edge-net.io/lon":         "e2.338700",
+		"edge-net.io/lat":         "n48.860700",
+		"edge-net.io/lon":         "e2.328100",
 	}
 	nodeUS := g.nodeObj
 	nodeUS.ObjectMeta = metav1.ObjectMeta{

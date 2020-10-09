@@ -210,6 +210,16 @@ func Contains(slice []string, value string) bool {
 	return false
 }
 
+// SliceContains returns whether slice contains value
+func SliceContains(slice [][]string, value []string) bool {
+	for _, ele := range slice {
+		if reflect.DeepEqual(value, ele) {
+			return true
+		}
+	}
+	return false
+}
+
 // Assert fails the test if the condition is false.
 func Assert(tb testing.TB, condition bool, msg string, v ...interface{}) {
 	if !condition {

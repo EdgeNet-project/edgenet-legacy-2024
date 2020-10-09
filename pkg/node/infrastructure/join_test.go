@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/util"
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
@@ -26,6 +26,6 @@ func TestMain(m *testing.M) {
 func TestCreateJoinToken(t *testing.T) {
 	ttl, err := time.ParseDuration("600s")
 	util.OK(t, err)
-	_, err := CreateToken(testclient.NewSimpleClientset(), ttl, "test.edgenet.io")
+	_, err = CreateToken(testclient.NewSimpleClientset(), ttl, "test.edgenet.io")
 	util.OK(t, err)
 }

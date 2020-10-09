@@ -322,6 +322,8 @@ func GetConditionReadyStatus(node *corev1.Node) string {
 	for _, conditionRow := range node.Status.Conditions {
 		if conditionType := conditionRow.Type; conditionType == "Ready" {
 			return string(conditionRow.Status)
+		} else if conditionType := conditionRow.Type; conditionType == "NotReady" {
+			return "False"
 		}
 	}
 	return ""
