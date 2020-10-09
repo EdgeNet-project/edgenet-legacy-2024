@@ -11,9 +11,6 @@ return [
         'ca' => env('KUBERNETES_API_CA', null),
         'prefix' => '/api/v1'
     ],
-    'dashboard' => [
-        'server' => env('KUBERNETES_DASHBOARD','https://dashboard.edge-net.org'),
-    ]
-
+    'dashboard' => env('KUBERNETES_DASHBOARD_SERVER','https://dashboard.edge-net.org'),
 
 ];
