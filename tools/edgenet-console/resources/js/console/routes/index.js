@@ -1,5 +1,5 @@
 import React from "react";
-import {Route, Switch} from "react-router-dom";
+import {Route, Redirect, Switch} from "react-router-dom";
 import { Login, ForgotPassword, ResetPasswordView } from "../authentication";
 import { Guest } from "../authentication/access";
 import { UserRegistration, VerifyEmail } from "../registration";
@@ -19,9 +19,10 @@ const ConsoleRoutes = () =>
             <Route path="/password/reset/:token">
                 <ResetPasswordView />
             </Route>
-            <Route>
+            <Route exact path="/">
                 <Login />
             </Route>
+            <Redirect to="/" />
         </Switch>
     </Guest>;
 

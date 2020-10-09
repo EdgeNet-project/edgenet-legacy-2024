@@ -9,8 +9,11 @@ const ProfileMenu = () => {
 
     return (
         <Box>
-            <NavigationButton label="Kubernetes" path="/kubernetes" icon={<Dashboard />} />
-            <NavigationButton label="Configuration" path="/configuration" icon={<System />} />
+            <Box border={{side:'bottom',color:'light-4'}} pad={{bottom:'small'}} margin={{bottom:'small'}}>
+                <NavigationButton label="Kubernetes" path="/kubernetes" icon={<Dashboard />} />
+                <NavigationButton label="Configuration" path="/configuration" icon={<System />} />
+            </Box>
+
             <NavigationButton label={user.firstname} path='/profile' icon={<User/>} />
         </Box>
     );

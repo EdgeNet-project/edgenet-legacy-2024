@@ -42,8 +42,6 @@ const Console = ({settings}) =>
             <Router>
                 <Authentication>
 
-                    <ConsoleRoutes />
-
                     <Authenticated>
                         <Navigation>
                             <Switch>
@@ -88,6 +86,8 @@ const Console = ({settings}) =>
 
                         </Navigation>
                     </Authenticated>
+
+                    <ConsoleRoutes />
 
                 </Authentication>
             </Router>

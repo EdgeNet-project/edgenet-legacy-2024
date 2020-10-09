@@ -7,14 +7,14 @@ import NavigationSection from "../components/NavigationSection";
 const RequestsMenu = () => {
 
     return (
+        <Admin>
         <NavigationSection label="Requests">
-            <Admin>
-                <NavigationButton label="Users" path="/userrequests" icon={<User />} />
-            </Admin>
+            <NavigationButton label="Users" path="/userrequests" icon={<User />} />
             <ClusterAdmin>
                 <NavigationButton label="Authorities" path="/authorityrequests" icon={<Organization />} />
             </ClusterAdmin>
         </NavigationSection>
+        </Admin>
     );
 }
 
