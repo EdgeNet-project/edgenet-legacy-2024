@@ -9,7 +9,7 @@ const Panel = ({children}) => {
         return (
             <Grid fill rows={['auto']} columns={['flex', 'medium']}
                   areas={[{name: 'main', start: [0, 0], end: [0, 0]}, {name: 'side', start: [1, 0], end: [1, 0]}]}>
-                <Box gridArea="main">{children[0]}</Box>
+                <Box gridArea="main" overflow="auto">{children[0]}</Box>
                 <Box gridArea="side" background="light-1" fill overflow="auto">{children[1]}</Box>
             </Grid>
         );

@@ -1,12 +1,12 @@
 import React, { useState, useContext, useEffect, useRef } from "react";
 import axios from "axios";
-import {Box, Heading, Text, Button, TextArea} from "grommet";
-import {Download, Copy, Down} from "grommet-icons";
+import {Box, Heading, Text, Button, Anchor, TextArea} from "grommet";
+import {Download, Copy} from "grommet-icons";
 import { AuthenticationContext } from "../../authentication";
 
 const Code = ({children}) =>
     <Text size="small">
-        <pre style={{backgroundColor:'#ededed',padding:'20px 0'}}>
+        <pre style={{backgroundColor:'#ededed',padding:'20px 10px',overflow:'auto'}}>
             {children}
         </pre>
     </Text>;
@@ -84,29 +84,74 @@ users:
             <TextArea ref={textareaEl} rows="10" value={config} />
 
             <Box margin={{vertical:'medium'}} pad={{vertical:'medium'}} border={{side:'top',color:'light-5'}}>
-                Copy your configuration file to edgenet-{user.authority}-{user.name}.yml"
 
                 <Heading level="3">
                     Using kubectl with your configuration file
                 </Heading>
                 <Text>
-                    To use EdgeNet your configuraton file copy it on your computer:
+                    To use EdgeNet download your configuraton file on your computer:
                 </Text>
                 <Code>
-                    # On Linux and Macos kubernetes config files are stored in your home
-                    cp edgenet-{user.authority}-{user.name}.yml $HOME/.kube
+                    # On Linux and Macos kubernetes config files are stored in your home <br/>
+                    mv edgenet-{user.authority}-{user.name}.yml $HOME/.kube
+                </Code>
+                <Text>
+                    Specify the configuration file path when using kubectl:
+                </Text>
+                <Code>
+                    kubectl get nodes --kubeconfig=$HOME/.kube/edgenet-{user.authority}-{user.name}.yml
                 </Code>
 
                 <Heading level="3">
                     Merging your configurations files
                 </Heading>
                 <Text>
-                    kubeconfig files are structured YAML files, you can use kubectl to merge your configuraton files:
+                    kubeconfig files are structured YAML files and $HOME/.kube/config is the default configuration file. <br />
+                    If you already have one or more cluster configurations you can use kubectl to merge your edgenet configuraton files. <br />
+                    As a first step make a backup of your current default configuration:
                 </Text>
-                <Text size="small">
-                    <pre style={{backgroundColor:'#ededed',padding:'20px 0'}}>
-                        cp $HOME/.kube/config $HOME/.kube/config.backup.$(date +%Y-%m-%d.%H:%M:%S)
-                    </pre>
+                <Code>
+                    cp $HOME/.kube/config $HOME/.kube/config.backup.$(date +%Y-%m-%d.%H:%M:%S)
+                </Code>
+                <Text>
+                    merge your default config with the edgenet configuration:
+                </Text>
+                <Code>
+                    KUBECONFIG=$HOME/.kube/config:$HOME/.kube/edgenet-{user.authority}-{user.name}.yml \ <br />
+                    &nbsp;&nbsp;&nbsp;&nbsp; kubectl config view --merge --flatten > ~/.kube/config
+                </Code>
+                <Text>
+                    When use kubectl you can now easily switch contexts to select the cluster you want to work on:
+                </Text>
+                <Code>
+                    kubectl get pods --context=edgenet
+                </Code>
+                <Text>
+                    If you don't want to merge the configuration files you can temporarily use the edgenet context in your shell
+                    session like so:
+                </Text>
+                <Code>
+                    export KUBECONFIG=$HOME/.kube/config:$HOME/.kube/edgenet-{user.authority}-{user.name}.yml
+                    <br /><br />
+                    kubectl get pods --context=edgenet
+                </Code>
+
+                <Text>
+                    You will find more information about kubectl at the following links:
+                    <ul>
+                        <li>
+                            <Anchor target="_blank" href="https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/"
+                                    label="Organizing Cluster Access Using kubeconfig Files" />
+                        </li>
+                        <li>
+
+                            <Anchor target="_blank" href="https://kubernetes.io/docs/reference/kubectl/kubectl/" label="kubectl CLI" />
+                        </li>
+                        <li>
+                            <Anchor target="_blank" href="https://kubernetes.io/docs/reference/kubectl/cheatsheet/" label="kubectl Cheat Sheet" />
+                        </li>
+                    </ul>
+
                 </Text>
             </Box>
 
