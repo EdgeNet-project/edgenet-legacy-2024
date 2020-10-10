@@ -15,33 +15,29 @@ class CreateUsersTable extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+            $table->timestamps();
+            $table->rememberToken();
+
+            $table->boolean('active')->default(false);
 
             $table->string('title')->nullable();
             $table->string('firstname');
             $table->string('lastname');
 
-            $table->text('bio')->nullable();
+            $table->string('name')->unique();
+            $table->string('authority');
 
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
 
             $table->string('password');
-            $table->rememberToken();
-            $table->timestamps();
 
             $table->string('api_token', 60)->nullable()->unique();
 
-            $table->string('address')->nullable();
-            $table->string('zipcode')->nullable();
-            $table->string('city')->nullable();
-            $table->string('country')->nullable();
+            $table->boolean('admin')->default(false);
 
-            $table->string('phone')->nullable();
+            $table->boolean('nodemanager')->default(false);
 
-            $table->unsignedBigInteger('authority_id')->unsigned()->nullable();
-            $table->foreign('authority_id')->references('id')
-                ->on('authorities')->onDelete('set null');
-            
         });
     }
 

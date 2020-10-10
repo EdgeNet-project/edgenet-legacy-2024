@@ -42,7 +42,12 @@ class RouteServiceProvider extends ServiceProvider
      */
     public function map()
     {
+
+        $this->mapKubernetesRoutes();
+
         $this->mapApiRoutes();
+
+        $this->mapEdgenetRoutes();
 
         $this->mapWebRoutes();
 
@@ -76,5 +81,42 @@ class RouteServiceProvider extends ServiceProvider
             ->middleware('api')
             ->namespace($this->namespace . '\Api')
             ->group(base_path('routes/api.php'));
+    }
+
+    /**
+     * Define the "k8s" routes for the application.
+     *
+     * These routes are typically stateless.
+     *
+     * @return void
+     */
+    protected function mapKubernetesRoutes()
+    {
+
+        Route::prefix('kubernetes')
+            ->middleware('kubernetes')
+            ->namespace($this->namespace . '\Kubernetes')
+            ->group(base_path('routes/kubernetes.php'));
+
+        Route::prefix('api/v1')
+            ->middleware('kubernetes')
+            ->namespace($this->namespace . '\Kubernetes')
+            ->group(base_path('routes/kubernetes_api.php'));
+
+    }
+
+    /**
+     * Define the "k8s" routes for the application.
+     *
+     * These routes are typically stateless.
+     *
+     * @return void
+     */
+    protected function mapEdgenetRoutes()
+    {
+        Route::prefix(config('edgenet.api.prefix'))
+            ->middleware('edgenet')
+            ->namespace($this->namespace . '\Edgenet')
+            ->group(base_path('routes/edgenet.php'));
     }
 }

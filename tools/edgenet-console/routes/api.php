@@ -17,6 +17,19 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:api')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+Route::group(['middleware' => 'auth:api'], function () {
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    });
+    Route::get('/cluster', function (Request $request) {
+        return [
+            'server' => config('kubernetes.api.server'),
+            'ca' => config('kubernetes.api.ca')
+
+        ];
+    });
+});
 //
 //// auth
 //Route::group([], function () {

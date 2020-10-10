@@ -41,6 +41,13 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        'kubernetes' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/kubernetes.log'),
+            'level' => 'info',
+            'days' => 30,
+        ],
+
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
