@@ -8,7 +8,7 @@ const MainMenu = () => {
     return (
         <Box>
             <NavigationButton label="Nodes" path="/nodes" icon={<Server />} />
-            <NavigationButton label="Slices" path="/slices" icon={<Server />} />
+            {/*<NavigationButton label="Slices" path="/slices" icon={<Server />} />*/}
         </Box>
     );
 }

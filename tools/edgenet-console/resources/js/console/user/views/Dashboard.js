@@ -1,9 +1,9 @@
 import React, {useContext, useRef} from "react";
 import {Box, Heading, Button, TextArea} from "grommet";
-import {Copy, Dashboard} from "grommet-icons";
+import {Copy, Dashboard as DashboardIcon} from "grommet-icons";
 import { AuthenticationContext } from "../../authentication";
 
-const Kubernetes = () => {
+const Dashboard = () => {
     const { user } = useContext(AuthenticationContext);
     const textareaEl = useRef(null);
 
@@ -30,11 +30,11 @@ const Kubernetes = () => {
                 <TextArea ref={textareaEl} rows="4" value={user.api_token} />
             </Box>
             <Box align="center" pad={{top:'large'}}>
-                <Button primary target="_blank" href="https://dashboard.edge-net.org" label="Access Dashboard" icon={<Dashboard />} />
+                <Button primary target="_blank" href="https://dashboard.edge-net.org" label="Access Dashboard" icon={<DashboardIcon />} />
             </Box>
 
         </Box>
     );
 }
 
-export default Kubernetes;
+export default Dashboard;

@@ -2,7 +2,7 @@
 
 ## Setup Notes
 
-### Kubernetes webhook authentication
+### Dashboard webhook authentication
 To setup the webhook auth api
 
 - Create the file authn-config.yaml like so. 
@@ -33,7 +33,7 @@ $ kubectl describe pod kube-apiserver-XX -n kube-system
 
 ```
 
-- Modify the Kubernetes API server configuraton by adding the
+- Modify the Dashboard API server configuraton by adding the
 --authentication-token-webhook-config-file command option
 
 ```

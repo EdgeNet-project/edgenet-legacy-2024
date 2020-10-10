@@ -16,7 +16,7 @@ import UserRequests from "./resources/views/UserRequests";
 import Profile from "./user/views/Profile";
 import Configuration from "./user/views/Configuration";
 import Secrets from "./user/views/Secrets";
-import Kubernetes from "./user/views/Kubernetes";
+import Dashboard from "./user/views/Dashboard";
 import Password from "./user/views/Password";
 
 import UserMenu from "./user/UserMenu";
@@ -65,8 +65,8 @@ const Console = ({settings}) =>
                                 <Route exact path="/configuration">
                                     <Configuration />
                                 </Route>
-                                <Route exact path="/kubernetes">
-                                    <Kubernetes />
+                                <Route exact path="/dashboard">
+                                    <Dashboard />
                                 </Route>
 
                                 <Route exact path="/profile/secrets">
