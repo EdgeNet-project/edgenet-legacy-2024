@@ -24,6 +24,7 @@ configs/**
 !configs/crd/**
 !configs/opa
 !configs/opa/**
+!configs/ca_sample.crt
 
 # assets
 assets/certs/**
