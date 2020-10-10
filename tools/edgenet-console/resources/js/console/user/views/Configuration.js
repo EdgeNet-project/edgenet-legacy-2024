@@ -72,7 +72,7 @@ users:
 
     return (
         <Box pad="medium">
-            <Heading size="small">
+            <Heading size="small" margin="none">
                 Your EdgeNet configuration
             </Heading>
 
