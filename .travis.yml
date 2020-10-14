@@ -1,0 +1,27 @@
+language: go
+
+go:
+  - 1.14
+
+env:
+  - GO111MODULE=on
+
+branches:
+  only:
+    - master
+    - release-1.0
+
+notifications:
+  email: false
+
+#before_install:
+#  - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.31.0
+
+script:
+  - make sync
+  - make all
+  - make test
+  - make build
+  - make run
+  - make clean
+  #- make lint test
