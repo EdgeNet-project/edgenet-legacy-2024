@@ -24,14 +24,14 @@ configs/**
 !configs/crd/**
 !configs/opa
 !configs/opa/**
+!configs/ca_sample.crt
+!configs/public.cfg
 
 # assets
 assets/certs/**
 assets/kubeconfigs/**
-assets/database/**
 !assets/certs/*.md
 !assets/kubeconfigs/*.md
-!assets/database/*.md
 
 # examples
 examples/selective-deployment/object/error-handling/**

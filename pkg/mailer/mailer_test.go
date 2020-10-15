@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -131,6 +132,7 @@ func TestNotification(t *testing.T) {
 				done := make(chan bool)
 				go createKubeconfig(tc.Content, done)
 				defer func() { done <- true }()
+				time.Sleep(500 * time.Millisecond)
 			}
 
 			t.Run("template", func(t *testing.T) {
