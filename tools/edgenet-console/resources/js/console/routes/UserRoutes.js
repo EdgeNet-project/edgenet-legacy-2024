@@ -6,7 +6,7 @@ import Secrets from "../views/user/Secrets";
 
 const ClusterAdminRoutes = () =>
     <Switch>
-        <Route exact path="/user/profile">
+        <Route exact path="/user">
             <Profile />
         </Route>
         <Route exact path="/user/secrets">
