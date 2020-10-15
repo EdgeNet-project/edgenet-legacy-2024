@@ -20,9 +20,9 @@ func TestStartController(t *testing.T) {
 	go Start(g.client, g.edgenetClient)
 	// Create a user
 	g.edgenetClient.AppsV1alpha().Users(g.userObj.GetNamespace()).Create(context.TODO(), g.userObj.DeepCopy(), metav1.CreateOptions{})
-	g.mockSigner(g.authorityObj.GetName(), g.userObj.GetName())
+	go g.mockSigner(g.authorityObj.GetName(), g.userObj.GetName())
 	// Wait for the status update of created object
-	time.Sleep(time.Millisecond * 15000)
+	time.Sleep(time.Millisecond * 21000)
 	// Get the object and check the status
 	user, _ := g.edgenetClient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.userObj.GetName(), metav1.GetOptions{})
 	util.Equals(t, true, user.Spec.Active)
@@ -31,7 +31,7 @@ func TestStartController(t *testing.T) {
 	// Update a user
 	user.Spec.Email = "update@edge-net.org"
 	g.edgenetClient.AppsV1alpha().Users(user.GetNamespace()).Update(context.TODO(), user.DeepCopy(), metav1.UpdateOptions{})
-	time.Sleep(time.Millisecond * 5000)
+	time.Sleep(time.Millisecond * 500)
 	user, _ = g.edgenetClient.AppsV1alpha().Users(user.GetNamespace()).Get(context.TODO(), user.GetName(), metav1.GetOptions{})
 	util.Equals(t, false, user.Spec.Active)
 

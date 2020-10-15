@@ -126,21 +126,25 @@ func TestCreate(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetClient)
 
 	regular := g.AUPObj
+	regular.SetUID("regular")
 	accepted := g.AUPObj
+	accepted.SetUID("accepted")
 	accepted.Spec.Accepted = true
 	recreation := g.AUPObj
+	recreation.SetUID("recreation")
 	recreation.Spec.Accepted = true
 	recreation.Status.Expires = &metav1.Time{
 		Time: time.Now().Add(1000 * time.Hour),
 	}
 	recreationExpired := g.AUPObj
+	recreationExpired.SetUID("recreationExpired")
 	recreationExpired.Spec.Accepted = true
 	recreationExpired.Status.Expires = &metav1.Time{
 		Time: time.Now().Add(-1000 * time.Hour),
 	}
 	t.Run("regular", func(t *testing.T) {
 		g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(regular.GetNamespace()).Create(context.TODO(), regular.DeepCopy(), metav1.CreateOptions{})
-		defer g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(regular.GetNamespace()).Create(context.TODO(), regular.DeepCopy(), metav1.CreateOptions{})
+		defer g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(regular.GetNamespace()).Delete(context.TODO(), regular.GetName(), metav1.DeleteOptions{})
 		g.handler.ObjectCreated(regular.DeepCopy())
 		AUP, err := g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(regular.GetNamespace()).Get(context.TODO(), regular.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
@@ -152,8 +156,13 @@ func TestCreate(t *testing.T) {
 		})
 	})
 	t.Run("accepted already", func(t *testing.T) {
+		user, err := g.edgenetClient.AppsV1alpha().Users(g.AUPObj.GetNamespace()).Get(context.TODO(), g.AUPObj.GetName(), metav1.GetOptions{})
+		util.OK(t, err)
+		user.Status.AUP = false
+		g.edgenetClient.AppsV1alpha().Users(user.GetNamespace()).Update(context.TODO(), user, metav1.UpdateOptions{})
+
 		g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(accepted.GetNamespace()).Create(context.TODO(), accepted.DeepCopy(), metav1.CreateOptions{})
-		defer g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(accepted.GetNamespace()).Create(context.TODO(), accepted.DeepCopy(), metav1.CreateOptions{})
+		defer g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(accepted.GetNamespace()).Delete(context.TODO(), accepted.GetName(), metav1.DeleteOptions{})
 		g.handler.ObjectCreated(accepted.DeepCopy())
 		AUP, err := g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(accepted.GetNamespace()).Get(context.TODO(), accepted.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
@@ -165,12 +174,17 @@ func TestCreate(t *testing.T) {
 		})
 	})
 	t.Run("recreation", func(t *testing.T) {
+		user, err := g.edgenetClient.AppsV1alpha().Users(g.AUPObj.GetNamespace()).Get(context.TODO(), g.AUPObj.GetName(), metav1.GetOptions{})
+		util.OK(t, err)
+		user.Status.AUP = false
+		g.edgenetClient.AppsV1alpha().Users(user.GetNamespace()).Update(context.TODO(), user, metav1.UpdateOptions{})
+
 		g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(recreation.GetNamespace()).Create(context.TODO(), recreation.DeepCopy(), metav1.CreateOptions{})
-		defer g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(recreation.GetNamespace()).Create(context.TODO(), recreation.DeepCopy(), metav1.CreateOptions{})
+		defer g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(recreation.GetNamespace()).Delete(context.TODO(), recreation.GetName(), metav1.DeleteOptions{})
 		g.handler.ObjectCreated(recreation.DeepCopy())
 		AUP, err := g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(recreation.GetNamespace()).Get(context.TODO(), recreation.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
-		util.Equals(t, success, AUP.Status.State)
+		util.Equals(t, "", AUP.Status.State)
 		t.Run("user status", func(t *testing.T) {
 			user, err := g.edgenetClient.AppsV1alpha().Users(AUP.GetNamespace()).Get(context.TODO(), AUP.GetName(), metav1.GetOptions{})
 			util.OK(t, err)
@@ -178,8 +192,13 @@ func TestCreate(t *testing.T) {
 		})
 	})
 	t.Run("recreation of expired one", func(t *testing.T) {
+		user, err := g.edgenetClient.AppsV1alpha().Users(g.AUPObj.GetNamespace()).Get(context.TODO(), g.AUPObj.GetName(), metav1.GetOptions{})
+		util.OK(t, err)
+		user.Status.AUP = false
+		g.edgenetClient.AppsV1alpha().Users(user.GetNamespace()).Update(context.TODO(), user, metav1.UpdateOptions{})
+
 		g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(recreationExpired.GetNamespace()).Create(context.TODO(), recreationExpired.DeepCopy(), metav1.CreateOptions{})
-		defer g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(recreationExpired.GetNamespace()).Create(context.TODO(), recreationExpired.DeepCopy(), metav1.CreateOptions{})
+		defer g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(recreationExpired.GetNamespace()).Delete(context.TODO(), recreationExpired.GetName(), metav1.DeleteOptions{})
 		g.handler.ObjectCreated(recreationExpired.DeepCopy())
 		AUP, err := g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(recreationExpired.GetNamespace()).Get(context.TODO(), recreationExpired.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
@@ -208,6 +227,7 @@ func TestAccept(t *testing.T) {
 	field.accepted = true
 	AUP.Spec.Accepted = true
 	g.handler.ObjectUpdated(AUP.DeepCopy(), field)
+	time.Sleep(time.Millisecond * 100)
 
 	AUP, err = g.edgenetClient.AppsV1alpha().AcceptableUsePolicies(g.AUPObj.GetNamespace()).Get(context.TODO(), g.AUPObj.GetName(), metav1.GetOptions{})
 	t.Run("update", func(t *testing.T) {

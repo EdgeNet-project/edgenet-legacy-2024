@@ -458,7 +458,12 @@ func (t *Handler) runTimeout(TRQCopy *apps_v1alpha.TotalResourceQuota) {
 							timeout = time.After(time.Until(getClosestExpiryDate(TRQCopy)))
 							timeoutRenewed <- true
 						} else {
-							terminated <- true
+							select {
+							case <-terminated:
+								watchTRQ.Stop()
+							default:
+								terminated <- true
+							}
 						}
 					}
 				}
