@@ -10,7 +10,7 @@ const Navigation = ({children}) => {
     return (
         <Grid rows={["100vh"]} columns={['small', 'flex']}
               areas={[{name: 'nav', start: [0, 0], end: [0, 0]}, {name: 'main', start: [1, 0], end: [1, 0]},]}>
-            <Box gridArea="nav" background="light-1" fill>
+            <Box gridArea="nav" background="#F8FAFE" fill>
                 <Logo />
                 <MainMenu />
                 <AuthorityMenu />
