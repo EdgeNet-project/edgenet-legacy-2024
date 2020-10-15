@@ -19,6 +19,9 @@ import Secrets from "./user/views/Secrets";
 import Dashboard from "./user/views/Dashboard";
 import Password from "./user/views/Password";
 
+import AuthorityList from "./views/admin/AuthorityList";
+import UserList from "./views/admin/UserList";
+
 import UserMenu from "./user/UserMenu";
 
 const ConsoleContext = React.createContext({
@@ -68,6 +71,14 @@ const Console = ({settings}) =>
                                 <Route exact path="/dashboard">
                                     <Dashboard />
                                 </Route>
+
+                                <Route exact path="/admin/authorities">
+                                    <AuthorityList />
+                                </Route>
+                                <Route exact path="/admin/users">
+                                    <UserList />
+                                </Route>
+
 
                                 <Route exact path="/profile/secrets">
                                     <Secrets />
