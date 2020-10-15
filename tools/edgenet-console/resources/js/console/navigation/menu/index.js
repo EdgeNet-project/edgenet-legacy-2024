@@ -3,8 +3,8 @@ import MainMenu from "./MainMenu";
 import ProfileMenu from "./ProfileMenu";
 import RequestsMenu from "./RequestsMenu";
 import KubernetesMenu from "./KubernetesMenu";
-import AdminMenu from "./AdminMenu";
+import ClusterAdminMenu from "./ClusterAdminMenu";
 
 export {
-    AuthorityMenu, MainMenu, ProfileMenu, RequestsMenu, KubernetesMenu, AdminMenu
+    AuthorityMenu, MainMenu, ProfileMenu, RequestsMenu, KubernetesMenu, ClusterAdminMenu
 }

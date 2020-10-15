@@ -1,14 +1,11 @@
 import React, {useEffect, useContext, useState} from "react";
 import axios from "axios";
-import moment from "moment";
 
 import { ConsoleContext } from "../../index";
 import {Box, Text, Button} from "grommet";
 import {StatusGood, StatusDisabled, Validate} from "grommet-icons";
 
-import Authority from "../components/Authority";
-import AuthorityAddress from "../components/AuthorityAddress";
-import AuthorityContact from "../components/AuthorityContact";
+import { Authority, AuthorityAddress, AuthorityContact } from "../../resources";
 
 const AuthorityRequest = ({resource, approveAuthority}) =>
     <Box pad="small" direction="row" justify="between">

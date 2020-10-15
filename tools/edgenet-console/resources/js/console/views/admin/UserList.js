@@ -2,8 +2,8 @@ import React, {useEffect, useContext, useState} from "react";
 import axios from "axios";
 
 import { ConsoleContext } from "../../index";
-import {Box, Text, Button} from "grommet";
-import {StatusGood, StatusDisabled, Validate} from "grommet-icons";
+import {Box, Text} from "grommet";
+import {StatusGood, StatusDisabled, UserManager} from "grommet-icons";
 
 import User from "../../resources/components/User";
 
@@ -12,18 +12,22 @@ const UserRow = ({resource}) =>
         <Box gap="small">
             <User resource={resource} />
             <Text size="small">
-                UID: {resource.metadata.uid} <br />
-                Name: {resource.metadata.name} <br />
-                Namespace: {resource.metadata.namespace}
+
             </Text>
 
         </Box>
 
         <Box justify="between">
-            <Box>
-
+            <Box justify="end" direction="row" gap="xsmall" pad={{bottom:'xsmall'}}>
+                {resource.status.type === 'admin' && <UserManager />}
+                {resource.spec.active ? <StatusGood color="status-ok" /> : <StatusDisabled />}
             </Box>
             <Box align="end">
+                <Text size="small">
+                    UID: {resource.metadata.uid} <br />
+                    Name: {resource.metadata.name} <br />
+                    Namespace: {resource.metadata.namespace}
+                </Text>
             </Box>
         </Box>
     </Box>;

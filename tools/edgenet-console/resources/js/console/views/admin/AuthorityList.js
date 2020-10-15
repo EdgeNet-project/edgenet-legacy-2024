@@ -5,9 +5,7 @@ import { ConsoleContext } from "../../index";
 import {Box, Text, Button} from "grommet";
 import {StatusGood, StatusDisabled, Validate} from "grommet-icons";
 
-import Authority from "../../resources/components/Authority";
-import AuthorityAddress from "../../resources/components/AuthorityAddress";
-import AuthorityContact from "../../resources/components/AuthorityContact";
+import { Authority, AuthorityAddress, AuthorityContact } from "../../resources";
 
 const AuthorityRow = ({resource}) =>
     <Box pad="small" direction="row" justify="between">
