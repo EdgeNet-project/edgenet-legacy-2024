@@ -31,6 +31,8 @@ const Dashboard = () => {
             </Box>
             <Box align="center" pad={{top:'large'}}>
                 <Button primary target="_blank" href="https://dashboard.edge-net.org" label="Access Dashboard" icon={<DashboardIcon />} />
+                {/*<Button secondary target="_blank" href="https://dashboard.edge-net.org" label="Access Dashboard" icon={<DashboardIcon />} />*/}
+                {/*<Button target="_blank" href="https://dashboard.edge-net.org" label="Access Dashboard" icon={<DashboardIcon />} />*/}
             </Box>
 
         </Box>

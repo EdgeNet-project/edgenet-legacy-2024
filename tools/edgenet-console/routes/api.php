@@ -23,9 +23,26 @@ Route::group(['middleware' => 'auth:api'], function () {
         return $request->user();
     });
     Route::get('/cluster', function (Request $request) {
+        $contextCreate = stream_context_create([
+            'ssl' => [
+                'capture_peer_cert' => true,
+                'allow_self_signed' => false,
+                'verify_peer' => false
+                ]
+        ]);
+        $res = stream_socket_client(str_replace('https://','ssl://', config('kubernetes.api.server')),
+            $errno, $errstr, 30, STREAM_CLIENT_CONNECT, $contextCreate);
+        $response = stream_context_get_params($res);
+
+        $certInfo = openssl_x509_parse($response["options"]["ssl"]["peer_certificate"]);
+        if (!openssl_x509_export($response["options"]["ssl"]["peer_certificate"], $certString)) {
+            // TODO: manage errors
+        }
+
         return [
             'server' => config('kubernetes.api.server'),
-            'ca' => config('kubernetes.api.ca')
+            'ca' => base64_encode($certString),
+            'info' => $certInfo
 
         ];
     });

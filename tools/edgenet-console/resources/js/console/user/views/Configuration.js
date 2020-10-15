@@ -83,7 +83,7 @@ users:
 
             <TextArea ref={textareaEl} rows="10" value={config} />
 
-            <Box margin={{vertical:'medium'}} pad={{vertical:'medium'}} border={{side:'top',color:'light-5'}}>
+            <Box border={{side:'top',color:'light-5'}} margin={{top:'medium'}}>
 
                 <Heading level="3">
                     Using kubectl with your configuration file
@@ -136,7 +136,7 @@ users:
                     kubectl get pods --context=edgenet
                 </Code>
 
-                <Text>
+                <Text margin={{bottom:'medium'}}>
                     You will find more information about kubectl at the following links:
                     <ul>
                         <li>

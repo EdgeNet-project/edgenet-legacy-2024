@@ -10,7 +10,7 @@ const NavigationButton = ({label, path, icon, onClick}) => {
         <Button plain alignSelf="stretch"
                 onClick={() => history.push(path)} active={!!match} hoverIndicator="white">
             <Box pad={{vertical: "xsmall", horizontal: "medium"}}
-                 gap="xxsmall" direction="row" background={match ? "white" : null}>{icon} <Text>{label}</Text></Box>
+                 gap="xxsmall" direction="row" background={match ? {color:"neutral-2", dark:true} : null}>{icon} <Text>{label}</Text></Box>
         </Button>
     );
 }
