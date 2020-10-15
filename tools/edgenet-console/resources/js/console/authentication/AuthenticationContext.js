@@ -80,9 +80,11 @@ const Authentication = ({children}) => {
             .catch(err => console.log(err));
     }
 
-    const error = (message) => {
+    const setError = (message) => {
         setMessage(message)
         setLoading(false)
+
+        setTimeout(() => setMessage(null), 6000)
     }
 
     const login = (email, password) => {
@@ -94,11 +96,11 @@ const Authentication = ({children}) => {
         .then(({data}) => setUser(data))
         .catch((error) => {
             if (error.response) {
-                error(error.response.data.message || '');
+                setError(error.response.data.message || '');
             } else if (error.request) {
-                error('server is not responding, try later');
+                setError('server is not responding, try later');
             } else {
-                error('client error');
+                setError('client error');
             }
         })
         .finally(() => setLoading(false))
@@ -109,16 +111,19 @@ const Authentication = ({children}) => {
         setLoading(true)
         axios.post('/logout')
         .then((response) => {
+            setToken(null);
             setUser({});
+            setEdgenet(null);
+            setAup(null);
             sessionStorage.removeItem('api_token');
         })
         .catch((error) => {
             if (error.response) {
-                error(error.response.data.message || '');
+                setError(error.response.data.message || '');
             } else if (error.request) {
-                error('server is not responding, try later');
+                setError('server is not responding, try later');
             } else {
-                error('client error');
+                setError('client error');
             }
         })
         .finally(() => setLoading(false));
@@ -148,11 +153,11 @@ const Authentication = ({children}) => {
         .then(({data}) => setMessage("an email will be sent to you"))
         .catch((error) => {
             if (error.response) {
-                error(error.response.data.message || '');
+                setError(error.response.data.message || '');
             } else if (error.request) {
-                error('server is not responding, try later');
+                setError('server is not responding, try later');
             } else {
-                error('client error');
+                setError('client error');
             }
         })
         .finally(() => setLoading(false));
@@ -168,11 +173,11 @@ const Authentication = ({children}) => {
         .then(({data}) => setMessage("password updated succesfully"))
         .catch((error) => {
             if (error.response) {
-                error(error.response.data.message || '');
+                setError(error.response.data.message || '');
             } else if (error.request) {
-                error('server is not responding, try later');
+                setError('server is not responding, try later');
             } else {
-                error('client error');
+                setError('client error');
             }
         })
         .finally(() => setLoading(false))
