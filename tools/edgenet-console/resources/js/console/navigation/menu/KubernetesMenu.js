@@ -5,7 +5,7 @@ import NavigationSection from "../components/NavigationSection";
 
 const ProfileMenu = () =>
     <NavigationSection label="Kubernetes">
-        <NavigationButton label="Dashboard" path="/dashboard" icon={<Dashboard />} />
-        <NavigationButton label="Configuration" path="/configuration" icon={<System />} />
+        <NavigationButton label="Dashboard" path="/kubernetes/dashboard" icon={<Dashboard />} />
+        <NavigationButton label="Configuration" path="/kubernetes/configuration" icon={<System />} />
     </NavigationSection>;
 export default ProfileMenu;

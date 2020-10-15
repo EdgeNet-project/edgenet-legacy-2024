@@ -3,7 +3,7 @@ import {Grid, Box } from "grommet";
 
 import Panel from "./Panel";
 import Logo from "../components/Logo";
-import { AuthorityMenu, MainMenu, ProfileMenu, RequestsMenu, KubernetesMenu, ClusterAdminMenu } from "../menu";
+import { MyAuthorityMenu, MainMenu, ProfileMenu, RequestsMenu, KubernetesMenu, ClusterAdminMenu } from "../menu";
 
 const Navigation = ({children}) => {
 
@@ -13,7 +13,7 @@ const Navigation = ({children}) => {
             <Box gridArea="nav" background="#F8FAFE" fill>
                 <Logo />
                 <MainMenu />
-                <AuthorityMenu />
+                <MyAuthorityMenu />
                 <RequestsMenu />
                 <Box flex="grow"/>
                 <ClusterAdminMenu />

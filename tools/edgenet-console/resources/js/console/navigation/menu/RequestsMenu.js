@@ -8,12 +8,12 @@ const RequestsMenu = () => {
 
     return (
         <Admin>
-        <NavigationSection label="Requests">
-            <NavigationButton label="Users" path="/userrequests" icon={<User />} />
-            <ClusterAdmin>
-                <NavigationButton label="Authorities" path="/authorityrequests" icon={<Organization />} />
-            </ClusterAdmin>
-        </NavigationSection>
+            <NavigationSection label="Requests">
+                <NavigationButton label="Users" path="/requests/users" icon={<User />} />
+                <ClusterAdmin>
+                    <NavigationButton label="Authorities" path="/requests/authorities" icon={<Organization />} />
+                </ClusterAdmin>
+            </NavigationSection>
         </Admin>
     );
 }

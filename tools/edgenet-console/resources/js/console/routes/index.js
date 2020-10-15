@@ -4,6 +4,12 @@ import { Login, ForgotPassword, ResetPasswordView } from "../authentication";
 import { Guest } from "../authentication/access";
 import { UserRegistration, VerifyEmail } from "../registration";
 
+import ClusterAdminRoutes from "./ClusterAdminRoutes";
+import KubernetesRoutes from "./KubernetesRoutes";
+import MyAuthorityRoutes from "./MyAuthorityRoutes";
+import RequestsRoutes from "./RequestsRoutes";
+import UserRoutes from "./UserRoutes";
+
 const ConsoleRoutes = () =>
     <Guest>
         <Switch>
@@ -26,4 +32,7 @@ const ConsoleRoutes = () =>
         </Switch>
     </Guest>;
 
-export default ConsoleRoutes;
+export {
+    ConsoleRoutes, ClusterAdminRoutes, KubernetesRoutes, MyAuthorityRoutes, RequestsRoutes, UserRoutes
+
+};

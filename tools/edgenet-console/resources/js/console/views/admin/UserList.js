@@ -5,7 +5,7 @@ import { ConsoleContext } from "../../index";
 import {Box, Text} from "grommet";
 import {StatusGood, StatusDisabled, UserManager} from "grommet-icons";
 
-import User from "../../resources/components/User";
+import { User } from "../../resources";
 
 const UserRow = ({resource}) =>
     <Box pad="small" direction="row" justify="between">
@@ -40,10 +40,10 @@ const UserList = () => {
     const { config } = useContext(ConsoleContext);
 
     useEffect(() => {
-        loadRequests();
+        loadResources();
     }, [])
 
-    const loadRequests = () => {
+    const loadResources = () => {
         axios.get('/apis/apps.edgenet.io/v1alpha/users', {
             // params: { ...queryParams, page: current_page + 1 },
             // paramsSerializer: qs.stringify,

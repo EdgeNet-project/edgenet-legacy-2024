@@ -9,7 +9,7 @@ const ProfileMenu = () => {
 
     return (
         <Box border={{side:'top',color:'light-4'}} pad={{top:'small', bottom:'medium'}} margin={{top:'small'}}>
-            <NavigationButton label={user.firstname} path='/profile' icon={<User/>} />
+            <NavigationButton label={user.firstname} path="/user" icon={<User/>} />
         </Box>
     );
 }
