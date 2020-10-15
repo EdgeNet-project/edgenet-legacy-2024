@@ -22,7 +22,7 @@ func TestStartController(t *testing.T) {
 	TRQObj.Spec.Claim = append(TRQObj.Spec.Claim, g.claimObj)
 	g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Create(context.TODO(), TRQObj.DeepCopy(), metav1.CreateOptions{})
 	// Wait for the status update of created object
-	time.Sleep(time.Millisecond * 5500)
+	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
 	TRQCopy, err := g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), TRQObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
@@ -38,7 +38,7 @@ func TestStartController(t *testing.T) {
 	TRQCopy, err = g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), TRQCopy.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, 1, len(TRQCopy.Spec.Drop))
-	time.Sleep(time.Millisecond * 300)
+	time.Sleep(time.Millisecond * 500)
 	TRQCopy, err = g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), TRQCopy.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, 0, len(TRQCopy.Spec.Drop))

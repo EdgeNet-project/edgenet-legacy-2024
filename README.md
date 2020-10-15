@@ -2,6 +2,10 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/EdgeNet-project/edgenet)](https://goreportcard.com/report/github.com/EdgeNet-project/edgenet)
 
+[![Build Status](https://travis-ci.org/EdgeNet-project/edgenet.svg?branch=master)](https://travis-ci.org/EdgeNet-project/edgenet)
+
+[![Coverage Status](https://coveralls.io/repos/github/EdgeNet-project/edgenet/badge.svg?branch=master)](https://coveralls.io/github/EdgeNet-project/edgenet?branch=master)
+
 EdgeNet is Kubernetes adapted for the network edge. It allows you to deploy applications to hundreds of nodes
 that are scattered across the internet, rather than to just one or a small number of centralized datacenters.
 
@@ -19,8 +23,8 @@ The EdgeNet software is free and open source; we invite you to contribute.
 
 To get a sense of where we are heading, please see our list of
 [milestones](https://github.com/EdgeNet-project/edgenet/milestones).
-We follow an agile development approach, with two week sprints, each one leading to a new production version of the 
-code. Our current sprint is one of the milestones, and you can see more near-term issues in our 
+We follow an agile development approach, with two week sprints, each one leading to a new production version of the
+code. Our current sprint is one of the milestones, and you can see more near-term issues in our
 [project backlog](https://github.com/orgs/EdgeNet-project/projects/2).
 You can pick one of these to work on, or suggest your own.
 
