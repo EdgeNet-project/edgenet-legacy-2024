@@ -45,7 +45,7 @@ type SelectiveDeploymentSpec struct {
 	// The type is for defining which kind of selectivedeployment it is, you could find the list of active types below.
 	// Types of selector: city, state, country, continent, and polygon
 	// The value represents the desired filter and it must be compatible with the type of selectivedeployment
-	Controllers Controllers `json:"controller"`
+	Controllers Controllers `json:"controllers"`
 	Selector    []Selector  `json:"selector"`
 }
 
@@ -61,7 +61,7 @@ type Selector struct {
 	Name     string                      `json:"name"`
 	Value    []string                    `json:"value"`
 	Operator corev1.NodeSelectorOperator `json:"operator"`
-	Quantity int                         `json:"count"`
+	Quantity int                         `json:"quantity"`
 }
 
 // SelectiveDeploymentStatus is the status for a SelectiveDeployment resource
