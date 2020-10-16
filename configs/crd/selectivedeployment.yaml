@@ -30,10 +30,6 @@ spec:
         - name: Status
           type: string
           jsonPath: .status.state
-        - name: Type
-          type: string
-          description: The type of selectivedeployment filter
-          jsonPath: .spec.type
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -54,16 +50,19 @@ spec:
                       type: array
                       items:
                         type: object
+                        x-kubernetes-preserve-unknown-fields: true
                       nullable: true
                     daemonset:
                       type: array
                       items:
                         type: object
+                        x-kubernetes-preserve-unknown-fields: true
                       nullable: true
                     statefulset:
                       type: array
                       items:
                         type: object
+                        x-kubernetes-preserve-unknown-fields: true
                       nullable: true
                 selector:
                   type: array
@@ -97,11 +96,13 @@ spec:
               type: object
               properties:
                 ready:
-                  type: boolean
+                  type: string
                 state:
                   type: string
                 message:
-                  type: string
+                  type: array
+                  items:
+                    type: string
   scope: Namespaced
   names:
     plural: selectivedeployments
