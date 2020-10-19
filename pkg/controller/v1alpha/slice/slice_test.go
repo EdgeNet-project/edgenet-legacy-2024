@@ -305,7 +305,7 @@ func TestUpdate(t *testing.T) {
 	t.Run("renew", func(t *testing.T) {
 		go g.handler.runTimeout(sliceCopy)
 		sliceCopy.Status.Expires = &metav1.Time{
-			Time: time.Now().Add(50 * time.Millisecond),
+			Time: time.Now().Add(300 * time.Millisecond),
 		}
 		g.edgenetClient.AppsV1alpha().Slices(sliceCopy.GetNamespace()).Update(context.TODO(), sliceCopy, metav1.UpdateOptions{})
 		time.Sleep(10 * time.Millisecond)
@@ -314,7 +314,7 @@ func TestUpdate(t *testing.T) {
 		util.OK(t, err)
 		var field fields
 		g.handler.ObjectUpdated(sliceCopy, field)
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(350 * time.Millisecond)
 
 		t.Run("save slice", func(t *testing.T) {
 			_, err := g.edgenetClient.AppsV1alpha().Slices(g.sliceObj.GetNamespace()).Get(context.TODO(), g.sliceObj.GetName(), metav1.GetOptions{})
