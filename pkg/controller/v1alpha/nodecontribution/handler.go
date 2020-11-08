@@ -83,14 +83,14 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 func (t *Handler) ObjectCreated(obj interface{}) {
 	log.Info("NCHandler.ObjectCreated")
 	// Create a copy of the node contribution object to make changes on it
-	NCCopy := obj.(*apps_v1alpha.NodeContribution).DeepCopy()
-	NCCopy.Status.Message = []string{}
+	ncCopy := obj.(*apps_v1alpha.NodeContribution).DeepCopy()
+	ncCopy.Status.Message = []string{}
 	// Find the authority from the namespace in which the object is
-	NCOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), NCCopy.GetNamespace(), metav1.GetOptions{})
-	nodeName := fmt.Sprintf("%s.%s.edge-net.io", NCOwnerNamespace.Labels["authority-name"], NCCopy.GetName())
+	NCOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), ncCopy.GetNamespace(), metav1.GetOptions{})
+	nodeName := fmt.Sprintf("%s.%s.edge-net.io", NCOwnerNamespace.Labels["authority-name"], ncCopy.GetName())
 	// Don't use the authority name if the node belongs to EdgeNet
 	if NCOwnerNamespace.GetName() == "authority-edgenet" {
-		nodeName = fmt.Sprintf("%s.edge-net.io", NCCopy.GetName())
+		nodeName = fmt.Sprintf("%s.edge-net.io", ncCopy.GetName())
 	}
 	NCOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), NCOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	authorityEnabled := NCOwnerAuthority.Spec.Enabled
@@ -101,49 +101,51 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		// Check whether the host has been given as an IP address or else
-		recordType := remoteip.GetRecordType(NCCopy.Spec.Host)
+		recordType := remoteip.GetRecordType(ncCopy.Spec.Host)
 		if recordType == "" {
-			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["invalid-host"])
-			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
-			t.sendEmail(NCCopy)
+			ncCopy.Status.State = failure
+			ncCopy.Status.Message = append(ncCopy.Status.Message, statusDict["invalid-host"])
+			t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
+			t.sendEmail(ncCopy)
 			return
 		}
 		// Set the client config according to the node contribution,
 		// with the maximum time of 15 seconds to establist the connection.
 		config := &ssh.ClientConfig{
-			User:            NCCopy.Spec.User,
-			Auth:            []ssh.AuthMethod{ssh.PublicKeys(t.publicKey), ssh.Password(NCCopy.Spec.Password)},
+			User:            ncCopy.Spec.User,
+			Auth:            []ssh.AuthMethod{ssh.PublicKeys(t.publicKey), ssh.Password(ncCopy.Spec.Password)},
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 			Timeout:         15 * time.Second,
 		}
-		addr := fmt.Sprintf("%s:%d", NCCopy.Spec.Host, NCCopy.Spec.Port)
+		addr := fmt.Sprintf("%s:%d", ncCopy.Spec.Host, ncCopy.Spec.Port)
 		contributedNode, err := t.clientset.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 		if err == nil {
 			// The node corresponding to the contributed node exists in the cluster
 			log.Println("NODE FOUND")
 			if node.GetConditionReadyStatus(contributedNode.DeepCopy()) != trueStr {
-				go t.runRecoveryProcedure(addr, config, nodeName, NCCopy, contributedNode)
+				t.balanceMultiThreading(5)
+				go t.runRecoveryProcedure(addr, config, nodeName, ncCopy, contributedNode)
 			} else {
-				NCCopy.Status.State = success
-				NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["node-ok"])
-				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+				ncCopy.Status.State = success
+				ncCopy.Status.Message = append(ncCopy.Status.Message, statusDict["node-ok"])
+				t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 			}
 		} else {
 			// There isn't any node corresponding to the node contribution
 			log.Println("NODE NOT FOUND")
-			go t.runSetupProcedure(NCOwnerNamespace.Labels["authority-name"], addr, nodeName, recordType, config, NCCopy)
+			t.balanceMultiThreading(5)
+			go t.runSetupProcedure(NCOwnerNamespace.Labels["authority-name"], addr, nodeName, recordType, config, ncCopy)
 		}
 	} else {
 		log.Println("AUTHORITY NOT ENABLED")
 		// Disable scheduling on the node if the authority is disabled
-		NCCopy.Spec.Enabled = false
-		NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).Update(context.TODO(), NCCopy, metav1.UpdateOptions{})
+		ncCopy.Spec.Enabled = false
+		ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).Update(context.TODO(), ncCopy, metav1.UpdateOptions{})
 		if err == nil {
-			NCCopy = NCCopyUpdated
-			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["authority-disabled"])
-			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+			ncCopy = ncCopyUpdated
+			ncCopy.Status.State = failure
+			ncCopy.Status.Message = append(ncCopy.Status.Message, statusDict["authority-disabled"])
+			t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 		}
 	}
 }
@@ -152,60 +154,62 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 func (t *Handler) ObjectUpdated(obj interface{}) {
 	log.Info("NCHandler.ObjectUpdated")
 	// Create a copy of the node contribution object to make changes on it
-	NCCopy := obj.(*apps_v1alpha.NodeContribution).DeepCopy()
-	NCCopy.Status.Message = []string{}
-
-	NCOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), NCCopy.GetNamespace(), metav1.GetOptions{})
-	nodeName := fmt.Sprintf("%s.%s.edge-net.io", NCOwnerNamespace.Labels["authority-name"], NCCopy.GetName())
-	var authorityEnabled bool
+	ncCopy := obj.(*apps_v1alpha.NodeContribution).DeepCopy()
+	ncCopy.Status.Message = []string{}
+	NCOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), ncCopy.GetNamespace(), metav1.GetOptions{})
+	nodeName := fmt.Sprintf("%s.%s.edge-net.io", NCOwnerNamespace.Labels["authority-name"], ncCopy.GetName())
 	if NCOwnerNamespace.GetName() == "authority-edgenet" {
-		nodeName = fmt.Sprintf("%s.edge-net.io", NCCopy.GetName())
-		authorityEnabled = true
-	} else {
-		NCOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), NCOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
-		authorityEnabled = NCOwnerAuthority.Spec.Enabled
+		nodeName = fmt.Sprintf("%s.edge-net.io", ncCopy.GetName())
 	}
+	NCOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), NCOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	authorityEnabled := NCOwnerAuthority.Spec.Enabled
 	log.Println("AUTHORITY CHECK")
 	// Check if the authority is active
 	if authorityEnabled {
 		log.Println("AUTHORITY ENABLED")
-		recordType := remoteip.GetRecordType(NCCopy.Spec.Host)
+		recordType := remoteip.GetRecordType(ncCopy.Spec.Host)
 		if recordType == "" {
-			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, statusDict["invalid-host"])
-			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
-			t.sendEmail(NCCopy)
+			ncCopy.Status.State = failure
+			ncCopy.Status.Message = append(ncCopy.Status.Message, statusDict["invalid-host"])
+			t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
+			t.sendEmail(ncCopy)
 			return
 		}
 		config := &ssh.ClientConfig{
-			User:            NCCopy.Spec.User,
-			Auth:            []ssh.AuthMethod{ssh.PublicKeys(t.publicKey), ssh.Password(NCCopy.Spec.Password)},
+			User:            ncCopy.Spec.User,
+			Auth:            []ssh.AuthMethod{ssh.PublicKeys(t.publicKey), ssh.Password(ncCopy.Spec.Password)},
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 			Timeout:         15 * time.Second,
 		}
-		addr := fmt.Sprintf("%s:%d", NCCopy.Spec.Host, NCCopy.Spec.Port)
+		addr := fmt.Sprintf("%s:%d", ncCopy.Spec.Host, ncCopy.Spec.Port)
 		contributedNode, err := t.clientset.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 		if err == nil {
 			log.Println("NODE FOUND")
-			if contributedNode.Spec.Unschedulable != !NCCopy.Spec.Enabled {
-				node.SetNodeScheduling(nodeName, !NCCopy.Spec.Enabled)
+			if contributedNode.Spec.Unschedulable != !ncCopy.Spec.Enabled {
+				node.SetNodeScheduling(nodeName, !ncCopy.Spec.Enabled)
 			}
-			if NCCopy.Status.State == failure {
-				go t.runRecoveryProcedure(addr, config, nodeName, NCCopy, contributedNode)
+			if node.GetConditionReadyStatus(contributedNode.DeepCopy()) != trueStr {
+				t.balanceMultiThreading(5)
+				go t.runRecoveryProcedure(addr, config, nodeName, ncCopy, contributedNode)
+			} else {
+				ncCopy.Status.State = success
+				ncCopy.Status.Message = append(ncCopy.Status.Message, statusDict["node-ok"])
+				t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 			}
 		} else {
 			log.Println("NODE NOT FOUND")
-			go t.runSetupProcedure(NCOwnerNamespace.Labels["authority-name"], addr, nodeName, recordType, config, NCCopy)
+			t.balanceMultiThreading(5)
+			go t.runSetupProcedure(NCOwnerNamespace.Labels["authority-name"], addr, nodeName, recordType, config, ncCopy)
 		}
 	} else {
 		log.Println("AUTHORITY NOT ENABLED")
-		NCCopy.Spec.Enabled = false
-		NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).Update(context.TODO(), NCCopy, metav1.UpdateOptions{})
+		ncCopy.Spec.Enabled = false
+		ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).Update(context.TODO(), ncCopy, metav1.UpdateOptions{})
 		if err == nil {
-			NCCopy = NCCopyUpdated
-			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Authority disabled")
-			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+			ncCopy = ncCopyUpdated
+			ncCopy.Status.State = failure
+			ncCopy.Status.Message = append(ncCopy.Status.Message, "Authority disabled")
+			t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 		}
 	}
 }
@@ -217,15 +221,15 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // sendEmail to send notification to participants
-func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) {
+func (t *Handler) sendEmail(ncCopy *apps_v1alpha.NodeContribution) {
 	// For those who are authority-admin and authorized users of the authority
-	userRaw, err := t.edgenetClientset.AppsV1alpha().Users(NCCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{})
+	userRaw, err := t.edgenetClientset.AppsV1alpha().Users(ncCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{})
 	if err == nil {
 		contentData := mailer.MultiProviderData{}
-		contentData.Name = NCCopy.GetName()
-		contentData.Host = NCCopy.Spec.Host
-		contentData.Status = NCCopy.Status.State
-		contentData.Message = NCCopy.Status.Message
+		contentData.Name = ncCopy.GetName()
+		contentData.Host = ncCopy.Spec.Host
+		contentData.Status = ncCopy.Status.State
+		contentData.Message = ncCopy.Status.Message
 		for _, userRow := range userRaw.Items {
 			if userRow.Spec.Active && userRow.Status.AUP && userRow.Status.Type == "admin" {
 				if err == nil && userRow.Spec.Active && userRow.Status.AUP {
@@ -248,20 +252,41 @@ func (t *Handler) sendEmail(NCCopy *apps_v1alpha.NodeContribution) {
 	}
 }
 
+// balanceMultiThreading is a simple algorithm to limit concurrent threads
+func (t *Handler) balanceMultiThreading(limit int) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+check:
+	for ; true; <-ticker.C {
+		var threads int
+		ncRaw, err := t.edgenetClientset.AppsV1alpha().NodeContributions("").List(context.TODO(), metav1.ListOptions{})
+		if err == nil {
+			for _, ncRow := range ncRaw.Items {
+				if ncRow.Status.State == inprogress {
+					threads++
+				}
+			}
+			if threads < limit {
+				break check
+			}
+		}
+	}
+}
+
 // runSetupProcedure installs necessary packages from scratch and makes the node join into the cluster
 func (t *Handler) runSetupProcedure(authorityName, addr, nodeName, recordType string, config *ssh.ClientConfig,
-	NCCopy *apps_v1alpha.NodeContribution) error {
+	ncCopy *apps_v1alpha.NodeContribution) error {
 	// Steps in the procedure
 	endProcedure := make(chan bool, 1)
 	dnsConfiguration := make(chan bool, 1)
 	installation := make(chan bool, 1)
 	nodePatch := make(chan bool, 1)
 	// Set the status as recovering
-	NCCopy.Status.State = inprogress
-	NCCopy.Status.Message = append(NCCopy.Status.Message, "Installation procedure has started")
-	NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+	ncCopy.Status.State = inprogress
+	ncCopy.Status.Message = append(ncCopy.Status.Message, "Installation procedure has started")
+	ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 	if err == nil {
-		NCCopy = NCCopyUpdated
+		ncCopy = ncCopyUpdated
 	}
 	// Start DNS configuration of `edge-net.io`
 	dnsConfiguration <- true
@@ -275,7 +300,7 @@ nodeInstallLoop:
 			hostRecord := namecheap.DomainDNSHost{
 				Name:    strings.TrimSuffix(nodeName, ".edge-net.io"),
 				Type:    recordType,
-				Address: NCCopy.Spec.Host,
+				Address: ncCopy.Spec.Host,
 			}
 			result, state := node.SetHostname(hostRecord)
 			// If the host record already exists, update the status of the node contribution.
@@ -287,11 +312,11 @@ nodeInstallLoop:
 				} else {
 					hostnameError = fmt.Sprintf("Error: Hostname %s or address %s couldn't added", hostRecord.Name, hostRecord.Address)
 				}
-				NCCopy.Status.State = incomplete
-				NCCopy.Status.Message = append(NCCopy.Status.Message, hostnameError)
-				NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+				ncCopy.Status.State = incomplete
+				ncCopy.Status.Message = append(ncCopy.Status.Message, hostnameError)
+				ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 				if err == nil {
-					NCCopy = NCCopyUpdated
+					ncCopy = ncCopyUpdated
 				}
 				log.Println(hostnameError)
 			}
@@ -304,26 +329,26 @@ nodeInstallLoop:
 				conn, err := ssh.Dial("tcp", addr, config)
 				if err != nil {
 					log.Println(err)
-					NCCopy.Status.State = failure
-					NCCopy.Status.Message = append(NCCopy.Status.Message, "SSH handshake failed")
-					NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+					ncCopy.Status.State = failure
+					ncCopy.Status.Message = append(ncCopy.Status.Message, "SSH handshake failed")
+					ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 					log.Println(err)
 					if err == nil {
-						NCCopy = NCCopyUpdated
+						ncCopy = ncCopyUpdated
 					}
 					endProcedure <- true
 					return
 				}
 				defer conn.Close()
 				// Uninstall all existing packages related, do a clean installation, and make the node join to the cluster
-				err = t.cleanInstallation(conn, nodeName, NCCopy)
+				err = t.cleanInstallation(conn, nodeName, ncCopy)
 				if err != nil {
-					NCCopy.Status.State = failure
-					NCCopy.Status.Message = append(NCCopy.Status.Message, "Node installation failed")
-					NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+					ncCopy.Status.State = failure
+					ncCopy.Status.Message = append(ncCopy.Status.Message, "Node installation failed")
+					ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 					log.Println(err)
 					if err == nil {
-						NCCopy = NCCopyUpdated
+						ncCopy = ncCopyUpdated
 					}
 					endProcedure <- true
 					return
@@ -337,12 +362,12 @@ nodeInstallLoop:
 			log.Println("***************Node Patch***************")
 			// Set the node as schedulable or unschedulable according to the node contribution
 			patchStatus := true
-			err := node.SetNodeScheduling(nodeName, !NCCopy.Spec.Enabled)
+			err := node.SetNodeScheduling(nodeName, !ncCopy.Spec.Enabled)
 			if err != nil {
-				NCCopy.Status.State = incomplete
-				NCCopy.Status.Message = append(NCCopy.Status.Message, "Scheduling configuration failed")
-				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
-				t.sendEmail(NCCopy)
+				ncCopy.Status.State = incomplete
+				ncCopy.Status.Message = append(ncCopy.Status.Message, "Scheduling configuration failed")
+				t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
+				t.sendEmail(ncCopy)
 				patchStatus = false
 			}
 			var ownerReferences []metav1.OwnerReference
@@ -356,34 +381,34 @@ nodeInstallLoop:
 			}
 			err = node.SetOwnerReferences(nodeName, ownerReferences)
 			if err != nil {
-				NCCopy.Status.State = incomplete
-				NCCopy.Status.Message = append(NCCopy.Status.Message, "Setting owner reference failed")
-				t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
-				t.sendEmail(NCCopy)
+				ncCopy.Status.State = incomplete
+				ncCopy.Status.Message = append(ncCopy.Status.Message, "Setting owner reference failed")
+				t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
+				t.sendEmail(ncCopy)
 				patchStatus = false
 			}
 			if patchStatus {
 				break nodeInstallLoop
 			}
-			NCCopy.Status.State = success
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Node installation successful")
-			t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+			ncCopy.Status.State = success
+			ncCopy.Status.Message = append(ncCopy.Status.Message, "Node installation successful")
+			t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 			endProcedure <- true
 		case <-endProcedure:
 			log.Println("***************Procedure Terminated***************")
-			t.sendEmail(NCCopy)
+			t.sendEmail(ncCopy)
 			break nodeInstallLoop
 		case <-time.After(25 * time.Minute):
 			log.Println("***************Timeout***************")
 			// Terminate the procedure after 25 minutes
-			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Node installation failed: timeout")
-			NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+			ncCopy.Status.State = failure
+			ncCopy.Status.Message = append(ncCopy.Status.Message, "Node installation failed: timeout")
+			ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 			log.Println(err)
 			if err == nil {
-				NCCopy = NCCopyUpdated
+				ncCopy = ncCopyUpdated
 			}
-			t.sendEmail(NCCopy)
+			t.sendEmail(ncCopy)
 			break nodeInstallLoop
 		}
 	}
@@ -392,7 +417,7 @@ nodeInstallLoop:
 
 // runRecoveryProcedure applies predefined methods to recover the node
 func (t *Handler) runRecoveryProcedure(addr string, config *ssh.ClientConfig,
-	nodeName string, NCCopy *apps_v1alpha.NodeContribution, contributedNode *corev1.Node) {
+	nodeName string, ncCopy *apps_v1alpha.NodeContribution, contributedNode *corev1.Node) {
 	// Steps in the procedure
 	endProcedure := make(chan bool, 1)
 	establishConnection := make(chan bool, 1)
@@ -400,11 +425,11 @@ func (t *Handler) runRecoveryProcedure(addr string, config *ssh.ClientConfig,
 	installation := make(chan bool, 1)
 	reboot := make(chan bool, 1)
 	// Set the status as recovering
-	NCCopy.Status.State = recover
-	NCCopy.Status.Message = append(NCCopy.Status.Message, "Node recovering")
-	NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+	ncCopy.Status.State = recover
+	ncCopy.Status.Message = append(ncCopy.Status.Message, "Node recovering")
+	ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 	if err == nil {
-		NCCopy = NCCopyUpdated
+		ncCopy = ncCopyUpdated
 	}
 	// Watch the events of node object
 	watchNode, err := t.clientset.CoreV1().Nodes().Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", contributedNode.GetName())})
@@ -419,12 +444,12 @@ func (t *Handler) runRecoveryProcedure(addr string, config *ssh.ClientConfig,
 						endProcedure <- true
 					}
 					if node.GetConditionReadyStatus(updatedNode) == trueStr {
-						NCCopy.Status.State = success
-						NCCopy.Status.Message = append([]string{}, "Node recovery successful")
-						NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+						ncCopy.Status.State = success
+						ncCopy.Status.Message = append([]string{}, "Node recovery successful")
+						ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 						log.Println(err)
 						if err == nil {
-							NCCopy = NCCopyUpdated
+							ncCopy = ncCopyUpdated
 						}
 						endProcedure <- true
 					}
@@ -442,12 +467,12 @@ func (t *Handler) runRecoveryProcedure(addr string, config *ssh.ClientConfig,
 		conn, err = ssh.Dial("tcp", addr, config)
 		if err != nil {
 			log.Println(err)
-			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Node recovery failed: SSH handshake failed")
-			NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+			ncCopy.Status.State = failure
+			ncCopy.Status.Message = append(ncCopy.Status.Message, "Node recovery failed: SSH handshake failed")
+			ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 			log.Println(err)
 			if err == nil {
-				NCCopy = NCCopyUpdated
+				ncCopy = ncCopyUpdated
 			}
 			endProcedure <- true
 		} else {
@@ -474,12 +499,12 @@ nodeRecoveryLoop:
 					establishConnection <- true
 					connCounter++
 				} else if err != nil && connCounter >= 3 {
-					NCCopy.Status.State = failure
-					NCCopy.Status.Message = append(NCCopy.Status.Message, "Node recovery failed: SSH handshake failed")
-					NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+					ncCopy.Status.State = failure
+					ncCopy.Status.Message = append(ncCopy.Status.Message, "Node recovery failed: SSH handshake failed")
+					ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 					log.Println(err)
 					if err == nil {
-						NCCopy = NCCopyUpdated
+						ncCopy = ncCopyUpdated
 					}
 					<-endProcedure
 					return
@@ -491,11 +516,11 @@ nodeRecoveryLoop:
 			// Restart Docker & Kubelet and flush iptables
 			err = reconfigureNode(conn, contributedNode.GetName())
 			if err != nil {
-				NCCopy.Status.Message = append(NCCopy.Status.Message, "Node recovery failed: reconfiguration step")
-				NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+				ncCopy.Status.Message = append(ncCopy.Status.Message, "Node recovery failed: reconfiguration step")
+				ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 				log.Println(err)
 				if err == nil {
-					NCCopy = NCCopyUpdated
+					ncCopy = ncCopyUpdated
 				}
 			}
 			time.Sleep(3 * time.Minute)
@@ -503,16 +528,16 @@ nodeRecoveryLoop:
 		case <-installation:
 			log.Println("***************Installation***************")
 			// Uninstall all existing packages related, do a clean installation, and make the node join to the cluster
-			err := t.cleanInstallation(conn, nodeName, NCCopy)
+			err := t.cleanInstallation(conn, nodeName, ncCopy)
 			if err != nil {
-				NCCopy.Status.State = failure
-				NCCopy.Status.Message = append(NCCopy.Status.Message, "Node recovery failed: installation step")
-				NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+				ncCopy.Status.State = failure
+				ncCopy.Status.Message = append(ncCopy.Status.Message, "Node recovery failed: installation step")
+				ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 				log.Println(err)
 				if err == nil {
-					NCCopy = NCCopyUpdated
+					ncCopy = ncCopyUpdated
 				}
-				t.sendEmail(NCCopy)
+				t.sendEmail(ncCopy)
 				watchNode.Stop()
 				break nodeRecoveryLoop
 			}
@@ -521,11 +546,11 @@ nodeRecoveryLoop:
 			// Reboot the node in a minute
 			err = rebootNode(conn)
 			if err != nil {
-				NCCopy.Status.Message = append(NCCopy.Status.Message, "Node recovery failed: reboot step")
-				NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+				ncCopy.Status.Message = append(ncCopy.Status.Message, "Node recovery failed: reboot step")
+				ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 				log.Println(err)
 				if err == nil {
-					NCCopy = NCCopyUpdated
+					ncCopy = ncCopyUpdated
 				}
 			}
 			conn.Close()
@@ -533,20 +558,20 @@ nodeRecoveryLoop:
 			establishConnection <- true
 		case <-endProcedure:
 			log.Println("***************Procedure Terminated***************")
-			t.sendEmail(NCCopy)
+			t.sendEmail(ncCopy)
 			watchNode.Stop()
 			break nodeRecoveryLoop
 		case <-time.After(25 * time.Minute):
 			log.Println("***************Timeout***************")
 			// Terminate the procedure after 25 minutes
-			NCCopy.Status.State = failure
-			NCCopy.Status.Message = append(NCCopy.Status.Message, "Node recovery failed: timeout")
-			NCCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(NCCopy.GetNamespace()).UpdateStatus(context.TODO(), NCCopy, metav1.UpdateOptions{})
+			ncCopy.Status.State = failure
+			ncCopy.Status.Message = append(ncCopy.Status.Message, "Node recovery failed: timeout")
+			ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 			log.Println(err)
 			if err == nil {
-				NCCopy = NCCopyUpdated
+				ncCopy = ncCopyUpdated
 			}
-			t.sendEmail(NCCopy)
+			t.sendEmail(ncCopy)
 			watchNode.Stop()
 			break nodeRecoveryLoop
 		}
@@ -557,7 +582,7 @@ nodeRecoveryLoop:
 }
 
 // cleanInstallation gets and runs the uninstallation and installation commands prepared
-func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, NCCopy *apps_v1alpha.NodeContribution) error {
+func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, ncCopy *apps_v1alpha.NodeContribution) error {
 	uninstallationCommands, err := getUninstallCommands(conn)
 	if err != nil {
 		log.Println(err)

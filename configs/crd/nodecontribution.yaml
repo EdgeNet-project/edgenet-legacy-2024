@@ -63,6 +63,7 @@ spec:
                   type: boolean
                 limitations:
                   type: array
+                  nullable: true
                   items:
                     type: object
                     required:

@@ -58,6 +58,7 @@ type informerevent struct {
 }
 
 // Constant variables for events
+const inqueue = "In Queue"
 const inprogress = "In Progress"
 const recover = "Recovering"
 const failure = "Failure"
@@ -98,17 +99,24 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	// Event handlers deal with events of resources. Here, there are three types of events as Add, Update, and Delete
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			// Put the resource object into a key
-			event.key, err = cache.MetaNamespaceKeyFunc(obj)
-			event.function = create
-			log.Infof("Add nodecontribution: %s", event.key)
-			if err == nil {
-				// Add the key to the queue
-				queue.Add(event)
+			if queue.Len() == 0 {
+				// Put the resource object into a key
+				event.key, err = cache.MetaNamespaceKeyFunc(obj)
+				event.function = create
+				log.Infof("Add nodecontribution: %s", event.key)
+				if err == nil {
+					// Add the key to the queue
+					queue.Add(event)
+				}
+			} else {
+				ncCopy := obj.(*apps_v1alpha.NodeContribution).DeepCopy()
+				ncCopy.Status.State = inqueue
+				edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			if reflect.DeepEqual(oldObj.(*apps_v1alpha.NodeContribution).Status, newObj.(*apps_v1alpha.NodeContribution).Status) {
+			if reflect.DeepEqual(oldObj.(*apps_v1alpha.NodeContribution).Status, newObj.(*apps_v1alpha.NodeContribution).Status) ||
+				newObj.(*apps_v1alpha.NodeContribution).Status.State == inqueue {
 				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 				event.function = update
 				log.Infof("Update nodecontribution: %s", event.key)
