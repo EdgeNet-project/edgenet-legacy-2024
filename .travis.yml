@@ -29,12 +29,12 @@ cache:
 
 git:
   lfs_skip_smudge: true
-  
+
 #before_install:
 #  - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.31.0
 
 script:
-  - $GOPATH/bin/goveralls -service=travis-pro
+  - $GOPATH/bin/goveralls -service=travis-ci
   - make sync
   - make all
   - make test
