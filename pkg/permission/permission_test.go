@@ -16,6 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
@@ -247,9 +248,13 @@ func TestPermissionSystem(t *testing.T) {
 
 	user1 := g.userObj
 	user2 := g.userObj
-	user2.SetName("johndoe-2")
-	user2.Spec.Email = "john.doe.2@edge-net.org"
+	user2.SetName("joepublic")
+	user2.Spec.Email = "joe.public@edge-net.org"
 	user2.Status.Type = "user"
+	user3 := g.userObj
+	user3.SetName("johnsmith")
+	user3.Spec.Email = "john.smith@edge-net.org"
+	user3.Status.Type = "user"
 
 	t.Run("create authority admin role", func(t *testing.T) {
 		err := CreateAuthorityAdminRole()
@@ -292,11 +297,15 @@ func TestPermissionSystem(t *testing.T) {
 		util.OK(t, err)
 		err = CreateUserSpecificRole(user2.DeepCopy(), &g.namespace, []metav1.OwnerReference{})
 		util.OK(t, err)
+		err = CreateUserSpecificRole(user3.DeepCopy(), &g.namespace, []metav1.OwnerReference{})
+		util.OK(t, err)
 	})
 	t.Run("update existing user specific role", func(t *testing.T) {
 		err := CreateUserSpecificRole(user1.DeepCopy(), &g.namespace, []metav1.OwnerReference{})
 		util.OK(t, err)
 		err = CreateUserSpecificRole(user2.DeepCopy(), &g.namespace, []metav1.OwnerReference{})
+		util.OK(t, err)
+		err = CreateUserSpecificRole(user3.DeepCopy(), &g.namespace, []metav1.OwnerReference{})
 		util.OK(t, err)
 	})
 	t.Run("create acceptable use policy role", func(t *testing.T) {
@@ -304,11 +313,15 @@ func TestPermissionSystem(t *testing.T) {
 		util.OK(t, err)
 		err = CreateUserAUPRole(user2.DeepCopy(), []metav1.OwnerReference{})
 		util.OK(t, err)
+		err = CreateUserAUPRole(user3.DeepCopy(), []metav1.OwnerReference{})
+		util.OK(t, err)
 	})
 	t.Run("update acceptable use policy role", func(t *testing.T) {
 		err := CreateUserAUPRole(user1.DeepCopy(), []metav1.OwnerReference{})
 		util.OK(t, err)
-		err = CreateUserAUPRole(user1.DeepCopy(), []metav1.OwnerReference{})
+		err = CreateUserAUPRole(user2.DeepCopy(), []metav1.OwnerReference{})
+		util.OK(t, err)
+		err = CreateUserAUPRole(user3.DeepCopy(), []metav1.OwnerReference{})
 		util.OK(t, err)
 	})
 	t.Run("create acceptable use policy role binding", func(t *testing.T) {
@@ -316,11 +329,15 @@ func TestPermissionSystem(t *testing.T) {
 		util.OK(t, err)
 		err = CreateAUPRoleBinding(user2.DeepCopy(), []metav1.OwnerReference{})
 		util.OK(t, err)
+		err = CreateAUPRoleBinding(user3.DeepCopy(), []metav1.OwnerReference{})
+		util.OK(t, err)
 	})
 	t.Run("update acceptable use policy role binding", func(t *testing.T) {
 		err := CreateAUPRoleBinding(user1.DeepCopy(), []metav1.OwnerReference{})
 		util.OK(t, err)
-		err = CreateAUPRoleBinding(user1.DeepCopy(), []metav1.OwnerReference{})
+		err = CreateAUPRoleBinding(user2.DeepCopy(), []metav1.OwnerReference{})
+		util.OK(t, err)
+		err = CreateAUPRoleBinding(user3.DeepCopy(), []metav1.OwnerReference{})
 		util.OK(t, err)
 	})
 
@@ -341,6 +358,22 @@ func TestPermissionSystem(t *testing.T) {
 	util.OK(t, err)
 	err = EstablishRoleBindings(user2.DeepCopy(), g.teamNamespace.GetName(), "Team")
 	util.OK(t, err)
+	roleName := "workload-manager"
+	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "teams"}, Verbs: []string{"create", "update", "patch"}}}
+	userRole := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: roleName}, Rules: policyRule}
+	_, err = g.client.RbacV1().Roles(g.namespace.GetName()).Create(context.TODO(), userRole, metav1.CreateOptions{})
+	util.OK(t, err)
+	rbSubjects := []rbacv1.Subject{{Kind: "User", Name: user2.Spec.Email, APIGroup: "rbac.authorization.k8s.io"}}
+	roleRef := rbacv1.RoleRef{Kind: "Role", Name: roleName}
+	roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: g.namespace.GetName(), Name: fmt.Sprintf("%s-%s", roleName, user2.GetName())},
+		Subjects: rbSubjects, RoleRef: roleRef}
+	_, err = g.client.RbacV1().RoleBindings(g.namespace.GetName()).Create(context.TODO(), roleBind, metav1.CreateOptions{})
+	util.OK(t, err)
+
+	err = EstablishPrivateRoleBindings(user3.DeepCopy())
+	util.OK(t, err)
+	err = EstablishRoleBindings(user3.DeepCopy(), g.namespace.GetName(), "Authority")
+	util.OK(t, err)
 
 	cases := map[string]struct {
 		user         apps_v1alpha.User
@@ -356,6 +389,8 @@ func TestPermissionSystem(t *testing.T) {
 		"admin/unauthorized for cluster role bindings/authority":   {user1, g.namespace.GetName(), "clusterrolebindings", "", false},
 		"authorized for acceptable use policies/authority":         {user2, g.namespace.GetName(), "acceptableusepolicies", user2.GetName(), true},
 		"authorized for user object/authority":                     {user2, g.namespace.GetName(), "users", user2.GetName(), true},
+		"user/authorized for acceptable use policies/authority":    {user3, g.namespace.GetName(), "acceptableusepolicies", user3.GetName(), true},
+		"user/authorized for user object/authority":                {user3, g.namespace.GetName(), "users", user3.GetName(), true},
 		"unauthorized for other user objects/authority":            {user2, g.namespace.GetName(), "users", user1.GetName(), false},
 		"unauthorized for other acceptable use policies/authority": {user2, g.namespace.GetName(), "acceptableusepolicies", user1.GetName(), false},
 		"unauthorized for roles/authority":                         {user2, g.namespace.GetName(), "roles", "", false},
@@ -365,13 +400,20 @@ func TestPermissionSystem(t *testing.T) {
 		"admin/authorized for daemonsets/slice":                    {user1, g.sliceNamespace.GetName(), "daemonsets", "", true},
 		"admin/unauthorized for slices/slice":                      {user1, g.sliceNamespace.GetName(), "slices", "", false},
 		"admin/unauthorized for users/slice":                       {user1, g.sliceNamespace.GetName(), "users", "", false},
-		"authorized for pods/slice":                                {user2, g.sliceNamespace.GetName(), "pods", user2.GetName(), true},
-		"authorized for pods log/slice":                            {user2, g.sliceNamespace.GetName(), "pods/log", user2.GetName(), true},
+		"authorized for pods/slice":                                {user2, g.sliceNamespace.GetName(), "pods", "", true},
+		"authorized for pods log/slice":                            {user2, g.sliceNamespace.GetName(), "pods/log", "", true},
 		"admin/authorized for slices/team":                         {user1, g.teamNamespace.GetName(), "slices", "", true},
 		"admin/unauthorized for users/team":                        {user1, g.teamNamespace.GetName(), "users", "", false},
 		"admin/unauthorized for pods/team":                         {user1, g.teamNamespace.GetName(), "pods", "", false},
-		"authorized for slices/team":                               {user2, g.teamNamespace.GetName(), "slices", user2.GetName(), true},
-		"unauthorized for deployments/team":                        {user2, g.teamNamespace.GetName(), "deployments", user2.GetName(), false},
+		"authorized for slices/team":                               {user2, g.teamNamespace.GetName(), "slices", "", true},
+		"unauthorized for deployments/team":                        {user2, g.teamNamespace.GetName(), "deployments", "", false},
+		"authorized for slices/authority":                          {user2, g.namespace.GetName(), "slices", "", true},
+		"authorized for teams/authority":                           {user2, g.namespace.GetName(), "teams", "", true},
+		"user/unauthorized for pods/slice":                         {user3, g.sliceNamespace.GetName(), "pods", "", false},
+		"user/unauthorized for pods log/slice":                     {user3, g.sliceNamespace.GetName(), "pods/log", "", false},
+		"user/unauthorized for slices/team":                        {user3, g.teamNamespace.GetName(), "slices", "", false},
+		"user/unauthorized for slices/authority":                   {user3, g.namespace.GetName(), "slices", "", false},
+		"user/unauthorized for teams/authority":                    {user3, g.namespace.GetName(), "teams", "", false},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {

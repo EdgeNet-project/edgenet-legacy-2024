@@ -144,6 +144,27 @@ func EstablishRoleBindings(userCopy *apps_v1alpha.User, namespace string, namesp
 // CheckAuthorization returns true if the user is holder of a role
 func CheckAuthorization(namespace, email, resource, resourceName string) bool {
 	authorized := false
+
+	checkRules := func(rule rbacv1.PolicyRule) {
+		for _, ruleResource := range rule.Resources {
+			if ruleResource == resource {
+				for _, verb := range rule.Verbs {
+					if verb == "create" || verb == "update" || verb == "patch" || verb == "delete" || verb == "*" {
+						if len(rule.ResourceNames) > 0 {
+							for _, ruleResourceName := range rule.ResourceNames {
+								if ruleResourceName == resourceName {
+									authorized = true
+								}
+							}
+						} else {
+							authorized = true
+						}
+					}
+				}
+			}
+		}
+	}
+
 	roleBindingRaw, _ := Clientset.RbacV1().RoleBindings(namespace).List(context.TODO(), metav1.ListOptions{})
 	for _, roleBindingRow := range roleBindingRaw.Items {
 		for _, subject := range roleBindingRow.Subjects {
@@ -152,38 +173,14 @@ func CheckAuthorization(namespace, email, resource, resourceName string) bool {
 					role, err := Clientset.RbacV1().Roles(namespace).Get(context.TODO(), roleBindingRow.RoleRef.Name, metav1.GetOptions{})
 					if err == nil {
 						for _, rule := range role.Rules {
-							for _, ruleResource := range rule.Resources {
-								if ruleResource == resource {
-									if len(rule.ResourceNames) > 0 {
-										for _, ruleResourceName := range rule.ResourceNames {
-											if ruleResourceName == resourceName {
-												authorized = true
-											}
-										}
-									} else {
-										authorized = true
-									}
-								}
-							}
+							checkRules(rule)
 						}
 					}
 				} else if roleBindingRow.RoleRef.Kind == "ClusterRole" {
 					role, err := Clientset.RbacV1().ClusterRoles().Get(context.TODO(), roleBindingRow.RoleRef.Name, metav1.GetOptions{})
 					if err == nil {
 						for _, rule := range role.Rules {
-							for _, ruleResource := range rule.Resources {
-								if ruleResource == resource {
-									if len(rule.ResourceNames) > 0 {
-										for _, ruleResourceName := range rule.ResourceNames {
-											if ruleResourceName == resourceName {
-												authorized = true
-											}
-										}
-									} else {
-										authorized = true
-									}
-								}
-							}
+							checkRules(rule)
 						}
 					}
 				}
