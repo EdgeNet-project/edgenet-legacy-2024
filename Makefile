@@ -23,12 +23,14 @@ all:
 		-ldflags="-X github.com/EdgeNet-Project/edgenet.CurrentVersion=$(GIT_VERSION)" \
 		./cmd/...
 
-test:
+bootstrap:
 	mkdir ${HOME}/.kube
 	cp ./configs/public.cfg ${HOME}/.kube/config
 	cp ./configs/smtp_test_template.yaml ./configs/smtp_test.yaml
 	cp ./configs/headnode_template.yaml ./configs/headnode.yaml
 	cp ./configs/namecheap_template.yaml ./configs/namecheap.yaml
+
+test:
 	$(GOCLEAN) -testcache ./...
 	$(GOTEST) ./... -v
 	find ./assets/certs ! -name 'README.md' -type f -exec rm -f {} +

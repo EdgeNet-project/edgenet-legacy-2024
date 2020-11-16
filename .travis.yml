@@ -1,7 +1,7 @@
 language: go
 
 go:
-  - 1.14
+  - 1.14.12
   - tip
 
 env:
@@ -30,14 +30,15 @@ cache:
 git:
   lfs_skip_smudge: true
 
-#before_install:
+before_install:
+  - go get github.com/mattn/goveralls
 #  - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.31.0
 
 script:
-  - $GOPATH/bin/goveralls -service=travis-ci
   - make sync
   - make all
-  - make test
+  - make bootstrap
+  - $GOPATH/bin/goveralls -service=travis-ci
   - make build
   - make run
   - make clean
@@ -45,4 +46,3 @@ script:
 
 before_script:
   - git lfs pull
-  - go get github.com/mattn/goveralls
