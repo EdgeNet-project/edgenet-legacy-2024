@@ -774,8 +774,9 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			fmt.Sprintf("hostname %s", hostname),
 			"systemctl enable docker",
 			"systemctl start docker",
-			node.CreateJoinToken("600s", hostname),
+			node.CreateJoinToken("30m", hostname),
 			"systemctl daemon-reload",
+			"systemctl restart docker",
 			"systemctl restart kubelet",
 		}
 		commands := append(essentialPackages, append(dockerInstallation, kubernetesInstallation...)...)
@@ -812,8 +813,9 @@ func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion str
 			fmt.Sprintf("hostname %s", hostname),
 			"systemctl enable docker",
 			"systemctl start docker",
-			node.CreateJoinToken("600s", hostname),
+			node.CreateJoinToken("30m", hostname),
 			"systemctl daemon-reload",
+			"systemctl restart docker",
 			"systemctl restart kubelet",
 		}
 		return commands, nil

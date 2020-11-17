@@ -77,7 +77,7 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 	}
 	secret = &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      token.ID,
+			Name:      fmt.Sprintf("bootstrap-token-%s", token.ID),
 			Namespace: metav1.NamespaceSystem,
 		},
 		Type: corev1.SecretType(bootstrapapi.SecretTypeBootstrapToken),
