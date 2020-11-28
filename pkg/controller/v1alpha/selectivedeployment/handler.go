@@ -80,7 +80,7 @@ func (t *SDHandler) ObjectDeleted(obj interface{}) {
 	// TBD
 }
 
-// getByNode generates selectivedeployment list from the owner references of controllers which contains the node that has an event (add/update/delete)
+// getByNode generates selectivedeployment list from the owner references of workloads which contains the node that has an event (add/update/delete)
 func (t *SDHandler) getByNode(nodeName string) ([][]string, bool) {
 	ownerList := [][]string{}
 	status := false
@@ -151,14 +151,14 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 	sdCopy.Status = apps_v1alpha.SelectiveDeploymentStatus{}
 
 	ownerReferences := SetAsOwnerReference(sdCopy)
-	controllerCounter := 0
+	workloadCounter := 0
 	failureCounter := 0
-	if sdCopy.Spec.Controllers.Deployment != nil {
-		controllerCounter += len(sdCopy.Spec.Controllers.Deployment)
-		for _, sdDeployment := range sdCopy.Spec.Controllers.Deployment {
+	if sdCopy.Spec.Workloads.Deployment != nil {
+		workloadCounter += len(sdCopy.Spec.Workloads.Deployment)
+		for _, sdDeployment := range sdCopy.Spec.Workloads.Deployment {
 			deploymentObj, err := t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Get(context.TODO(), sdDeployment.GetName(), metav1.GetOptions{})
 			if errors.IsNotFound(err) {
-				configuredDeployment, failureCount := t.configureController(sdCopy, sdDeployment, ownerReferences)
+				configuredDeployment, failureCount := t.configureWorkload(sdCopy, sdDeployment, ownerReferences)
 				failureCounter += failureCount
 				_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Create(context.TODO(), configuredDeployment.(*appsv1.Deployment), metav1.CreateOptions{})
 				if err != nil {
@@ -169,7 +169,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 				underControl := checkOwnerReferences(sdCopy, deploymentObj.GetOwnerReferences())
 				if !underControl {
 					// Configure the deployment according to the SD
-					configuredDeployment, failureCount := t.configureController(sdCopy, sdDeployment, ownerReferences)
+					configuredDeployment, failureCount := t.configureWorkload(sdCopy, sdDeployment, ownerReferences)
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(context.TODO(), configuredDeployment.(*appsv1.Deployment), metav1.UpdateOptions{})
 					if err != nil {
@@ -183,12 +183,12 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 			}
 		}
 	}
-	if sdCopy.Spec.Controllers.DaemonSet != nil {
-		controllerCounter += len(sdCopy.Spec.Controllers.DaemonSet)
-		for _, sdDaemonset := range sdCopy.Spec.Controllers.DaemonSet {
+	if sdCopy.Spec.Workloads.DaemonSet != nil {
+		workloadCounter += len(sdCopy.Spec.Workloads.DaemonSet)
+		for _, sdDaemonset := range sdCopy.Spec.Workloads.DaemonSet {
 			daemonsetObj, err := t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Get(context.TODO(), sdDaemonset.GetName(), metav1.GetOptions{})
 			if errors.IsNotFound(err) {
-				configuredDaemonSet, failureCount := t.configureController(sdCopy, sdDaemonset, ownerReferences)
+				configuredDaemonSet, failureCount := t.configureWorkload(sdCopy, sdDaemonset, ownerReferences)
 				failureCounter += failureCount
 				_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Create(context.TODO(), configuredDaemonSet.(*appsv1.DaemonSet), metav1.CreateOptions{})
 				if err != nil {
@@ -199,7 +199,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 				underControl := checkOwnerReferences(sdCopy, daemonsetObj.GetOwnerReferences())
 				if !underControl {
 					// Configure the daemonset according to the SD
-					configuredDaemonSet, failureCount := t.configureController(sdCopy, sdDaemonset, ownerReferences)
+					configuredDaemonSet, failureCount := t.configureWorkload(sdCopy, sdDaemonset, ownerReferences)
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(context.TODO(), configuredDaemonSet.(*appsv1.DaemonSet), metav1.UpdateOptions{})
 					if err != nil {
@@ -213,12 +213,12 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 			}
 		}
 	}
-	if sdCopy.Spec.Controllers.StatefulSet != nil {
-		controllerCounter += len(sdCopy.Spec.Controllers.StatefulSet)
-		for _, sdStatefulset := range sdCopy.Spec.Controllers.StatefulSet {
+	if sdCopy.Spec.Workloads.StatefulSet != nil {
+		workloadCounter += len(sdCopy.Spec.Workloads.StatefulSet)
+		for _, sdStatefulset := range sdCopy.Spec.Workloads.StatefulSet {
 			statefulsetObj, err := t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Get(context.TODO(), sdStatefulset.GetName(), metav1.GetOptions{})
 			if errors.IsNotFound(err) {
-				configuredStatefulSet, failureCount := t.configureController(sdCopy, sdStatefulset, ownerReferences)
+				configuredStatefulSet, failureCount := t.configureWorkload(sdCopy, sdStatefulset, ownerReferences)
 				failureCounter += failureCount
 				_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Create(context.TODO(), configuredStatefulSet.(*appsv1.StatefulSet), metav1.CreateOptions{})
 				if err != nil {
@@ -229,7 +229,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 				underControl := checkOwnerReferences(sdCopy, statefulsetObj.GetOwnerReferences())
 				if !underControl {
 					// Configure the statefulset according to the SD
-					configuredStatefulSet, failureCount := t.configureController(sdCopy, sdStatefulset, ownerReferences)
+					configuredStatefulSet, failureCount := t.configureWorkload(sdCopy, sdStatefulset, ownerReferences)
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(context.TODO(), configuredStatefulSet.(*appsv1.StatefulSet), metav1.UpdateOptions{})
 					if err != nil {
@@ -247,19 +247,19 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 	if failureCounter == 0 {
 		sdCopy.Status.State = success
 		sdCopy.Status.Message = []string{statusDict["sd-success"]}
-	} else if controllerCounter == failureCounter {
+	} else if workloadCounter == failureCounter {
 		sdCopy.Status.State = failure
 	} else {
 		sdCopy.Status.State = partial
 	}
-	sdCopy.Status.Ready = fmt.Sprintf("%d/%d", (controllerCounter - failureCounter), controllerCounter)
+	sdCopy.Status.Ready = fmt.Sprintf("%d/%d", (workloadCounter - failureCounter), workloadCounter)
 }
 
-// configureController manipulate the controller by selectivedeployments to match the desired state that users supplied
-func (t *SDHandler) configureController(sdCopy *apps_v1alpha.SelectiveDeployment, controllerRow interface{}, ownerReferences []metav1.OwnerReference) (interface{}, int) {
-	log.Info("configureController: start")
+// configureWorkload manipulate the workload by selectivedeployments to match the desired state that users supplied
+func (t *SDHandler) configureWorkload(sdCopy *apps_v1alpha.SelectiveDeployment, workloadRow interface{}, ownerReferences []metav1.OwnerReference) (interface{}, int) {
+	log.Info("configureWorkload: start")
 	nodeSelectorTermList, failureCount := t.setFilter(sdCopy, "addOrUpdate")
-	// Set the new node affinity configuration in the controller and update that
+	// Set the new node affinity configuration for the workload and update that
 	nodeAffinity := &corev1.NodeAffinity{
 		RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 			NodeSelectorTerms: nodeSelectorTermList,
@@ -275,52 +275,52 @@ func (t *SDHandler) configureController(sdCopy *apps_v1alpha.SelectiveDeployment
 		}
 		affinity.Reset()
 	}
-	var controllerCopy interface{}
-	switch controllerObj := controllerRow.(type) {
+	var workloadCopy interface{}
+	switch workloadObj := workloadRow.(type) {
 	case appsv1.Deployment:
-		if len(nodeSelectorTermList) <= 0 && controllerObj.Spec.Template.Spec.Affinity != nil {
-			controllerObj.Spec.Template.Spec.Affinity.Reset()
-		} else if controllerObj.Spec.Template.Spec.Affinity != nil {
-			controllerObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		if len(nodeSelectorTermList) <= 0 && workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.Reset()
+		} else if workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
 		} else {
-			controllerObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
+			workloadObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
 				NodeAffinity: nodeAffinity,
 			}
 		}
-		controllerObj.ObjectMeta.OwnerReferences = ownerReferences
-		//log.Printf("%s/Deployment/%s: %s", controllerObj.GetNamespace(), controllerObj.GetName(), nodeAffinity)
-		controllerCopy = controllerObj.DeepCopy()
-		//t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(controllerCopy)
+		workloadObj.ObjectMeta.OwnerReferences = ownerReferences
+		//log.Printf("%s/Deployment/%s: %s", workloadObj.GetNamespace(), workloadObj.GetName(), nodeAffinity)
+		workloadCopy = workloadObj.DeepCopy()
+		//t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(workloadCopy)
 	case appsv1.DaemonSet:
-		if len(nodeSelectorTermList) <= 0 && controllerObj.Spec.Template.Spec.Affinity != nil {
-			controllerObj.Spec.Template.Spec.Affinity.Reset()
-		} else if controllerObj.Spec.Template.Spec.Affinity != nil {
-			controllerObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		if len(nodeSelectorTermList) <= 0 && workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.Reset()
+		} else if workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
 		} else {
-			controllerObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
+			workloadObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
 				NodeAffinity: nodeAffinity,
 			}
 		}
-		controllerObj.ObjectMeta.OwnerReferences = ownerReferences
-		//log.Printf("%s/DaemonSet/%s: %s", controllerObj.GetNamespace(), controllerObj.GetName(), nodeAffinity)
-		controllerCopy = controllerObj.DeepCopy()
-		//t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(controllerCopy)
+		workloadObj.ObjectMeta.OwnerReferences = ownerReferences
+		//log.Printf("%s/DaemonSet/%s: %s", workloadObj.GetNamespace(), workloadObj.GetName(), nodeAffinity)
+		workloadCopy = workloadObj.DeepCopy()
+		//t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(workloadCopy)
 	case appsv1.StatefulSet:
-		if len(nodeSelectorTermList) <= 0 && controllerObj.Spec.Template.Spec.Affinity != nil {
-			controllerObj.Spec.Template.Spec.Affinity.Reset()
-		} else if controllerObj.Spec.Template.Spec.Affinity != nil {
-			controllerObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		if len(nodeSelectorTermList) <= 0 && workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.Reset()
+		} else if workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
 		} else {
-			controllerObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
+			workloadObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
 				NodeAffinity: nodeAffinity,
 			}
 		}
-		controllerObj.ObjectMeta.OwnerReferences = ownerReferences
-		//log.Printf("%s/StatefulSet/%s: %s", controllerObj.GetNamespace(), controllerObj.GetName(), nodeAffinity)
-		controllerCopy = controllerObj.DeepCopy()
-		//t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(controllerCopy)
+		workloadObj.ObjectMeta.OwnerReferences = ownerReferences
+		//log.Printf("%s/StatefulSet/%s: %s", workloadObj.GetNamespace(), workloadObj.GetName(), nodeAffinity)
+		workloadCopy = workloadObj.DeepCopy()
+		//t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(workloadCopy)
 	}
-	return controllerCopy, failureCount
+	return workloadCopy, failureCount
 }
 
 // setFilter generates the values in the predefined form and puts those into the node selection fields of the selectivedeployment object

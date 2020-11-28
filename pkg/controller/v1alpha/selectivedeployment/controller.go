@@ -78,7 +78,7 @@ const unknownStr = "Unknown"
 
 // Dictionary of status messages
 var statusDict = map[string]string{
-	"sd-success":                   "The selective deployment smoothly created the controllers",
+	"sd-success":                   "The selective deployment smoothly created the workload(s)",
 	"deployment-creation-failure":  "Deployment %s could not be created",
 	"deployment-in-use":            "Deployment %s is already under the control of another selective deployment",
 	"daemonset-creation-failure":   "DaemonSet %s could not be created",
@@ -289,7 +289,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		},
 	})
 
-	// The selectivedeployment resources are reconfigured according to controller events in this section
+	// The selectivedeployment resources are reconfigured according to workload events in this section
 	addToQueue := func(ownerSD *apps_v1alpha.SelectiveDeployment, key string, ctlType string) {
 		event.key, err = cache.MetaNamespaceKeyFunc(ownerSD.DeepCopyObject())
 		event.function = update
@@ -299,12 +299,12 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		}
 	}
 
-	controllerAddFunc := func(obj interface{}) {
-		switch controllerObj := obj.(type) {
+	workloadAddFunc := func(obj interface{}) {
+		switch workloadObj := obj.(type) {
 		case *appsv1.Deployment:
 			var sdName string
 			underControl := false
-			ownerReferences := controllerObj.GetOwnerReferences()
+			ownerReferences := workloadObj.GetOwnerReferences()
 			for _, reference := range ownerReferences {
 				if reference.Kind == "SelectiveDeployment" {
 					underControl = true
@@ -312,16 +312,16 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 				}
 			}
 			if !underControl {
-				ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(context.TODO(), sdName, metav1.GetOptions{})
+				ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(workloadObj.GetNamespace()).Get(context.TODO(), sdName, metav1.GetOptions{})
 				if err == nil {
-					key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+					key, _ := cache.MetaNamespaceKeyFunc(workloadObj)
 					addToQueue(ownerSD, key, "Deployment")
 				}
 			}
 		case *appsv1.DaemonSet:
 			var sdName string
 			underControl := false
-			ownerReferences := controllerObj.GetOwnerReferences()
+			ownerReferences := workloadObj.GetOwnerReferences()
 			for _, reference := range ownerReferences {
 				if reference.Kind == "SelectiveDeployment" {
 					underControl = true
@@ -329,16 +329,16 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 				}
 			}
 			if !underControl {
-				ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(context.TODO(), sdName, metav1.GetOptions{})
+				ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(workloadObj.GetNamespace()).Get(context.TODO(), sdName, metav1.GetOptions{})
 				if err == nil {
-					key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+					key, _ := cache.MetaNamespaceKeyFunc(workloadObj)
 					addToQueue(ownerSD, key, "DaemonSet")
 				}
 			}
 		case *appsv1.StatefulSet:
 			var sdName string
 			underControl := false
-			ownerReferences := controllerObj.GetOwnerReferences()
+			ownerReferences := workloadObj.GetOwnerReferences()
 			for _, reference := range ownerReferences {
 				if reference.Kind == "SelectiveDeployment" {
 					underControl = true
@@ -346,45 +346,45 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 				}
 			}
 			if !underControl {
-				ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(context.TODO(), sdName, metav1.GetOptions{})
+				ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(workloadObj.GetNamespace()).Get(context.TODO(), sdName, metav1.GetOptions{})
 				if err == nil {
-					key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+					key, _ := cache.MetaNamespaceKeyFunc(workloadObj)
 					addToQueue(ownerSD, key, "StatefulSet")
 				}
 			}
 		}
 	}
-	controllerDeleteFunc := func(obj interface{}) {
-		switch controllerObj := obj.(type) {
+	workloadDeleteFunc := func(obj interface{}) {
+		switch workloadObj := obj.(type) {
 		case *appsv1.Deployment:
-			ownerReferences := controllerObj.GetOwnerReferences()
+			ownerReferences := workloadObj.GetOwnerReferences()
 			for _, reference := range ownerReferences {
 				if reference.Kind == "SelectiveDeployment" {
-					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(context.TODO(), reference.Name, metav1.GetOptions{})
+					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(workloadObj.GetNamespace()).Get(context.TODO(), reference.Name, metav1.GetOptions{})
 					if err == nil {
-						key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+						key, _ := cache.MetaNamespaceKeyFunc(workloadObj)
 						addToQueue(ownerSD, key, "Deployment")
 					}
 				}
 			}
 		case *appsv1.DaemonSet:
-			ownerReferences := controllerObj.GetOwnerReferences()
+			ownerReferences := workloadObj.GetOwnerReferences()
 			for _, reference := range ownerReferences {
 				if reference.Kind == "SelectiveDeployment" {
-					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(context.TODO(), reference.Name, metav1.GetOptions{})
+					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(workloadObj.GetNamespace()).Get(context.TODO(), reference.Name, metav1.GetOptions{})
 					if err == nil {
-						key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+						key, _ := cache.MetaNamespaceKeyFunc(workloadObj)
 						addToQueue(ownerSD, key, "DaemonSet")
 					}
 				}
 			}
 		case *appsv1.StatefulSet:
-			ownerReferences := controllerObj.GetOwnerReferences()
+			ownerReferences := workloadObj.GetOwnerReferences()
 			for _, reference := range ownerReferences {
 				if reference.Kind == "SelectiveDeployment" {
-					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(controllerObj.GetNamespace()).Get(context.TODO(), reference.Name, metav1.GetOptions{})
+					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(workloadObj.GetNamespace()).Get(context.TODO(), reference.Name, metav1.GetOptions{})
 					if err == nil {
-						key, _ := cache.MetaNamespaceKeyFunc(controllerObj)
+						key, _ := cache.MetaNamespaceKeyFunc(workloadObj)
 						addToQueue(ownerSD, key, "StatefulSet")
 					}
 				}
@@ -405,8 +405,8 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		cache.Indexers{},
 	)
 	deploymentInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    controllerAddFunc,
-		DeleteFunc: controllerDeleteFunc,
+		AddFunc:    workloadAddFunc,
+		DeleteFunc: workloadDeleteFunc,
 	})
 	daemonSetInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
@@ -422,8 +422,8 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		cache.Indexers{},
 	)
 	daemonSetInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    controllerAddFunc,
-		DeleteFunc: controllerDeleteFunc,
+		AddFunc:    workloadAddFunc,
+		DeleteFunc: workloadDeleteFunc,
 	})
 	statefulSetInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
@@ -439,8 +439,8 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		cache.Indexers{},
 	)
 	statefulSetInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    controllerAddFunc,
-		DeleteFunc: controllerDeleteFunc,
+		AddFunc:    workloadAddFunc,
+		DeleteFunc: workloadDeleteFunc,
 	})
 	controller := controller{
 		logger:         log.NewEntry(log.New()),
