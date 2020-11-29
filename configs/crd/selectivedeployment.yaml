@@ -40,10 +40,10 @@ spec:
             spec:
               type: object
               required:
-                - controllers
+                - workloads
                 - selector
               properties:
-                controllers:
+                workloads:
                   type: object
                   properties:
                     deployment:
