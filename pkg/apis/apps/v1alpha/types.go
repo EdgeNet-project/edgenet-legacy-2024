@@ -41,16 +41,16 @@ type SelectiveDeployment struct {
 // SelectiveDeploymentSpec is the spec for a SelectiveDeployment resource
 type SelectiveDeploymentSpec struct {
 	// The controller indicates the name and type of controller desired to configure
-	// Controllers: deployment, daemonset, and statefulsets
+	// Workloads: deployment, daemonset, and statefulsets
 	// The type is for defining which kind of selectivedeployment it is, you could find the list of active types below.
 	// Types of selector: city, state, country, continent, and polygon
 	// The value represents the desired filter and it must be compatible with the type of selectivedeployment
-	Controllers Controllers `json:"controllers"`
-	Selector    []Selector  `json:"selector"`
+	Workloads Workloads  `json:"workloads"`
+	Selector  []Selector `json:"selector"`
 }
 
-// Controllers indicates deployments, daemonsets or statefulsets
-type Controllers struct {
+// Workloads indicates deployments, daemonsets or statefulsets
+type Workloads struct {
 	Deployment  []appsv1.Deployment  `json:"deployment"`
 	DaemonSet   []appsv1.DaemonSet   `json:"daemonset"`
 	StatefulSet []appsv1.StatefulSet `json:"statefulset"`
