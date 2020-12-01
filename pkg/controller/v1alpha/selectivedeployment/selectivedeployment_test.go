@@ -173,7 +173,7 @@ func (g *TestGroup) Init() {
 			Name: "default",
 		},
 		Spec: apps_v1alpha.SelectiveDeploymentSpec{
-			Controllers: apps_v1alpha.Controllers{
+			Workloads: apps_v1alpha.Workloads{
 				Deployment: []appsv1.Deployment{
 					deploymentObj,
 				},
@@ -279,7 +279,7 @@ func TestCreate(t *testing.T) {
 	deploymentPartial := g.deploymentObj
 	deploymentPartial.SetName("partial")
 	g.client.AppsV1().Deployments("").Create(context.TODO(), deploymentPartial.DeepCopy(), metav1.CreateOptions{})
-	sdPartiallyRepeatedObj.Spec.Controllers.Deployment = append(sdObj.Spec.Controllers.Deployment, deploymentPartial)
+	sdPartiallyRepeatedObj.Spec.Workloads.Deployment = append(sdObj.Spec.Workloads.Deployment, deploymentPartial)
 	// Deployment, DaemonSet, and StatefulSet created already before the creation of Selective Deployment
 	deploymentIrrelevant := g.deploymentObj
 	deploymentIrrelevant.SetName("irrelevant")
@@ -294,15 +294,15 @@ func TestCreate(t *testing.T) {
 	deploymentCreated := g.deploymentObj
 	deploymentCreated.SetName("created")
 	g.client.AppsV1().Deployments("").Create(context.TODO(), deploymentCreated.DeepCopy(), metav1.CreateOptions{})
-	sdObj.Spec.Controllers.Deployment = append(sdObj.Spec.Controllers.Deployment, deploymentCreated)
+	sdObj.Spec.Workloads.Deployment = append(sdObj.Spec.Workloads.Deployment, deploymentCreated)
 	daemonsetCreated := g.daemonsetObj
 	daemonsetCreated.SetName("created")
 	g.client.AppsV1().DaemonSets("").Create(context.TODO(), daemonsetCreated.DeepCopy(), metav1.CreateOptions{})
-	sdObj.Spec.Controllers.DaemonSet = append(sdObj.Spec.Controllers.DaemonSet, daemonsetCreated)
+	sdObj.Spec.Workloads.DaemonSet = append(sdObj.Spec.Workloads.DaemonSet, daemonsetCreated)
 	statefulsetCreated := g.statefulsetObj
 	statefulsetCreated.SetName("created")
 	g.client.AppsV1().StatefulSets("").Create(context.TODO(), statefulsetCreated.DeepCopy(), metav1.CreateOptions{})
-	sdObj.Spec.Controllers.StatefulSet = append(sdObj.Spec.Controllers.StatefulSet, statefulsetCreated)
+	sdObj.Spec.Workloads.StatefulSet = append(sdObj.Spec.Workloads.StatefulSet, statefulsetCreated)
 	// Invoke the create function
 	g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Create(context.TODO(), sdObj.DeepCopy(), metav1.CreateOptions{})
 	g.handler.ObjectCreated(sdObj.DeepCopy())
@@ -335,11 +335,11 @@ func TestCreate(t *testing.T) {
 		expected string
 	}{
 		"configure/deployment":   {"Deployment", deploymentCreated.GetName(), nodeParis.GetName()},
-		"create/deployment":      {"Deployment", g.sdObj.Spec.Controllers.Deployment[0].GetName(), nodeParis.GetName()},
+		"create/deployment":      {"Deployment", g.sdObj.Spec.Workloads.Deployment[0].GetName(), nodeParis.GetName()},
 		"configure/daemonset":    {"DaemonSet", daemonsetCreated.GetName(), nodeParis.GetName()},
-		"create/daemonset":       {"DaemonSet", g.sdObj.Spec.Controllers.DaemonSet[0].GetName(), nodeParis.GetName()},
+		"create/daemonset":       {"DaemonSet", g.sdObj.Spec.Workloads.DaemonSet[0].GetName(), nodeParis.GetName()},
 		"configure/statefulset":  {"StatefulSet", statefulsetCreated.GetName(), nodeParis.GetName()},
-		"create/statefulset":     {"StatefulSet", g.sdObj.Spec.Controllers.StatefulSet[0].GetName(), nodeParis.GetName()},
+		"create/statefulset":     {"StatefulSet", g.sdObj.Spec.Workloads.StatefulSet[0].GetName(), nodeParis.GetName()},
 		"irrelevant/deployment":  {"Deployment", deploymentIrrelevant.GetName(), ""},
 		"irrelevant/daemonset":   {"DaemonSet", daemonsetIrrelevant.GetName(), ""},
 		"irrelevant/statefulset": {"StatefulSet", statefulsetIrrelevant.GetName(), ""},
@@ -445,17 +445,17 @@ func TestUpdate(t *testing.T) {
 	util.Equals(t, statusDict["sd-success"], sdCopy.Status.Message[0])
 	util.Equals(t, "3/3", sdCopy.Status.Ready)
 
-	deploymentCopy, err := g.client.AppsV1().Deployments("").Get(context.TODO(), sdObj.Spec.Controllers.Deployment[0].GetName(), metav1.GetOptions{})
+	deploymentCopy, err := g.client.AppsV1().Deployments("").Get(context.TODO(), sdObj.Spec.Workloads.Deployment[0].GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t,
 		nodeParis.GetName(),
 		deploymentCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0])
-	daemonsetCopy, err := g.client.AppsV1().DaemonSets("").Get(context.TODO(), sdObj.Spec.Controllers.DaemonSet[0].GetName(), metav1.GetOptions{})
+	daemonsetCopy, err := g.client.AppsV1().DaemonSets("").Get(context.TODO(), sdObj.Spec.Workloads.DaemonSet[0].GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t,
 		nodeParis.GetName(),
 		daemonsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0])
-	statfulsetCopy, err := g.client.AppsV1().StatefulSets("").Get(context.TODO(), sdObj.Spec.Controllers.StatefulSet[0].GetName(), metav1.GetOptions{})
+	statfulsetCopy, err := g.client.AppsV1().StatefulSets("").Get(context.TODO(), sdObj.Spec.Workloads.StatefulSet[0].GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t,
 		nodeParis.GetName(),
@@ -562,14 +562,14 @@ func TestUpdate(t *testing.T) {
 		})
 	}
 
-	t.Run("controller spec", func(t *testing.T) {
-		util.Equals(t, sdCopy.Spec.Controllers.Deployment[0].Spec.Template.Spec.Containers[0].Image, deploymentCopy.Spec.Template.Spec.Containers[0].Image)
-		util.Equals(t, sdCopy.Spec.Controllers.DaemonSet[0].Spec.Template.Spec.Containers[0].Image, daemonsetCopy.Spec.Template.Spec.Containers[0].Image)
-		util.Equals(t, sdCopy.Spec.Controllers.StatefulSet[0].Spec.Template.Spec.Containers[0].Image, statfulsetCopy.Spec.Template.Spec.Containers[0].Image)
+	t.Run("workload spec", func(t *testing.T) {
+		util.Equals(t, sdCopy.Spec.Workloads.Deployment[0].Spec.Template.Spec.Containers[0].Image, deploymentCopy.Spec.Template.Spec.Containers[0].Image)
+		util.Equals(t, sdCopy.Spec.Workloads.DaemonSet[0].Spec.Template.Spec.Containers[0].Image, daemonsetCopy.Spec.Template.Spec.Containers[0].Image)
+		util.Equals(t, sdCopy.Spec.Workloads.StatefulSet[0].Spec.Template.Spec.Containers[0].Image, statfulsetCopy.Spec.Template.Spec.Containers[0].Image)
 
-		sdCopy.Spec.Controllers.Deployment[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.0"
-		sdCopy.Spec.Controllers.DaemonSet[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.1"
-		sdCopy.Spec.Controllers.StatefulSet[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.2"
+		sdCopy.Spec.Workloads.Deployment[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.0"
+		sdCopy.Spec.Workloads.DaemonSet[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.1"
+		sdCopy.Spec.Workloads.StatefulSet[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.2"
 
 		g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Update(context.TODO(), sdCopy, metav1.UpdateOptions{})
 		g.handler.ObjectUpdated(sdCopy)
