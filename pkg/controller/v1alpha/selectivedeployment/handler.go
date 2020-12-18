@@ -31,6 +31,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	batchv1beta "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -134,6 +136,22 @@ func (t *SDHandler) getByNode(nodeName string) ([][]string, bool) {
 	}
 	for _, statefulsetRow := range statefulsetRaw.Items {
 		setList(statefulsetRow.Spec.Template.Spec, statefulsetRow.GetOwnerReferences(), statefulsetRow.GetNamespace())
+	}
+	jobRaw, err := t.clientset.BatchV1().Jobs("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	for _, jobRow := range jobRaw.Items {
+		setList(jobRow.Spec.Template.Spec, jobRow.GetOwnerReferences(), jobRow.GetNamespace())
+	}
+	cronjobRaw, err := t.clientset.BatchV1beta1().CronJobs("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	for _, cronjobRow := range cronjobRaw.Items {
+		setList(cronjobRow.Spec.JobTemplate.Spec.Template.Spec, cronjobRow.GetOwnerReferences(), cronjobRow.GetNamespace())
 	}
 	return ownerList, status
 }
@@ -243,6 +261,66 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 			}
 		}
 	}
+	if sdCopy.Spec.Workloads.Job != nil {
+		workloadCounter += len(sdCopy.Spec.Workloads.Job)
+		for _, sdJob := range sdCopy.Spec.Workloads.Job {
+			jobObj, err := t.clientset.BatchV1().Jobs(sdCopy.GetNamespace()).Get(context.TODO(), sdJob.GetName(), metav1.GetOptions{})
+			if errors.IsNotFound(err) {
+				configuredJob, failureCount := t.configureWorkload(sdCopy, sdJob, ownerReferences)
+				failureCounter += failureCount
+				_, err = t.clientset.BatchV1().Jobs(sdCopy.GetNamespace()).Create(context.TODO(), configuredJob.(*batchv1.Job), metav1.CreateOptions{})
+				if err != nil {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["job-creation-failure"], sdJob.GetName()))
+					failureCounter++
+				}
+			} else {
+				underControl := checkOwnerReferences(sdCopy, jobObj.GetOwnerReferences())
+				if !underControl {
+					// Configure the job according to the SD
+					configuredJob, failureCount := t.configureWorkload(sdCopy, sdJob, ownerReferences)
+					failureCounter += failureCount
+					_, err = t.clientset.BatchV1().Jobs(sdCopy.GetNamespace()).Update(context.TODO(), configuredJob.(*batchv1.Job), metav1.UpdateOptions{})
+					if err != nil {
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["job-creation-failure"], sdJob.GetName()))
+						failureCounter++
+					}
+				} else {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["job-in-use"], sdJob.GetName()))
+					failureCounter++
+				}
+			}
+		}
+	}
+	if sdCopy.Spec.Workloads.CronJob != nil {
+		workloadCounter += len(sdCopy.Spec.Workloads.CronJob)
+		for _, sdCronJob := range sdCopy.Spec.Workloads.CronJob {
+			cronjobObj, err := t.clientset.BatchV1beta1().CronJobs(sdCopy.GetNamespace()).Get(context.TODO(), sdCronJob.GetName(), metav1.GetOptions{})
+			if errors.IsNotFound(err) {
+				configuredCronJob, failureCount := t.configureWorkload(sdCopy, sdCronJob, ownerReferences)
+				failureCounter += failureCount
+				_, err = t.clientset.BatchV1beta1().CronJobs(sdCopy.GetNamespace()).Create(context.TODO(), configuredCronJob.(*batchv1beta.CronJob), metav1.CreateOptions{})
+				if err != nil {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-creation-failure"], sdCronJob.GetName()))
+					failureCounter++
+				}
+			} else {
+				underControl := checkOwnerReferences(sdCopy, cronjobObj.GetOwnerReferences())
+				if !underControl {
+					// Configure the cronjob according to the SD
+					configuredCronJob, failureCount := t.configureWorkload(sdCopy, sdCronJob, ownerReferences)
+					failureCounter += failureCount
+					_, err = t.clientset.BatchV1beta1().CronJobs(sdCopy.GetNamespace()).Update(context.TODO(), configuredCronJob.(*batchv1beta.CronJob), metav1.UpdateOptions{})
+					if err != nil {
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-creation-failure"], sdCronJob.GetName()))
+						failureCounter++
+					}
+				} else {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-in-use"], sdCronJob.GetName()))
+					failureCounter++
+				}
+			}
+		}
+	}
 
 	if failureCounter == 0 {
 		sdCopy.Status.State = success
@@ -319,6 +397,34 @@ func (t *SDHandler) configureWorkload(sdCopy *apps_v1alpha.SelectiveDeployment, 
 		//log.Printf("%s/StatefulSet/%s: %s", workloadObj.GetNamespace(), workloadObj.GetName(), nodeAffinity)
 		workloadCopy = workloadObj.DeepCopy()
 		//t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(workloadCopy)
+	case batchv1.Job:
+		if len(nodeSelectorTermList) <= 0 && workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.Reset()
+		} else if workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		} else {
+			workloadObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: nodeAffinity,
+			}
+		}
+		workloadObj.ObjectMeta.OwnerReferences = ownerReferences
+		//log.Printf("%s/Job/%s: %s", workloadObj.GetNamespace(), workloadObj.GetName(), nodeAffinity)
+		workloadCopy = workloadObj.DeepCopy()
+		//t.clientset.BatchV1().Jobs(sdCopy.GetNamespace()).Update(workloadCopy)
+	case batchv1beta.CronJob:
+		if len(nodeSelectorTermList) <= 0 && workloadObj.Spec.JobTemplate.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.JobTemplate.Spec.Template.Spec.Affinity.Reset()
+		} else if workloadObj.Spec.JobTemplate.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.JobTemplate.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		} else {
+			workloadObj.Spec.JobTemplate.Spec.Template.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: nodeAffinity,
+			}
+		}
+		workloadObj.ObjectMeta.OwnerReferences = ownerReferences
+		//log.Printf("%s/CronJob/%s: %s", workloadObj.GetNamespace(), workloadObj.GetName(), nodeAffinity)
+		workloadCopy = workloadObj.DeepCopy()
+		//t.clientset.BatchV1beta1().CronJob(sdCopy.GetNamespace()).Update(workloadCopy)
 	}
 	return workloadCopy, failureCount
 }

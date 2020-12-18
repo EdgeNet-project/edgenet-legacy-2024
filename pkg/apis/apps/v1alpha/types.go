@@ -18,6 +18,8 @@ package v1alpha
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	batchv1beta "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -51,9 +53,11 @@ type SelectiveDeploymentSpec struct {
 
 // Workloads indicates deployments, daemonsets or statefulsets
 type Workloads struct {
-	Deployment  []appsv1.Deployment  `json:"deployment"`
-	DaemonSet   []appsv1.DaemonSet   `json:"daemonset"`
-	StatefulSet []appsv1.StatefulSet `json:"statefulset"`
+	Deployment  []appsv1.Deployment   `json:"deployment"`
+	DaemonSet   []appsv1.DaemonSet    `json:"daemonset"`
+	StatefulSet []appsv1.StatefulSet  `json:"statefulset"`
+	Job         []batchv1.Job         `json:"job"`
+	CronJob     []batchv1beta.CronJob `json:"cronjob"`
 }
 
 // Selector to define desired node filtering parameters
