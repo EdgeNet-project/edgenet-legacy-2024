@@ -34,6 +34,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	batchv1beta "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,15 +49,17 @@ import (
 
 // The main structure of controller
 type controller struct {
-	logger         *log.Entry
-	queue          workqueue.RateLimitingInterface
-	informer       cache.SharedIndexInformer
-	nodeInformer   cache.SharedIndexInformer
-	deplInformer   cache.SharedIndexInformer
-	daemonInformer cache.SharedIndexInformer
-	stateInformer  cache.SharedIndexInformer
-	handler        HandlerInterface
-	wg             map[string]*sync.WaitGroup
+	logger              *log.Entry
+	queue               workqueue.RateLimitingInterface
+	informer            cache.SharedIndexInformer
+	nodeInformer        cache.SharedIndexInformer
+	deploymentInformer  cache.SharedIndexInformer
+	daemonSetInformer   cache.SharedIndexInformer
+	statefulSetInformer cache.SharedIndexInformer
+	jobInformer         cache.SharedIndexInformer
+	cronJobInformer     cache.SharedIndexInformer
+	handler             HandlerInterface
+	wg                  map[string]*sync.WaitGroup
 }
 
 // The main structure of informerevent
@@ -85,6 +89,10 @@ var statusDict = map[string]string{
 	"daemonset-in-use":             "DaemonSet %s is already under the control of another selective deployment",
 	"statefulset-creation-failure": "StatefulSet %s could not be created",
 	"statefulset-in-use":           "StatefulSet %s is already under the control of another selective deployment",
+	"job-creation-failure":         "Job %s could not be created",
+	"job-in-use":                   "Job %s is already under the control of another selective deployment",
+	"cronjob-creation-failure":     "CronJob %s could not be created",
+	"cronjob-in-use":               "CronJob %s is already under the control of another selective deployment",
 	"nodes-fewer":                  "Fewer nodes issue, %d node(s) found instead of %d for %s%s",
 	"GeoJSON-err":                  "%s%s has a GeoJSON format error",
 }
@@ -123,12 +131,6 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			if reflect.DeepEqual(oldObj.(*apps_v1alpha.SelectiveDeployment).Status, newObj.(*apps_v1alpha.SelectiveDeployment).Status) {
 				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 				event.function = update
-				// The variable of event.delta contains the different values of the old object from the new one
-				/*delta := dry(oldObj.(*apps_v1alpha.SelectiveDeployment).Spec.Controllers, newObj.(*apps_v1alpha.SelectiveDeployment).Spec.Controllers)
-				deltaJSON, err := json.Marshal(delta)
-				if err == nil {
-					event.delta = string(deltaJSON)
-				}*/
 				log.Infof("Update selectivedeployment: %s", event.key)
 				if err == nil {
 					queue.Add(event)
@@ -352,6 +354,40 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 					addToQueue(ownerSD, key, "StatefulSet")
 				}
 			}
+		case *batchv1.Job:
+			var sdName string
+			underControl := false
+			ownerReferences := workloadObj.GetOwnerReferences()
+			for _, reference := range ownerReferences {
+				if reference.Kind == "SelectiveDeployment" {
+					underControl = true
+					sdName = reference.Name
+				}
+			}
+			if !underControl {
+				ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(workloadObj.GetNamespace()).Get(context.TODO(), sdName, metav1.GetOptions{})
+				if err == nil {
+					key, _ := cache.MetaNamespaceKeyFunc(workloadObj)
+					addToQueue(ownerSD, key, "Job")
+				}
+			}
+		case *batchv1beta.CronJob:
+			var sdName string
+			underControl := false
+			ownerReferences := workloadObj.GetOwnerReferences()
+			for _, reference := range ownerReferences {
+				if reference.Kind == "SelectiveDeployment" {
+					underControl = true
+					sdName = reference.Name
+				}
+			}
+			if !underControl {
+				ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(workloadObj.GetNamespace()).Get(context.TODO(), sdName, metav1.GetOptions{})
+				if err == nil {
+					key, _ := cache.MetaNamespaceKeyFunc(workloadObj)
+					addToQueue(ownerSD, key, "CronJob")
+				}
+			}
 		}
 	}
 	workloadDeleteFunc := func(obj interface{}) {
@@ -386,6 +422,28 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 					if err == nil {
 						key, _ := cache.MetaNamespaceKeyFunc(workloadObj)
 						addToQueue(ownerSD, key, "StatefulSet")
+					}
+				}
+			}
+		case *batchv1.Job:
+			ownerReferences := workloadObj.GetOwnerReferences()
+			for _, reference := range ownerReferences {
+				if reference.Kind == "SelectiveDeployment" {
+					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(workloadObj.GetNamespace()).Get(context.TODO(), reference.Name, metav1.GetOptions{})
+					if err == nil {
+						key, _ := cache.MetaNamespaceKeyFunc(workloadObj)
+						addToQueue(ownerSD, key, "Job")
+					}
+				}
+			}
+		case *batchv1beta.CronJob:
+			ownerReferences := workloadObj.GetOwnerReferences()
+			for _, reference := range ownerReferences {
+				if reference.Kind == "SelectiveDeployment" {
+					ownerSD, err := edgenetClientset.AppsV1alpha().SelectiveDeployments(workloadObj.GetNamespace()).Get(context.TODO(), reference.Name, metav1.GetOptions{})
+					if err == nil {
+						key, _ := cache.MetaNamespaceKeyFunc(workloadObj)
+						addToQueue(ownerSD, key, "CronJob")
 					}
 				}
 			}
@@ -442,16 +500,52 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		AddFunc:    workloadAddFunc,
 		DeleteFunc: workloadDeleteFunc,
 	})
+	jobInformer := cache.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return clientset.BatchV1().Jobs("").List(context.TODO(), options)
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return clientset.BatchV1().Jobs("").Watch(context.TODO(), options)
+			},
+		},
+		&batchv1.Job{},
+		0,
+		cache.Indexers{},
+	)
+	jobInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    workloadAddFunc,
+		DeleteFunc: workloadDeleteFunc,
+	})
+	cronJobInformer := cache.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return clientset.BatchV1beta1().CronJobs("").List(context.TODO(), options)
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return clientset.BatchV1beta1().CronJobs("").Watch(context.TODO(), options)
+			},
+		},
+		&batchv1beta.CronJob{},
+		0,
+		cache.Indexers{},
+	)
+	cronJobInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    workloadAddFunc,
+		DeleteFunc: workloadDeleteFunc,
+	})
 	controller := controller{
-		logger:         log.NewEntry(log.New()),
-		informer:       informer,
-		nodeInformer:   nodeInformer,
-		deplInformer:   deploymentInformer,
-		daemonInformer: daemonSetInformer,
-		stateInformer:  statefulSetInformer,
-		queue:          queue,
-		handler:        sdHandler,
-		wg:             wg,
+		logger:              log.NewEntry(log.New()),
+		informer:            informer,
+		nodeInformer:        nodeInformer,
+		deploymentInformer:  deploymentInformer,
+		daemonSetInformer:   daemonSetInformer,
+		statefulSetInformer: statefulSetInformer,
+		jobInformer:         jobInformer,
+		cronJobInformer:     cronJobInformer,
+		queue:               queue,
+		handler:             sdHandler,
+		wg:                  wg,
 	}
 
 	// A channel to terminate elegantly
@@ -477,12 +571,12 @@ func (c *controller) run(stopCh <-chan struct{}, clientset kubernetes.Interface,
 	// Run the informer to list and watch resources
 	go c.informer.Run(stopCh)
 	go c.nodeInformer.Run(stopCh)
-	go c.deplInformer.Run(stopCh)
-	go c.daemonInformer.Run(stopCh)
-	go c.stateInformer.Run(stopCh)
+	go c.deploymentInformer.Run(stopCh)
+	go c.daemonSetInformer.Run(stopCh)
+	go c.statefulSetInformer.Run(stopCh)
 
 	// Synchronization to settle resources one
-	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced, c.nodeInformer.HasSynced, c.deplInformer.HasSynced, c.daemonInformer.HasSynced, c.stateInformer.HasSynced) {
+	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced, c.nodeInformer.HasSynced, c.deploymentInformer.HasSynced, c.daemonSetInformer.HasSynced, c.statefulSetInformer.HasSynced) {
 		utilruntime.HandleError(fmt.Errorf("Error syncing cache"))
 		return
 	}
