@@ -14,6 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	batchv1beta "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +31,8 @@ type TestGroup struct {
 	deploymentObj  appsv1.Deployment
 	daemonsetObj   appsv1.DaemonSet
 	statefulsetObj appsv1.StatefulSet
+	jobObj         batchv1.Job
+	cronjobObj     batchv1beta.CronJob
 	nodeObj        corev1.Node
 	handler        SDHandler
 }
@@ -159,6 +163,89 @@ func (g *TestGroup) Init() {
 			},
 		},
 	}
+	jobObj := batchv1.Job{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "StatefulSet",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+			Labels: map[string]string{
+				"app": "nginx",
+			},
+		},
+		Spec: batchv1.JobSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "nginx",
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						corev1.Container{
+							Name:  "nginx",
+							Image: "nginx:1.7.9",
+							Ports: []corev1.ContainerPort{
+								corev1.ContainerPort{
+									ContainerPort: 80,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	cronjobObj := batchv1beta.CronJob{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "StatefulSet",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+			Labels: map[string]string{
+				"app": "nginx",
+			},
+		},
+		Spec: batchv1beta.CronJobSpec{
+			Schedule: "*/1 * * * *",
+			JobTemplate: batchv1beta.JobTemplateSpec{
+				Spec: batchv1.JobSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "nginx",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "nginx",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								corev1.Container{
+									Name:  "nginx",
+									Image: "nginx:1.7.9",
+									Ports: []corev1.ContainerPort{
+										corev1.ContainerPort{
+											ContainerPort: 80,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 	selectorObj := apps_v1alpha.Selector{
 		Value:    []string{"Paris"},
 		Operator: "In",
@@ -182,6 +269,12 @@ func (g *TestGroup) Init() {
 				},
 				StatefulSet: []appsv1.StatefulSet{
 					statefulsetObj,
+				},
+				Job: []batchv1.Job{
+					jobObj,
+				},
+				CronJob: []batchv1beta.CronJob{
+					cronjobObj,
 				},
 			},
 			Selector: []apps_v1alpha.Selector{
@@ -222,6 +315,8 @@ func (g *TestGroup) Init() {
 	g.statefulsetObj = statefulsetObj
 	g.daemonsetObj = daemonsetObj
 	g.deploymentObj = deploymentObj
+	g.jobObj = jobObj
+	g.cronjobObj = cronjobObj
 	g.selector = selectorObj
 	g.sdObj = sdObj
 	g.client = testclient.NewSimpleClientset()
@@ -290,6 +385,12 @@ func TestCreate(t *testing.T) {
 	statefulsetIrrelevant := g.statefulsetObj
 	statefulsetIrrelevant.SetName("irrelevant")
 	g.client.AppsV1().StatefulSets("").Create(context.TODO(), statefulsetIrrelevant.DeepCopy(), metav1.CreateOptions{})
+	jobIrrelevant := g.jobObj
+	jobIrrelevant.SetName("irrelevant")
+	g.client.BatchV1().Jobs("").Create(context.TODO(), jobIrrelevant.DeepCopy(), metav1.CreateOptions{})
+	cronjobIrrelevant := g.cronjobObj
+	cronjobIrrelevant.SetName("irrelevant")
+	g.client.BatchV1beta1().CronJobs("").Create(context.TODO(), cronjobIrrelevant.DeepCopy(), metav1.CreateOptions{})
 
 	deploymentCreated := g.deploymentObj
 	deploymentCreated.SetName("created")
@@ -303,6 +404,15 @@ func TestCreate(t *testing.T) {
 	statefulsetCreated.SetName("created")
 	g.client.AppsV1().StatefulSets("").Create(context.TODO(), statefulsetCreated.DeepCopy(), metav1.CreateOptions{})
 	sdObj.Spec.Workloads.StatefulSet = append(sdObj.Spec.Workloads.StatefulSet, statefulsetCreated)
+	jobCreated := g.jobObj
+	jobCreated.SetName("created")
+	g.client.BatchV1().Jobs("").Create(context.TODO(), jobCreated.DeepCopy(), metav1.CreateOptions{})
+	sdObj.Spec.Workloads.Job = append(sdObj.Spec.Workloads.Job, jobCreated)
+	cronjobCreated := g.cronjobObj
+	cronjobCreated.SetName("created")
+	g.client.BatchV1beta1().CronJobs("").Create(context.TODO(), cronjobCreated.DeepCopy(), metav1.CreateOptions{})
+	sdObj.Spec.Workloads.CronJob = append(sdObj.Spec.Workloads.CronJob, cronjobCreated)
+
 	// Invoke the create function
 	g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Create(context.TODO(), sdObj.DeepCopy(), metav1.CreateOptions{})
 	g.handler.ObjectCreated(sdObj.DeepCopy())
@@ -311,7 +421,7 @@ func TestCreate(t *testing.T) {
 		util.OK(t, err)
 		util.Equals(t, success, sdCopy.Status.State)
 		util.Equals(t, statusDict["sd-success"], sdCopy.Status.Message[0])
-		util.Equals(t, "6/6", sdCopy.Status.Ready)
+		util.Equals(t, "10/10", sdCopy.Status.Ready)
 	})
 	g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Create(context.TODO(), sdRepeatedObj.DeepCopy(), metav1.CreateOptions{})
 	g.handler.ObjectCreated(sdRepeatedObj.DeepCopy())
@@ -319,7 +429,7 @@ func TestCreate(t *testing.T) {
 	t.Run("status of failure", func(t *testing.T) {
 		util.OK(t, err)
 		util.Equals(t, failure, sdRepeatedCopy.Status.State)
-		util.Equals(t, "0/3", sdRepeatedCopy.Status.Ready)
+		util.Equals(t, "0/5", sdRepeatedCopy.Status.Ready)
 	})
 	g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Create(context.TODO(), sdPartiallyRepeatedObj.DeepCopy(), metav1.CreateOptions{})
 	g.handler.ObjectCreated(sdPartiallyRepeatedObj.DeepCopy())
@@ -327,7 +437,7 @@ func TestCreate(t *testing.T) {
 	t.Run("status of failure", func(t *testing.T) {
 		util.OK(t, err)
 		util.Equals(t, partial, sdPartialCopy.Status.State)
-		util.Equals(t, "1/4", sdPartialCopy.Status.Ready)
+		util.Equals(t, "1/6", sdPartialCopy.Status.Ready)
 	})
 	cases := map[string]struct {
 		kind     string
@@ -340,9 +450,15 @@ func TestCreate(t *testing.T) {
 		"create/daemonset":       {"DaemonSet", g.sdObj.Spec.Workloads.DaemonSet[0].GetName(), nodeParis.GetName()},
 		"configure/statefulset":  {"StatefulSet", statefulsetCreated.GetName(), nodeParis.GetName()},
 		"create/statefulset":     {"StatefulSet", g.sdObj.Spec.Workloads.StatefulSet[0].GetName(), nodeParis.GetName()},
+		"configure/job":          {"Job", jobCreated.GetName(), nodeParis.GetName()},
+		"create/job":             {"Job", g.sdObj.Spec.Workloads.Job[0].GetName(), nodeParis.GetName()},
+		"configure/cronjob":      {"CronJob", cronjobCreated.GetName(), nodeParis.GetName()},
+		"create/cronjob":         {"CronJob", g.sdObj.Spec.Workloads.CronJob[0].GetName(), nodeParis.GetName()},
 		"irrelevant/deployment":  {"Deployment", deploymentIrrelevant.GetName(), ""},
 		"irrelevant/daemonset":   {"DaemonSet", daemonsetIrrelevant.GetName(), ""},
 		"irrelevant/statefulset": {"StatefulSet", statefulsetIrrelevant.GetName(), ""},
+		"irrelevant/job":         {"Job", jobIrrelevant.GetName(), ""},
+		"irrelevant/cronjob":     {"CronJob", cronjobIrrelevant.GetName(), ""},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
@@ -360,14 +476,27 @@ func TestCreate(t *testing.T) {
 				if daemonsetCopy.Spec.Template.Spec.Affinity != nil {
 					util.Equals(t, 1, len(daemonsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values))
 					affinityValue = daemonsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
-
 				}
 			} else if tc.kind == "StatefulSet" {
-				statfulsetCopy, err := g.client.AppsV1().StatefulSets("").Get(context.TODO(), tc.name, metav1.GetOptions{})
+				statefulsetCopy, err := g.client.AppsV1().StatefulSets("").Get(context.TODO(), tc.name, metav1.GetOptions{})
 				util.OK(t, err)
-				if statfulsetCopy.Spec.Template.Spec.Affinity != nil {
-					util.Equals(t, 1, len(statfulsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values))
-					affinityValue = statfulsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
+				if statefulsetCopy.Spec.Template.Spec.Affinity != nil {
+					util.Equals(t, 1, len(statefulsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values))
+					affinityValue = statefulsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
+				}
+			} else if tc.kind == "Job" {
+				jobCopy, err := g.client.BatchV1().Jobs("").Get(context.TODO(), tc.name, metav1.GetOptions{})
+				util.OK(t, err)
+				if jobCopy.Spec.Template.Spec.Affinity != nil {
+					util.Equals(t, 1, len(jobCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values))
+					affinityValue = jobCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
+				}
+			} else if tc.kind == "CronJob" {
+				jobCopy, err := g.client.BatchV1beta1().CronJobs("").Get(context.TODO(), tc.name, metav1.GetOptions{})
+				util.OK(t, err)
+				if jobCopy.Spec.JobTemplate.Spec.Template.Spec.Affinity != nil {
+					util.Equals(t, 1, len(jobCopy.Spec.JobTemplate.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values))
+					affinityValue = jobCopy.Spec.JobTemplate.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
 				}
 			}
 			t.Run("node affinity", func(t *testing.T) {
@@ -443,7 +572,7 @@ func TestUpdate(t *testing.T) {
 	util.OK(t, err)
 	util.Equals(t, success, sdCopy.Status.State)
 	util.Equals(t, statusDict["sd-success"], sdCopy.Status.Message[0])
-	util.Equals(t, "3/3", sdCopy.Status.Ready)
+	util.Equals(t, "5/5", sdCopy.Status.Ready)
 
 	deploymentCopy, err := g.client.AppsV1().Deployments("").Get(context.TODO(), sdObj.Spec.Workloads.Deployment[0].GetName(), metav1.GetOptions{})
 	util.OK(t, err)
@@ -455,11 +584,21 @@ func TestUpdate(t *testing.T) {
 	util.Equals(t,
 		nodeParis.GetName(),
 		daemonsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0])
-	statfulsetCopy, err := g.client.AppsV1().StatefulSets("").Get(context.TODO(), sdObj.Spec.Workloads.StatefulSet[0].GetName(), metav1.GetOptions{})
+	statefulsetCopy, err := g.client.AppsV1().StatefulSets("").Get(context.TODO(), sdObj.Spec.Workloads.StatefulSet[0].GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t,
 		nodeParis.GetName(),
-		statfulsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0])
+		statefulsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0])
+	jobCopy, err := g.client.BatchV1().Jobs("").Get(context.TODO(), sdObj.Spec.Workloads.Job[0].GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t,
+		nodeParis.GetName(),
+		jobCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0])
+	cronjobCopy, err := g.client.BatchV1beta1().CronJobs("").Get(context.TODO(), sdObj.Spec.Workloads.CronJob[0].GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t,
+		nodeParis.GetName(),
+		cronjobCopy.Spec.JobTemplate.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0])
 
 	seaside := g.selector
 	seaside.Value = []string{"Seaside"}
@@ -552,12 +691,26 @@ func TestUpdate(t *testing.T) {
 					expected,
 					daemonsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[j].MatchExpressions[0].Values)
 			}
-			statfulsetCopy, err := g.client.AppsV1().StatefulSets("").Get(context.TODO(), statfulsetCopy.GetName(), metav1.GetOptions{})
+			statefulsetCopy, err := g.client.AppsV1().StatefulSets("").Get(context.TODO(), statefulsetCopy.GetName(), metav1.GetOptions{})
 			util.OK(t, err)
-			for z, expected := range tc.expected {
+			for k, expected := range tc.expected {
 				util.Equals(t,
 					expected,
-					statfulsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[z].MatchExpressions[0].Values)
+					statefulsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[k].MatchExpressions[0].Values)
+			}
+			jobCopy, err := g.client.BatchV1().Jobs("").Get(context.TODO(), jobCopy.GetName(), metav1.GetOptions{})
+			util.OK(t, err)
+			for l, expected := range tc.expected {
+				util.Equals(t,
+					expected,
+					jobCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[l].MatchExpressions[0].Values)
+			}
+			cronjobCopy, err := g.client.BatchV1beta1().CronJobs("").Get(context.TODO(), cronjobCopy.GetName(), metav1.GetOptions{})
+			util.OK(t, err)
+			for m, expected := range tc.expected {
+				util.Equals(t,
+					expected,
+					cronjobCopy.Spec.JobTemplate.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[m].MatchExpressions[0].Values)
 			}
 		})
 	}
@@ -565,11 +718,15 @@ func TestUpdate(t *testing.T) {
 	t.Run("workload spec", func(t *testing.T) {
 		util.Equals(t, sdCopy.Spec.Workloads.Deployment[0].Spec.Template.Spec.Containers[0].Image, deploymentCopy.Spec.Template.Spec.Containers[0].Image)
 		util.Equals(t, sdCopy.Spec.Workloads.DaemonSet[0].Spec.Template.Spec.Containers[0].Image, daemonsetCopy.Spec.Template.Spec.Containers[0].Image)
-		util.Equals(t, sdCopy.Spec.Workloads.StatefulSet[0].Spec.Template.Spec.Containers[0].Image, statfulsetCopy.Spec.Template.Spec.Containers[0].Image)
+		util.Equals(t, sdCopy.Spec.Workloads.StatefulSet[0].Spec.Template.Spec.Containers[0].Image, statefulsetCopy.Spec.Template.Spec.Containers[0].Image)
+		util.Equals(t, sdCopy.Spec.Workloads.Job[0].Spec.Template.Spec.Containers[0].Image, jobCopy.Spec.Template.Spec.Containers[0].Image)
+		util.Equals(t, sdCopy.Spec.Workloads.CronJob[0].Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image, cronjobCopy.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image)
 
 		sdCopy.Spec.Workloads.Deployment[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.0"
 		sdCopy.Spec.Workloads.DaemonSet[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.1"
 		sdCopy.Spec.Workloads.StatefulSet[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.2"
+		sdCopy.Spec.Workloads.Job[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.3"
+		sdCopy.Spec.Workloads.CronJob[0].Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image = "nginx:1.8.4"
 
 		g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Update(context.TODO(), sdCopy, metav1.UpdateOptions{})
 		g.handler.ObjectUpdated(sdCopy)
@@ -577,12 +734,18 @@ func TestUpdate(t *testing.T) {
 		util.OK(t, err)
 		daemonsetCopy, err := g.client.AppsV1().DaemonSets("").Get(context.TODO(), daemonsetCopy.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
-		statfulsetCopy, err := g.client.AppsV1().StatefulSets("").Get(context.TODO(), statfulsetCopy.GetName(), metav1.GetOptions{})
+		statefulsetCopy, err := g.client.AppsV1().StatefulSets("").Get(context.TODO(), statefulsetCopy.GetName(), metav1.GetOptions{})
+		util.OK(t, err)
+		jobCopy, err := g.client.BatchV1().Jobs("").Get(context.TODO(), jobCopy.GetName(), metav1.GetOptions{})
+		util.OK(t, err)
+		cronjobCopy, err := g.client.BatchV1beta1().CronJobs("").Get(context.TODO(), cronjobCopy.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
 
 		util.Equals(t, "nginx:1.8.0", deploymentCopy.Spec.Template.Spec.Containers[0].Image)
 		util.Equals(t, "nginx:1.8.1", daemonsetCopy.Spec.Template.Spec.Containers[0].Image)
-		util.Equals(t, "nginx:1.8.2", statfulsetCopy.Spec.Template.Spec.Containers[0].Image)
+		util.Equals(t, "nginx:1.8.2", statefulsetCopy.Spec.Template.Spec.Containers[0].Image)
+		util.Equals(t, "nginx:1.8.3", jobCopy.Spec.Template.Spec.Containers[0].Image)
+		util.Equals(t, "nginx:1.8.4", cronjobCopy.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image)
 	})
 }
 
@@ -630,7 +793,7 @@ func TestGetByNode(t *testing.T) {
 	util.OK(t, err)
 	util.Equals(t, success, sdCopy.Status.State)
 	util.Equals(t, statusDict["sd-success"], sdCopy.Status.Message[0])
-	util.Equals(t, "3/3", sdCopy.Status.Ready)
+	util.Equals(t, "5/5", sdCopy.Status.Ready)
 
 	ownerList, status := g.handler.getByNode(nodeParis.GetName())
 	util.Equals(t, true, status)
