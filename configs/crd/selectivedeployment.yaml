@@ -64,6 +64,18 @@ spec:
                         type: object
                         x-kubernetes-preserve-unknown-fields: true
                       nullable: true
+                    job:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    cronjob:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
                 selector:
                   type: array
                   items:
