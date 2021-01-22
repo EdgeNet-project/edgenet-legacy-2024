@@ -104,6 +104,8 @@ spec:
                         minimum: 1
                         nullable: true
                   minimum: 1
+                recovery:
+                  type: boolean
             status:
               type: object
               properties:
