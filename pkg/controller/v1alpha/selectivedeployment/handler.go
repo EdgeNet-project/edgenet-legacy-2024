@@ -322,7 +322,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 		}
 	}
 
-	if failureCounter == 0 {
+	if failureCounter == 0 && workloadCounter != 0 {
 		sdCopy.Status.State = success
 		sdCopy.Status.Message = []string{statusDict["sd-success"]}
 	} else if workloadCounter == failureCounter {

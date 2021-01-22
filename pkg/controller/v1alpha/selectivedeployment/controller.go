@@ -178,23 +178,25 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 						}
 						sdRaw, _ := edgenetClientset.AppsV1alpha().SelectiveDeployments("").List(context.TODO(), metav1.ListOptions{})
 						for _, sdRow := range sdRaw.Items {
-							if sdRow.Status.State == partial || sdRow.Status.State == failure {
-							selectorLoop:
-								for _, selectorDet := range sdRow.Spec.Selector {
-									fewerNodes := false
-									for _, message := range sdRow.Status.Message {
-										if strings.Contains(message, "Fewer nodes issue") {
-											fewerNodes = true
+							if sdRow.Spec.Recovery {
+								if sdRow.Status.State == partial || sdRow.Status.State == failure {
+								selectorLoop:
+									for _, selectorDet := range sdRow.Spec.Selector {
+										fewerNodes := false
+										for _, message := range sdRow.Status.Message {
+											if strings.Contains(message, "Fewer nodes issue") {
+												fewerNodes = true
+											}
 										}
-									}
-									if selectorDet.Quantity == 0 || (selectorDet.Quantity != 0 && fewerNodes) {
-										event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
-										event.function = update
-										log.Infof("SD node added: %s, recovery started for: %s", key, event.key)
-										if err == nil {
-											queue.Add(event)
+										if selectorDet.Quantity == 0 || (selectorDet.Quantity != 0 && fewerNodes) {
+											event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
+											event.function = update
+											log.Infof("SD node added: %s, recovery started for: %s", key, event.key)
+											if err == nil {
+												queue.Add(event)
+											}
+											break selectorLoop
 										}
-										break selectorLoop
 									}
 								}
 							}
@@ -218,23 +220,25 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 				}
 				sdRaw, _ := edgenetClientset.AppsV1alpha().SelectiveDeployments("").List(context.TODO(), metav1.ListOptions{})
 				for _, sdRow := range sdRaw.Items {
-					if sdRow.Status.State == partial || sdRow.Status.State == failure {
-					selectorLoop:
-						for _, selectorDet := range sdRow.Spec.Selector {
-							fewerNodes := false
-							for _, message := range sdRow.Status.Message {
-								if strings.Contains(message, "Fewer nodes issue") {
-									fewerNodes = true
+					if sdRow.Spec.Recovery {
+						if sdRow.Status.State == partial || sdRow.Status.State == failure {
+						selectorLoop:
+							for _, selectorDet := range sdRow.Spec.Selector {
+								fewerNodes := false
+								for _, message := range sdRow.Status.Message {
+									if strings.Contains(message, "Fewer nodes issue") {
+										fewerNodes = true
+									}
 								}
-							}
-							if selectorDet.Quantity == 0 || (selectorDet.Quantity != 0 && fewerNodes) {
-								event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
-								event.function = update
-								log.Infof("SD node updated: %s, recovery started for: %s", key, event.key)
-								if err == nil {
-									queue.Add(event)
+								if selectorDet.Quantity == 0 || (selectorDet.Quantity != 0 && fewerNodes) {
+									event.key, err = cache.MetaNamespaceKeyFunc(sdRow.DeepCopyObject())
+									event.function = update
+									log.Infof("SD node updated: %s, recovery started for: %s", key, event.key)
+									if err == nil {
+										queue.Add(event)
+									}
+									break selectorLoop
 								}
-								break selectorLoop
 							}
 						}
 					}
@@ -255,11 +259,13 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 						if err != nil {
 							continue
 						}
-						event.key, err = cache.MetaNamespaceKeyFunc(sdObj.DeepCopyObject())
-						event.function = update
-						log.Infof("SD node updated: %s, recovery started for: %s", key, event.key)
-						if err == nil {
-							queue.Add(event)
+						if sdObj.Spec.Recovery {
+							event.key, err = cache.MetaNamespaceKeyFunc(sdObj.DeepCopyObject())
+							event.function = update
+							log.Infof("SD node updated: %s, recovery started for: %s", key, event.key)
+							if err == nil {
+								queue.Add(event)
+							}
 						}
 					}
 				}
@@ -280,11 +286,13 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 						log.Println(err.Error())
 						continue
 					}
-					event.key, err = cache.MetaNamespaceKeyFunc(sdObj.DeepCopyObject())
-					event.function = update
-					log.Infof("SD node deleted: %s, recovery started for: %s", key, event.key)
-					if err == nil {
-						queue.Add(event)
+					if sdObj.Spec.Recovery {
+						event.key, err = cache.MetaNamespaceKeyFunc(sdObj.DeepCopyObject())
+						event.function = update
+						log.Infof("SD node deleted: %s, recovery started for: %s", key, event.key)
+						if err == nil {
+							queue.Add(event)
+						}
 					}
 				}
 			}

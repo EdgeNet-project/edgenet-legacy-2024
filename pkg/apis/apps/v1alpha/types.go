@@ -49,6 +49,7 @@ type SelectiveDeploymentSpec struct {
 	// The value represents the desired filter and it must be compatible with the type of selectivedeployment
 	Workloads Workloads  `json:"workloads"`
 	Selector  []Selector `json:"selector"`
+	Recovery  bool       `json:"recovery"`
 }
 
 // Workloads indicates deployments, daemonsets or statefulsets
