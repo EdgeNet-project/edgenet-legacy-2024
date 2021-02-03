@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"regexp"
-	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -421,7 +419,6 @@ func (t *Handler) runRecoveryProcedure(addr string, config *ssh.ClientConfig,
 	// Steps in the procedure
 	endProcedure := make(chan bool, 1)
 	establishConnection := make(chan bool, 1)
-	reconfiguration := make(chan bool, 1)
 	installation := make(chan bool, 1)
 	reboot := make(chan bool, 1)
 	// Set the status as recovering
@@ -476,7 +473,7 @@ func (t *Handler) runRecoveryProcedure(addr string, config *ssh.ClientConfig,
 			}
 			endProcedure <- true
 		} else {
-			reconfiguration <- true
+			reboot <- true
 		}
 	}()
 
@@ -511,20 +508,6 @@ nodeRecoveryLoop:
 				}
 				installation <- true
 			}()
-		case <-reconfiguration:
-			log.Printf("***************Reconfiguration***************%s", nodeName)
-			// Restart Docker & Kubelet and flush iptables
-			err = reconfigureNode(conn, contributedNode.GetName())
-			if err != nil {
-				ncCopy.Status.Message = append(ncCopy.Status.Message, "Node recovery failed: reconfiguration step")
-				ncCopyUpdated, err := t.edgenetClientset.AppsV1alpha().NodeContributions(ncCopy.GetNamespace()).UpdateStatus(context.TODO(), ncCopy, metav1.UpdateOptions{})
-				log.Println(err)
-				if err == nil {
-					ncCopy = ncCopyUpdated
-				}
-			}
-			time.Sleep(3 * time.Minute)
-			reboot <- true
 		case <-installation:
 			log.Println("***************Installation***************")
 			// Uninstall all existing packages related, do a clean installation, and make the node join to the cluster
@@ -649,52 +632,6 @@ func rebootNode(conn *ssh.Client) error {
 	return nil
 }
 
-// reconfigureNode gets and runs the configuration commands prepared
-func reconfigureNode(conn *ssh.Client, hostname string) error {
-	configurationCommands, err := getReconfigurationCommands(conn, hostname)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	// Have root privileges
-	commands := append([]string{"sudo su"}, configurationCommands...)
-	sess, err := startSession(conn)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	defer sess.Close()
-	// StdinPipe for commands
-	stdin, err := sess.StdinPipe()
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	//sess.Stdout = os.Stdout
-	sess.Stderr = os.Stderr
-	sess, err = startShell(sess)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	// Run commands sequentially
-	for _, cmd := range commands {
-		_, err = fmt.Fprintf(stdin, "%s\n", cmd)
-		if err != nil {
-			log.Println(err)
-			return err
-		}
-	}
-	stdin.Close()
-	// Wait for session to finish
-	err = sess.Wait()
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	return nil
-}
-
 // Start a new session in the connection
 func startSession(conn *ssh.Client) (*ssh.Session, error) {
 	sess, err := conn.NewSession()
@@ -717,189 +654,16 @@ func startShell(sess *ssh.Session) (*ssh.Session, error) {
 
 // getInstallCommands prepares the commands necessary according to the OS
 func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion string) ([]string, error) {
-	sess, err := startSession(conn)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	defer sess.Close()
-	// Detect the node OS
-	output, err := sess.Output("cat /etc/os-release")
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	dockerInstallation := []string{}
-	if ubuntuOrDebianOrHypriot, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*|ID=\"hypriotOS\".*|ID=hypriotOS.*", string(output[:])); ubuntuOrDebianOrHypriot {
-		// The commands including kubernetes & docker installation for Ubuntu, and also kubeadm join command
-		var ubuntuCommands = []string{
-			"apt-get install docker.io",
-		}
-		var debianCommands = []string{
-			"apt-get install software-properties-common -y",
-			"curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -",
-			"add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable\"",
-			"apt-get update",
-			"apt-get install docker-ce",
-		}
-		if ubuntu, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*", string(output[:])); ubuntu {
-			dockerInstallation = ubuntuCommands
-		} else if hypriotOS, _ := regexp.MatchString("ID=\"hypriotOS\".*|ID=hypriotOS.*", string(output[:])); hypriotOS {
-			// The ID of hypriotOS should become checked again
-			dockerInstallation = nil
-		} else {
-			dockerInstallation = debianCommands
-		}
-		essentialPackages := []string{
-			"dpkg --configure -a",
-			"apt-get update -y && apt-get install -y apt-transport-https -y",
-			"apt-get install curl -y",
-			"modprobe br_netfilter",
-			"cat <<EOF > /etc/sysctl.d/k8s.conf",
-			"net.bridge.bridge-nf-call-ip6tables = 1",
-			"net.bridge.bridge-nf-call-iptables = 1",
-			"EOF",
-			"sysctl --system",
-			"swapoff -a",
-			"sed -e '/swap/ s/^#*/#/' -i /etc/fstab",
-			"curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -",
-			"cat <<EOF | tee /etc/apt/sources.list.d/kubernetes.list",
-			"deb https://apt.kubernetes.io/ kubernetes-xenial main",
-			"EOF",
-			"apt-get update",
-		}
-		kubernetesInstallation := []string{
-			fmt.Sprintf("apt-get install kubeadm=%[1]s-00 kubectl=%[1]s-00 kubelet=%[1]s-00 kubernetes-cni -y", kubernetesVersion),
-			"apt-mark hold kubelet kubeadm kubectl",
-			fmt.Sprintf("hostname %s", hostname),
-			"systemctl enable docker",
-			"systemctl start docker",
-			node.CreateJoinToken("30m", hostname),
-			"systemctl daemon-reload",
-			"systemctl restart docker",
-			"systemctl restart kubelet",
-		}
-		commands := append(essentialPackages, append(dockerInstallation, kubernetesInstallation...)...)
-		return commands, nil
-	} else if centosOrFedoraOrRHEL, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*|ID=\"rhel\".*|ID=rhel.*", string(output[:])); centosOrFedoraOrRHEL {
-		// The commands including kubernetes & docker installation for CentOS, and also kubeadm join command
 		commands := []string{
-			"yum install yum-utils -y",
-			"yum install epel-release -y",
-			"yum update -y",
-			"export basearch=$(uname -i)",
-			"modprobe br_netfilter",
-			"cat <<EOF > /etc/sysctl.d/k8s.conf",
-			"net.bridge.bridge-nf-call-ip6tables = 1",
-			"net.bridge.bridge-nf-call-iptables = 1",
-			"EOF",
-			"sysctl --system",
-			"swapoff -a",
-			"sed -e '/swap/ s/^#*/#/' -i /etc/fstab",
-			"cat <<EOF > /etc/yum.repos.d/kubernetes.repo",
-			"[kubernetes]",
-			"name=Kubernetes",
-			"baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-\\$basearch",
-			"enabled=1",
-			"gpgcheck=1",
-			"repo_gpgcheck=1",
-			"gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg",
-			"exclude=kubelet kubeadm kubectl",
-			"EOF",
-			"setenforce 0",
-			"sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config",
-			fmt.Sprintf("yum install docker kubeadm-%[1]s-0 kubectl-%[1]s-0 kubelet-%[1]s-0 kubernetes-cni -y --disableexcludes=kubernetes", kubernetesVersion),
-			"systemctl enable --now kubelet",
-			fmt.Sprintf("hostname %s", hostname),
-			"systemctl enable docker",
-			"systemctl start docker",
 			node.CreateJoinToken("30m", hostname),
-			"systemctl daemon-reload",
-			"systemctl restart docker",
-			"systemctl restart kubelet",
 		}
 		return commands, nil
 	}
-	return nil, fmt.Errorf("unknown")
-}
 
 // getUninstallCommands prepares the commands necessary according to the OS
 func getUninstallCommands(conn *ssh.Client) ([]string, error) {
-	sess, err := startSession(conn)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	defer sess.Close()
-	// Detect the node OS
-	output, err := sess.Output("cat /etc/os-release")
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
-		// The commands including kubeadm reset command, and kubernetes & docker installation for Ubuntu
 		commands := []string{
 			"kubeadm reset -f",
-			"apt-get purge kubeadm kubectl kubelet kubernetes-cni kube* docker-engine docker docker.io docker-ce -y",
-			"apt-get autoremove -y",
-			"rm -rf ~/.kube",
-			"iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X",
-		}
-		return commands, nil
-	} else if centosOrFedoraOrRHEL, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*|ID=\"rhel\".*|ID=rhel.*", string(output[:])); centosOrFedoraOrRHEL {
-		// The commands including kubeadm reset command, and kubernetes & docker installation for CentOS
-		commands := []string{
-			"kubeadm reset -f",
-			"yum remove kubeadm kubectl kubelet kubernetes-cni kube* docker docker-ce docker-ce-cli docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine -y",
-			"yum clean all -y",
-			"yum autoremove -y",
-			"rm -rf ~/.kube",
-			"iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X",
 		}
 		return commands, nil
 	}
-	return nil, fmt.Errorf("unknown")
-}
-
-// getReconfigurationCommands prepares the commands necessary according to the OS
-func getReconfigurationCommands(conn *ssh.Client, hostname string) ([]string, error) {
-	sess, err := startSession(conn)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	defer sess.Close()
-	// Detect the node OS
-	output, err := sess.Output("cat /etc/os-release")
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	if ubuntuOrDebian, _ := regexp.MatchString("ID=\"ubuntu\".*|ID=ubuntu.*|ID=\"debian\".*|ID=debian.*", string(output[:])); ubuntuOrDebian {
-		// The commands to set the hostname, restart docker & kubernetes and flush iptables on Ubuntu
-		commands := []string{
-			fmt.Sprintf("hostname %s", hostname),
-			"systemctl stop docker",
-			"systemctl stop kubelet",
-			"iptables --flush",
-			"iptables -tnat --flush",
-			"systemctl start docker",
-			"systemctl start kubelet",
-		}
-		return commands, nil
-	} else if centosOrFedoraOrRHEL, _ := regexp.MatchString("ID=\"centos\".*|ID=centos.*|ID=\"fedora\".*|ID=fedora.*|ID=\"rhel\".*|ID=rhel.*", string(output[:])); centosOrFedoraOrRHEL {
-		// The commands to set the hostname, restart docker & kubernetes and flush iptables on CentOS
-		commands := []string{
-			fmt.Sprintf("hostname %s", hostname),
-			"systemctl stop docker",
-			"systemctl stop kubelet",
-			"iptables -F",
-			"iptables -tnat -F",
-			"systemctl start docker",
-			"systemctl start kubelet",
-		}
-		return commands, nil
-	}
-	return nil, fmt.Errorf("unknown")
-}
