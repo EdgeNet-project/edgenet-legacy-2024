@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -654,16 +655,16 @@ func startShell(sess *ssh.Session) (*ssh.Session, error) {
 
 // getInstallCommands prepares the commands necessary according to the OS
 func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion string) ([]string, error) {
-		commands := []string{
-			node.CreateJoinToken("30m", hostname),
-		}
-		return commands, nil
+	commands := []string{
+		node.CreateJoinToken("30m", hostname),
 	}
+	return commands, nil
+}
 
 // getUninstallCommands prepares the commands necessary according to the OS
 func getUninstallCommands(conn *ssh.Client) ([]string, error) {
-		commands := []string{
-			"kubeadm reset -f",
-		}
-		return commands, nil
+	commands := []string{
+		"kubeadm reset -f",
 	}
+	return commands, nil
+}
