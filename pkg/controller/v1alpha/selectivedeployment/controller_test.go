@@ -92,6 +92,15 @@ func TestStartController(t *testing.T) {
 	time.Sleep(time.Millisecond * 500)
 	sdCopy, err = g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), sdCopy.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
+	util.Equals(t, failure, sdCopy.Status.State)
+	util.Equals(t, "0/5", sdCopy.Status.Ready)
+
+	sdCopy.Spec.Recovery = true
+	_, err = g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Update(context.TODO(), sdCopy, metav1.UpdateOptions{})
+	util.OK(t, err)
+	time.Sleep(time.Millisecond * 500)
+	sdCopy, err = g.edgenetClient.AppsV1alpha().SelectiveDeployments("").Get(context.TODO(), sdCopy.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
 	util.Equals(t, success, sdCopy.Status.State)
 	util.Equals(t, "5/5", sdCopy.Status.Ready)
 

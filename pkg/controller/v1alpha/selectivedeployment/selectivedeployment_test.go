@@ -260,6 +260,7 @@ func (g *TestGroup) Init() {
 			Name: "default",
 		},
 		Spec: apps_v1alpha.SelectiveDeploymentSpec{
+			Recovery: false,
 			Workloads: apps_v1alpha.Workloads{
 				Deployment: []appsv1.Deployment{
 					deploymentObj,
