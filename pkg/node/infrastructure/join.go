@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/util/cert"
 	bootstrapapi "k8s.io/cluster-bootstrap/token/api"
 	bootstraputil "k8s.io/cluster-bootstrap/token/util"
+
 	//nodebootstraptokenphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/node"
 
 	kubeadmtypes "sigs.k8s.io/cluster-api/bootstrap/kubeadm/types/v1beta1"
@@ -152,19 +153,19 @@ func getHosts(client *namecheap.Client) namecheap.DomainDNSGetHostsResult {
 func SetHostname(client *namecheap.Client, hostRecord namecheap.DomainDNSHost) (bool, string) {
 	hostList := getHosts(client)
 	exist := false
-	for _, host := range hostList.Hosts {
+	for key, host := range hostList.Hosts {
 		if host.Name == hostRecord.Name || host.Address == hostRecord.Address {
+			// If the record exist then update it, overwrite it with new name and address
+			hostList.Hosts[key] = hostRecord
+			log.Printf("Update existing host: %s - %s \n Hostname  and ip address changed to: %s - %s", host.Name, host.Address, hostRecord.Name, hostRecord.Address)
 			exist = true
 			break
 		}
 	}
-
-	if exist {
-		log.Printf("Hostname or ip address already exists: %s - %s", hostRecord.Name, hostRecord.Address)
-		return false, "exist"
+	// In case the record is new, it is appended to the list of existing records
+	if !exist {
+		hostList.Hosts = append(hostList.Hosts, hostRecord)
 	}
-
-	hostList.Hosts = append(hostList.Hosts, hostRecord)
 	setResponse, err := client.DomainDNSSetHosts("edge-net", "io", hostList.Hosts)
 	if err != nil {
 		log.Println(err.Error())
