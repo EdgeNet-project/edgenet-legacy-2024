@@ -153,25 +153,17 @@ func getHosts(client *namecheap.Client) namecheap.DomainDNSGetHostsResult {
 func SetHostname(client *namecheap.Client, hostRecord namecheap.DomainDNSHost) (bool, string) {
 	hostList := getHosts(client)
 	exist := false
-	for _, host := range hostList.Hosts {
+	for key, host := range hostList.Hosts {
 		if host.Name == hostRecord.Name || host.Address == hostRecord.Address {
+			// If the record exist then update it, overwrite it with new name and address
+			hostList.Hosts[key] = hostRecord
+			log.Printf("Update existing host: %s - %s \n Hostname  and ip address changed to: %s - %s", host.Name, host.Address, hostRecord.Name, hostRecord.Address)
 			exist = true
 			break
 		}
 	}
-
-	//if the record exist then update it, overwrite it with new name and address.
-	if exist {
-		for i, v := range hostList.Hosts {
-			if v.Name == hostRecord.Name || v.Address == hostRecord.Address {
-				hostList.Hosts[i] = hostRecord
-				break
-			}
-		}
-		log.Printf("UPDATE existing host: %s - %s \n Hostname  and ip address changed to: %s - %s", v.Name, v.Address, hostRecord.Name, hostRecord.Address)
-
-	} else {
-		//in case the record is new, it is appended to the list of existing records
+	// In case the record is new, it is appended to the list of existing records
+	if !exist {
 		hostList.Hosts = append(hostList.Hosts, hostRecord)
 	}
 	setResponse, err := client.DomainDNSSetHosts("edge-net", "io", hostList.Hosts)
