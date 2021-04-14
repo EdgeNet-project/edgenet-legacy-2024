@@ -1,6 +1,6 @@
 EdgeNet Architectural Decision Record ```ADR-003``` <!-- added by Timur; not part of the MADR template -->
 
-# EdgeNet's multi-tenant design
+# EdgeNet's multi-tenant nomenclature
 
 * Status: pending approval (revised from prior, approved, version) <!-- optional -->
 * Deciders: Berat Senel, Ciro Scognamiglio, Maxime Mouchet, Olivier Fourmaux, Timur Friedman, Rick McGeer <!-- optional -->
@@ -10,7 +10,7 @@ Technical Story: [Brief Spec Doc](https://docs.google.com/document/d/1lAF6PS6BnV
 
 ## Context and Problem Statement
 
-EdgeNet was positioning itself to replace PlanetLab Europe (PLE) with using novel technologies. Thus, the concepts and design of multi-tenancy are inherited from PLE and Fed4FIRE+ in order to be integrated into Kubernetes. However, the Kubernetes community is not familiar with the terms, such as Authority and Slice. And this is one of the reasons that make it harder to contribute back to the community. Furthermore, there are drawbacks in the current design, such as the additional steps required to deploy an application. They also prevent us from achieving cleaner code.
+EdgeNet has been positioning itself to replace PlanetLab Europe (PLE)'s Linux Containers (LXC) based design with a contemporary Docker and Kubernetes based design. In keeping with this approach, the concepts and the design of EdgeNet multitenancy were inherited from PlanetLab and from the Horizon 2020 Fed4FIRE+ European testbed federation project in which PLE participates. However, the Kubernetes community is not familiar with the terms from the testbed community, such as Authority and Slice, or PI (for principal investigator), and continuing with such nomenclature is expected to hinder the ability of EdgeNet to contribute back to Kubernetes. We therefore seek to bring EdgeNet's mutitenancy nomenclature into line with current practice in the Kubernetes community. We would also like to take advantage of the nomenclature update to adjust certain aspects of EdgeNet's current multitenancy design that require steps that ought not to be strictly necessary (creation of a Slice) before a service can be deployed. Finally, this is an opportunity for us to produce cleaner code.
 
 ## Decision Drivers <!-- optional -->
 
