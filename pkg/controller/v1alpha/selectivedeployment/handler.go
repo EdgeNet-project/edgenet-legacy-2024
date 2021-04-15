@@ -17,99 +17,47 @@ limitations under the License.
 package selectivedeployment
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
-	"edgenet/pkg/client/clientset/versioned"
-	"edgenet/pkg/node"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	"github.com/EdgeNet-project/edgenet/pkg/node"
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	batchv1beta "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
-	ObjectUpdated(obj interface{}, delta string)
-	ObjectDeleted(obj interface{}, delta string)
-	ConfigureControllers()
-	CheckControllerStatus(old, new interface{}, eventType string) ([]apps_v1alpha.SelectiveDeployment, bool)
-	GetSelectiveDeployments(node string) ([][]string, bool)
+	ObjectUpdated(obj interface{})
+	ObjectDeleted(obj interface{})
 }
 
 // SDHandler is a implementation of Handler
 type SDHandler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
-	sdDet            sdDet
-	wgHandler        map[string]*sync.WaitGroup
-	wgRecovery       map[string]*sync.WaitGroup
-	namespaceList    []string
-}
-
-// The data defined by the user to be used for node selection
-type desiredFilter struct {
-	nodeSelectorTerms []corev1.NodeSelectorTerm
-	nodeSelectorTerm  corev1.NodeSelectorTerm
-	matchExpression   corev1.NodeSelectorRequirement
-}
-
-// The data of deleted/updated object to handle operations based on the deleted/updated object
-type sdDet struct {
-	name            string
-	namespace       string
-	sdType          string
-	controllerDelta []string
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 }
 
 // Init handles any handler initialization
-func (t *SDHandler) Init() error {
+func (t *SDHandler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("SDHandler.Init")
-	t.sdDet = sdDet{}
-	t.wgHandler = make(map[string]*sync.WaitGroup)
-	t.wgRecovery = make(map[string]*sync.WaitGroup)
-	var err error
-	t.clientset, err = authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	return err
-}
-
-// namespaceInit does initialization of the namespace
-func (t *SDHandler) namespaceInit(namespace string) {
-	if t.wgHandler[namespace] == nil || t.wgRecovery[namespace] == nil {
-		var wgHandler sync.WaitGroup
-		var wgRecovery sync.WaitGroup
-		t.wgHandler[namespace] = &wgHandler
-		t.wgRecovery[namespace] = &wgRecovery
-	}
-	check := false
-	for _, namespaceRow := range t.namespaceList {
-		if namespace == namespaceRow {
-			check = true
-		}
-	}
-	if !check {
-		t.namespaceList = append(t.namespaceList, namespace)
-	}
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
@@ -117,54 +65,25 @@ func (t *SDHandler) ObjectCreated(obj interface{}) {
 	log.Info("SDHandler.ObjectCreated")
 	// Create a copy of the selectivedeployment object to make changes on it
 	sdCopy := obj.(*apps_v1alpha.SelectiveDeployment).DeepCopy()
-	t.namespaceInit(sdCopy.GetNamespace())
-	t.wgHandler[sdCopy.GetNamespace()].Add(1)
-	defer func() {
-		// Sleep to prevent extra resource consumption by running ConfigureControllers
-		time.Sleep(100 * time.Millisecond)
-		t.wgHandler[sdCopy.GetNamespace()].Done()
-	}()
-	t.setControllerFilter(sdCopy, "", "create")
+	t.applyCriteria(sdCopy, "create")
 }
 
 // ObjectUpdated is called when an object is updated
-func (t *SDHandler) ObjectUpdated(obj interface{}, delta string) {
+func (t *SDHandler) ObjectUpdated(obj interface{}) {
 	log.Info("SDHandler.ObjectUpdated")
 	// Create a copy of the selectivedeployment object to make changes on it
 	sdCopy := obj.(*apps_v1alpha.SelectiveDeployment).DeepCopy()
-	t.namespaceInit(sdCopy.GetNamespace())
-	t.wgHandler[sdCopy.GetNamespace()].Add(1)
-	defer func() {
-		time.Sleep(100 * time.Millisecond)
-		t.wgHandler[sdCopy.GetNamespace()].Done()
-	}()
-	t.setControllerFilter(sdCopy, delta, "update")
+	t.applyCriteria(sdCopy, "update")
 }
 
 // ObjectDeleted is called when an object is deleted
-func (t *SDHandler) ObjectDeleted(obj interface{}, delta string) {
+func (t *SDHandler) ObjectDeleted(obj interface{}) {
 	log.Info("SDHandler.ObjectDeleted")
-	// Put the required data of the deleted object into variables
-	objectDelta := strings.Split(delta, "-?delta?- ")
-	t.sdDet = sdDet{
-		name:            objectDelta[0],
-		namespace:       objectDelta[1],
-		sdType:          objectDelta[2],
-		controllerDelta: strings.Split(objectDelta[3], "/?delta?/ "),
-	}
-
-	t.namespaceInit(t.sdDet.namespace)
-	t.wgHandler[t.sdDet.namespace].Add(1)
-	defer func() {
-		time.Sleep(100 * time.Millisecond)
-		t.wgHandler[t.sdDet.namespace].Done()
-	}()
-	// Detect and recover the selectivedeployment resource objects which are prevented by the this object from taking control of the controller(s)
-	t.recoverSelectiveDeployments(t.sdDet)
+	// TBD
 }
 
-// GetSelectiveDeployments generates selectivedeployment list from the owner references of controllers which contains the node that has an event (add/update/delete)
-func (t *SDHandler) GetSelectiveDeployments(nodeName string) ([][]string, bool) {
+// getByNode generates selectivedeployment list from the owner references of workloads which contains the node that has an event (add/update/delete)
+func (t *SDHandler) getByNode(nodeName string) ([][]string, bool) {
 	ownerList := [][]string{}
 	status := false
 
@@ -180,7 +99,9 @@ func (t *SDHandler) GetSelectiveDeployments(nodeName string) ([][]string, bool) 
 								for _, owner := range ownerReferences {
 									if owner.Kind == "SelectiveDeployment" {
 										ownerDet := []string{namespace, owner.Name}
-										ownerList = append(ownerList, ownerDet)
+										if !util.SliceContains(ownerList, ownerDet) {
+											ownerList = append(ownerList, ownerDet)
+										}
 										status = true
 									}
 								}
@@ -192,7 +113,7 @@ func (t *SDHandler) GetSelectiveDeployments(nodeName string) ([][]string, bool) 
 			}
 		}
 	}
-	deploymentRaw, err := t.clientset.AppsV1().Deployments("").List(metav1.ListOptions{})
+	deploymentRaw, err := t.clientset.AppsV1().Deployments("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -200,7 +121,7 @@ func (t *SDHandler) GetSelectiveDeployments(nodeName string) ([][]string, bool) 
 	for _, deploymentRow := range deploymentRaw.Items {
 		setList(deploymentRow.Spec.Template.Spec, deploymentRow.GetOwnerReferences(), deploymentRow.GetNamespace())
 	}
-	daemonsetRaw, err := t.clientset.AppsV1().DaemonSets("").List(metav1.ListOptions{})
+	daemonsetRaw, err := t.clientset.AppsV1().DaemonSets("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -208,7 +129,7 @@ func (t *SDHandler) GetSelectiveDeployments(nodeName string) ([][]string, bool) 
 	for _, daemonsetRow := range daemonsetRaw.Items {
 		setList(daemonsetRow.Spec.Template.Spec, daemonsetRow.GetOwnerReferences(), daemonsetRow.GetNamespace())
 	}
-	statefulsetRaw, err := t.clientset.AppsV1().StatefulSets("").List(metav1.ListOptions{})
+	statefulsetRaw, err := t.clientset.AppsV1().StatefulSets("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -216,722 +137,488 @@ func (t *SDHandler) GetSelectiveDeployments(nodeName string) ([][]string, bool) 
 	for _, statefulsetRow := range statefulsetRaw.Items {
 		setList(statefulsetRow.Spec.Template.Spec, statefulsetRow.GetOwnerReferences(), statefulsetRow.GetNamespace())
 	}
+	jobRaw, err := t.clientset.BatchV1().Jobs("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	for _, jobRow := range jobRaw.Items {
+		setList(jobRow.Spec.Template.Spec, jobRow.GetOwnerReferences(), jobRow.GetNamespace())
+	}
+	cronjobRaw, err := t.clientset.BatchV1beta1().CronJobs("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	for _, cronjobRow := range cronjobRaw.Items {
+		setList(cronjobRow.Spec.JobTemplate.Spec.Template.Spec, cronjobRow.GetOwnerReferences(), cronjobRow.GetNamespace())
+	}
 	return ownerList, status
 }
 
-// CheckControllerStatus runs in case of any controller event
-func (t *SDHandler) CheckControllerStatus(oldObj interface{}, newObj interface{}, eventType string) ([]apps_v1alpha.SelectiveDeployment, bool) {
-	log.Info("SDHandler.CheckControllerStatus")
-	sdSlice := []apps_v1alpha.SelectiveDeployment{}
-	status := false
-
-	switch newObj.(type) {
-	case *appsv1.Deployment:
-		if eventType == update {
-			newCtl := newObj.(*appsv1.Deployment).DeepCopy()
-			oldCtl := oldObj.(*appsv1.Deployment).DeepCopy()
-			newPodSpec := newCtl.Spec.Template.Spec
-			oldPodSpec := oldCtl.Spec.Template.Spec
-			if newPodSpec.Affinity != nil && newPodSpec.Affinity.NodeAffinity != nil && newPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil && oldPodSpec.Affinity != nil && oldPodSpec.Affinity.NodeAffinity != nil && oldPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-				if !reflect.DeepEqual(newPodSpec.Affinity, oldPodSpec.Affinity) && reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
-					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
-					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
-					status = true
-				}
-			} else if newPodSpec.Affinity == nil && oldPodSpec.Affinity != nil && oldPodSpec.Affinity.NodeAffinity != nil && oldPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-				if reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
-					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
-					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
-					status = true
-				}
-			}
-		} else {
-			ctlObj := newObj.(*appsv1.Deployment).DeepCopy()
-			sdRaw, _ := t.edgenetClientset.AppsV1alpha().SelectiveDeployments(ctlObj.GetNamespace()).List(metav1.ListOptions{})
-			for _, sdRow := range sdRaw.Items {
-				for _, controllerDet := range sdRow.Spec.Controller {
-					if ctlObj.GetName() == controllerDet.Name && strings.ToLower(controllerDet.Type) == "deployment" {
-						status = true
-						if eventType == create {
-							crashNonExistMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, "nonexistent", "all")
-							crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller")
-							if crashNonExistMatch || !crashMatch {
-								sdSlice = append(sdSlice, sdRow)
-							}
-						} else if eventType == delete {
-							if crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller"); !crashMatch {
-								sdSlice = append(sdSlice, sdRow)
-							}
-						}
-					}
-				}
-			}
-		}
-	case *appsv1.DaemonSet:
-		if eventType == update {
-			newCtl := newObj.(*appsv1.DaemonSet).DeepCopy()
-			oldCtl := oldObj.(*appsv1.DaemonSet).DeepCopy()
-			newPodSpec := newCtl.Spec.Template.Spec
-			oldPodSpec := oldCtl.Spec.Template.Spec
-			if newPodSpec.Affinity != nil && newPodSpec.Affinity.NodeAffinity != nil && newPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil && oldPodSpec.Affinity != nil && oldPodSpec.Affinity.NodeAffinity != nil && oldPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-				if !reflect.DeepEqual(newPodSpec.Affinity, oldPodSpec.Affinity) && reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
-					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
-					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
-					status = true
-				}
-			} else if newPodSpec.Affinity == nil && oldPodSpec.Affinity != nil && oldPodSpec.Affinity.NodeAffinity != nil && oldPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-				if reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
-					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
-					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
-					status = true
-				}
-			}
-		} else {
-			ctlObj := newObj.(*appsv1.DaemonSet).DeepCopy()
-			sdRaw, _ := t.edgenetClientset.AppsV1alpha().SelectiveDeployments(ctlObj.GetNamespace()).List(metav1.ListOptions{})
-			for _, sdRow := range sdRaw.Items {
-				for _, controllerDet := range sdRow.Spec.Controller {
-					if ctlObj.GetName() == controllerDet.Name && strings.ToLower(controllerDet.Type) == "daemonset" {
-						status = true
-						if eventType == create {
-							crashNonExistMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, "nonexistent", "all")
-							crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller")
-							if crashNonExistMatch || !crashMatch {
-								sdSlice = append(sdSlice, sdRow)
-							}
-						} else if eventType == delete {
-							if crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller"); !crashMatch {
-								sdSlice = append(sdSlice, sdRow)
-							}
-						}
-					}
-				}
-			}
-		}
-	case *appsv1.StatefulSet:
-		if eventType == update {
-			newCtl := newObj.(*appsv1.StatefulSet).DeepCopy()
-			oldCtl := oldObj.(*appsv1.StatefulSet).DeepCopy()
-			newPodSpec := newCtl.Spec.Template.Spec
-			oldPodSpec := oldCtl.Spec.Template.Spec
-			if newPodSpec.Affinity != nil && newPodSpec.Affinity.NodeAffinity != nil && newPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil && oldPodSpec.Affinity != nil && oldPodSpec.Affinity.NodeAffinity != nil && oldPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-				if !reflect.DeepEqual(newPodSpec.Affinity, oldPodSpec.Affinity) && reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
-					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
-					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
-					status = true
-				}
-			} else if newPodSpec.Affinity == nil && oldPodSpec.Affinity != nil && oldPodSpec.Affinity.NodeAffinity != nil && oldPodSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-				if reflect.DeepEqual(newCtl.ObjectMeta.GetOwnerReferences(), oldCtl.ObjectMeta.GetOwnerReferences()) &&
-					!reflect.DeepEqual(newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"], oldCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"]) &&
-					newCtl.ObjectMeta.Annotations["kubectl.kubernetes.io/last-applied-configuration"] != "" {
-					status = true
-				}
-			}
-		} else {
-			ctlObj := newObj.(*appsv1.StatefulSet).DeepCopy()
-			sdRaw, _ := t.edgenetClientset.AppsV1alpha().SelectiveDeployments(ctlObj.GetNamespace()).List(metav1.ListOptions{})
-			for _, sdRow := range sdRaw.Items {
-				for _, controllerDet := range sdRow.Spec.Controller {
-					if ctlObj.GetName() == controllerDet.Name && strings.ToLower(controllerDet.Type) == "statefulset" {
-						status = true
-						if eventType == create {
-							crashNonExistMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, "nonexistent", "all")
-							crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller")
-							if crashNonExistMatch || !crashMatch {
-								sdSlice = append(sdSlice, sdRow)
-							}
-						} else if eventType == delete {
-							if crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller"); !crashMatch {
-								sdSlice = append(sdSlice, sdRow)
-							}
-						}
-					}
-				}
-			}
+// applyCriteria used by ObjectCreated, ObjectUpdated, and recoverSelectiveDeployments functions
+func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, eventType string) {
+	oldStatus := sdCopy.Status
+	statusUpdate := func() {
+		if !reflect.DeepEqual(oldStatus, sdCopy.Status) {
+			t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(context.TODO(), sdCopy, metav1.UpdateOptions{})
 		}
 	}
-	return sdSlice, status
-}
-
-// setControllerFilter used by ObjectCreated, ObjectUpdated, and recoverSelectiveDeployments functions
-func (t *SDHandler) setControllerFilter(sdCopy *apps_v1alpha.SelectiveDeployment, delta string, eventType string) {
+	defer statusUpdate()
 	// Flush the status
 	sdCopy.Status = apps_v1alpha.SelectiveDeploymentStatus{}
-	// Put the differences between the old and the new objects into variables
-	t.sdDet = sdDet{
-		name:      sdCopy.GetName(),
-		namespace: sdCopy.GetNamespace(),
-		sdType:    sdCopy.Spec.Type,
-	}
-	if delta != "" {
-		t.sdDet.controllerDelta = strings.Split(delta, "/?delta?/ ")
-	}
 
-	if eventType != "recover" && eventType != "create" {
-		defer t.recoverSelectiveDeployments(t.sdDet)
-	} else if eventType == "recover" {
-		t.wgRecovery[t.sdDet.namespace].Add(1)
-		defer func() {
-			time.Sleep(100 * time.Millisecond)
-			t.wgRecovery[t.sdDet.namespace].Done()
-		}()
-	}
-	defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-
-	sdRaw, err := t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).List(metav1.ListOptions{})
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	// Reveal conflicts by comparing selectivedeployment resource objects with the object in process
-	sdCopy = setCrashListByConflicts(sdCopy, sdRaw)
-	nonExistentCounter := 0
-	for _, controllerDet := range sdCopy.Spec.Controller {
-		err = nil
-		// Get the controller defined at the selectivedeployment object
-		switch strings.ToLower(controllerDet.Type) {
-		case "deployment":
-			_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Get(controllerDet.Name, metav1.GetOptions{})
-		case "daemonset":
-			_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Get(controllerDet.Name, metav1.GetOptions{})
-		case "statefulset":
-			_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Get(controllerDet.Name, metav1.GetOptions{})
-		default:
-			err = nil
-		}
-		if err != nil {
-			// In here, the errors caused by non-existent of the controller are added to crash list of the selectivedeployment object
-			sdCopy = setCrashListByNonExistents(sdCopy, controllerDet)
-			nonExistentCounter++
-		}
-	}
-
-	// uniqueCrashList is a list without duplicate values
-	uniqueCrashList := []apps_v1alpha.Controller{}
-	for _, crash := range sdCopy.Status.Crash {
-		exists := false
-		for _, controllerDet := range uniqueCrashList {
-			if crash.Controller.Type == controllerDet.Type && crash.Controller.Name == controllerDet.Name {
-				exists = true
+	ownerReferences := SetAsOwnerReference(sdCopy)
+	workloadCounter := 0
+	failureCounter := 0
+	if sdCopy.Spec.Workloads.Deployment != nil {
+		workloadCounter += len(sdCopy.Spec.Workloads.Deployment)
+		for _, sdDeployment := range sdCopy.Spec.Workloads.Deployment {
+			deploymentObj, err := t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Get(context.TODO(), sdDeployment.GetName(), metav1.GetOptions{})
+			if errors.IsNotFound(err) {
+				configuredDeployment, failureCount := t.configureWorkload(sdCopy, sdDeployment, ownerReferences)
+				failureCounter += failureCount
+				_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Create(context.TODO(), configuredDeployment.(*appsv1.Deployment), metav1.CreateOptions{})
+				if err != nil {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDeployment.GetName()))
+					failureCounter++
+				}
+			} else {
+				underControl := checkOwnerReferences(sdCopy, deploymentObj.GetOwnerReferences())
+				if !underControl {
+					// Configure the deployment according to the SD
+					configuredDeployment, failureCount := t.configureWorkload(sdCopy, sdDeployment, ownerReferences)
+					failureCounter += failureCount
+					_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(context.TODO(), configuredDeployment.(*appsv1.Deployment), metav1.UpdateOptions{})
+					if err != nil {
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDeployment.GetName()))
+						failureCounter++
+					}
+				} else {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["deployment-in-use"], sdDeployment.GetName()))
+					failureCounter++
+				}
 			}
 		}
-		if !exists {
-			uniqueCrashList = append(uniqueCrashList, crash.Controller)
+	}
+	if sdCopy.Spec.Workloads.DaemonSet != nil {
+		workloadCounter += len(sdCopy.Spec.Workloads.DaemonSet)
+		for _, sdDaemonset := range sdCopy.Spec.Workloads.DaemonSet {
+			daemonsetObj, err := t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Get(context.TODO(), sdDaemonset.GetName(), metav1.GetOptions{})
+			if errors.IsNotFound(err) {
+				configuredDaemonSet, failureCount := t.configureWorkload(sdCopy, sdDaemonset, ownerReferences)
+				failureCounter += failureCount
+				_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Create(context.TODO(), configuredDaemonSet.(*appsv1.DaemonSet), metav1.CreateOptions{})
+				if err != nil {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDaemonset.GetName()))
+					failureCounter++
+				}
+			} else {
+				underControl := checkOwnerReferences(sdCopy, daemonsetObj.GetOwnerReferences())
+				if !underControl {
+					// Configure the daemonset according to the SD
+					configuredDaemonSet, failureCount := t.configureWorkload(sdCopy, sdDaemonset, ownerReferences)
+					failureCounter += failureCount
+					_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(context.TODO(), configuredDaemonSet.(*appsv1.DaemonSet), metav1.UpdateOptions{})
+					if err != nil {
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDaemonset.GetName()))
+						failureCounter++
+					}
+				} else {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-in-use"], sdDaemonset.GetName()))
+					failureCounter++
+				}
+			}
+		}
+	}
+	if sdCopy.Spec.Workloads.StatefulSet != nil {
+		workloadCounter += len(sdCopy.Spec.Workloads.StatefulSet)
+		for _, sdStatefulset := range sdCopy.Spec.Workloads.StatefulSet {
+			statefulsetObj, err := t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Get(context.TODO(), sdStatefulset.GetName(), metav1.GetOptions{})
+			if errors.IsNotFound(err) {
+				configuredStatefulSet, failureCount := t.configureWorkload(sdCopy, sdStatefulset, ownerReferences)
+				failureCounter += failureCount
+				_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Create(context.TODO(), configuredStatefulSet.(*appsv1.StatefulSet), metav1.CreateOptions{})
+				if err != nil {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-creation-failure"], sdStatefulset.GetName()))
+					failureCounter++
+				}
+			} else {
+				underControl := checkOwnerReferences(sdCopy, statefulsetObj.GetOwnerReferences())
+				if !underControl {
+					// Configure the statefulset according to the SD
+					configuredStatefulSet, failureCount := t.configureWorkload(sdCopy, sdStatefulset, ownerReferences)
+					failureCounter += failureCount
+					_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(context.TODO(), configuredStatefulSet.(*appsv1.StatefulSet), metav1.UpdateOptions{})
+					if err != nil {
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-creation-failure"], sdStatefulset.GetName()))
+						failureCounter++
+					}
+				} else {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-in-use"], sdStatefulset.GetName()))
+					failureCounter++
+				}
+			}
+		}
+	}
+	if sdCopy.Spec.Workloads.Job != nil {
+		workloadCounter += len(sdCopy.Spec.Workloads.Job)
+		for _, sdJob := range sdCopy.Spec.Workloads.Job {
+			jobObj, err := t.clientset.BatchV1().Jobs(sdCopy.GetNamespace()).Get(context.TODO(), sdJob.GetName(), metav1.GetOptions{})
+			if errors.IsNotFound(err) {
+				configuredJob, failureCount := t.configureWorkload(sdCopy, sdJob, ownerReferences)
+				failureCounter += failureCount
+				_, err = t.clientset.BatchV1().Jobs(sdCopy.GetNamespace()).Create(context.TODO(), configuredJob.(*batchv1.Job), metav1.CreateOptions{})
+				if err != nil {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["job-creation-failure"], sdJob.GetName()))
+					failureCounter++
+				}
+			} else {
+				underControl := checkOwnerReferences(sdCopy, jobObj.GetOwnerReferences())
+				if !underControl {
+					// Configure the job according to the SD
+					configuredJob, failureCount := t.configureWorkload(sdCopy, sdJob, ownerReferences)
+					failureCounter += failureCount
+					_, err = t.clientset.BatchV1().Jobs(sdCopy.GetNamespace()).Update(context.TODO(), configuredJob.(*batchv1.Job), metav1.UpdateOptions{})
+					if err != nil {
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["job-creation-failure"], sdJob.GetName()))
+						failureCounter++
+					}
+				} else {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["job-in-use"], sdJob.GetName()))
+					failureCounter++
+				}
+			}
+		}
+	}
+	if sdCopy.Spec.Workloads.CronJob != nil {
+		workloadCounter += len(sdCopy.Spec.Workloads.CronJob)
+		for _, sdCronJob := range sdCopy.Spec.Workloads.CronJob {
+			cronjobObj, err := t.clientset.BatchV1beta1().CronJobs(sdCopy.GetNamespace()).Get(context.TODO(), sdCronJob.GetName(), metav1.GetOptions{})
+			if errors.IsNotFound(err) {
+				configuredCronJob, failureCount := t.configureWorkload(sdCopy, sdCronJob, ownerReferences)
+				failureCounter += failureCount
+				_, err = t.clientset.BatchV1beta1().CronJobs(sdCopy.GetNamespace()).Create(context.TODO(), configuredCronJob.(*batchv1beta.CronJob), metav1.CreateOptions{})
+				if err != nil {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-creation-failure"], sdCronJob.GetName()))
+					failureCounter++
+				}
+			} else {
+				underControl := checkOwnerReferences(sdCopy, cronjobObj.GetOwnerReferences())
+				if !underControl {
+					// Configure the cronjob according to the SD
+					configuredCronJob, failureCount := t.configureWorkload(sdCopy, sdCronJob, ownerReferences)
+					failureCounter += failureCount
+					_, err = t.clientset.BatchV1beta1().CronJobs(sdCopy.GetNamespace()).Update(context.TODO(), configuredCronJob.(*batchv1beta.CronJob), metav1.UpdateOptions{})
+					if err != nil {
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-creation-failure"], sdCronJob.GetName()))
+						failureCounter++
+					}
+				} else {
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-in-use"], sdCronJob.GetName()))
+					failureCounter++
+				}
+			}
 		}
 	}
 
-	// The problems and details of the desired new selectivedeployment object are described herein, and this step is the last of the error processing
-	if len(uniqueCrashList) == len(sdCopy.Spec.Controller) {
-		sdCopy.Status.State = failure
-		// nonExistentCounter indicates the number of non-existent controller(s) already defined in the desired selectivedeployment object
-		if nonExistentCounter != 0 && len(sdCopy.Status.Crash) != nonExistentCounter {
-			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) are already under the control of any different resource object(s) with the same type, %d controller(s) couldn't be found", (len(uniqueCrashList) - nonExistentCounter), nonExistentCounter)
-		} else if nonExistentCounter != 0 && len(sdCopy.Status.Crash) == nonExistentCounter {
-			sdCopy.Status.Message = "No controllers found"
-		} else {
-			sdCopy.Status.Message = "All controllers are already under the control of any different resource object(s) with the same type"
-		}
-	} else if len(sdCopy.Status.Crash) == 0 {
+	if failureCounter == 0 && workloadCounter != 0 {
 		sdCopy.Status.State = success
-		sdCopy.Status.Message = "SelectiveDeployment runs precisely to ensure that the actual state of the cluster matches the desired state"
+		sdCopy.Status.Message = []string{statusDict["sd-success"]}
+	} else if workloadCounter == failureCounter {
+		sdCopy.Status.State = failure
 	} else {
 		sdCopy.Status.State = partial
-		if len(sdCopy.Status.Crash) != nonExistentCounter {
-			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) are already under the control of any different resource object(s) with the same type", (len(uniqueCrashList) - nonExistentCounter))
-		}
-		if nonExistentCounter != 0 {
-			sdCopy.Status.Message = fmt.Sprintf("%d controller(s) couldn't be found", nonExistentCounter)
-		}
 	}
-
-	// The number of controller(s) that the selectivedeployment resource successfully controls
-	sdCopy.Status.Ready = fmt.Sprintf("%d/%d", len(sdCopy.Spec.Controller)-len(uniqueCrashList), len(sdCopy.Spec.Controller))
+	sdCopy.Status.Ready = fmt.Sprintf("%d/%d", (workloadCounter - failureCounter), workloadCounter)
 }
 
-// recoverSelectiveDeployments compares the crash list with the controller list and the name of selectivedeployment to recover objects affected by the selectivedeployment
-// object. The controller delta list contains the name of controllers removed from the selectivedeployment object by updating or deleting it
-func (t *SDHandler) recoverSelectiveDeployments(sdDet sdDet) {
-	sdRaw, err := t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdDet.namespace).List(metav1.ListOptions{})
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
+// configureWorkload manipulate the workload by selectivedeployments to match the desired state that users supplied
+func (t *SDHandler) configureWorkload(sdCopy *apps_v1alpha.SelectiveDeployment, workloadRow interface{}, ownerReferences []metav1.OwnerReference) (interface{}, int) {
+	log.Info("configureWorkload: start")
+	nodeSelectorTermList, failureCount := t.setFilter(sdCopy, "addOrUpdate")
+	// Set the new node affinity configuration for the workload and update that
+	nodeAffinity := &corev1.NodeAffinity{
+		RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+			NodeSelectorTerms: nodeSelectorTermList,
+		},
 	}
-	for _, sdRow := range sdRaw.Items {
-		if sdRow.GetName() != sdDet.name && sdRow.Spec.Type == sdDet.sdType && sdRow.Status.State != "" {
-			for _, controllerDetStr := range sdDet.controllerDelta {
-				controllerDetStrArr := strings.Split(controllerDetStr, "?/delta/? ")
-				controllerDet := apps_v1alpha.Controller{}
-				controllerDet.Type = controllerDetStrArr[0]
-				controllerDet.Name = controllerDetStrArr[1]
-				if crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdDet.name, "all"); crashMatch {
-					selectivedeployment, err := t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdRow.GetNamespace()).Get(sdRow.GetName(), metav1.GetOptions{})
-					if err == nil {
-						t.setControllerFilter(selectivedeployment, "", "recover")
-						t.wgRecovery[sdDet.namespace].Wait()
-						time.Sleep(100 * time.Millisecond)
-					}
-				}
-			}
-		}
-	}
-}
-
-// ConfigureControllers configures the controllers by selectivedeployments to match the desired state users supplied
-func (t *SDHandler) ConfigureControllers() {
-	log.Info("ConfigureControllers: start")
-
-	configurationList := t.namespaceList
-	t.namespaceList = []string{}
-	for _, namespace := range configurationList {
-		t.wgHandler[namespace].Wait()
-		t.wgRecovery[namespace].Wait()
-		time.Sleep(1200 * time.Millisecond)
-
-		controllerSelector := desiredFilter{}
-		ownerList := []metav1.OwnerReference{}
-
-		sdRaw, err := t.edgenetClientset.AppsV1alpha().SelectiveDeployments(namespace).List(metav1.ListOptions{})
-		if err != nil {
-			log.Println(err.Error())
-			panic(err.Error())
-		}
-
-		setFilterOfController := func(controllerName string, controllerType string, podSpec corev1.PodSpec, oldOwnerList []metav1.OwnerReference) bool {
-			// Clear the variables involved with node selection
-			controllerSelector.nodeSelectorTerms = []corev1.NodeSelectorTerm{}
-			ownerList = []metav1.OwnerReference{}
-			for _, sdRow := range sdRaw.Items {
-				if sdRow.Status.State == success || sdRow.Status.State == partial {
-					controllerSelector.nodeSelectorTerm = corev1.NodeSelectorTerm{}
-					controllerSelector.matchExpression.Operator = "In"
-					controllerSelector.matchExpression = t.setFilter(sdRow, controllerSelector.matchExpression, "addOrUpdate")
-					for _, controllerDet := range sdRow.Spec.Controller {
-						if crashMatch, _ := checkCrashList(sdRow.Status.Crash, controllerDet, sdRow.GetNamespace(), "controller"); !crashMatch && controllerType == strings.ToLower(controllerDet.Type) && controllerName == controllerDet.Name {
-							if len(controllerSelector.matchExpression.Values) > 0 {
-								controllerSelector.nodeSelectorTerm.MatchExpressions = append(controllerSelector.nodeSelectorTerm.MatchExpressions, controllerSelector.matchExpression)
-								controllerSelector.nodeSelectorTerms = append(controllerSelector.nodeSelectorTerms, controllerSelector.nodeSelectorTerm)
-							}
-							newControllerRef := *metav1.NewControllerRef(sdRow.DeepCopy(), apps_v1alpha.SchemeGroupVersion.WithKind("SelectiveDeployment"))
-							takeControl := false
-							newControllerRef.Controller = &takeControl
-							ownerList = append(ownerList, newControllerRef)
-						}
-					}
-				}
-			}
-			status := false
-			if podSpec.Affinity != nil && podSpec.Affinity.NodeAffinity != nil && podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-				if !reflect.DeepEqual(podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms, controllerSelector.nodeSelectorTerms) ||
-					!reflect.DeepEqual(oldOwnerList, ownerList) {
-					status = true
-				}
-			} else if len(controllerSelector.nodeSelectorTerms) > 0 {
-				status = true
-			}
-			return status
-		}
-		updateController := func(controllerRow interface{}) {
-			// Set the new affinity configuration in the controller and update that
-			nodeAffinity := &corev1.Affinity{
-				NodeAffinity: &corev1.NodeAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-						NodeSelectorTerms: controllerSelector.nodeSelectorTerms,
-					},
+	if len(nodeSelectorTermList) <= 0 {
+		affinity := &corev1.Affinity{
+			NodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: nodeSelectorTermList,
 				},
-			}
-			if len(controllerSelector.nodeSelectorTerms) <= 0 {
-				nodeAffinity.Reset()
-			}
-			switch controllerObj := controllerRow.(type) {
-			case appsv1.Deployment:
-				controllerCopy := controllerObj.DeepCopy()
-				controllerCopy.Spec.Template.Spec.Affinity = nodeAffinity
-				log.Printf("%s/Deployment/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
-				controllerCopy.ObjectMeta.OwnerReferences = ownerList
-				t.clientset.AppsV1().Deployments(namespace).Update(controllerCopy)
-			case appsv1.DaemonSet:
-				controllerCopy := controllerObj.DeepCopy()
-				controllerCopy.Spec.Template.Spec.Affinity = nodeAffinity
-				log.Printf("%s/DaemonSet/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
-				controllerCopy.ObjectMeta.OwnerReferences = ownerList
-				t.clientset.AppsV1().DaemonSets(namespace).Update(controllerCopy)
-			case appsv1.StatefulSet:
-				controllerCopy := controllerObj.DeepCopy()
-				controllerCopy.Spec.Template.Spec.Affinity = nodeAffinity
-				log.Printf("%s/StatefulSet/%s: %s", controllerCopy.GetNamespace(), controllerCopy.GetName(), nodeAffinity)
-				controllerCopy.ObjectMeta.OwnerReferences = ownerList
-				t.clientset.AppsV1().StatefulSets(namespace).Update(controllerCopy)
-			}
+			},
 		}
-		configureController := func(controllerList interface{}) {
-			switch controllerRaw := controllerList.(type) {
-			case *appsv1.DeploymentList:
-				// Sync the desired filter fields according to the object
-				controllerSelector = desiredFilter{}
-				for _, controllerRow := range controllerRaw.Items {
-					if changeStatus := setFilterOfController(controllerRow.GetName(), "deployment", controllerRow.Spec.Template.Spec, controllerRow.ObjectMeta.OwnerReferences); changeStatus {
-						updateController(controllerRow)
-					}
-				}
-			case *appsv1.DaemonSetList:
-				controllerSelector = desiredFilter{}
-				for _, controllerRow := range controllerRaw.Items {
-					if changeStatus := setFilterOfController(controllerRow.GetName(), "daemonset", controllerRow.Spec.Template.Spec, controllerRow.ObjectMeta.OwnerReferences); changeStatus {
-						updateController(controllerRow)
-					}
-				}
-			case *appsv1.StatefulSetList:
-				controllerSelector = desiredFilter{}
-				for _, controllerRow := range controllerRaw.Items {
-					if changeStatus := setFilterOfController(controllerRow.GetName(), "statefulset", controllerRow.Spec.Template.Spec, controllerRow.ObjectMeta.OwnerReferences); changeStatus {
-						updateController(controllerRow)
-					}
-				}
-			}
-		}
-
-		deploymentRaw, err := t.clientset.AppsV1().Deployments(namespace).List(metav1.ListOptions{})
-		if err != nil {
-			log.Println(err.Error())
-			panic(err.Error())
-		}
-		configureController(deploymentRaw)
-		time.Sleep(100 * time.Millisecond)
-		daemonsetRaw, err := t.clientset.AppsV1().DaemonSets(namespace).List(metav1.ListOptions{})
-		if err != nil {
-			log.Println(err.Error())
-			panic(err.Error())
-		}
-		configureController(daemonsetRaw)
-		time.Sleep(100 * time.Millisecond)
-		statefulsetRaw, err := t.clientset.AppsV1().StatefulSets(namespace).List(metav1.ListOptions{})
-		if err != nil {
-			log.Println(err.Error())
-			panic(err.Error())
-		}
-		configureController(statefulsetRaw)
+		affinity.Reset()
 	}
+	var workloadCopy interface{}
+	switch workloadObj := workloadRow.(type) {
+	case appsv1.Deployment:
+		if len(nodeSelectorTermList) <= 0 && workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.Reset()
+		} else if workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		} else {
+			workloadObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: nodeAffinity,
+			}
+		}
+		workloadObj.ObjectMeta.OwnerReferences = ownerReferences
+		//log.Printf("%s/Deployment/%s: %s", workloadObj.GetNamespace(), workloadObj.GetName(), nodeAffinity)
+		workloadCopy = workloadObj.DeepCopy()
+		//t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(workloadCopy)
+	case appsv1.DaemonSet:
+		if len(nodeSelectorTermList) <= 0 && workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.Reset()
+		} else if workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		} else {
+			workloadObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: nodeAffinity,
+			}
+		}
+		workloadObj.ObjectMeta.OwnerReferences = ownerReferences
+		//log.Printf("%s/DaemonSet/%s: %s", workloadObj.GetNamespace(), workloadObj.GetName(), nodeAffinity)
+		workloadCopy = workloadObj.DeepCopy()
+		//t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(workloadCopy)
+	case appsv1.StatefulSet:
+		if len(nodeSelectorTermList) <= 0 && workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.Reset()
+		} else if workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		} else {
+			workloadObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: nodeAffinity,
+			}
+		}
+		workloadObj.ObjectMeta.OwnerReferences = ownerReferences
+		//log.Printf("%s/StatefulSet/%s: %s", workloadObj.GetNamespace(), workloadObj.GetName(), nodeAffinity)
+		workloadCopy = workloadObj.DeepCopy()
+		//t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(workloadCopy)
+	case batchv1.Job:
+		if len(nodeSelectorTermList) <= 0 && workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.Reset()
+		} else if workloadObj.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		} else {
+			workloadObj.Spec.Template.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: nodeAffinity,
+			}
+		}
+		workloadObj.ObjectMeta.OwnerReferences = ownerReferences
+		//log.Printf("%s/Job/%s: %s", workloadObj.GetNamespace(), workloadObj.GetName(), nodeAffinity)
+		workloadCopy = workloadObj.DeepCopy()
+		//t.clientset.BatchV1().Jobs(sdCopy.GetNamespace()).Update(workloadCopy)
+	case batchv1beta.CronJob:
+		if len(nodeSelectorTermList) <= 0 && workloadObj.Spec.JobTemplate.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.JobTemplate.Spec.Template.Spec.Affinity.Reset()
+		} else if workloadObj.Spec.JobTemplate.Spec.Template.Spec.Affinity != nil {
+			workloadObj.Spec.JobTemplate.Spec.Template.Spec.Affinity.NodeAffinity = nodeAffinity
+		} else {
+			workloadObj.Spec.JobTemplate.Spec.Template.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: nodeAffinity,
+			}
+		}
+		workloadObj.ObjectMeta.OwnerReferences = ownerReferences
+		//log.Printf("%s/CronJob/%s: %s", workloadObj.GetNamespace(), workloadObj.GetName(), nodeAffinity)
+		workloadCopy = workloadObj.DeepCopy()
+		//t.clientset.BatchV1beta1().CronJob(sdCopy.GetNamespace()).Update(workloadCopy)
+	}
+	return workloadCopy, failureCount
 }
 
 // setFilter generates the values in the predefined form and puts those into the node selection fields of the selectivedeployment object
-func (t *SDHandler) setFilter(sdRow apps_v1alpha.SelectiveDeployment,
-	matchExpression corev1.NodeSelectorRequirement, event string) corev1.NodeSelectorRequirement {
-	matchExpression.Values = []string{}
-	matchExpression.Key = "kubernetes.io/hostname"
-	sdType := strings.ToLower(sdRow.Spec.Type)
-	selectorFailure := false
-	// Turn the key into the predefined form which is determined at the custom resource definition of selectivedeployment
-	switch sdType {
-	case "city", "state", "country", "continent":
-		// If the event type is delete then we don't need to run the part below
-		if event != "delete" {
-			labelKeySuffix := ""
-			if sdType == "state" || sdType == "country" {
-				labelKeySuffix = "-iso"
-			}
-			labelKey := strings.ToLower(fmt.Sprintf("edge-net.io/%s%s", sdType, labelKeySuffix))
-			// This gets the node list which includes the EdgeNet geolabels
-			nodesRaw, err := t.clientset.CoreV1().Nodes().List(metav1.ListOptions{FieldSelector: "spec.unschedulable!=true"})
-			if err != nil {
-				log.Println(err.Error())
-				panic(err.Error())
-			}
-			sdCopy := sdRow.DeepCopy()
-			// This loop allows us to process each value defined at the object of selectivedeployment resource
-			for _, selectorRow := range sdRow.Spec.Selector {
-				counter := 0
-				// The loop to process each node separately
-			cityNodeLoop:
-				for _, nodeRow := range nodesRaw.Items {
-					taintBlock := false
-					for _, taint := range nodeRow.Spec.Taints {
-						if (taint.Key == "node-role.kubernetes.io/master" && taint.Effect == noSchedule) ||
-							(taint.Key == "node.kubernetes.io/unschedulable" && taint.Effect == noSchedule) {
-							taintBlock = true
-						}
-					}
-					conditionBlock := false
-					if node.GetConditionReadyStatus(nodeRow.DeepCopy()) != trueStr {
-						conditionBlock = true
-					}
-
-					if !conditionBlock && !taintBlock {
-						if contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
-							continue
-						}
-						if selectorRow.Value == nodeRow.Labels[labelKey] && selectorRow.Operator == "In" {
-							matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
-							counter++
-						} else if selectorRow.Value != nodeRow.Labels[labelKey] && selectorRow.Operator == "NotIn" {
-							matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
-							counter++
-						}
-						if selectorRow.Count != 0 && selectorRow.Count == counter {
-							break cityNodeLoop
-						}
-					}
+func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event string) ([]corev1.NodeSelectorTerm, int) {
+	var nodeSelectorTermList []corev1.NodeSelectorTerm
+	failureCounter := 0
+	for _, selectorRow := range sdCopy.Spec.Selector {
+		var matchExpression corev1.NodeSelectorRequirement
+		matchExpression.Values = []string{}
+		matchExpression.Operator = selectorRow.Operator
+		matchExpression.Key = "kubernetes.io/hostname"
+		selectorName := strings.ToLower(selectorRow.Name)
+		// Turn the key into the predefined form which is determined at the custom resource definition of selectivedeployment
+		switch selectorName {
+		case "city", "state", "country", "continent":
+			// If the event type is delete then we don't need to run the part below
+			if event != "delete" {
+				labelKeySuffix := ""
+				if selectorName == "state" || selectorName == "country" {
+					labelKeySuffix = "-iso"
 				}
-
-				if selectorRow.Count != 0 && selectorRow.Count > counter {
-					updateSDStatus := func(sdCopy *apps_v1alpha.SelectiveDeployment) {
-						strLen := 16
-						strSuffix := "..."
-						if len(selectorRow.Value) <= strLen {
-							strLen = len(selectorRow.Value)
-							strSuffix = ""
-						}
-						if sdCopy.Status.State == success {
-							sdCopy.Status.State = partial
-							sdCopy.Status.Message = fmt.Sprintf("Fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
-						} else {
-							errorMsg := fmt.Sprintf("fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
-							if !strings.Contains(strings.ToLower(sdCopy.Status.Message), strings.ToLower(errorMsg)) {
-								sdCopy.Status.Message = fmt.Sprintf("%s, fewer nodes issue, %d node(s) found instead of %d for %s%s", sdCopy.Status.Message, counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
-							}
-						}
-					}
-					if selectorFailure == false {
-						selectorFailure = true
-						defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-						updateSDStatus(sdCopy)
-					} else {
-						updateSDStatus(sdCopy)
-					}
-				} else if strings.Contains(sdRow.Status.Message, "Fewer nodes issue") || strings.Contains(sdRow.Status.Message, "fewer nodes issue") {
-					defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-					index := strings.Index(sdRow.Status.Message, "Fewer nodes issue")
-					if index != -1 {
-						sdRow.Status.Message = sdRow.Status.Message[0:index]
-						if sdCopy.Status.State == partial {
-							sdCopy.Status.State = success
-						}
-					} else {
-						index := strings.Index(sdRow.Status.Message, ", fewer nodes issue")
-						sdRow.Status.Message = sdRow.Status.Message[0:index]
-					}
-				}
-			}
-		}
-	case "polygon":
-		// If the event type is delete then we don't need to run the GeoFence functions
-		if event != "delete" {
-			// If the selectivedeployment key is polygon then certain calculations like geofence need to be done
-			// for being had the list of nodes that the pods will be deployed on according to the desired state.
-			// This gets the node list which includes the EdgeNet geolabels
-			nodesRaw, err := t.clientset.CoreV1().Nodes().List(metav1.ListOptions{FieldSelector: "spec.unschedulable!=true"})
-			if err != nil {
-				log.Println(err.Error())
-				panic(err.Error())
-			}
-
-			var polygon [][]float64
-			sdCopy := sdRow.DeepCopy()
-			// This loop allows us to process each polygon defined at the object of selectivedeployment resource
-			for _, selectorRow := range sdRow.Spec.Selector {
-				counter := 0
-				err = json.Unmarshal([]byte(selectorRow.Value), &polygon)
+				labelKey := strings.ToLower(fmt.Sprintf("edge-net.io/%s%s", selectorName, labelKeySuffix))
+				// This gets the node list which includes the EdgeNet geolabels
+				nodesRaw, err := t.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{FieldSelector: "spec.unschedulable!=true"})
 				if err != nil {
-					updateSDStatus := func(sdCopy *apps_v1alpha.SelectiveDeployment) {
-						strLen := 16
-						strSuffix := "..."
-						if len(selectorRow.Value) <= strLen {
-							strLen = len(selectorRow.Value)
-							strSuffix = ""
-						}
-						if sdCopy.Status.State == success {
-							sdCopy.Status.State = partial
-							sdCopy.Status.Message = fmt.Sprintf("%s%s has a GeoJSON format error", selectorRow.Value[0:strLen], strSuffix)
-						} else {
-							errorMsg := fmt.Sprintf("%s%s has a GeoJSON format error", selectorRow.Value[0:strLen], strSuffix)
-							if !strings.Contains(strings.ToLower(sdCopy.Status.Message), strings.ToLower(errorMsg)) {
-								sdCopy.Status.Message = fmt.Sprintf("%s, %s%s has a GeoJSON format error", sdCopy.Status.Message, selectorRow.Value[0:strLen], strSuffix)
-							}
-						}
-					}
-					if selectorFailure == false {
-						selectorFailure = true
-						defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-						updateSDStatus(sdCopy)
-					} else {
-						updateSDStatus(sdCopy)
-					}
-					continue
+					log.Println(err.Error())
+					panic(err.Error())
 				}
-				// The loop to process each node separately
-			polyNodeLoop:
-				for _, nodeRow := range nodesRaw.Items {
-					taintBlock := false
-					for _, taint := range nodeRow.Spec.Taints {
-						if (taint.Key == "node-role.kubernetes.io/master" && taint.Effect == noSchedule) ||
-							(taint.Key == "node.kubernetes.io/unschedulable" && taint.Effect == noSchedule) {
-							taintBlock = true
-						}
-					}
-					conditionBlock := false
-					for _, conditionRow := range nodeRow.Status.Conditions {
-						if conditionType := conditionRow.Type; conditionType == "Ready" {
-							if conditionRow.Status != trueStr {
-								conditionBlock = true
+				counter := 0
+				// This loop allows us to process each value defined at the object of selectivedeployment resource
+			valueLoop:
+				for _, selectorValue := range selectorRow.Value {
+					// The loop to process each node separately
+					for _, nodeRow := range nodesRaw.Items {
+						taintBlock := false
+						for _, taint := range nodeRow.Spec.Taints {
+							if (taint.Key == "node-role.kubernetes.io/master" && taint.Effect == noSchedule) ||
+								(taint.Key == "node.kubernetes.io/unschedulable" && taint.Effect == noSchedule) {
+								taintBlock = true
 							}
 						}
-					}
-					if !conditionBlock && !taintBlock {
-						if nodeRow.Labels["edge-net.io/lon"] != "" && nodeRow.Labels["edge-net.io/lat"] != "" {
-							if contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
+						conditionBlock := false
+						if node.GetConditionReadyStatus(nodeRow.DeepCopy()) != trueStr {
+							conditionBlock = true
+						}
+
+						if !conditionBlock && !taintBlock {
+							if util.Contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
 								continue
 							}
-							// Because of alphanumeric limitations of Kubernetes on the labels we use "w", "e", "n", and "s" prefixes
-							// at the labels of latitude and longitude. Here is the place those prefixes are dropped away.
-							lonStr := nodeRow.Labels["edge-net.io/lon"]
-							lonStr = string(lonStr[1:])
-							latStr := nodeRow.Labels["edge-net.io/lat"]
-							latStr = string(latStr[1:])
-							if lon, err := strconv.ParseFloat(lonStr, 64); err == nil {
-								if lat, err := strconv.ParseFloat(latStr, 64); err == nil {
-									// boundbox is a rectangle which provides to check whether the point is inside polygon
-									// without taking all point of the polygon into consideration
-									boundbox := node.Boundbox(polygon)
-									status := node.GeoFence(boundbox, polygon, lon, lat)
-									if status && selectorRow.Operator == "In" {
-										matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
-										counter++
-									} else if !status && selectorRow.Operator == "NotIn" {
-										matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
-										counter++
-									}
+							if selectorValue == nodeRow.Labels[labelKey] && selectorRow.Operator == "In" {
+								matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
+								counter++
+							} else if selectorValue != nodeRow.Labels[labelKey] && selectorRow.Operator == "NotIn" {
+								matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
+								counter++
+							}
+							if selectorRow.Quantity != 0 && selectorRow.Quantity == counter {
+								break valueLoop
+							}
+						}
+					}
+				}
+				if selectorRow.Quantity != 0 && selectorRow.Quantity > counter {
+					strLen := 16
+					strSuffix := "..."
+					if len(selectorRow.Value) <= strLen {
+						strLen = len(selectorRow.Value)
+						strSuffix = ""
+					}
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["nodes-fewer"], counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix))
+					failureCounter++
+				}
+			}
+		case "polygon":
+			// If the event type is delete then we don't need to run the GeoFence functions
+			if event != "delete" {
+				// If the selectivedeployment key is polygon then certain calculations like geofence need to be done
+				// for being had the list of nodes that the pods will be deployed on according to the desired state.
+				// This gets the node list which includes the EdgeNet geolabels
+				nodesRaw, err := t.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{FieldSelector: "spec.unschedulable!=true"})
+				if err != nil {
+					log.Println(err.Error())
+					panic(err.Error())
+				}
+
+				var polygon [][]float64
+				// This loop allows us to process each polygon defined at the object of selectivedeployment resource
+				counter := 0
+			polyValueLoop:
+				for _, selectorValue := range selectorRow.Value {
+					err = json.Unmarshal([]byte(selectorValue), &polygon)
+					if err != nil {
+						strLen := 16
+						strSuffix := "..."
+						if len(selectorRow.Value) <= strLen {
+							strLen = len(selectorRow.Value)
+							strSuffix = ""
+						}
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["GeoJSON-err"], selectorValue[0:strLen], strSuffix))
+						failureCounter++
+						continue
+					}
+					// The loop to process each node separately
+					for _, nodeRow := range nodesRaw.Items {
+						taintBlock := false
+						for _, taint := range nodeRow.Spec.Taints {
+							if (taint.Key == "node-role.kubernetes.io/master" && taint.Effect == noSchedule) ||
+								(taint.Key == "node.kubernetes.io/unschedulable" && taint.Effect == noSchedule) {
+								taintBlock = true
+							}
+						}
+						conditionBlock := false
+						for _, conditionRow := range nodeRow.Status.Conditions {
+							if conditionType := conditionRow.Type; conditionType == "Ready" {
+								if conditionRow.Status != trueStr {
+									conditionBlock = true
 								}
 							}
 						}
-						if selectorRow.Count != 0 && selectorRow.Count == counter {
-							break polyNodeLoop
-						}
-					}
-				}
-
-				if selectorRow.Count != 0 && selectorRow.Count > counter {
-					updateSDStatus := func(sdCopy *apps_v1alpha.SelectiveDeployment) {
-						strLen := 16
-						strSuffix := "..."
-						if len(selectorRow.Value) <= strLen {
-							strLen = len(selectorRow.Value)
-							strSuffix = ""
-						}
-						if sdCopy.Status.State == success {
-							sdCopy.Status.State = partial
-							sdCopy.Status.Message = fmt.Sprintf("Fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
-						} else {
-							errorMsg := fmt.Sprintf("fewer nodes issue, %d node(s) found instead of %d for %s%s", counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
-							if !strings.Contains(strings.ToLower(sdCopy.Status.Message), strings.ToLower(errorMsg)) {
-								sdCopy.Status.Message = fmt.Sprintf("%s, fewer nodes issue, %d node(s) found instead of %d for %s%s", sdCopy.Status.Message, counter, selectorRow.Count, selectorRow.Value[0:strLen], strSuffix)
+						if !conditionBlock && !taintBlock {
+							if nodeRow.Labels["edge-net.io/lon"] != "" && nodeRow.Labels["edge-net.io/lat"] != "" {
+								if util.Contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
+									continue
+								}
+								// Because of alphanumeric limitations of Kubernetes on the labels we use "w", "e", "n", and "s" prefixes
+								// at the labels of latitude and longitude. Here is the place those prefixes are dropped away.
+								lonStr := nodeRow.Labels["edge-net.io/lon"]
+								lonStr = string(lonStr[1:])
+								latStr := nodeRow.Labels["edge-net.io/lat"]
+								latStr = string(latStr[1:])
+								if lon, err := strconv.ParseFloat(lonStr, 64); err == nil {
+									if lat, err := strconv.ParseFloat(latStr, 64); err == nil {
+										// boundbox is a rectangle which provides to check whether the point is inside polygon
+										// without taking all point of the polygon into consideration
+										boundbox := node.Boundbox(polygon)
+										status := node.GeoFence(boundbox, polygon, lon, lat)
+										if status && selectorRow.Operator == "In" {
+											matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
+											counter++
+										} else if !status && selectorRow.Operator == "NotIn" {
+											matchExpression.Values = append(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"])
+											counter++
+										}
+									}
+								}
 							}
-						}
-					}
-					if selectorFailure == false {
-						selectorFailure = true
-						defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-						updateSDStatus(sdCopy)
-					} else {
-						updateSDStatus(sdCopy)
-					}
-				} else if strings.Contains(sdRow.Status.Message, "Fewer nodes issue") || strings.Contains(sdRow.Status.Message, "fewer nodes issue") {
-					defer t.edgenetClientset.AppsV1alpha().SelectiveDeployments(sdCopy.GetNamespace()).UpdateStatus(sdCopy)
-					index := strings.Index(sdRow.Status.Message, "Fewer nodes issue")
-					if index != -1 {
-						sdRow.Status.Message = sdRow.Status.Message[0:index]
-						if sdCopy.Status.State == partial {
-							sdCopy.Status.State = success
-						}
-					} else {
-						index := strings.Index(sdRow.Status.Message, ", fewer nodes issue")
-						sdRow.Status.Message = sdRow.Status.Message[0:index]
-					}
-				}
-			}
-		}
-	default:
-		matchExpression.Key = ""
-	}
-
-	return matchExpression
-}
-
-// setCrashListByConflicts compares the controllers of the selectivedeployment resource objects with those of the object in the process
-// to make a list of the conflicts which guides the user to understand its faults
-func setCrashListByConflicts(sdCopy *apps_v1alpha.SelectiveDeployment, sdRaw *apps_v1alpha.SelectiveDeploymentList) *apps_v1alpha.SelectiveDeployment {
-	// The loop to process each selectivedeployment object separately
-	for _, sdRow := range sdRaw.Items {
-		if sdRow.GetName() != sdCopy.GetName() && sdRow.Spec.Type == sdCopy.Spec.Type && sdRow.Status.State != "" {
-			for _, newController := range sdCopy.Spec.Controller {
-				for _, otherObjController := range sdRow.Spec.Controller {
-					if otherObjController.Type == newController.Type && otherObjController.Name == newController.Name {
-						// Checks whether the crash list is empty and this crash exists in the crash list of the selectivedeployment object
-						if crashMatch, _ := checkCrashList(sdRow.Status.Crash, newController, sdCopy.GetName(), "all"); !crashMatch {
-							if crashMatch, _ := checkCrashList(sdCopy.Status.Crash, otherObjController, sdRow.GetName(), "all"); !crashMatch || len(sdCopy.Status.Crash) == 0 {
-								crash := apps_v1alpha.Crash{}
-								crash.Controller.Type = otherObjController.Type
-								crash.Controller.Name = otherObjController.Name
-								crash.Reason = sdRow.GetName()
-								sdCopy.Status.Crash = append(sdCopy.Status.Crash, crash)
+							if selectorRow.Quantity != 0 && selectorRow.Quantity == counter {
+								break polyValueLoop
 							}
 						}
 					}
 				}
+				if selectorRow.Quantity != 0 && selectorRow.Quantity > counter {
+					strLen := 16
+					strSuffix := "..."
+					if len(selectorRow.Value) <= strLen {
+						strLen = len(selectorRow.Value)
+						strSuffix = ""
+					}
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["nodes-fewer"], counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix))
+					failureCounter++
+				}
 			}
+		default:
+			matchExpression.Key = ""
 		}
+
+		var nodeSelectorTerm corev1.NodeSelectorTerm
+		nodeSelectorTerm.MatchExpressions = append(nodeSelectorTerm.MatchExpressions, matchExpression)
+		nodeSelectorTermList = append(nodeSelectorTermList, nodeSelectorTerm)
 	}
-	return sdCopy
+	return nodeSelectorTermList, failureCounter
 }
 
-// setCrashListByNonExistents checks whether the controller exists to put it into the list and it will be listed in case of non-existent
-func setCrashListByNonExistents(sdCopy *apps_v1alpha.SelectiveDeployment, controllerDet apps_v1alpha.Controller) *apps_v1alpha.SelectiveDeployment {
-	if crashMatch, _ := checkCrashList(sdCopy.Status.Crash, controllerDet, "nonexistent", "all"); !crashMatch {
-		crash := apps_v1alpha.Crash{}
-		crash.Controller.Type = controllerDet.Type
-		crash.Controller.Name = controllerDet.Name
-		crash.Reason = "nonexistent"
-		sdCopy.Status.Crash = append(sdCopy.Status.Crash, crash)
-	}
-	return sdCopy
+// SetAsOwnerReference returns the authority as owner
+func SetAsOwnerReference(sdCopy *apps_v1alpha.SelectiveDeployment) []metav1.OwnerReference {
+	// The following section makes authority become the owner
+	ownerReferences := []metav1.OwnerReference{}
+	newSDRef := *metav1.NewControllerRef(sdCopy, apps_v1alpha.SchemeGroupVersion.WithKind("SelectiveDeployment"))
+	takeControl := false
+	newSDRef.Controller = &takeControl
+	ownerReferences = append(ownerReferences, newSDRef)
+	return ownerReferences
 }
 
-// checkCrashList compares the crash list with the given names of controller and selectivedeployment
-func checkCrashList(crashList []apps_v1alpha.Crash, controllerDet apps_v1alpha.Controller, sdName string, compareType string) (bool, int) {
-	exists := false
-	index := -1
-	for i, crash := range crashList {
-		crashControllerType := crash.Controller.Type
-		crashControllerName := crash.Controller.Name
-		crashsdName := crash.Reason
-		if compareType == "controller" {
-			crashsdName = sdName
-		} else if compareType == "selectivedeployment" {
-			crashControllerType = controllerDet.Type
-			crashControllerName = controllerDet.Name
-		}
-		if controllerDet.Type == crashControllerType && controllerDet.Name == crashControllerName && sdName == crashsdName {
-			exists = true
-			index = i
+func checkOwnerReferences(sdCopy *apps_v1alpha.SelectiveDeployment, ownerReferences []metav1.OwnerReference) bool {
+	underControl := false
+	for _, reference := range ownerReferences {
+		if reference.Kind == "SelectiveDeployment" && reference.UID != sdCopy.GetUID() {
+			underControl = true
 		}
 	}
-	return exists, index
-}
-
-// Return whether slice contains value
-func contains(slice []string, value string) bool {
-	for _, ele := range slice {
-		if value == ele {
-			return true
-		}
-	}
-	return false
-}
-
-// Return whether owner references already contains the reference
-func containsOwnerRef(ownerRefs []metav1.OwnerReference, value metav1.OwnerReference) bool {
-	for _, ele := range ownerRefs {
-		if ele.UID == value.UID {
-			return true
-		}
-	}
-	return false
+	return underControl
 }

@@ -1,16 +1,16 @@
 package nodelabeler
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"edgenet/pkg/authorization"
-	"edgenet/pkg/node"
+	"github.com/EdgeNet-project/edgenet/pkg/node"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	core_v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,23 +32,19 @@ type controller struct {
 }
 
 // Start function is entry point of the controller
-func Start() {
-	clientset, err := authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
+func Start(kubernetes kubernetes.Interface) {
+	clientset := kubernetes
 
 	// Create the shared informer to list and watch node resources
 	informer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			// The main purpose of listing is to attach geo labels to whole nodes at the beginning
 			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return clientset.CoreV1().Nodes().List(options)
+				return clientset.CoreV1().Nodes().List(context.TODO(), options)
 			},
 			// This function watches all changes/updates of nodes
 			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return clientset.CoreV1().Nodes().Watch(options)
+				return clientset.CoreV1().Nodes().Watch(context.TODO(), options)
 			},
 		},
 		&core_v1.Node{},
@@ -91,7 +87,7 @@ func Start() {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	// Run the controller loop as a background task to start processing resources
-	go controller.run(stopCh)
+	go controller.run(stopCh, clientset)
 	// A channel to observe OS signals for smooth shut down
 	sigTerm := make(chan os.Signal, 1)
 	signal.Notify(sigTerm, syscall.SIGTERM)
@@ -100,13 +96,13 @@ func Start() {
 }
 
 // Run starts the controller loop
-func (c *controller) run(stopCh <-chan struct{}) {
+func (c *controller) run(stopCh <-chan struct{}, clientset kubernetes.Interface) {
 	// A Go panic which includes logging and terminating
 	defer utilruntime.HandleCrash()
 	// Shutdown after all goroutines have done
 	defer c.queue.ShutDown()
 	c.logger.Info("run: initiating")
-
+	c.handler.Init(clientset)
 	// Run the informer to list and watch resources
 	go c.informer.Run(stopCh)
 

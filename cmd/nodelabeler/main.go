@@ -20,13 +20,20 @@ limitations under the License.
 package main
 
 import (
-	"edgenet/pkg/authorization"
-	"edgenet/pkg/controller/v1/nodelabeler"
+	"log"
+
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1/nodelabeler"
 )
 
 func main() {
 	// Set kubeconfig to be used to create clientsets
-	authorization.SetKubeConfig()
+	bootstrap.SetKubeConfig()
+	clientset, err := bootstrap.CreateClientSet()
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
 	// Start the controller to watch nodes and attach the labels to them
-	nodelabeler.Start()
+	nodelabeler.Start(clientset)
 }

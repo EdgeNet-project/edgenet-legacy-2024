@@ -20,7 +20,9 @@ limitations under the License.
 package node
 
 import (
+	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -28,8 +30,8 @@ import (
 	"strings"
 	"time"
 
-	"edgenet/pkg/authorization"
-	"edgenet/pkg/node/infrastructure"
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
+	"github.com/EdgeNet-project/edgenet/pkg/node/infrastructure"
 
 	namecheap "github.com/billputer/go-namecheap"
 	geoip2 "github.com/oschwald/geoip2-golang"
@@ -37,6 +39,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 )
 
 // JSON structure of patch operation
@@ -45,37 +48,48 @@ type patchStringValue struct {
 	Path  string `json:"path"`
 	Value string `json:"value"`
 }
+type patchByBoolValue struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value bool   `json:"value"`
+}
+type patchByOwnerReferenceValue struct {
+	Op    string                  `json:"op"`
+	Path  string                  `json:"path"`
+	Value []metav1.OwnerReference `json:"value"`
+}
+
+// Clientset to be synced by the custom resources
+var Clientset kubernetes.Interface
 
 // GeoFence function determines whether the point is inside a polygon by using the crossing number method.
 // This method counts the number of times a ray starting at a point crosses a polygon boundary edge.
 // The even numbers mean the point is outside and the odd ones mean the point is inside.
-func GeoFence(boundbox []float64, polygon [][]float64, y float64, x float64) bool {
+func GeoFence(boundbox []float64, polygon [][]float64, x float64, y float64) bool {
 	vertices := len(polygon)
 	lastIndex := vertices - 1
 	oddNodes := false
-
 	if boundbox[0] <= x && boundbox[1] >= x && boundbox[2] <= y && boundbox[3] >= y {
 		for index := range polygon {
-			if (polygon[index][0] < y && polygon[lastIndex][0] >= y || polygon[lastIndex][0] < y &&
-				polygon[index][0] >= y) && (polygon[index][1] <= x || polygon[lastIndex][1] <= x) {
-				if polygon[index][1]+(y-polygon[index][0])/(polygon[lastIndex][0]-polygon[index][0])*
-					(polygon[lastIndex][1]-polygon[index][1]) < x {
+			if (polygon[index][1] < y && polygon[lastIndex][1] >= y || polygon[lastIndex][1] < y &&
+				polygon[index][1] >= y) && (polygon[index][0] <= x || polygon[lastIndex][0] <= x) {
+				if polygon[index][0]+(y-polygon[index][1])/(polygon[lastIndex][1]-polygon[index][1])*
+					(polygon[lastIndex][0]-polygon[index][0]) < x {
 					oddNodes = !oddNodes
 				}
 			}
 			lastIndex = index
 		}
 	}
-
 	return oddNodes
 }
 
 // Boundbox returns a rectangle which created according to the points of the polygon given
 func Boundbox(points [][]float64) []float64 {
-	var minX float64 = -math.MaxFloat64
-	var maxX float64 = math.MaxFloat64
-	var minY float64 = -math.MaxFloat64
-	var maxY float64 = math.MaxFloat64
+	var minX float64 = math.MaxFloat64
+	var maxX float64 = -math.MaxFloat64
+	var minY float64 = math.MaxFloat64
+	var maxY float64 = -math.MaxFloat64
 
 	for _, coordinates := range points {
 		minX = math.Min(minX, coordinates[0])
@@ -88,13 +102,54 @@ func Boundbox(points [][]float64) []float64 {
 	return bounding
 }
 
-// setNodeLabels uses client-go to patch nodes by processing a labels map
-func setNodeLabels(hostname string, labels map[string]string) bool {
-	clientset, err := authorization.CreateClientSet()
+// GetKubeletVersion looks at the head node to decide which version of Kubernetes to install
+func GetKubeletVersion() string {
+	nodeRaw, err := Clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master"})
 	if err != nil {
 		log.Println(err.Error())
-		panic(err.Error())
 	}
+	kubeletVersion := ""
+	for _, nodeRow := range nodeRaw.Items {
+		kubeletVersion = nodeRow.Status.NodeInfo.KubeletVersion
+	}
+	return kubeletVersion
+}
+
+// SetOwnerReferences make the references owner of the node
+func SetOwnerReferences(nodeName string, ownerReferences []metav1.OwnerReference) error {
+	// Create a patch slice and initialize it to the size of 1
+	// Append the data existing in the label map to the slice
+	nodePatchArr := make([]interface{}, 1)
+	nodePatch := patchByOwnerReferenceValue{}
+	nodePatch.Op = "add"
+	nodePatch.Path = "/metadata/ownerReferences"
+	nodePatch.Value = ownerReferences
+	nodePatchArr[0] = nodePatch
+	nodePatchJSON, _ := json.Marshal(nodePatchArr)
+	// Patch the nodes with the arguments:
+	// hostname, patch type, and patch data
+	_, err := Clientset.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.JSONPatchType, nodePatchJSON, metav1.PatchOptions{})
+	return err
+}
+
+// SetNodeScheduling syncs the node with the node contribution
+func SetNodeScheduling(nodeName string, unschedulable bool) error {
+	// Create a patch slice and initialize it to the size of 1
+	nodePatchArr := make([]interface{}, 1)
+	nodePatch := patchByBoolValue{}
+	nodePatch.Op = "replace"
+	nodePatch.Path = "/spec/unschedulable"
+	nodePatch.Value = unschedulable
+	nodePatchArr[0] = nodePatch
+	nodePatchJSON, _ := json.Marshal(nodePatchArr)
+	// Patch the nodes with the arguments:
+	// hostname, patch type, and patch data
+	_, err := Clientset.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.JSONPatchType, nodePatchJSON, metav1.PatchOptions{})
+	return err
+}
+
+// setNodeLabels uses client-go to patch nodes by processing a labels map
+func setNodeLabels(hostname string, labels map[string]string) bool {
 	// Create a patch slice and initialize it to the label size
 	nodePatchArr := make([]patchStringValue, len(labels))
 	nodePatch := patchStringValue{}
@@ -108,10 +163,9 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 		row++
 	}
 	nodesJSON, _ := json.Marshal(nodePatchArr)
-
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
-	_, err = clientset.CoreV1().Nodes().Patch(hostname, types.JSONPatchType, nodesJSON)
+	_, err := Clientset.CoreV1().Nodes().Patch(context.TODO(), hostname, types.JSONPatchType, nodesJSON, metav1.PatchOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -123,8 +177,15 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 func GetGeolocationByIP(hostname string, ipStr string) bool {
 	// Parse IP address
 	ip := net.ParseIP(ipStr)
+	var pathDB string
+	if flag.Lookup("geolite-path") != nil {
+		pathDB = flag.Lookup("geolite-path").Value.(flag.Getter).Get().(string)
+	}
+	if pathDB == "" {
+		pathDB = "../../assets/database/GeoLite2-City/GeoLite2-City.mmdb"
+	}
 	// Open GeoLite database
-	db, err := geoip2.Open("../../assets/database/GeoLite2-City/GeoLite2-City.mmdb")
+	db, err := geoip2.Open(pathDB)
 	if err != nil {
 		log.Fatal(err)
 		return false
@@ -221,7 +282,7 @@ func GetNodeIPAddresses(obj *corev1.Node) (string, string) {
 
 // SetHostname generates token to be used on adding a node onto the cluster
 func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
-	client, err := authorization.CreateNamecheapClient()
+	client, err := bootstrap.CreateNamecheapClient()
 	if err != nil {
 		log.Println(err.Error())
 		return false, "Unknown"
@@ -232,13 +293,8 @@ func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
 
 // CreateJoinToken generates token to be used on adding a node onto the cluster
 func CreateJoinToken(ttl string, hostname string) string {
-	clientset, err := authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
 	duration, _ := time.ParseDuration(ttl)
-	token, err := infrastructure.CreateToken(clientset, duration, hostname)
+	token, err := infrastructure.CreateToken(Clientset, duration, hostname)
 	if err != nil {
 		log.Println(err.Error())
 		return "error"
@@ -248,13 +304,7 @@ func CreateJoinToken(ttl string, hostname string) string {
 
 // GetList uses clientset to get node list of the cluster
 func GetList() []string {
-	clientset, err := authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-
-	nodesRaw, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodesRaw, err := Clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -267,89 +317,13 @@ func GetList() []string {
 	return nodes
 }
 
-// GetStatusList uses clientset to get node list of the cluster that contains Ready State info
-func GetStatusList() []byte {
-	type nodeStatus struct {
-		Node       string   `json:"node"`
-		Ready      string   `json:"ready"`
-		IP         string   `json:"ip"`
-		Age        int      `json:"age"`
-		Hardware   string   `json:"hardware"`
-		Namespaces []string `json:"namespaces"`
-		City       string   `json:"city"`
-		State      string   `json:"state-iso"`
-		Country    string   `json:"country-iso"`
-		Continent  string   `json:"continent"`
-		Lon        string   `json:"lon"`
-		Lat        string   `json:"lat"`
-	}
-	clientset, err := authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-
-	nodesRaw, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	podsRaw, err := clientset.CoreV1().Pods("").List(metav1.ListOptions{})
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	nodesArr := make([]nodeStatus, len(nodesRaw.Items))
-	for i, nodeRow := range nodesRaw.Items {
-		nodesArr[i].Node = nodeRow.Name
-		nodesArr[i].City = nodeRow.Labels["edge-net.io/city"]
-		nodesArr[i].State = nodeRow.Labels["edge-net.io/state-iso"]
-		nodesArr[i].Country = nodeRow.Labels["edge-net.io/country-iso"]
-		nodesArr[i].Continent = nodeRow.Labels["edge-net.io/continent"]
-		lonStr := nodeRow.Labels["edge-net.io/lon"]
-		latStr := nodeRow.Labels["edge-net.io/lat"]
-		if nodeRow.Labels["edge-net.io/lon"] != "" && nodeRow.Labels["edge-net.io/lat"] != "" {
-			lonStr = string(lonStr[1:])
-			latStr = string(latStr[1:])
-		}
-		nodesArr[i].Lon = lonStr
-		nodesArr[i].Lat = latStr
-		for _, conditionRow := range nodeRow.Status.Conditions {
-			if conditionType := conditionRow.Type; conditionType == "Ready" {
-				nodesArr[i].Ready = string(conditionRow.Status)
-			}
-		}
-
-		internalIP, externalIP := GetNodeIPAddresses(nodeRow.DeepCopy())
-		if internalIP != "" {
-			nodesArr[i].IP = internalIP
-		} else if externalIP != "" {
-			nodesArr[i].IP = externalIP
-		}
-
-		nodesArr[i].Age = nodeRow.GetCreationTimestamp().Day()
-		nodesArr[i].Hardware = fmt.Sprintf("%s %d CPU %dMiB, %s", nodeRow.Status.NodeInfo.Architecture,
-			nodeRow.Status.Capacity.Cpu().Value(), nodeRow.Status.Capacity.Memory().Value()/1048576,
-			nodeRow.Status.NodeInfo.OSImage)
-
-		namespaces := []string{}
-		for _, podRow := range podsRaw.Items {
-			if nodeRow.Name == podRow.Spec.NodeName {
-				namespaces = append(namespaces, podRow.GetNamespace())
-			}
-		}
-		nodesArr[i].Namespaces = unique(namespaces)
-	}
-	nodesJSON, _ := json.Marshal(nodesArr)
-
-	return nodesJSON
-}
-
 // GetConditionReadyStatus picks the ready status of node
 func GetConditionReadyStatus(node *corev1.Node) string {
 	for _, conditionRow := range node.Status.Conditions {
 		if conditionType := conditionRow.Type; conditionType == "Ready" {
 			return string(conditionRow.Status)
+		} else if conditionType := conditionRow.Type; conditionType == "NotReady" {
+			return "False"
 		}
 	}
 	return ""
@@ -357,16 +331,10 @@ func GetConditionReadyStatus(node *corev1.Node) string {
 
 // getNodeByHostname uses clientset to get namespace requested
 func getNodeByHostname(hostname string) (string, error) {
-	clientset, err := authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-
 	// Examples for error handling:
 	// - Use helper functions like e.g. errors.IsNotFound()
 	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
-	_, err = clientset.CoreV1().Nodes().Get(hostname, metav1.GetOptions{})
+	_, err := Clientset.CoreV1().Nodes().Get(context.TODO(), hostname, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		log.Printf("Node %s not found", hostname)
 		return "false", err

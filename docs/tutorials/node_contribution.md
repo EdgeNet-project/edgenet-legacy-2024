@@ -2,27 +2,27 @@
 
 EdgeNet thrives thanks to contributions from its users and from others who volunteer resources in support of the system. This tutorial describes the very simple process of adding a node to EdgeNet. If you are able to set up a virtual machine (VM) on a server that you administer, then you can contribute, which will be a great benefit to our growing infrastructure and to all EdgeNet users.
 
-Each node falls under what we call an *authority* in EdgeNet, which is a group, or possibly just one person, that takes responsibility for users and/or resources. To contribute a node, please be sure that you are an authority administrator, or that an administrator of your authority has authorized you to make node contributions.
+Each node falls under what we call an *authority* in EdgeNet, which is a group, or possibly just one person, that takes responsibility for users and/or resources. To contribute a node, please be sure that you are an EdgeNet authority administrator, or that an administrator of your authority has authorized you to make node contributions.
 
 ## Preliminaries
 
-To contribute a node, we assume that you already know how to set up a VM and ensure that certain of its port numbers are accessible from the internet.
+To contribute a node, we assume that you already know how to set up a VM with its own public IP address and ensure that certain of its port numbers are accessible from the internet.
 
 ### Set up a VM
 
-EdgeNet is currently accepting *Ubuntu* and *CentOS* VMs as nodes. We plan to broaden our range of supported operating systems over time.
+EdgeNet is currently accepting nodes that run recent *Ubuntu* or *CentOS* distributions. We plan to broaden our range of supported operating systems over time. The VM must have its own public IP address that is distinct from the IP address of the server on which it resides.
 
 ### Open your firewall
 
-EdgeNet is most useful to researchers if its nodes are entirely open to the internet, without a firewall blocking incoming traffic in any way. This is easiest if your server is in a perimeter network, sometimes called a *DMZ* or *science DMZ*. If you are contributing resources from elsewhere, please do your best, within the limits of what your institution allows, or, if the server is in your home, what you yourself are prepared to offer.
+EdgeNet is most useful to researchers if its nodes are entirely open to the internet, without a firewall blocking incoming traffic in any way. This is easiest if your server is in a perimeter network, sometimes called a *DMZ* or *science DMZ*. If you are contributing resources from elsewhere, please do your best, within the limits of what your institution allows. If the server is in your home, please open as many ports as your internet service provider allows.
 
-At a minimum, you may only contribute a node if the Kubernetes [required ports](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#check-required-ports) are accessible from the internet.
+At a minimum, it will only be possible for you to contribute a node if the Kubernetes [required ports](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#check-required-ports) are accessible from the internet.
 
 ## Technologies you will use
 
 You will use [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview/), the [Kubernetes](https://kubernetes.io/) command-line interface.
 
-You will most likely have used ``kubectl`` to create your EdgeNet user account to begin with. If you need to install it again, please see the releavant [Kubernetes documentation](https://kubernetes.io/docs/tasks/tools/install-kubectl/).
+You will most likely have used ``kubectl`` to create your EdgeNet user account to begin with. If you need to install the tool again, please see the relevant [Kubernetes documentation](https://kubernetes.io/docs/tasks/tools/install-kubectl/).
 
 You will also have received a user-specific kubeconfig file when you created your EdgeNet user account. You will authenticate with this kubeconfig file when you make a node contribution. In what follows, we will assume that it is saved in your working directory on your system as ``./edgenet-kubeconfig.cfg``. If it is elsewhere, please be sure to modify the commands accordingly.
 
@@ -40,7 +40,9 @@ Enable an SSH server on your VM, preferably on a port number other than the defa
 
 Create an EdgeNet user (the username does not matter) as a **sudoer**.
 
-Copy & paste the contents of [the EdgeNet public key](https://github.com/EdgeNet-project/edgenet/blob/master/config/id_rsa.pub) into the SSH authorized keys file for the EdgeNet user.
+Copy & paste the contents of [the EdgeNet public key](https://github.com/EdgeNet-project/edgenet/blob/master/configs/id_rsa.pub) into the SSH authorized keys file for the EdgeNet user.
+
+**P.S.** The user should be allowed to run commands by using *sudo* without being prompted for the password.
 
 ### Prepare a description of your node contribution
 
@@ -69,6 +71,10 @@ spec:
   user: edgenet
 ```
 
+#### Node naming pattern
+
+The node name pattern in use is `<authority-name>.<node-contribution-name>.edge-net.io` to provide a node list grouping the authorities. According to the example above, the node name would appear as **lip6-lab.ple-1.edge-net.io**.
+
 ### Make your node contribution
 
 Using ``kubectl``, create a node contribution object:
@@ -89,3 +95,25 @@ You can at any time check on the status of your node contribution by invoking th
 ```
 kubectl describe nodecontribution ple-1 -n authority-lip6-lab --kubeconfig ./edgenet-kubeconfig.cfg
 ```
+
+#### In case of failure
+
+If you encounter the state of **Failure** on the status of your node contribution, please make sure that you follow the instructions correctly. When you make sure you correctly follow the instructions, you can delete the node contribution object and recreate it as below:
+
+```
+kubectl delete -f ./nodecontribution.yaml --kubeconfig ./edgenet-kubeconfig.cfg
+```
+
+```
+kubectl create -f ./nodecontribution.yaml --kubeconfig ./edgenet-kubeconfig.cfg
+```
+
+In case of any other issue, please contact our support team by [opening our tawk.to window](https://tawk.to/edgenet).
+
+## Legal rights
+
+The use of EdgeNet is subject to the user's acceptance of the Acceptable Use Policy. Please [click here](https://edge-net.org/aup.html) to reach the AUP.
+
+In addition to this, the containers in EdgeNet doesn't hold root privileges by default.
+
+Furthermore, we will put the EdgeFlow solution inherited from PlanetFlow in place to track all activity in the next releases.

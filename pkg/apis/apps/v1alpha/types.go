@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Sorbonne Université
+Copyright 2020 Sorbonne Université
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,7 +17,11 @@ limitations under the License.
 package v1alpha
 
 import (
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	batchv1beta "k8s.io/api/batch/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // +genclient
@@ -26,9 +30,9 @@ import (
 // SelectiveDeployment describes a SelectiveDeployment resource
 type SelectiveDeployment struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
-	meta_v1.TypeMeta `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
-	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the selectivedeployment resource spec
 	Spec SelectiveDeploymentSpec `json:"spec"`
@@ -39,48 +43,45 @@ type SelectiveDeployment struct {
 // SelectiveDeploymentSpec is the spec for a SelectiveDeployment resource
 type SelectiveDeploymentSpec struct {
 	// The controller indicates the name and type of controller desired to configure
-	// Controllers: deployment, daemonset, and statefulsets
+	// Workloads: deployment, daemonset, and statefulsets
 	// The type is for defining which kind of selectivedeployment it is, you could find the list of active types below.
-	// Types: city, state, country, continent, and polygon
+	// Types of selector: city, state, country, continent, and polygon
 	// The value represents the desired filter and it must be compatible with the type of selectivedeployment
-	Controller []Controller `json:"controller"`
-	Type       string       `json:"type"`
-	Selector   []Selector   `json:"selector"`
+	Workloads Workloads  `json:"workloads"`
+	Selector  []Selector `json:"selector"`
+	Recovery  bool       `json:"recovery"`
 }
 
-// Controller indicates deployment, daemonset or statefulsets and their names
-type Controller struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
+// Workloads indicates deployments, daemonsets or statefulsets
+type Workloads struct {
+	Deployment  []appsv1.Deployment   `json:"deployment"`
+	DaemonSet   []appsv1.DaemonSet    `json:"daemonset"`
+	StatefulSet []appsv1.StatefulSet  `json:"statefulset"`
+	Job         []batchv1.Job         `json:"job"`
+	CronJob     []batchv1beta.CronJob `json:"cronjob"`
 }
 
 // Selector to define desired node filtering parameters
 type Selector struct {
-	Value    string `json:"value"`
-	Operator string `json:"operator"`
-	Count    int    `json:"count"`
+	Name     string                      `json:"name"`
+	Value    []string                    `json:"value"`
+	Operator corev1.NodeSelectorOperator `json:"operator"`
+	Quantity int                         `json:"quantity"`
 }
 
 // SelectiveDeploymentStatus is the status for a SelectiveDeployment resource
 type SelectiveDeploymentStatus struct {
-	Ready   string  `json:"ready"`
-	State   string  `json:"state"`
-	Message string  `json:"message"`
-	Crash   []Crash `json:"crash"`
-}
-
-// Crash is the list of controllers that the object cannot take them under control
-type Crash struct {
-	Controller Controller `json:"controller"`
-	Reason     string     `json:"reason"`
+	Ready   string   `json:"ready"`
+	State   string   `json:"state"`
+	Message []string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SelectiveDeploymentList is a list of SelectiveDeployment resources
 type SelectiveDeploymentList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
 
 	Items []SelectiveDeployment `json:"items"`
 }
@@ -92,9 +93,9 @@ type SelectiveDeploymentList struct {
 // Authority describes a Authority resource
 type Authority struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
-	meta_v1.TypeMeta `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
-	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the authority resource spec
 	Spec AuthoritySpec `json:"spec"`
@@ -109,6 +110,7 @@ type AuthoritySpec struct {
 	URL       string  `json:"url"`
 	Address   Address `json:"address"`
 	Contact   Contact `json:"contact"`
+	Enabled   bool    `json:"enabled"`
 }
 
 // Contact
@@ -131,7 +133,6 @@ type Address struct {
 
 // AuthorityStatus is the status for a Authority resource
 type AuthorityStatus struct {
-	Enabled bool     `json:"enabled"`
 	State   string   `json:"state"`
 	Message []string `json:"message"`
 }
@@ -140,8 +141,8 @@ type AuthorityStatus struct {
 
 // AuthorityList is a list of Authority resources
 type AuthorityList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
 
 	Items []Authority `json:"items"`
 }
@@ -153,9 +154,9 @@ type AuthorityList struct {
 // AuthorityRequest describes a AuthorityRequest resource
 type AuthorityRequest struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
-	meta_v1.TypeMeta `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
-	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the authorityrequest resource spec
 	Spec AuthorityRequestSpec `json:"spec"`
@@ -170,23 +171,23 @@ type AuthorityRequestSpec struct {
 	URL       string  `json:"url"`
 	Address   Address `json:"address"`
 	Contact   Contact `json:"contact"`
+	Approved  bool    `json:"approved"`
 }
 
 // AuthorityRequestStatus is the status for a AuthorityRequest resource
 type AuthorityRequestStatus struct {
-	EmailVerify bool          `json:"emailverify"`
-	Approved    bool          `json:"approved"`
-	Expires     *meta_v1.Time `json:"expires"`
-	State       string        `json:"state"`
-	Message     []string      `json:"message"`
+	EmailVerified bool         `json:"emailverified"`
+	Expires       *metav1.Time `json:"expires"`
+	State         string       `json:"state"`
+	Message       []string     `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // AuthorityRequestList is a list of AuthorityRequest resources
 type AuthorityRequestList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
 
 	Items []AuthorityRequest `json:"items"`
 }
@@ -197,9 +198,9 @@ type AuthorityRequestList struct {
 // Team describes a Team resource
 type Team struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
-	meta_v1.TypeMeta `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
-	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the team resource spec
 	Spec TeamSpec `json:"spec"`
@@ -211,6 +212,7 @@ type Team struct {
 type TeamSpec struct {
 	Users       []TeamUsers `json:"users"`
 	Description string      `json:"description"`
+	Enabled     bool        `json:"enabled"`
 }
 
 type TeamUsers struct {
@@ -220,15 +222,16 @@ type TeamUsers struct {
 
 // TeamStatus is the status for a Team resource
 type TeamStatus struct {
-	Enabled bool `json:"enabled"`
+	State   string   `json:"state"`
+	Message []string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // TeamList is a list of Team resources
 type TeamList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
 
 	Items []Team `json:"items"`
 }
@@ -239,9 +242,9 @@ type TeamList struct {
 // Slice describes a Slice resource
 type Slice struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
-	meta_v1.TypeMeta `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
-	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the slice resource spec
 	Spec SliceSpec `json:"spec"`
@@ -255,6 +258,7 @@ type SliceSpec struct {
 	Profile     string       `json:"profile"`
 	Users       []SliceUsers `json:"users"`
 	Description string       `json:"description"`
+	Renew       bool         `json:"renew"`
 }
 
 type SliceUsers struct {
@@ -264,16 +268,17 @@ type SliceUsers struct {
 
 // SliceStatus is the status for a Slice resource
 type SliceStatus struct {
-	Renew   bool          `json:"renew"`
-	Expires *meta_v1.Time `json:"expires"`
+	Expires *metav1.Time `json:"expires"`
+	State   string       `json:"state"`
+	Message []string     `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SliceList is a list of Slice resources
 type SliceList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
 
 	Items []Slice `json:"items"`
 }
@@ -284,9 +289,9 @@ type SliceList struct {
 // User describes a User resource
 type User struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
-	meta_v1.TypeMeta `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
-	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the user resource spec
 	Spec UserSpec `json:"spec"`
@@ -316,8 +321,8 @@ type UserStatus struct {
 
 // UserList is a list of User resources
 type UserList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
 
 	Items []User `json:"items"`
 }
@@ -328,9 +333,9 @@ type UserList struct {
 // UserRegistrationRequest describes a UserRegistrationRequest resource
 type UserRegistrationRequest struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
-	meta_v1.TypeMeta `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
-	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the userregistrationrequest resource spec
 	Spec UserRegistrationRequestSpec `json:"spec"`
@@ -345,23 +350,23 @@ type UserRegistrationRequestSpec struct {
 	Email     string `json:"email"`
 	URL       string `json:"url"`
 	Bio       string `json:"bio"`
+	Approved  bool   `json:"approved"`
 }
 
 // UserRegistrationRequestStatus is the status for a UserRegistrationRequest resource
 type UserRegistrationRequestStatus struct {
-	EmailVerify bool          `json:"emailverify"`
-	Approved    bool          `json:"approved"`
-	Expires     *meta_v1.Time `json:"expires"`
-	State       string        `json:"state"`
-	Message     []string      `json:"message"`
+	EmailVerified bool         `json:"emailverified"`
+	Expires       *metav1.Time `json:"expires"`
+	State         string       `json:"state"`
+	Message       []string     `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // UserRegistrationRequestList is a list of UserRegistrationRequest resources
 type UserRegistrationRequestList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
 
 	Items []UserRegistrationRequest `json:"items"`
 }
@@ -372,9 +377,9 @@ type UserRegistrationRequestList struct {
 // AcceptableUsePolicy describes a AcceptableUsePolicy resource
 type AcceptableUsePolicy struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
-	meta_v1.TypeMeta `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
-	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the acceptableusepolicy resource spec
 	Spec AcceptableUsePolicySpec `json:"spec"`
@@ -385,20 +390,22 @@ type AcceptableUsePolicy struct {
 // AcceptableUsePolicySpec is the spec for a AcceptableUsePolicy resource
 type AcceptableUsePolicySpec struct {
 	Accepted bool `json:"accepted"`
+	Renew    bool `json:"renew"`
 }
 
 // AcceptableUsePolicyStatus is the status for a AcceptableUsePolicy resource
 type AcceptableUsePolicyStatus struct {
-	Renew   bool          `json:"renew"`
-	Expires *meta_v1.Time `json:"expires"`
+	Expires *metav1.Time `json:"expires"`
+	State   string       `json:"state"`
+	Message []string     `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // AcceptableUsePolicyList is a list of AcceptableUsePolicy resources
 type AcceptableUsePolicyList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
 
 	Items []AcceptableUsePolicy `json:"items"`
 }
@@ -409,9 +416,9 @@ type AcceptableUsePolicyList struct {
 // EmailVerification describes a EmailVerification resource
 type EmailVerification struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
-	meta_v1.TypeMeta `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
-	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the emailverification resource spec
 	Spec EmailVerificationSpec `json:"spec"`
@@ -428,18 +435,17 @@ type EmailVerificationSpec struct {
 
 // EmailVerificationStatus is the status for a EmailVerification resource
 type EmailVerificationStatus struct {
-	Renew   bool          `json:"renew"`
-	Expires *meta_v1.Time `json:"expires"`
-	State   string        `json:"state"`
-	Message []string      `json:"message"`
+	Expires *metav1.Time `json:"expires"`
+	State   string       `json:"state"`
+	Message []string     `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // EmailVerificationList is a list of EmailVerification resources
 type EmailVerificationList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
 
 	Items []EmailVerification `json:"items"`
 }
@@ -450,9 +456,9 @@ type EmailVerificationList struct {
 // NodeContribution describes a NodeContribution resource
 type NodeContribution struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
-	meta_v1.TypeMeta `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
-	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the nodecontribution resource spec
 	Spec NodeContributionSpec `json:"spec"`
@@ -486,8 +492,8 @@ type NodeContributionStatus struct {
 
 // NodeContributionList is a list of NodeContribution resources
 type NodeContributionList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
 
 	Items []NodeContribution `json:"items"`
 }
@@ -499,9 +505,9 @@ type NodeContributionList struct {
 // TotalResourceQuota describes a total resouce quota resource
 type TotalResourceQuota struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
-	meta_v1.TypeMeta `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
-	meta_v1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the totalresourcequota resource spec
 	Spec TotalResourceQuotaSpec `json:"spec"`
@@ -518,10 +524,10 @@ type TotalResourceQuotaSpec struct {
 
 // TotalResourceDetails indicates resources to add or remove, and how long they will remain
 type TotalResourceDetails struct {
-	Name    string        `json:"name"`
-	CPU     string        `json:"cpu"`
-	Memory  string        `json:"memory"`
-	Expires *meta_v1.Time `json:"expires"`
+	Name    string       `json:"name"`
+	CPU     string       `json:"cpu"`
+	Memory  string       `json:"memory"`
+	Expires *metav1.Time `json:"expires"`
 }
 
 // TotalResourceQuotaStatus is the status for a total resouce quota resource
@@ -542,8 +548,8 @@ type TotalResourceUsed struct {
 
 // TotalResourceQuotaList is a list of total resouce quota resources
 type TotalResourceQuotaList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
 
 	Items []TotalResourceQuota `json:"items"`
 }

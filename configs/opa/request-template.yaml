@@ -1,0 +1,53 @@
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: requestcontrol
+spec:
+  crd:
+    spec:
+      names:
+        kind: RequestControl
+        listKind: RequestControlList
+        plural: requestcontrols
+        singular: requestcontrol
+      validation:
+        openAPIV3Schema:
+          properties:
+            spec:
+              required:
+                - allowed
+              values:
+                type: array
+                items:
+                  type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package requestcontrol
+
+        violation[{"msg": msg, "details": {"restricted_values": restricted_values}}] {
+        	restricted_values[value]
+        	count(restricted_values) > 0
+          creation
+        	not admin
+        	msg := sprintf("Request cannot hold approved status at creation: %v", [restricted_values])
+        }
+
+        admin {
+        	"system:masters" == input.review.userInfo.groups[_]
+        }
+
+        creation {
+          "CREATE" == input.review.operation
+        }
+
+        restricted_values[value] {
+        	value := input.review.object.spec.approved
+        	not matches_any(value)
+        }
+
+        matches_any(value) {
+        	some i
+        	param_value := input.parameters.values[i]
+        	value == param_value
+        }

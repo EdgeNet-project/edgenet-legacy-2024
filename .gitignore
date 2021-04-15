@@ -13,25 +13,25 @@
 *.out
 
 # config files
-config/**
-!config/id_rsa.pub
-!config/*_template.yaml
-!config/user-files
-!config/user-files/**
-!config/nginx
-!config/nginx/*_template.conf
-!config/crd
-!config/crd/**
-!config/opa
-!config/opa/**
+configs/**
+!configs/id_rsa.pub
+!configs/*_template.yaml
+!configs/user-files
+!configs/user-files/**
+!configs/nginx
+!configs/nginx/*_template.conf
+!configs/crd
+!configs/crd/**
+!configs/opa
+!configs/opa/**
+!configs/ca_sample.crt
+!configs/public.cfg
 
 # assets
 assets/certs/**
 assets/kubeconfigs/**
-assets/database/**
 !assets/certs/*.md
 !assets/kubeconfigs/*.md
-!assets/database/*.md
 
 # examples
 examples/selective-deployment/object/error-handling/**
@@ -39,7 +39,8 @@ examples/selective-deployment/object/error-handling
 
 examples/*.txt
 examples/*/*.txt
-code-generation
+code-generator
+hack
 
 # Ignore OS X metadata files
 ._*

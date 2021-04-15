@@ -17,22 +17,22 @@ limitations under the License.
 package acceptableusepolicy
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	apps_v1alpha "edgenet/pkg/apis/apps/v1alpha"
-	"edgenet/pkg/authorization"
-	"edgenet/pkg/client/clientset/versioned"
-	"edgenet/pkg/mailer"
+	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
-	Init() error
+	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj, updated interface{})
 	ObjectDeleted(obj interface{})
@@ -40,25 +40,15 @@ type HandlerInterface interface {
 
 // Handler implementation
 type Handler struct {
-	clientset        *kubernetes.Clientset
-	edgenetClientset *versioned.Clientset
+	clientset        kubernetes.Interface
+	edgenetClientset versioned.Interface
 }
 
 // Init handles any handler initialization
-func (t *Handler) Init() error {
+func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	log.Info("AUPHandler.Init")
-	var err error
-	t.clientset, err = authorization.CreateClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	t.edgenetClientset, err = authorization.CreateEdgeNetClientSet()
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	return err
+	t.clientset = kubernetes
+	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
@@ -67,38 +57,65 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	// Create a copy of the acceptable use policy object to make changes on it
 	AUPCopy := obj.(*apps_v1alpha.AcceptableUsePolicy).DeepCopy()
 	// Find the authority from the namespace in which the object is
-	AUPOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(AUPCopy.GetNamespace(), metav1.GetOptions{})
-	AUPOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(AUPOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	AUPOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), AUPCopy.GetNamespace(), metav1.GetOptions{})
+	AUPOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), AUPOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	// Check if the authority is active
-	if AUPOwnerAuthority.Status.Enabled {
+	if AUPOwnerAuthority.Spec.Enabled {
 		// If the service restarts, it creates all objects again
 		// Because of that, this section covers a variety of possibilities
 		if AUPCopy.Spec.Accepted && AUPCopy.Status.Expires == nil {
 			// Run timeout goroutine
 			go t.runApprovalTimeout(AUPCopy)
-			defer t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
-			if AUPCopy.Status.Renew {
-				AUPCopy.Status.Renew = false
-			}
 			// Set a timeout cycle which makes the acceptable use policy expires every 6 months
 			AUPCopy.Status.Expires = &metav1.Time{
 				Time: time.Now().Add(4382 * time.Hour),
+			}
+			AUPCopy.Status.State = success
+			AUPCopy.Status.Message = []string{statusDict["aup-ok"]}
+			_, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(context.TODO(), AUPCopy, metav1.UpdateOptions{})
+			if err != nil {
+				AUPCopy.Status.State = failure
+				AUPCopy.Status.Message = []string{statusDict["aup-ok"], statusDict["aup-set-fail"]}
+				t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(context.TODO(), AUPCopy, metav1.UpdateOptions{})
+			} else {
+				user, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(context.TODO(), AUPCopy.GetName(), metav1.GetOptions{})
+				if !user.Status.AUP {
+					user.Status.AUP = true
+					t.edgenetClientset.AppsV1alpha().Users(user.GetNamespace()).Update(context.TODO(), user, metav1.UpdateOptions{})
+				}
 			}
 		} else if AUPCopy.Spec.Accepted && AUPCopy.Status.Expires != nil {
 			// Check if the 6 months cycle expired
 			if AUPCopy.Status.Expires.Time.Sub(time.Now()) >= 0 {
 				go t.runApprovalTimeout(AUPCopy)
+				user, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(context.TODO(), AUPCopy.GetName(), metav1.GetOptions{})
+				if !user.Status.AUP {
+					user.Status.AUP = true
+					t.edgenetClientset.AppsV1alpha().Users(user.GetNamespace()).Update(context.TODO(), user, metav1.UpdateOptions{})
+				}
 			} else {
 				AUPCopy.Spec.Accepted = false
-				AUPCopyUpdated, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(AUPCopy)
+				AUPUpdated, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(context.TODO(), AUPCopy, metav1.UpdateOptions{})
 				if err == nil {
-					AUPCopy = AUPCopyUpdated
+					AUPCopy = AUPUpdated
+				}
+				AUPCopy.Status.State = failure
+				AUPCopy.Status.Message = []string{statusDict["aup-expired"]}
+				t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(context.TODO(), AUPCopy, metav1.UpdateOptions{})
+				user, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(context.TODO(), AUPCopy.GetName(), metav1.GetOptions{})
+				if user.Status.AUP {
+					user.Status.AUP = false
+					t.edgenetClientset.AppsV1alpha().Users(user.GetNamespace()).Update(context.TODO(), user, metav1.UpdateOptions{})
 				}
 			}
-
-			if AUPCopy.Status.Renew {
-				AUPCopy.Status.Renew = false
-				t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
+		} else if !AUPCopy.Spec.Accepted && AUPCopy.Status.Expires == nil {
+			AUPCopy.Status.State = success
+			AUPCopy.Status.Message = []string{statusDict["aup-ok"]}
+			t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(context.TODO(), AUPCopy, metav1.UpdateOptions{})
+			user, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(context.TODO(), AUPCopy.GetName(), metav1.GetOptions{})
+			if user.Status.AUP {
+				user.Status.AUP = false
+				t.edgenetClientset.AppsV1alpha().Users(user.GetNamespace()).Update(context.TODO(), user, metav1.UpdateOptions{})
 			}
 		}
 	}
@@ -109,19 +126,23 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 	log.Info("AUPHandler.ObjectUpdated")
 	// Create a copy of the acceptable use policy object to make changes on it
 	AUPCopy := obj.(*apps_v1alpha.AcceptableUsePolicy).DeepCopy()
-	AUPOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(AUPCopy.GetNamespace(), metav1.GetOptions{})
-	AUPOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(AUPOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
+	AUPOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), AUPCopy.GetNamespace(), metav1.GetOptions{})
+	AUPOwnerAuthority, _ := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), AUPOwnerNamespace.Labels["authority-name"], metav1.GetOptions{})
 	fieldUpdated := updated.(fields)
 
-	if AUPOwnerAuthority.Status.Enabled {
-		defer t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(AUPCopy)
+	if AUPOwnerAuthority.Spec.Enabled {
 		// To manipulate user object according to the changes of acceptable use policy
 		if fieldUpdated.accepted {
+			defer func() {
+				AUPUpdated, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(context.TODO(), AUPCopy, metav1.UpdateOptions{})
+				if err == nil {
+					AUPCopy = AUPUpdated
+				}
+			}()
 			// Get the user who owns this acceptable use policy object
-			AUPUser, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(AUPCopy.GetName(), metav1.GetOptions{})
+			AUPUser, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(context.TODO(), AUPCopy.GetName(), metav1.GetOptions{})
 			if AUPCopy.Spec.Accepted {
 				AUPUser.Status.AUP = true
-
 				go t.runApprovalTimeout(AUPCopy)
 				// Set the expiration date according to the 6-month cycle
 				AUPCopy.Status.Expires = &metav1.Time{
@@ -137,16 +158,17 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 			} else {
 				AUPUser.Status.AUP = false
 			}
-			go t.edgenetClientset.AppsV1alpha().Users(AUPUser.GetNamespace()).UpdateStatus(AUPUser)
-		} else if AUPCopy.Spec.Accepted && AUPCopy.Status.Renew {
-			AUPCopy.Status.Expires = &metav1.Time{
-				Time: time.Now().Add(4382 * time.Hour),
-			}
+			go t.edgenetClientset.AppsV1alpha().Users(AUPUser.GetNamespace()).UpdateStatus(context.TODO(), AUPUser, metav1.UpdateOptions{})
 		}
-		AUPCopy.Status.Renew = false
 	} else {
 		AUPCopy.Spec.Accepted = false
-		t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(AUPCopy)
+		AUPUpdated, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(context.TODO(), AUPCopy, metav1.UpdateOptions{})
+		if err == nil {
+			AUPCopy = AUPUpdated
+		}
+		AUPCopy.Status.State = failure
+		AUPCopy.Status.Message = []string{statusDict["authority-disabled"]}
+		t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).UpdateStatus(context.TODO(), AUPCopy, metav1.UpdateOptions{})
 	}
 }
 
@@ -161,10 +183,8 @@ func (t *Handler) runApprovalTimeout(AUPCopy *apps_v1alpha.AcceptableUsePolicy) 
 	timeoutRenewed := make(chan bool, 1)
 	terminated := make(chan bool, 1)
 	var timeout <-chan time.Time
-	var reminder <-chan time.Time
 	if AUPCopy.Status.Expires != nil {
 		timeout = time.After(time.Until(AUPCopy.Status.Expires.Time))
-		reminder = time.After(time.Until(AUPCopy.Status.Expires.Time.Add(time.Hour * -168)))
 	}
 	closeChannels := func() {
 		close(timeoutRenewed)
@@ -172,35 +192,37 @@ func (t *Handler) runApprovalTimeout(AUPCopy *apps_v1alpha.AcceptableUsePolicy) 
 	}
 
 	// Watch the events of acceptable use policy object
-	watchAUP, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Watch(metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", AUPCopy.GetName())})
+	watchAUP, err := t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", AUPCopy.GetName())})
 	if err == nil {
 		go func() {
 			// Get events from watch interface
 			for AUPEvent := range watchAUP.ResultChan() {
 				// Get updated acceptable use policy object
 				updatedAUP, status := AUPEvent.Object.(*apps_v1alpha.AcceptableUsePolicy)
-				if status {
-					if AUPEvent.Type == "DELETED" || !updatedAUP.Spec.Accepted {
-						terminated <- true
-						continue
-					}
+				if AUPCopy.GetUID() == updatedAUP.GetUID() {
+					if status {
+						if AUPEvent.Type == "DELETED" || !updatedAUP.Spec.Accepted {
+							terminated <- true
+							continue
+						}
 
-					if updatedAUP.Status.Expires != nil {
-						// Check whether expiration date updated
-						if AUPCopy.Status.Expires != nil && timeout != nil {
-							if AUPCopy.Status.Expires.Time == updatedAUP.Status.Expires.Time {
-								AUPCopy = updatedAUP
-								continue
+						if updatedAUP.Status.Expires != nil {
+							// Check whether expiration date updated - TBD
+							/*if AUPCopy.Status.Expires != nil && timeout != nil {
+								if AUPCopy.Status.Expires.Time == updatedAUP.Status.Expires.Time {
+									AUPCopy = updatedAUP
+									continue
+								}
+							}*/
+							if updatedAUP.Status.Expires.Time.Sub(time.Now()) >= 0 {
+								timeout = time.After(time.Until(updatedAUP.Status.Expires.Time))
+								timeoutRenewed <- true
+							} else {
+								terminated <- true
 							}
 						}
-
-						if updatedAUP.Status.Expires.Time.Sub(time.Now()) >= 0 {
-							timeout = time.After(time.Until(updatedAUP.Status.Expires.Time))
-							reminder = time.After(time.Until(updatedAUP.Status.Expires.Time.Add(time.Hour * -168)))
-							timeoutRenewed <- true
-						}
+						AUPCopy = updatedAUP
 					}
-					AUPCopy = updatedAUP
 				}
 			}
 		}()
@@ -218,28 +240,20 @@ timeoutLoop:
 		select {
 		case <-timeoutRenewed:
 			break timeoutOptions
-		case <-reminder:
-			AUPOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(AUPCopy.GetNamespace(), metav1.GetOptions{})
-			AUPUser, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(AUPCopy.GetName(), metav1.GetOptions{})
-			contentData := mailer.CommonContentData{}
-			contentData.CommonData.Authority = AUPOwnerNamespace.Labels["authority-name"]
-			contentData.CommonData.Username = AUPCopy.GetName()
-			contentData.CommonData.Name = fmt.Sprintf("%s %s", AUPUser.Spec.FirstName, AUPUser.Spec.LastName)
-			contentData.CommonData.Email = []string{AUPUser.Spec.Email}
-			mailer.Send("acceptable-use-policy-renewal", contentData)
-			break timeoutOptions
 		case <-timeout:
 			watchAUP.Stop()
-			AUPOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(AUPCopy.GetNamespace(), metav1.GetOptions{})
-			AUPUser, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(AUPCopy.GetName(), metav1.GetOptions{})
+			AUPOwnerNamespace, _ := t.clientset.CoreV1().Namespaces().Get(context.TODO(), AUPCopy.GetNamespace(), metav1.GetOptions{})
+			AUPUser, _ := t.edgenetClientset.AppsV1alpha().Users(AUPCopy.GetNamespace()).Get(context.TODO(), AUPCopy.GetName(), metav1.GetOptions{})
 			contentData := mailer.CommonContentData{}
 			contentData.CommonData.Authority = AUPOwnerNamespace.Labels["authority-name"]
 			contentData.CommonData.Username = AUPCopy.GetName()
 			contentData.CommonData.Name = fmt.Sprintf("%s %s", AUPUser.Spec.FirstName, AUPUser.Spec.LastName)
 			contentData.CommonData.Email = []string{AUPUser.Spec.Email}
 			mailer.Send("acceptable-use-policy-expired", contentData)
+			AUPUser.Status.AUP = false
+			t.edgenetClientset.AppsV1alpha().Users(AUPUser.GetNamespace()).Update(context.TODO(), AUPUser, metav1.UpdateOptions{})
 			AUPCopy.Spec.Accepted = false
-			t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(AUPCopy)
+			t.edgenetClientset.AppsV1alpha().AcceptableUsePolicies(AUPCopy.GetNamespace()).Update(context.TODO(), AUPCopy, metav1.UpdateOptions{})
 			closeChannels()
 			break timeoutLoop
 		case <-terminated:

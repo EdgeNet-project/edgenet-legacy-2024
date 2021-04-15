@@ -1,6 +1,9 @@
 /*
 Copyright 2019 Sorbonne Université
 
+Old Credits:
+Copyright 2017 The Kubernetes Authors.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -17,35 +20,36 @@ limitations under the License.
 package v1alpha
 
 import (
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"edgenet/pkg/apis/apps"
+	"github.com/EdgeNet-project/edgenet/pkg/apis/apps"
 )
 
-// SchemeGroupVersion is the identifier for the API which includes
-// the name of the group and the version of the API
-var SchemeGroupVersion = schema.GroupVersion{
-	Group:   apps.GroupName,
-	Version: "v1alpha",
+// SchemeGroupVersion is group version used to register these objects
+var SchemeGroupVersion = schema.GroupVersion{Group: apps.GroupName, Version: "v1alpha"}
+
+// Kind takes an unqualified kind and returns back a Group qualified GroupKind
+func Kind(kind string) schema.GroupKind {
+	return SchemeGroupVersion.WithKind(kind).GroupKind()
 }
 
-// Create a SchemeBuilder which uses functions to add types to the scheme
-var (
-	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
-	AddToScheme   = SchemeBuilder.AddToScheme
-)
-
-// Resource handles adding types to the schemes
+// Resource takes an unqualified resource and returns a Group qualified GroupResource
 func Resource(resource string) schema.GroupResource {
 	return SchemeGroupVersion.WithResource(resource).GroupResource()
 }
 
-// addKnownTypes adds our types to the API scheme by registering
+var (
+	// SchemeBuilder initializes a scheme builder
+	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
+	// AddToScheme is a global function that registers this API group & version to a scheme
+	AddToScheme = SchemeBuilder.AddToScheme
+)
+
+// Adds the list of known types to Scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(
-		SchemeGroupVersion,
+	scheme.AddKnownTypes(SchemeGroupVersion,
 		&SelectiveDeployment{},
 		&SelectiveDeploymentList{},
 		&Authority{},
@@ -69,8 +73,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&TotalResourceQuota{},
 		&TotalResourceQuotaList{},
 	)
-
-	// Register the type in the scheme
-	meta_v1.AddToGroupVersion(scheme, SchemeGroupVersion)
+	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
 }

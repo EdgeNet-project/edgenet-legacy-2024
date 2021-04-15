@@ -20,14 +20,15 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/base64"
+	"flag"
 	"fmt"
 	"html/template"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net/smtp"
 	"os"
-	"time"
+
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	yaml "gopkg.in/yaml.v2"
 )
@@ -67,6 +68,7 @@ type MultiProviderData struct {
 type VerifyContentData struct {
 	CommonData commonData
 	Code       string
+	URL        string
 }
 
 // ValidationFailureContentData to set the failure-specific variables
@@ -85,29 +87,107 @@ type smtpServer struct {
 	To       string `yaml:"to"`
 }
 
+// console implementation
+type console struct {
+	URL string `yaml:"url"`
+}
+
+var dir = "../.."
+
 // address to get URI of smtp server
 func (s *smtpServer) address() string {
 	return fmt.Sprintf("%s:%s", s.Host, s.Port)
 }
 
 // Send function consumed by the custom resources to send emails
-func Send(subject string, contentData interface{}) {
+func Send(subject string, contentData interface{}) error {
 	// The code below inits the SMTP configuration for sending emails
+	if flag.Lookup("dir") != nil {
+		dir = flag.Lookup("dir").Value.(flag.Getter).Get().(string)
+	}
 	// The path of the yaml config file of smtp server
-	file, err := os.Open("../../config/smtp.yaml")
+	var pathSMTP string
+	if flag.Lookup("smtp-path") != nil {
+		pathSMTP = flag.Lookup("smtp-path").Value.(flag.Getter).Get().(string)
+	}
+	if pathSMTP == "" {
+		pathSMTP = fmt.Sprintf("%s/configs/smtp.yaml", dir)
+	}
+	file, err := os.Open(pathSMTP)
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
-		return
+		return err
 	}
 	decoder := yaml.NewDecoder(file)
 	var smtpServer smtpServer
 	err = decoder.Decode(&smtpServer)
 	if err != nil {
 		log.Printf("Mailer: unexpected error executing command: %v", err)
-		return
+		return err
 	}
 
 	// This section determines which email to send whom
+	to, body := prepareNotification(subject, contentData, smtpServer)
+
+	// Create a new Client connected to the SMTP server
+	client, err := smtp.Dial(smtpServer.address())
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	// Check if the server supports TLS
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		// Start TLS to encrypt all further communication
+		cfg := &tls.Config{ServerName: smtpServer.Host, InsecureSkipVerify: true}
+		if err = client.StartTLS(cfg); err != nil {
+			log.Println(err)
+			return err
+		}
+	}
+	// Check if the server supports SMTP authentication
+	if ok, _ := client.Extension("AUTH"); ok {
+		// To authenticate if needed
+		auth := smtp.PlainAuth("", smtpServer.Username, smtpServer.Password, smtpServer.Host)
+		if err = client.Auth(auth); err != nil {
+			log.Println(err)
+			return err
+		}
+	}
+	// The part below starts a mail transaction by using the provided email address
+	if err = client.Mail(smtpServer.From); err != nil {
+		log.Println(err)
+		return err
+	}
+	// Add recipients to the email
+	for _, addr := range to {
+		if err = client.Rcpt(addr); err != nil {
+			log.Println(err)
+			return err
+		}
+	}
+	// To write the mail headers and body
+	w, err := client.Data()
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	_, err = w.Write(body.Bytes())
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	err = w.Close()
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	// Close the connection to the server
+	client.Quit()
+	log.Printf("Mailer: email sent to  %s!", to)
+	return err
+}
+
+func prepareNotification(subject string, contentData interface{}, smtpServer smtpServer) ([]string, bytes.Buffer) {
 	to := []string{}
 	var body bytes.Buffer
 	switch subject {
@@ -143,62 +223,7 @@ func Send(subject string, contentData interface{}) {
 		"user-kubeconfig-failure", "user-email-verification-dubious", "user-email-verification-update-malfunction", "user-deactivation-failure":
 		to, body = setUserFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	}
-
-	// Create a new Client connected to the SMTP server
-	client, err := smtp.Dial(smtpServer.address())
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	// Check if the server supports TLS
-	if ok, _ := client.Extension("STARTTLS"); ok {
-		// Start TLS to encrypt all further communication
-		cfg := &tls.Config{ServerName: smtpServer.Host, InsecureSkipVerify: true}
-		if err = client.StartTLS(cfg); err != nil {
-			log.Println(err)
-			return
-		}
-	}
-	// Check if the server supports SMTP authentication
-	if ok, _ := client.Extension("AUTH"); ok {
-		// To authenticate if needed
-		auth := smtp.PlainAuth("", smtpServer.Username, smtpServer.Password, smtpServer.Host)
-		if err = client.Auth(auth); err != nil {
-			log.Println(err)
-			return
-		}
-	}
-	// The part below starts a mail transaction by using the provided email address
-	if err = client.Mail(smtpServer.From); err != nil {
-		log.Println(err)
-		return
-	}
-	// Add recipients to the email
-	for _, addr := range to {
-		if err = client.Rcpt(addr); err != nil {
-			log.Println(err)
-			return
-		}
-	}
-	// To write the mail headers and body
-	w, err := client.Data()
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	_, err = w.Write(body.Bytes())
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	err = w.Close()
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	// Close the connection to the server
-	client.Quit()
-	log.Printf("Mailer: email sent to  %s!", to)
+	return to, body
 }
 
 // setCommonEmailHeaders to create an email body by subject and common headers
@@ -222,7 +247,7 @@ func setCommonEmailHeaders(subject string, from string, to []string, delimiter s
 		headers += fmt.Sprintf("\r\n--%s\r\n", delimiter)
 	}
 	headers += "Content-Type: text/html; charset=\"utf-8\"\r\n"
-	headers += "Content-Transfer-Encoding: 8bit\r\n"
+	headers += "Content-Transfer-Encoding: 8bit\r\n\r\n"
 	if delimiter != "" {
 		headers += "\r\n"
 	}
@@ -236,7 +261,7 @@ func setCommonEmailHeaders(subject string, from string, to []string, delimiter s
 func setUserFailureContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
 	NCData := contentData.(CommonContentData)
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	title := "[EdgeNet Admin] User Creation Failure"
 	if subject == "user-validation-failure-name" || subject == "user-validation-failure-email" ||
@@ -255,7 +280,7 @@ func setUserFailureContent(contentData interface{}, from string, to []string, su
 func setAuthorityFailureContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
 	NCData := contentData.(CommonContentData)
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	title := "[EdgeNet Admin] Authority Establishment Failure"
 	if subject == "authority-validation-failure-name" || subject == "authority-validation-failure-email" {
@@ -273,7 +298,7 @@ func setAuthorityFailureContent(contentData interface{}, from string, to []strin
 func setNodeContributionContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
 	NCData := contentData.(MultiProviderData)
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	title := "[EdgeNet] Node contribution event"
 	switch subject {
@@ -299,7 +324,7 @@ func setTeamContent(contentData interface{}, from, subject string) ([]string, by
 	// This represents receivers' email addresses
 	to := teamData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	title := "[EdgeNet] Team event"
 	switch subject {
@@ -322,7 +347,7 @@ func setTeamContent(contentData interface{}, from, subject string) ([]string, by
 func setSliceContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
 	sliceData := contentData.(ResourceAllocationData)
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	title := "[EdgeNet] Slice event"
 	switch subject {
@@ -363,7 +388,7 @@ func setAUPConfirmationContent(contentData interface{}, from string) ([]string, 
 	// This represents receivers' email addresses
 	to := AUPData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-confirmation.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/acceptable-use-policy-confirmation.html", dir))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] Acceptable Use Policy Confirmed", from, to, delimiter)
 	t.Execute(&body, AUPData)
@@ -377,7 +402,7 @@ func setAUPExpiredContent(contentData interface{}, from string) ([]string, bytes
 	// This represents receivers' email addresses
 	to := AUPData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-expired.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/acceptable-use-policy-expired.html", dir))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] Acceptable Use Policy Expired", from, to, delimiter)
 	t.Execute(&body, AUPData)
@@ -391,7 +416,7 @@ func setAUPRenewalContent(contentData interface{}, from string) ([]string, bytes
 	// This represents receivers' email addresses
 	to := AUPData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/acceptable-use-policy-renewal.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/acceptable-use-policy-renewal.html", dir))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] Acceptable Use Policy Expiring", from, to, delimiter)
 	t.Execute(&body, AUPData)
@@ -405,7 +430,7 @@ func setAuthorityRequestContent(contentData interface{}, from string) ([]string,
 	// This represents receivers' email addresses
 	to := registrationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/authority-creation.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/authority-creation.html", dir))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] Authority Successfully Created", from, to, delimiter)
 	t.Execute(&body, registrationData)
@@ -416,10 +441,21 @@ func setAuthorityRequestContent(contentData interface{}, from string) ([]string,
 // setAuthorityEmailVerificationContent to create an email body related to the email verification
 func setAuthorityEmailVerificationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
+	file, err := os.Open(fmt.Sprintf("%s/configs/console.yaml", dir))
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+	}
+	decoder := yaml.NewDecoder(file)
+	var console console
+	err = decoder.Decode(&console)
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+	}
+	verificationData.URL = console.URL
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verification.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/authority-email-verification.html", dir))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] Authority Registration Request - Do You Confirm?", from, to, delimiter)
 	t.Execute(&body, verificationData)
@@ -431,7 +467,7 @@ func setAuthorityEmailVerificationContent(contentData interface{}, from string) 
 func setAuthorityVerifiedAlertContent(contentData interface{}, from string, to []string) ([]string, bytes.Buffer) {
 	alertData := contentData.(CommonContentData)
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/authority-email-verified-alert.html")
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/authority-email-verified-alert.html", dir))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet Admin] Authority Request - Email Verified", from, to, delimiter)
 	t.Execute(&body, alertData)
@@ -445,8 +481,8 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 	// This represents receivers' email addresses
 	to := registrationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles("../../assets/templates/email/user-registration.html")
-	delimiter := generateRandomString(10)
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/user-registration.html", dir))
+	delimiter := util.GenerateRandomString(10)
 	body := setCommonEmailHeaders("[EdgeNet] User Registration Successful", from, to, delimiter)
 	t.Execute(&body, registrationData)
 
@@ -456,7 +492,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 	headers += "Content-Disposition: attachment;filename=\"edgenet-kubeconfig.cfg\"\r\n"
 	// Read the kubeconfig file created for web authentication
 	// It will be in the attachment of email
-	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet-authority-%s-%s.cfg", registrationData.CommonData.Authority,
+	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, registrationData.CommonData.Authority,
 		registrationData.CommonData.Username))
 	if fileErr != nil {
 		log.Panic(fileErr)
@@ -470,10 +506,21 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 // setUserEmailVerificationContent to create an email body related to the email verification
 func setUserEmailVerificationContent(contentData interface{}, from, subject string) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
+	file, err := os.Open(fmt.Sprintf("%s/configs/console.yaml", dir))
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+	}
+	decoder := yaml.NewDecoder(file)
+	var console console
+	err = decoder.Decode(&console)
+	if err != nil {
+		log.Printf("Mailer: unexpected error executing command: %v", err)
+	}
+	verificationData.URL = console.URL
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	title := "[EdgeNet] Email Verification"
 	switch subject {
@@ -496,22 +543,10 @@ func setUserVerifiedAlertContent(contentData interface{}, from string, to []stri
 		to = alertData.CommonData.Email
 	}
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("../../assets/templates/email/%s.html", subject))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
 	body := setCommonEmailHeaders("[EdgeNet] User Email Verified", from, to, delimiter)
 	t.Execute(&body, alertData)
 
 	return to, body
-}
-
-// generateRandomString to have a unique string
-func generateRandomString(n int) string {
-	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-	b := make([]rune, n)
-	rand.Seed(time.Now().UnixNano())
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }

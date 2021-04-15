@@ -1,13 +1,24 @@
 package main
 
 import (
-	"edgenet/pkg/authorization"
-	"edgenet/pkg/controller/v1alpha/user"
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/user"
+	"log"
 )
 
 func main() {
 	// Set kubeconfig to be used to create clientsets
-	authorization.SetKubeConfig()
+	bootstrap.SetKubeConfig()
+	clientset, err := bootstrap.CreateClientSet()
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	edgenetClientset, err := bootstrap.CreateEdgeNetClientSet()
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
 	// Start the controller to provide the functionalities of user resource
-	user.Start()
+	user.Start(clientset, edgenetClientset)
 }

@@ -1,0 +1,76 @@
+# Copyright 2020 Sorbonne Université
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: emailverifications.apps.edgenet.io
+spec:
+  group: apps.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Identifier
+          type: string
+          jsonPath: .spec.identifier
+        - name: Verified
+          type: boolean
+          jsonPath: .spec.verified
+        - name: Expires
+          type: string
+          jsonPath: .status.expires
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - kind
+                - identifier
+                - verified
+              properties:
+                kind:
+                  type: string
+                  enum:
+                    - Authority
+                    - User
+                    - Email
+                identifier:
+                  type: string
+                verified:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                expires:
+                  type: string
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+  scope: Namespaced
+  names:
+    plural: emailverifications
+    singular: emailverification
+    kind: EmailVerification
