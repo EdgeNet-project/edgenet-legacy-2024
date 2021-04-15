@@ -567,19 +567,11 @@ nodeRecoveryLoop:
 
 // cleanInstallation gets and runs the uninstallation and installation commands prepared
 func (t *Handler) cleanInstallation(conn *ssh.Client, nodeName string, ncCopy *apps_v1alpha.NodeContribution) error {
-	uninstallationCommands, err := getUninstallCommands(conn)
-	if err != nil {
-		log.Println(err)
-		return err
+	commands := []string{
+		"sudo su",
+		"kubeadm reset -f",
+		node.CreateJoinToken("30m", nodeName),
 	}
-	installationCommands, err := getInstallCommands(conn, nodeName, node.GetKubeletVersion()[1:])
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	// Have root privileges
-	commands := append([]string{"sudo su"}, uninstallationCommands...)
-	commands = append(commands, installationCommands...)
 	sess, err := startSession(conn)
 	if err != nil {
 		log.Println(err)
@@ -651,20 +643,4 @@ func startShell(sess *ssh.Session) (*ssh.Session, error) {
 		return nil, err
 	}
 	return sess, nil
-}
-
-// getInstallCommands prepares the commands necessary according to the OS
-func getInstallCommands(conn *ssh.Client, hostname string, kubernetesVersion string) ([]string, error) {
-	commands := []string{
-		node.CreateJoinToken("30m", hostname),
-	}
-	return commands, nil
-}
-
-// getUninstallCommands prepares the commands necessary according to the OS
-func getUninstallCommands(conn *ssh.Client) ([]string, error) {
-	commands := []string{
-		"kubeadm reset -f",
-	}
-	return commands, nil
 }
