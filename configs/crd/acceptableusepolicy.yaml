@@ -14,9 +14,9 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: acceptableusepolicies.apps.edgenet.io
+  name: acceptableusepolicies.core.edgenet.io
 spec:
-  group: apps.edgenet.io
+  group: core.edgenet.io
   versions:
     - name: v1alpha
       served: true
@@ -27,9 +27,9 @@ spec:
         - name: Accepted
           type: boolean
           jsonPath: .spec.accepted
-        - name: Expires
+        - name: Expiry
           type: string
-          jsonPath: .status.expires
+          jsonPath: .status.expiry
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -44,12 +44,12 @@ spec:
               properties:
                 accepted:
                   type: boolean
-                renew:
-                  type: boolean
             status:
               type: object
               properties:
-                expires:
+                tenant:
+                  type: string
+                expiry:
                   type: string
                 state:
                   type: string
@@ -58,7 +58,7 @@ spec:
                   nullable: true
                   items:
                     type: string
-  scope: Namespaced
+  scope: Cluster
   names:
     plural: acceptableusepolicies
     singular: acceptableusepolicy

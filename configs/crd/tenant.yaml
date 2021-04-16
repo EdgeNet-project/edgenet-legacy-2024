@@ -14,9 +14,9 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: authorities.apps.edgenet.io
+  name: tenants.core.edgenet.io
 spec:
-  group: apps.edgenet.io
+  group: core.edgenet.io
   # list of versions supported by this CustomResourceDefinition
   versions:
     - name: v1alpha
@@ -60,6 +60,7 @@ spec:
                 - url
                 - address
                 - contact
+                - user
                 - enabled
               properties:
                 fullname:
@@ -90,15 +91,11 @@ spec:
                 contact:
                   type: object
                   required:
-                    - username
                     - firstname
                     - lastname
                     - email
                     - phone
                   properties:
-                    username:
-                      type: string
-                      pattern: "^[a-z0-9]*$"
                     firstname:
                       type: string
                     lastname:
@@ -107,11 +104,48 @@ spec:
                       type: string
                     phone:
                       type: string
+                user:
+                  type: array
+                  nullable: false
+                  items:
+                    type: object
+                    required:
+                      - username
+                      - firstname
+                      - lastname
+                      - email
+                      - role
+                    properties:
+                      username:
+                        type: string
+                        pattern: "^[a-z0-9]*$"
+                      firstname:
+                        type: string
+                      lastname:
+                        type: string
+                      email:
+                        type: string
+                      role:
+                        type: string
+                        enum:
+                          - Owner
+                          - Admin
+                          - Collaborator
                 enabled:
                   type: boolean
             status:
               type: object
               properties:
+                nodecontribution:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+                registrationrequest:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
                 state:
                   type: string
                 message:
@@ -120,6 +154,6 @@ spec:
                     type: string
   scope: Cluster
   names:
-    plural: authorities
-    singular: authority
-    kind: Authority
+    plural: tenants
+    singular: tenant
+    kind: Tenant

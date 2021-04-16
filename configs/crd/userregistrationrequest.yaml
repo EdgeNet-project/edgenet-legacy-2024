@@ -14,9 +14,9 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: userregistrationrequests.apps.edgenet.io
+  name: userrequests.registration.edgenet.io
 spec:
-  group: apps.edgenet.io
+  group: registration.edgenet.io
   versions:
     - name: v1alpha
       served: true
@@ -24,6 +24,9 @@ spec:
       subresources:
         status: {}
       additionalPrinterColumns:
+        - name: "Tenant"
+          type: string
+          jsonPath: .spec.tenant
         - name: "First Name"
           type: string
           jsonPath: .spec.firstname
@@ -33,9 +36,9 @@ spec:
         - name: Email
           type: string
           jsonPath: .spec.email
-        - name: Expires
+        - name: Expiry
           type: string
-          jsonPath: .status.expires
+          jsonPath: .status.expiry
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -46,10 +49,14 @@ spec:
             spec:
               type: object
               required:
+                - tenant
                 - firstname
                 - lastname
                 - email
               properties:
+                tenant:
+                  type: string
+                  pattern: "^[a-z0-9]*$"
                 firstname:
                   type: string
                 lastname:
@@ -57,10 +64,6 @@ spec:
                 email:
                   type: string
                   format: email
-                url:
-                  type: string
-                bio:
-                  type: string
                 approved:
                   type: boolean
             status:
@@ -68,7 +71,7 @@ spec:
               properties:
                 emailverified:
                   type: boolean
-                expires:
+                expiry:
                   type: string
                 state:
                   type: string
@@ -77,10 +80,10 @@ spec:
                   nullable: true
                   items:
                     type: string
-  scope: Namespaced
+  scope: Cluster
   names:
-    plural: userregistrationrequests
-    singular: userregistrationrequest
-    kind: UserRegistrationRequest
+    plural: userrequests
+    singular: userrequest
+    kind: UserRequest
     shortNames:
       - urr

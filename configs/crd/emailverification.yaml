@@ -14,9 +14,9 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: emailverifications.apps.edgenet.io
+  name: emailverifications.registration.edgenet.io
 spec:
-  group: apps.edgenet.io
+  group: registration.edgenet.io
   versions:
     - name: v1alpha
       served: true
@@ -24,15 +24,15 @@ spec:
       subresources:
         status: {}
       additionalPrinterColumns:
-        - name: Identifier
+        - name: User
           type: string
-          jsonPath: .spec.identifier
+          jsonPath: .spec.user
         - name: Verified
           type: boolean
           jsonPath: .spec.verified
-        - name: Expires
+        - name: Expiry
           type: string
-          jsonPath: .status.expires
+          jsonPath: .status.expiry
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -44,23 +44,27 @@ spec:
               type: object
               required:
                 - kind
-                - identifier
+                - user
                 - verified
               properties:
                 kind:
                   type: string
                   enum:
-                    - Authority
-                    - User
-                    - Email
-                identifier:
+                    - TenantRequest
+                    - UserRequest
+                    - Tenant
+                tenant:
                   type: string
+                  pattern: "^[a-z0-9]*$"
+                user:
+                  type: string
+                  pattern: "^[a-z0-9]*$"
                 verified:
                   type: boolean
             status:
               type: object
               properties:
-                expires:
+                expiry:
                   type: string
                 state:
                   type: string
@@ -69,7 +73,7 @@ spec:
                   nullable: true
                   items:
                     type: string
-  scope: Namespaced
+  scope: Cluster
   names:
     plural: emailverifications
     singular: emailverification

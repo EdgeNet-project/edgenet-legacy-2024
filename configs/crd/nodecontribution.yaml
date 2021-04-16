@@ -14,9 +14,9 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: nodecontributions.apps.edgenet.io
+  name: nodecontributions.core.edgenet.io
 spec:
-  group: apps.edgenet.io
+  group: core.edgenet.io
   versions:
     - name: v1alpha
       served: true
@@ -50,14 +50,15 @@ spec:
                 - port
                 - enabled
               properties:
+                tenant:
+                  type: string
+                  pattern: "^[a-z0-9]*$"
                 host:
                   type: string
                 port:
                   type: integer
                   minimum: 1
                 user:
-                  type: string
-                password:
                   type: string
                 enabled:
                   type: boolean
@@ -66,15 +67,15 @@ spec:
                   nullable: true
                   items:
                     type: object
-                    required:
-                      - authority
                     properties:
-                      authority:
+                      kind:
                         type: string
-                      team:
+                        enum:
+                          - Tenant
+                          - Namespace
+                      identifier:
                         type: string
-                      slice:
-                        type: string
+                        pattern: "^[a-z0-9]*$"
             status:
               type: object
               properties:
@@ -85,7 +86,7 @@ spec:
                   nullable: true
                   items:
                     type: string
-  scope: Namespaced
+  scope: Cluster
   names:
     plural: nodecontributions
     singular: nodecontribution
