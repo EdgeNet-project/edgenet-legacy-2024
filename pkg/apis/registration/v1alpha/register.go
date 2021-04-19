@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Sorbonne Université
+Copyright 2021 Sorbonne Université
 
 Old Credits:
 Copyright 2017 The Kubernetes Authors.
@@ -24,11 +24,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/EdgeNet-project/edgenet/pkg/apis/apps"
+	"github.com/EdgeNet-project/edgenet/pkg/apis/registration"
 )
 
 // SchemeGroupVersion is group version used to register these objects
-var SchemeGroupVersion = schema.GroupVersion{Group: apps.GroupName, Version: "v1alpha"}
+var SchemeGroupVersion = schema.GroupVersion{Group: registration.GroupName, Version: "v1alpha"}
 
 // Kind takes an unqualified kind and returns back a Group qualified GroupKind
 func Kind(kind string) schema.GroupKind {
@@ -50,8 +50,12 @@ var (
 // Adds the list of known types to Scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&SelectiveDeployment{},
-		&SelectiveDeploymentList{},
+		&TenantRequest{},
+		&TenantRequestList{},
+		&UserRequest{},
+		&UserRequestList{},
+		&EmailVerification{},
+		&EmailVerificationList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
