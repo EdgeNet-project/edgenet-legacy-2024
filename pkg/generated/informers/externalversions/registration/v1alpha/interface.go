@@ -24,8 +24,12 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// SelectiveDeployments returns a SelectiveDeploymentInformer.
-	SelectiveDeployments() SelectiveDeploymentInformer
+	// EmailVerifications returns a EmailVerificationInformer.
+	EmailVerifications() EmailVerificationInformer
+	// TenantRequests returns a TenantRequestInformer.
+	TenantRequests() TenantRequestInformer
+	// UserRequests returns a UserRequestInformer.
+	UserRequests() UserRequestInformer
 }
 
 type version struct {
@@ -39,7 +43,17 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// SelectiveDeployments returns a SelectiveDeploymentInformer.
-func (v *version) SelectiveDeployments() SelectiveDeploymentInformer {
-	return &selectiveDeploymentInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// EmailVerifications returns a EmailVerificationInformer.
+func (v *version) EmailVerifications() EmailVerificationInformer {
+	return &emailVerificationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// TenantRequests returns a TenantRequestInformer.
+func (v *version) TenantRequests() TenantRequestInformer {
+	return &tenantRequestInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// UserRequests returns a UserRequestInformer.
+func (v *version) UserRequests() UserRequestInformer {
+	return &userRequestInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

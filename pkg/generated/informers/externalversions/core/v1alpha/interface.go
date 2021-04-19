@@ -24,8 +24,14 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// SelectiveDeployments returns a SelectiveDeploymentInformer.
-	SelectiveDeployments() SelectiveDeploymentInformer
+	// AcceptableUsePolicies returns a AcceptableUsePolicyInformer.
+	AcceptableUsePolicies() AcceptableUsePolicyInformer
+	// NodeContributions returns a NodeContributionInformer.
+	NodeContributions() NodeContributionInformer
+	// Tenants returns a TenantInformer.
+	Tenants() TenantInformer
+	// TenantResourceQuotas returns a TenantResourceQuotaInformer.
+	TenantResourceQuotas() TenantResourceQuotaInformer
 }
 
 type version struct {
@@ -39,7 +45,22 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// SelectiveDeployments returns a SelectiveDeploymentInformer.
-func (v *version) SelectiveDeployments() SelectiveDeploymentInformer {
-	return &selectiveDeploymentInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// AcceptableUsePolicies returns a AcceptableUsePolicyInformer.
+func (v *version) AcceptableUsePolicies() AcceptableUsePolicyInformer {
+	return &acceptableUsePolicyInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// NodeContributions returns a NodeContributionInformer.
+func (v *version) NodeContributions() NodeContributionInformer {
+	return &nodeContributionInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// Tenants returns a TenantInformer.
+func (v *version) Tenants() TenantInformer {
+	return &tenantInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// TenantResourceQuotas returns a TenantResourceQuotaInformer.
+func (v *version) TenantResourceQuotas() TenantResourceQuotaInformer {
+	return &tenantResourceQuotaInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

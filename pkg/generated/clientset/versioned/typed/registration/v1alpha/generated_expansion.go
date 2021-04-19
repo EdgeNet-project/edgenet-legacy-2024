@@ -18,4 +18,8 @@ limitations under the License.
 
 package v1alpha
 
-type SelectiveDeploymentExpansion interface{}
+type EmailVerificationExpansion interface{}
+
+type TenantRequestExpansion interface{}
+
+type UserRequestExpansion interface{}

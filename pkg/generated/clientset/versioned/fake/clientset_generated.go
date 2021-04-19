@@ -22,6 +22,10 @@ import (
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	appsv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha"
 	fakeappsv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha/fake"
+	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha"
+	fakecorev1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha/fake"
+	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/registration/v1alpha"
+	fakeregistrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/registration/v1alpha/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -79,4 +83,14 @@ var _ clientset.Interface = &Clientset{}
 // AppsV1alpha retrieves the AppsV1alphaClient
 func (c *Clientset) AppsV1alpha() appsv1alpha.AppsV1alphaInterface {
 	return &fakeappsv1alpha.FakeAppsV1alpha{Fake: &c.Fake}
+}
+
+// CoreV1alpha retrieves the CoreV1alphaClient
+func (c *Clientset) CoreV1alpha() corev1alpha.CoreV1alphaInterface {
+	return &fakecorev1alpha.FakeCoreV1alpha{Fake: &c.Fake}
+}
+
+// RegistrationV1alpha retrieves the RegistrationV1alphaClient
+func (c *Clientset) RegistrationV1alpha() registrationv1alpha.RegistrationV1alphaInterface {
+	return &fakeregistrationv1alpha.FakeRegistrationV1alpha{Fake: &c.Fake}
 }

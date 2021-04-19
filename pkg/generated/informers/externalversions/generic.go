@@ -22,6 +22,8 @@ import (
 	"fmt"
 
 	v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
+	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -53,28 +55,26 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=apps.edgenet.io, Version=v1alpha
-	case v1alpha.SchemeGroupVersion.WithResource("acceptableusepolicies"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().AcceptableUsePolicies().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("authorities"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Authorities().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("authorityrequests"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().AuthorityRequests().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("emailverifications"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().EmailVerifications().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("nodecontributions"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().NodeContributions().Informer()}, nil
 	case v1alpha.SchemeGroupVersion.WithResource("selectivedeployments"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().SelectiveDeployments().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("slices"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Slices().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("teams"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Teams().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("totalresourcequotas"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().TotalResourceQuotas().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("users"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().Users().Informer()}, nil
-	case v1alpha.SchemeGroupVersion.WithResource("userregistrationrequests"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().UserRegistrationRequests().Informer()}, nil
+
+		// Group=core.edgenet.io, Version=v1alpha
+	case corev1alpha.SchemeGroupVersion.WithResource("acceptableusepolicies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().AcceptableUsePolicies().Informer()}, nil
+	case corev1alpha.SchemeGroupVersion.WithResource("nodecontributions"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().NodeContributions().Informer()}, nil
+	case corev1alpha.SchemeGroupVersion.WithResource("tenants"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().Tenants().Informer()}, nil
+	case corev1alpha.SchemeGroupVersion.WithResource("tenantresourcequotas"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().TenantResourceQuotas().Informer()}, nil
+
+		// Group=registration.edgenet.io, Version=v1alpha
+	case registrationv1alpha.SchemeGroupVersion.WithResource("emailverifications"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Registration().V1alpha().EmailVerifications().Informer()}, nil
+	case registrationv1alpha.SchemeGroupVersion.WithResource("tenantrequests"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Registration().V1alpha().TenantRequests().Informer()}, nil
+	case registrationv1alpha.SchemeGroupVersion.WithResource("userrequests"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Registration().V1alpha().UserRequests().Informer()}, nil
 
 	}
 

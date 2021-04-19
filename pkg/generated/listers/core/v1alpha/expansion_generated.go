@@ -18,10 +18,18 @@ limitations under the License.
 
 package v1alpha
 
-// SelectiveDeploymentListerExpansion allows custom methods to be added to
-// SelectiveDeploymentLister.
-type SelectiveDeploymentListerExpansion interface{}
+// AcceptableUsePolicyListerExpansion allows custom methods to be added to
+// AcceptableUsePolicyLister.
+type AcceptableUsePolicyListerExpansion interface{}
 
-// SelectiveDeploymentNamespaceListerExpansion allows custom methods to be added to
-// SelectiveDeploymentNamespaceLister.
-type SelectiveDeploymentNamespaceListerExpansion interface{}
+// NodeContributionListerExpansion allows custom methods to be added to
+// NodeContributionLister.
+type NodeContributionListerExpansion interface{}
+
+// TenantListerExpansion allows custom methods to be added to
+// TenantLister.
+type TenantListerExpansion interface{}
+
+// TenantResourceQuotaListerExpansion allows custom methods to be added to
+// TenantResourceQuotaLister.
+type TenantResourceQuotaListerExpansion interface{}

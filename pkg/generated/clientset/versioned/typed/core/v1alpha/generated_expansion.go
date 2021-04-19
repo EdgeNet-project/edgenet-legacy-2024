@@ -18,4 +18,10 @@ limitations under the License.
 
 package v1alpha
 
-type SelectiveDeploymentExpansion interface{}
+type AcceptableUsePolicyExpansion interface{}
+
+type NodeContributionExpansion interface{}
+
+type TenantExpansion interface{}
+
+type TenantResourceQuotaExpansion interface{}

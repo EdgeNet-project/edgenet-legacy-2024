@@ -19,27 +19,37 @@ limitations under the License.
 package v1alpha
 
 import (
-	v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
-type AppsV1alphaInterface interface {
+type RegistrationV1alphaInterface interface {
 	RESTClient() rest.Interface
-	SelectiveDeploymentsGetter
+	EmailVerificationsGetter
+	TenantRequestsGetter
+	UserRequestsGetter
 }
 
-// AppsV1alphaClient is used to interact with features provided by the apps.edgenet.io group.
-type AppsV1alphaClient struct {
+// RegistrationV1alphaClient is used to interact with features provided by the registration.edgenet.io group.
+type RegistrationV1alphaClient struct {
 	restClient rest.Interface
 }
 
-func (c *AppsV1alphaClient) SelectiveDeployments(namespace string) SelectiveDeploymentInterface {
-	return newSelectiveDeployments(c, namespace)
+func (c *RegistrationV1alphaClient) EmailVerifications() EmailVerificationInterface {
+	return newEmailVerifications(c)
 }
 
-// NewForConfig creates a new AppsV1alphaClient for the given config.
-func NewForConfig(c *rest.Config) (*AppsV1alphaClient, error) {
+func (c *RegistrationV1alphaClient) TenantRequests() TenantRequestInterface {
+	return newTenantRequests(c)
+}
+
+func (c *RegistrationV1alphaClient) UserRequests() UserRequestInterface {
+	return newUserRequests(c)
+}
+
+// NewForConfig creates a new RegistrationV1alphaClient for the given config.
+func NewForConfig(c *rest.Config) (*RegistrationV1alphaClient, error) {
 	config := *c
 	if err := setConfigDefaults(&config); err != nil {
 		return nil, err
@@ -48,12 +58,12 @@ func NewForConfig(c *rest.Config) (*AppsV1alphaClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &AppsV1alphaClient{client}, nil
+	return &RegistrationV1alphaClient{client}, nil
 }
 
-// NewForConfigOrDie creates a new AppsV1alphaClient for the given config and
+// NewForConfigOrDie creates a new RegistrationV1alphaClient for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) *AppsV1alphaClient {
+func NewForConfigOrDie(c *rest.Config) *RegistrationV1alphaClient {
 	client, err := NewForConfig(c)
 	if err != nil {
 		panic(err)
@@ -61,9 +71,9 @@ func NewForConfigOrDie(c *rest.Config) *AppsV1alphaClient {
 	return client
 }
 
-// New creates a new AppsV1alphaClient for the given RESTClient.
-func New(c rest.Interface) *AppsV1alphaClient {
-	return &AppsV1alphaClient{c}
+// New creates a new RegistrationV1alphaClient for the given RESTClient.
+func New(c rest.Interface) *RegistrationV1alphaClient {
+	return &RegistrationV1alphaClient{c}
 }
 
 func setConfigDefaults(config *rest.Config) error {
@@ -81,7 +91,7 @@ func setConfigDefaults(config *rest.Config) error {
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *AppsV1alphaClient) RESTClient() rest.Interface {
+func (c *RegistrationV1alphaClient) RESTClient() rest.Interface {
 	if c == nil {
 		return nil
 	}

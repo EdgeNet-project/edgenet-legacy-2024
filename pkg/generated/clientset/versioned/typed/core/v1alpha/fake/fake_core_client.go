@@ -19,22 +19,34 @@ limitations under the License.
 package fake
 
 import (
-	v1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha"
+	v1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )
 
-type FakeAppsV1alpha struct {
+type FakeCoreV1alpha struct {
 	*testing.Fake
 }
 
-func (c *FakeAppsV1alpha) SelectiveDeployments(namespace string) v1alpha.SelectiveDeploymentInterface {
-	return &FakeSelectiveDeployments{c, namespace}
+func (c *FakeCoreV1alpha) AcceptableUsePolicies() v1alpha.AcceptableUsePolicyInterface {
+	return &FakeAcceptableUsePolicies{c}
+}
+
+func (c *FakeCoreV1alpha) NodeContributions() v1alpha.NodeContributionInterface {
+	return &FakeNodeContributions{c}
+}
+
+func (c *FakeCoreV1alpha) Tenants() v1alpha.TenantInterface {
+	return &FakeTenants{c}
+}
+
+func (c *FakeCoreV1alpha) TenantResourceQuotas() v1alpha.TenantResourceQuotaInterface {
+	return &FakeTenantResourceQuotas{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeAppsV1alpha) RESTClient() rest.Interface {
+func (c *FakeCoreV1alpha) RESTClient() rest.Interface {
 	var ret *rest.RESTClient
 	return ret
 }

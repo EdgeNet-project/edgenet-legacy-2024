@@ -22,6 +22,8 @@ import (
 	"fmt"
 
 	appsv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha"
+	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha"
+	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/registration/v1alpha"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -30,18 +32,32 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	AppsV1alpha() appsv1alpha.AppsV1alphaInterface
+	CoreV1alpha() corev1alpha.CoreV1alphaInterface
+	RegistrationV1alpha() registrationv1alpha.RegistrationV1alphaInterface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	appsV1alpha *appsv1alpha.AppsV1alphaClient
+	appsV1alpha         *appsv1alpha.AppsV1alphaClient
+	coreV1alpha         *corev1alpha.CoreV1alphaClient
+	registrationV1alpha *registrationv1alpha.RegistrationV1alphaClient
 }
 
 // AppsV1alpha retrieves the AppsV1alphaClient
 func (c *Clientset) AppsV1alpha() appsv1alpha.AppsV1alphaInterface {
 	return c.appsV1alpha
+}
+
+// CoreV1alpha retrieves the CoreV1alphaClient
+func (c *Clientset) CoreV1alpha() corev1alpha.CoreV1alphaInterface {
+	return c.coreV1alpha
+}
+
+// RegistrationV1alpha retrieves the RegistrationV1alphaClient
+func (c *Clientset) RegistrationV1alpha() registrationv1alpha.RegistrationV1alphaInterface {
+	return c.registrationV1alpha
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -69,6 +85,14 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.coreV1alpha, err = corev1alpha.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
+	cs.registrationV1alpha, err = registrationv1alpha.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfig(&configShallowCopy)
 	if err != nil {
@@ -82,6 +106,8 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
 	cs.appsV1alpha = appsv1alpha.NewForConfigOrDie(c)
+	cs.coreV1alpha = corev1alpha.NewForConfigOrDie(c)
+	cs.registrationV1alpha = registrationv1alpha.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -91,6 +117,8 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.appsV1alpha = appsv1alpha.New(c)
+	cs.coreV1alpha = corev1alpha.New(c)
+	cs.registrationV1alpha = registrationv1alpha.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs
