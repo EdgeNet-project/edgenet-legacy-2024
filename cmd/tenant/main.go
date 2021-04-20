@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/totalresourcequota"
 	"log"
+
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/authority"
 )
 
 func main() {
@@ -19,6 +20,6 @@ func main() {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	// Start the controller to provide the functionalities of total resource quota resource
-	totalresourcequota.Start(clientset, edgenetClientset)
+	// Start the controller to provide the functionalities of authority resource
+	authority.Start(clientset, edgenetClientset)
 }

@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/nodecontribution"
 	"log"
+
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/nodecontribution"
 )
 
 func main() {

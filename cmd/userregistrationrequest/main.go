@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/userregistrationrequest"
 	"log"
+
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/userrequest"
 )
 
 func main() {
@@ -19,6 +20,6 @@ func main() {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	// Start the controller to provide the functionalities of userregistrationrequest resource
-	userregistrationrequest.Start(clientset, edgenetClientset)
+	// Start the controller to provide the functionalities of userrequest resource
+	userrequest.Start(clientset, edgenetClientset)
 }

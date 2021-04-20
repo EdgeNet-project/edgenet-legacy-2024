@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/authorityrequest"
 	"log"
+
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/authorityrequest"
 )
 
 func main() {

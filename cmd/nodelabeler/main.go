@@ -23,7 +23,7 @@ import (
 	"log"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/v1/nodelabeler"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/apps/v1/nodelabeler"
 )
 
 func main() {
