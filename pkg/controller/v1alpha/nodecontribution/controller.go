@@ -172,7 +172,11 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 							exist := false
 							for _, NCRow := range NCRaw.Items {
 								nodeName := fmt.Sprintf("%s.%s.edge-net.io", NCOwnerNamespace.Labels["authority-name"], NCRow.GetName())
-								if NCRow.GetName() == nodeName {
+                                                                // Don't use the authority name if the node belongs to EdgeNet
+	                                                        if NCOwnerNamespace.GetName() == "authority-edgenet" {
+		                                                  nodeName = fmt.Sprintf("%s.edge-net.io", NCRow.GetName())
+                                                          	}
+								if nodeObj.GetName() == nodeName {
 									exist = true
 								}
 							}
@@ -201,7 +205,11 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 								NCOwnerNamespace, _ := clientset.CoreV1().Namespaces().Get(context.TODO(), owner.Name, metav1.GetOptions{})
 								for _, NCRow := range NCRaw.Items {
 									nodeName := fmt.Sprintf("%s.%s.edge-net.io", NCOwnerNamespace.Labels["authority-name"], NCRow.GetName())
-									if NCRow.GetName() == nodeName {
+                                                                        // Don't use the authority name if the node belongs to EdgeNet
+                                                                        if NCOwnerNamespace.GetName() == "authority-edgenet" {
+                                                                            nodeName = fmt.Sprintf("%s.edge-net.io", NCRow.GetName())
+                                                                        }
+									if newObj.GetName() == nodeName {
 										NCRow := NCRow.DeepCopy()
 										if (oldReady == falseStr && newReady == trueStr) ||
 											(oldReady == unknownStr && newReady == trueStr) {
