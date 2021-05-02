@@ -6,30 +6,26 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"strings"
 	"testing"
 
-	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
 type TestGroup struct {
-	authorityObj   apps_v1alpha.Authority
-	userObj        apps_v1alpha.User
-	client         kubernetes.Interface
-	edgenetclient  versioned.Interface
-	namespace      corev1.Namespace
-	teamNamespace  corev1.Namespace
-	sliceNamespace corev1.Namespace
+	tenant        corev1alpha.Tenant
+	user          corev1alpha.User
+	client        kubernetes.Interface
+	edgenetclient versioned.Interface
+	namespace     corev1.Namespace
 }
 
 func TestMain(m *testing.M) {
@@ -39,385 +35,256 @@ func TestMain(m *testing.M) {
 }
 
 func (g *TestGroup) Init() {
-	authorityObj := apps_v1alpha.Authority{
+	tenantObj := corev1alpha.Tenant{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Authority",
+			Kind:       "Tenant",
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "edgenet",
 		},
-		Spec: apps_v1alpha.AuthoritySpec{
+		Spec: corev1alpha.TenantSpec{
 			FullName:  "EdgeNet",
 			ShortName: "EdgeNet",
 			URL:       "https://www.edge-net.org",
-			Address: apps_v1alpha.Address{
+			Address: corev1alpha.Address{
 				City:    "Paris - NY - CA",
 				Country: "France - US",
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: apps_v1alpha.Contact{
+			Contact: corev1alpha.Contact{
 				Email:     "john.doe@edge-net.org",
 				FirstName: "John",
 				LastName:  "Doe",
 				Phone:     "+333333333",
 				Username:  "johndoe",
 			},
+			User: []corev1alpha.User{
+				corev1alpha.User{
+					Username:  "johndoe",
+					FirstName: "John",
+					LastName:  "Doe",
+					Email:     "john.doe@edge-net.org",
+					Role:      "Owner",
+				},
+			},
 			Enabled: false,
 		},
 	}
-	userObj := apps_v1alpha.User{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "User",
-			APIVersion: "apps.edgenet.io/v1alpha",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "johndoe",
-			Namespace: "authority-edgenet",
-		},
-		Spec: apps_v1alpha.UserSpec{
-			FirstName: "EdgeNet",
-			LastName:  "EdgeNet",
-			Email:     "john.doe@edge-net.org",
-			Active:    true,
-		},
-		Status: apps_v1alpha.UserStatus{
-			Type: "admin",
-		},
+	userObj := corev1alpha.User{
+		Username:  "johnsmith",
+		FirstName: "John",
+		LastName:  "Smith",
+		Email:     "john.smith@edge-net.org",
+		Role:      "Collaborator",
 	}
-	g.authorityObj = authorityObj
-	g.userObj = userObj
+	g.tenant = tenantObj
+	g.user = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
-	// Sync Clientset with fake client
 	Clientset = g.client
-	// Create namespaces
-	g.namespace = corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", g.authorityObj.GetName())}}
+	g.namespace = corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s", g.tenant.GetName())}}
 	g.client.CoreV1().Namespaces().Create(context.TODO(), &g.namespace, metav1.CreateOptions{})
-	g.sliceNamespace = corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s-slice-1", g.authorityObj.GetName())}}
-	g.client.CoreV1().Namespaces().Create(context.TODO(), &g.sliceNamespace, metav1.CreateOptions{})
-	g.teamNamespace = corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s-team-1", g.authorityObj.GetName())}}
-	g.client.CoreV1().Namespaces().Create(context.TODO(), &g.teamNamespace, metav1.CreateOptions{})
 }
 
 func TestCreateClusterRoles(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 
-	authority1 := g.authorityObj
-	authority2 := g.authorityObj
-	authority2.SetName("edgenet-2")
-	authority3 := g.authorityObj
-	authority2.SetName("edgenet-3")
+	err := CreateClusterRoles()
+	util.OK(t, err)
 
 	cases := map[string]struct {
-		authority apps_v1alpha.Authority
-		expected  string
+		expected string
 	}{
-		"create cluster role 1":        {authority1, fmt.Sprintf("authority-%s", authority1.GetName())},
-		"update existing cluster role": {authority1, fmt.Sprintf("authority-%s", authority1.GetName())},
-		"create cluster role 2":        {authority2, fmt.Sprintf("authority-%s", authority2.GetName())},
-		"create cluster role 3":        {authority3, fmt.Sprintf("authority-%s", authority3.GetName())},
+		"default tenant owner": {"tenant-owner"},
+		"default tenant admin": {"tenant-admin"},
+		"default collaborator": {"tenant-collaborator"},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
-			err := CreateClusterRoles(tc.authority.DeepCopy())
-			util.OK(t, err)
 			_, err = g.client.RbacV1().ClusterRoles().Get(context.TODO(), tc.expected, metav1.GetOptions{})
 			util.OK(t, err)
 		})
 	}
+
+	tenant := g.tenant
+	user1 := g.user
+	user2 := g.user
+	user2.Username = "joepublic"
+	user2.FirstName = "Joe"
+	user2.LastName = "Public"
+	user2.Email = "joe.public@edge-net.org"
+	user2.Role = "Admin"
+
+	t.Run("role binding", func(t *testing.T) {
+		cases := map[string]struct {
+			namespace string
+			roleName  string
+			user      corev1alpha.User
+			expected  string
+		}{
+			"owner":        {tenant.GetName(), "tenant-owner", tenant.Spec.User[0], fmt.Sprintf("tenant-owner-%s", tenant.Spec.User[0].GetName())},
+			"collaborator": {tenant.GetName(), "tenant-collaborator", user1, fmt.Sprintf("tenant-collaborator-%s", user1.GetName())},
+			"admin":        {tenant.GetName(), "tenant-admin", user2, fmt.Sprintf("tenant-admin-%s", user2.GetName())},
+		}
+		for k, tc := range cases {
+			t.Run(k, func(t *testing.T) {
+				CreateObjectSpecificRoleBinding(tc.namespace, tc.roleName, tc.user.DeepCopy(), []metav1.OwnerReference{})
+				_, err := g.client.RbacV1().RoleBindings(tenant.GetName()).Get(context.TODO(), tc.expected, metav1.GetOptions{})
+				util.OK(t, err)
+				err = CreateObjectSpecificRoleBinding(tc.namespace, tc.roleName, tc.user.DeepCopy(), []metav1.OwnerReference{})
+				util.OK(t, err)
+			})
+		}
+	})
+	err = CreateClusterRoles()
+	util.OK(t, err)
 }
 
-func TestEstablishPrivateRoleBindings(t *testing.T) {
+func TestCreateObjectSpecificClusterRole(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 
-	user1 := g.userObj
-	user2 := g.userObj
-	user2.SetName("johndoe-2")
-	user3 := g.userObj
-	user3.SetName("johndoe-3")
+	tenant1 := g.tenant
+	tenant2 := g.tenant
+	tenant2.SetName("lip6")
 
 	cases := map[string]struct {
-		user        apps_v1alpha.User
-		bindingType []string
-		expected    []string
+		tenant       corev1alpha.Tenant
+		resource     string
+		resourceName string
+		verbs        []string
+		expected     string
 	}{
-		"create private role bindings 1": {
-			user1,
-			[]string{"Role", "ClusterRole"},
-			[]string{
-				fmt.Sprintf("%s-user-%s", user1.GetNamespace(), user1.GetName()),
-				fmt.Sprintf("%s-%s-for-authority", user1.GetNamespace(), user1.GetName()),
-			},
-		},
-		"update existing private role bindings": {
-			user1,
-			[]string{"Role", "ClusterRole"},
-			[]string{
-				fmt.Sprintf("%s-user-%s", user1.GetNamespace(), user1.GetName()),
-				fmt.Sprintf("%s-%s-for-authority", user1.GetNamespace(), user1.GetName()),
-			},
-		},
-		"create private role bindings 2": {
-			user2,
-			[]string{"Role", "ClusterRole"},
-			[]string{
-				fmt.Sprintf("%s-user-%s", user2.GetNamespace(), user2.GetName()),
-				fmt.Sprintf("%s-%s-for-authority", user2.GetNamespace(), user2.GetName()),
-			},
-		},
-		"create private role bindings 3": {
-			user3,
-			[]string{"Role", "ClusterRole"},
-			[]string{
-				fmt.Sprintf("%s-user-%s", user3.GetNamespace(), user3.GetName()),
-				fmt.Sprintf("%s-%s-for-authority", user3.GetNamespace(), user3.GetName()),
-			},
-		},
+		"tenant":                    {tenant1, "tenants", tenant1.GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("%s-tenants-%s-name", tenant1.GetName(), tenant1.GetName())},
+		"tenant resource quota":     {tenant1, "tenantresourcequotas", tenant1.GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("%s-tenantresourcequotas-%s-name", tenant1.GetName(), tenant1.GetName())},
+		"node contribution":         {tenant2, "nodecontributions", "ple", []string{"get", "update", "patch", "delete"}, fmt.Sprintf("%s-nodecontributions-%s-name", tenant2.GetName(), "ple")},
+		"user registration request": {tenant1, "userregistrationrequests", g.user.GetName(), []string{"get", "update", "patch", "delete"}, fmt.Sprintf("%s-userregistrationrequests-%s-name", tenant1.GetName(), g.user.GetName())},
+		"email verification":        {tenant2, "emailverifications", "abcdefghi", []string{"get", "update", "patch", "delete"}, fmt.Sprintf("%s-emailverifications-%s-name", tenant2.GetName(), "abcdefghi")},
+		"acceptable use policy":     {tenant1, "acceptableusepolicies", tenant1.Spec.User[0].GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("%s-acceptableusepolicies-%s-name", tenant1.GetName(), tenant1.Spec.User[0].GetName())},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
-			err := EstablishPrivateRoleBindings(tc.user.DeepCopy())
+			CreateObjectSpecificClusterRole(tc.tenant.GetName(), tc.resource, tc.resourceName, "name", tc.verbs, []metav1.OwnerReference{})
+			clusterRole, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), tc.expected, metav1.GetOptions{})
 			util.OK(t, err)
-			for i, bindingName := range tc.expected {
-				if tc.bindingType[i] == "Role" {
-					_, err = g.client.RbacV1().RoleBindings(tc.user.GetNamespace()).Get(context.TODO(), bindingName, metav1.GetOptions{})
-					util.OK(t, err)
-				} else if tc.bindingType[i] == "ClusterRole" {
-					_, err = g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), bindingName, metav1.GetOptions{})
-					util.OK(t, err)
-				}
+			if err == nil {
+				util.Equals(t, tc.verbs, clusterRole.Rules[0].Verbs)
 			}
-		})
-	}
-}
-
-func TestEstablishRoleBindings(t *testing.T) {
-	g := TestGroup{}
-	g.Init()
-
-	user1 := g.userObj
-	user2 := g.userObj
-	user2.SetName("johndoe-2")
-	user3 := g.userObj
-	user3.SetName("johndoe-3")
-	user3.Status.Type = "user"
-
-	cases := map[string]struct {
-		user          apps_v1alpha.User
-		namespaceType string
-		expected      string
-	}{
-		"create role 1": {
-			user1,
-			"Authority",
-			fmt.Sprintf("%s-%s-%s-%s", user1.GetNamespace(), user1.GetName(), strings.ToLower("Authority"), strings.ToLower(user1.Status.Type)),
-		},
-		"update existing role": {
-			user1,
-			"Authority",
-			fmt.Sprintf("%s-%s-%s-%s", user1.GetNamespace(), user1.GetName(), strings.ToLower("Authority"), strings.ToLower(user1.Status.Type)),
-		},
-		"create role 2": {
-			user2,
-			"Slice",
-			fmt.Sprintf("%s-%s-%s-%s", user2.GetNamespace(), user2.GetName(), strings.ToLower("Slice"), strings.ToLower(user2.Status.Type)),
-		},
-		"create role 3": {
-			user3,
-			"Team",
-			fmt.Sprintf("%s-%s-%s-%s", user3.GetNamespace(), user3.GetName(), strings.ToLower("Team"), strings.ToLower(user3.Status.Type)),
-		},
-	}
-	for k, tc := range cases {
-		t.Run(k, func(t *testing.T) {
-			err := EstablishRoleBindings(tc.user.DeepCopy(), tc.user.GetNamespace(), tc.namespaceType)
-			util.OK(t, err)
-			_, err = g.client.RbacV1().RoleBindings(tc.user.GetNamespace()).Get(context.TODO(), tc.expected, metav1.GetOptions{})
+			err = CreateObjectSpecificClusterRole(tc.tenant.GetName(), tc.resource, tc.resourceName, "name", tc.verbs, []metav1.OwnerReference{})
 			util.OK(t, err)
 		})
 	}
+
+	t.Run("cluster role binding", func(t *testing.T) {
+		cases := map[string]struct {
+			roleName string
+			user     corev1alpha.User
+			expected string
+		}{
+			"tenant":                    {fmt.Sprintf("%s-tenants-%s", tenant1.GetName(), tenant1.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-tenants-%s-%s", tenant1.GetName(), tenant1.GetName(), tenant1.Spec.User[0].GetName())},
+			"tenant resource quota":     {fmt.Sprintf("%s-tenantresourcequotas-%s", tenant1.GetName(), tenant1.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-tenantresourcequotas-%s-%s", tenant1.GetName(), tenant1.GetName(), tenant1.Spec.User[0].GetName())},
+			"node contribution":         {fmt.Sprintf("%s-nodecontributions-%s", tenant1.GetName(), "ple"), tenant1.Spec.User[0], fmt.Sprintf("%s-nodecontributions-%s-%s", tenant1.GetName(), "ple", tenant1.Spec.User[0].GetName())},
+			"user registration request": {fmt.Sprintf("%s-userregistrationrequests-%s", tenant1.GetName(), g.user.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-userregistrationrequests-%s-%s", tenant1.GetName(), g.user.GetName(), tenant1.Spec.User[0].GetName())},
+			"email verification":        {fmt.Sprintf("%s-emailverifications-%s", tenant1.GetName(), "abcdefghi"), g.user, fmt.Sprintf("%s-emailverifications-%s-%s", tenant1.GetName(), "abcdefghi", g.user.GetName())},
+			"acceptable use policy":     {fmt.Sprintf("%s-acceptableusepolicies-%s", tenant1.GetName(), tenant1.Spec.User[0].GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-acceptableusepolicies-%s-%s", tenant1.GetName(), tenant1.Spec.User[0].GetName(), tenant1.Spec.User[0].GetName())},
+		}
+		for k, tc := range cases {
+			t.Run(k, func(t *testing.T) {
+				CreateObjectSpecificClusterRoleBinding(tc.roleName, tc.user.DeepCopy(), []metav1.OwnerReference{})
+				_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), tc.expected, metav1.GetOptions{})
+				util.OK(t, err)
+				err = CreateObjectSpecificClusterRoleBinding(tc.roleName, tc.user.DeepCopy(), []metav1.OwnerReference{})
+				util.OK(t, err)
+			})
+		}
+	})
 }
 
 func TestPermissionSystem(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 
-	user1 := g.userObj
-	user2 := g.userObj
-	user2.SetName("joepublic")
-	user2.Spec.Email = "joe.public@edge-net.org"
-	user2.Status.Type = "user"
-	user3 := g.userObj
-	user3.SetName("johnsmith")
-	user3.Spec.Email = "john.smith@edge-net.org"
-	user3.Status.Type = "user"
+	tenant := g.tenant
+	user1 := tenant.Spec.User[0]
+	user2 := g.user
+	user3 := g.user
+	user3.Username = "joepublic"
+	user3.FirstName = "Joe"
+	user3.LastName = "Public"
+	user3.Email = "joe.public@edge-net.org"
+	user3.Role = "Admin"
 
-	t.Run("create authority admin role", func(t *testing.T) {
-		err := CreateAuthorityAdminRole()
-		util.OK(t, err)
-	})
-	t.Run("update existing authority admin role", func(t *testing.T) {
-		err := CreateAuthorityAdminRole()
-		util.OK(t, err)
-	})
-	t.Run("create authority user role", func(t *testing.T) {
-		err := CreateAuthorityUserRole()
-		util.OK(t, err)
-	})
-	t.Run("update existing authority user role", func(t *testing.T) {
-		err := CreateAuthorityUserRole()
-		util.OK(t, err)
-	})
-	t.Run("create slice roles", func(t *testing.T) {
-		err := CreateSliceRoles()
-		util.OK(t, err)
-	})
-	t.Run("update existing slice roles", func(t *testing.T) {
-		err := CreateSliceRoles()
-		util.OK(t, err)
-	})
-	t.Run("create team roles", func(t *testing.T) {
-		err := CreateTeamRoles()
-		util.OK(t, err)
-	})
-	t.Run("update existing team roles", func(t *testing.T) {
-		err := CreateTeamRoles()
-		util.OK(t, err)
-	})
-
-	err := CreateClusterRoles(g.authorityObj.DeepCopy())
+	err := CreateClusterRoles()
 	util.OK(t, err)
-
-	t.Run("create user specific role", func(t *testing.T) {
-		err := CreateUserSpecificRole(user1.DeepCopy(), &g.namespace, []metav1.OwnerReference{})
-		util.OK(t, err)
-		err = CreateUserSpecificRole(user2.DeepCopy(), &g.namespace, []metav1.OwnerReference{})
-		util.OK(t, err)
-		err = CreateUserSpecificRole(user3.DeepCopy(), &g.namespace, []metav1.OwnerReference{})
-		util.OK(t, err)
-	})
-	t.Run("update existing user specific role", func(t *testing.T) {
-		err := CreateUserSpecificRole(user1.DeepCopy(), &g.namespace, []metav1.OwnerReference{})
-		util.OK(t, err)
-		err = CreateUserSpecificRole(user2.DeepCopy(), &g.namespace, []metav1.OwnerReference{})
-		util.OK(t, err)
-		err = CreateUserSpecificRole(user3.DeepCopy(), &g.namespace, []metav1.OwnerReference{})
-		util.OK(t, err)
-	})
-	t.Run("create acceptable use policy role", func(t *testing.T) {
-		err := CreateUserAUPRole(user1.DeepCopy(), []metav1.OwnerReference{})
-		util.OK(t, err)
-		err = CreateUserAUPRole(user2.DeepCopy(), []metav1.OwnerReference{})
-		util.OK(t, err)
-		err = CreateUserAUPRole(user3.DeepCopy(), []metav1.OwnerReference{})
-		util.OK(t, err)
-	})
-	t.Run("update acceptable use policy role", func(t *testing.T) {
-		err := CreateUserAUPRole(user1.DeepCopy(), []metav1.OwnerReference{})
-		util.OK(t, err)
-		err = CreateUserAUPRole(user2.DeepCopy(), []metav1.OwnerReference{})
-		util.OK(t, err)
-		err = CreateUserAUPRole(user3.DeepCopy(), []metav1.OwnerReference{})
-		util.OK(t, err)
-	})
-	t.Run("create acceptable use policy role binding", func(t *testing.T) {
-		err := CreateAUPRoleBinding(user1.DeepCopy(), []metav1.OwnerReference{})
-		util.OK(t, err)
-		err = CreateAUPRoleBinding(user2.DeepCopy(), []metav1.OwnerReference{})
-		util.OK(t, err)
-		err = CreateAUPRoleBinding(user3.DeepCopy(), []metav1.OwnerReference{})
-		util.OK(t, err)
-	})
-	t.Run("update acceptable use policy role binding", func(t *testing.T) {
-		err := CreateAUPRoleBinding(user1.DeepCopy(), []metav1.OwnerReference{})
-		util.OK(t, err)
-		err = CreateAUPRoleBinding(user2.DeepCopy(), []metav1.OwnerReference{})
-		util.OK(t, err)
-		err = CreateAUPRoleBinding(user3.DeepCopy(), []metav1.OwnerReference{})
-		util.OK(t, err)
-	})
-
-	err = EstablishPrivateRoleBindings(user1.DeepCopy())
-	util.OK(t, err)
-	err = EstablishRoleBindings(user1.DeepCopy(), g.namespace.GetName(), "Authority")
-	util.OK(t, err)
-	err = EstablishRoleBindings(user1.DeepCopy(), g.sliceNamespace.GetName(), "Slice")
-	util.OK(t, err)
-	err = EstablishRoleBindings(user1.DeepCopy(), g.teamNamespace.GetName(), "Team")
-	util.OK(t, err)
-
-	err = EstablishPrivateRoleBindings(user2.DeepCopy())
-	util.OK(t, err)
-	err = EstablishRoleBindings(user2.DeepCopy(), g.namespace.GetName(), "Authority")
-	util.OK(t, err)
-	err = EstablishRoleBindings(user2.DeepCopy(), g.sliceNamespace.GetName(), "Slice")
-	util.OK(t, err)
-	err = EstablishRoleBindings(user2.DeepCopy(), g.teamNamespace.GetName(), "Team")
-	util.OK(t, err)
-	roleName := "workload-manager"
-	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"slices", "teams"}, Verbs: []string{"create", "update", "patch"}}}
-	userRole := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: roleName}, Rules: policyRule}
-	_, err = g.client.RbacV1().Roles(g.namespace.GetName()).Create(context.TODO(), userRole, metav1.CreateOptions{})
-	util.OK(t, err)
-	rbSubjects := []rbacv1.Subject{{Kind: "User", Name: user2.Spec.Email, APIGroup: "rbac.authorization.k8s.io"}}
-	roleRef := rbacv1.RoleRef{Kind: "Role", Name: roleName}
-	roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: g.namespace.GetName(), Name: fmt.Sprintf("%s-%s", roleName, user2.GetName())},
-		Subjects: rbSubjects, RoleRef: roleRef}
-	_, err = g.client.RbacV1().RoleBindings(g.namespace.GetName()).Create(context.TODO(), roleBind, metav1.CreateOptions{})
-	util.OK(t, err)
-
-	err = EstablishPrivateRoleBindings(user3.DeepCopy())
-	util.OK(t, err)
-	err = EstablishRoleBindings(user3.DeepCopy(), g.namespace.GetName(), "Authority")
-	util.OK(t, err)
-
 	cases := map[string]struct {
-		user         apps_v1alpha.User
-		namespace    string
-		resource     string
-		resourceName string
-		expected     bool
+		expected string
 	}{
-		"admin/authorized for slices/authority":                    {user1, g.namespace.GetName(), "slices", "", true},
-		"admin/authorized for users/authority":                     {user1, g.namespace.GetName(), "users", "", true},
-		"admin/authorized for roles/authority":                     {user1, g.namespace.GetName(), "roles", "", true},
-		"admin/authorized for role bindings/authority":             {user1, g.namespace.GetName(), "rolebindings", "", true},
-		"admin/unauthorized for cluster role bindings/authority":   {user1, g.namespace.GetName(), "clusterrolebindings", "", false},
-		"authorized for acceptable use policies/authority":         {user2, g.namespace.GetName(), "acceptableusepolicies", user2.GetName(), true},
-		"authorized for user object/authority":                     {user2, g.namespace.GetName(), "users", user2.GetName(), true},
-		"user/authorized for acceptable use policies/authority":    {user3, g.namespace.GetName(), "acceptableusepolicies", user3.GetName(), true},
-		"user/authorized for user object/authority":                {user3, g.namespace.GetName(), "users", user3.GetName(), true},
-		"unauthorized for other user objects/authority":            {user2, g.namespace.GetName(), "users", user1.GetName(), false},
-		"unauthorized for other acceptable use policies/authority": {user2, g.namespace.GetName(), "acceptableusepolicies", user1.GetName(), false},
-		"unauthorized for roles/authority":                         {user2, g.namespace.GetName(), "roles", "", false},
-		"admin/authorized for pods/slice":                          {user1, g.sliceNamespace.GetName(), "pods", "", true},
-		"admin/authorized for pods log/slice":                      {user1, g.sliceNamespace.GetName(), "pods/log", "", true},
-		"admin/authorized for pods exec/slice":                     {user1, g.sliceNamespace.GetName(), "pods/exec", "", true},
-		"admin/authorized for daemonsets/slice":                    {user1, g.sliceNamespace.GetName(), "daemonsets", "", true},
-		"admin/unauthorized for slices/slice":                      {user1, g.sliceNamespace.GetName(), "slices", "", false},
-		"admin/unauthorized for users/slice":                       {user1, g.sliceNamespace.GetName(), "users", "", false},
-		"authorized for pods/slice":                                {user2, g.sliceNamespace.GetName(), "pods", "", true},
-		"authorized for pods log/slice":                            {user2, g.sliceNamespace.GetName(), "pods/log", "", true},
-		"admin/authorized for slices/team":                         {user1, g.teamNamespace.GetName(), "slices", "", true},
-		"admin/unauthorized for users/team":                        {user1, g.teamNamespace.GetName(), "users", "", false},
-		"admin/unauthorized for pods/team":                         {user1, g.teamNamespace.GetName(), "pods", "", false},
-		"authorized for slices/team":                               {user2, g.teamNamespace.GetName(), "slices", "", true},
-		"unauthorized for deployments/team":                        {user2, g.teamNamespace.GetName(), "deployments", "", false},
-		"authorized for slices/authority":                          {user2, g.namespace.GetName(), "slices", "", true},
-		"authorized for teams/authority":                           {user2, g.namespace.GetName(), "teams", "", true},
-		"user/unauthorized for pods/slice":                         {user3, g.sliceNamespace.GetName(), "pods", "", false},
-		"user/unauthorized for pods log/slice":                     {user3, g.sliceNamespace.GetName(), "pods/log", "", false},
-		"user/unauthorized for slices/team":                        {user3, g.teamNamespace.GetName(), "slices", "", false},
-		"user/unauthorized for slices/authority":                   {user3, g.namespace.GetName(), "slices", "", false},
-		"user/unauthorized for teams/authority":                    {user3, g.namespace.GetName(), "teams", "", false},
+		"create cluster role for tenant owner":         {"tenant-owner"},
+		"create cluster role for default collaborator": {"tenant-collaborator"},
+		"create cluster role for default tenant admin": {"tenant-admin"},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
-			authorized := CheckAuthorization(tc.namespace, tc.user.Spec.Email, tc.resource, tc.resourceName)
+			_, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), tc.expected, metav1.GetOptions{})
+			util.OK(t, err)
+		})
+	}
+	t.Run("bind cluster role for tenant owner", func(t *testing.T) {
+		CreateObjectSpecificRoleBinding(tenant.GetName(), "tenant-owner", user1.DeepCopy(), []metav1.OwnerReference{})
+	})
+	t.Run("bind cluster role for tenant collaborator", func(t *testing.T) {
+		CreateObjectSpecificRoleBinding(tenant.GetName(), "tenant-collaborator", user2.DeepCopy(), []metav1.OwnerReference{})
+	})
+	t.Run("bind cluster role for tenant admin", func(t *testing.T) {
+		CreateObjectSpecificRoleBinding(tenant.GetName(), "tenant-admin", user3.DeepCopy(), []metav1.OwnerReference{})
+	})
+
+	t.Run("create owner specific tenant role", func(t *testing.T) {
+		CreateObjectSpecificClusterRole(tenant.GetName(), "tenants", tenant.GetName(), "owner", []string{"get", "update", "patch"}, []metav1.OwnerReference{})
+		_, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-owner", tenant.GetName(), tenant.GetName()), metav1.GetOptions{})
+		util.OK(t, err)
+	})
+	t.Run("create admin specific tenant role", func(t *testing.T) {
+		CreateObjectSpecificClusterRole(tenant.GetName(), "tenants", tenant.GetName(), "admin", []string{"get"}, []metav1.OwnerReference{})
+		_, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-admin", tenant.GetName(), tenant.GetName()), metav1.GetOptions{})
+		util.OK(t, err)
+	})
+	t.Run("create owner role binding", func(t *testing.T) {
+		CreateObjectSpecificClusterRoleBinding(fmt.Sprintf("%s-tenants-%s-owner", tenant.GetName(), tenant.GetName()), user1.DeepCopy(), []metav1.OwnerReference{})
+		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-owner-%s", tenant.GetName(), tenant.GetName(), user1.GetName()), metav1.GetOptions{})
+		util.OK(t, err)
+	})
+	t.Run("create admin role binding", func(t *testing.T) {
+		CreateObjectSpecificClusterRoleBinding(fmt.Sprintf("%s-tenants-%s-admin", tenant.GetName(), tenant.GetName()), user3.DeepCopy(), []metav1.OwnerReference{})
+		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-admin-%s", tenant.GetName(), tenant.GetName(), user3.GetName()), metav1.GetOptions{})
+		util.OK(t, err)
+	})
+
+	permissionCases := map[string]struct {
+		user         corev1alpha.User
+		namespace    string
+		resource     string
+		resourceName string
+		scope        string
+		expected     bool
+	}{
+		"owner/authorized for subnamespace":          {user1, g.namespace.GetName(), "subnamespaces", "", "namespace", true},
+		"collaborator/authorized for subnamespace":   {user2, g.namespace.GetName(), "subnamespaces", "", "namespace", false},
+		"owner/authorized for roles":                 {user1, g.namespace.GetName(), "roles", "", "namespace", true},
+		"collaborator/authorized for roles":          {user2, g.namespace.GetName(), "roles", "", "namespace", false},
+		"owner/authorized for role bindings":         {user1, g.namespace.GetName(), "rolebindings", "", "namespace", true},
+		"admin/authorized for role bindings":         {user3, g.namespace.GetName(), "rolebindings", "", "namespace", true},
+		"owner/authorized for cluster role bindings": {user1, "", "clusterrolebindings", "", "cluster", false},
+		"owner/authorized for tenant object":         {user1, "", "tenants", tenant.GetName(), "cluster", true},
+		"collaborator/authorized for tenant object":  {user2, "", "tenants", tenant.GetName(), "cluster", false},
+		"admin/authorized for tenant object":         {user3, "", "tenants", tenant.GetName(), "cluster", false},
+	}
+	for k, tc := range permissionCases {
+		t.Run(k, func(t *testing.T) {
+			authorized := CheckAuthorization(tc.namespace, tc.user.Email, tc.resource, tc.resourceName, tc.scope)
 			util.Equals(t, tc.expected, authorized)
 		})
 	}
