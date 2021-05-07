@@ -24,12 +24,6 @@ spec:
       subresources:
         status: {}
       additionalPrinterColumns:
-        - name: CPU Usage (%)
-          type: integer
-          jsonPath: .status.used.cpu
-        - name: Memory Usage (%)
-          type: integer
-          jsonPath: .status.used.memory
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -91,15 +85,6 @@ spec:
             status:
               type: object
               properties:
-                exceeded:
-                  type: boolean
-                used:
-                  type: object
-                  properties:
-                    cpu:
-                      type: number
-                    memory:
-                      type: number
                 state:
                   type: string
                 message:

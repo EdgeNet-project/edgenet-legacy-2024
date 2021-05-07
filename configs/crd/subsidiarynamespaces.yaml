@@ -43,9 +43,7 @@ spec:
             spec:
               type: object
               required:
-                - type
-                - profile
-                - users
+                - resources
               properties:
                 resources:
                   type: object
@@ -59,8 +57,10 @@ spec:
                   properties:
                     networkpolicy:
                       type: boolean
+                      default: true
                     rbac:
                       type: boolean
+                      default: true
                 expiry:
                   type: string
                   format: date

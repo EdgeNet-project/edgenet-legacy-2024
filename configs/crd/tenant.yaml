@@ -131,6 +131,8 @@ spec:
                           - Owner
                           - Admin
                           - Collaborator
+                      active:
+                        type: boolean
                 enabled:
                   type: boolean
             status:
