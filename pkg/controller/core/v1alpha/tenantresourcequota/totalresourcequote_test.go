@@ -1,4 +1,4 @@
-package totalresourcequota
+package tenantresourcequota
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
@@ -28,11 +28,9 @@ import (
 // The main structure of test group
 type TestGroup struct {
 	TRQObj        corev1alpha.TenantResourceQuota
-	claimObj      apps_v1alpha.TotalResourceDetails
-	dropObj       apps_v1alpha.TotalResourceDetails
-	authorityObj  corev1alpha.Authority
-	teamObj       apps_v1alpha.Team
-	sliceObj      apps_v1alpha.Slice
+	claimObj      corev1alpha.TenantResourceDetails
+	dropObj       corev1alpha.TenantResourceDetails
+	tenantObj     corev1alpha.Tenant
 	nodeObj       corev1.Node
 	client        kubernetes.Interface
 	edgenetClient versioned.Interface
@@ -52,50 +50,44 @@ func TestMain(m *testing.M) {
 func (g *TestGroup) Init() {
 	TRQObj := corev1alpha.TenantResourceQuota{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "TotalResourceQuota",
+			Kind:       "TenantResourceQuota",
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "edgenet",
 			UID:  "trq",
 		},
-		Spec: corev1alpha.TenantResourceQuotaSpec{
-			Enabled: true,
-		},
-		Status: corev1alpha.TenantResourceQuotaStatus{
-			Exceeded: false,
-		},
 	}
-	claimObj := apps_v1alpha.TotalResourceDetails{
+	claimObj := corev1alpha.TenantResourceDetails{
 		Name:   "Default",
 		CPU:    "12000m",
 		Memory: "12Gi",
 	}
-	dropObj := apps_v1alpha.TotalResourceDetails{
+	dropObj := corev1alpha.TenantResourceDetails{
 		Name:   "Default",
 		CPU:    "10000m",
 		Memory: "10Gi",
 	}
-	authorityObj := corev1alpha.Authority{
+	tenantObj := corev1alpha.Tenant{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Authority",
+			Kind:       "Tenant",
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "edgenet",
 			UID:  "edgenet",
 		},
-		Spec: corev1alpha.AuthoritySpec{
+		Spec: corev1alpha.TenantSpec{
 			FullName:  "EdgeNet",
 			ShortName: "EdgeNet",
 			URL:       "https://www.edge-net.org",
-			Address: apps_v1alpha.Address{
+			Address: corev1alpha.Address{
 				City:    "Paris - NY - CA",
 				Country: "France - US",
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: apps_v1alpha.Contact{
+			Contact: corev1alpha.Contact{
 				Email:     "john.doe@edge-net.org",
 				FirstName: "John",
 				LastName:  "Doe",
@@ -105,49 +97,13 @@ func (g *TestGroup) Init() {
 			Enabled: true,
 		},
 	}
-	teamObj := apps_v1alpha.Team{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Team",
-			APIVersion: "apps.edgenet.io/v1alpha",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "team",
-			Namespace: "authority-edgenet",
-		},
-		Spec: apps_v1alpha.TeamSpec{
-			Users:       []apps_v1alpha.TeamUsers{},
-			Description: "This is a description",
-			Enabled:     true,
-		},
-		Status: apps_v1alpha.TeamStatus{
-			State: success,
-		},
-	}
-	sliceObj := apps_v1alpha.Slice{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Slice",
-			APIVersion: "apps.edgenet.io/v1alpha",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "slice",
-			Namespace: "authority-edgenet",
-		},
-		Spec: apps_v1alpha.SliceSpec{
-			Profile:     "High",
-			Users:       []apps_v1alpha.SliceUsers{},
-			Description: "This is a description",
-		},
-		Status: apps_v1alpha.SliceStatus{
-			Expires: nil,
-		},
-	}
 	nodeObj := corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "edgenet",
 			OwnerReferences: []metav1.OwnerReference{
 				metav1.OwnerReference{
 					APIVersion: "apps.edgenet.io/v1alpha",
-					Kind:       "Authority",
+					Kind:       "Tenant",
 					Name:       "edgenet",
 					UID:        "edgenet"},
 			},
@@ -180,16 +136,14 @@ func (g *TestGroup) Init() {
 	g.TRQObj = TRQObj
 	g.claimObj = claimObj
 	g.dropObj = dropObj
-	g.authorityObj = authorityObj
-	g.teamObj = teamObj
-	g.sliceObj = sliceObj
+	g.tenantObj = tenantObj
 	g.nodeObj = nodeObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetClient = edgenettestclient.NewSimpleClientset()
-	// Imitate authority creation processes
-	g.edgenetClient.AppsV1alpha().Authorities().Create(context.TODO(), g.authorityObj.DeepCopy(), metav1.CreateOptions{})
-	namespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("authority-%s", g.authorityObj.GetName())}}
-	namespaceLabels := map[string]string{"owner": "authority", "owner-name": g.authorityObj.GetName(), "authority-name": g.authorityObj.GetName()}
+	// Imitate tenant creation processes
+	g.edgenetClient.CoreV1alpha().Tenants().Create(context.TODO(), g.tenantObj.DeepCopy(), metav1.CreateOptions{})
+	namespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s", g.tenantObj.GetName())}}
+	namespaceLabels := map[string]string{"owner": "tenant", "owner-name": g.tenantObj.GetName(), "tenant-name": g.tenantObj.GetName()}
 	namespace.SetLabels(namespaceLabels)
 	g.client.CoreV1().Namespaces().Create(context.TODO(), &namespace, metav1.CreateOptions{})
 }
@@ -230,11 +184,11 @@ func TestCreate(t *testing.T) {
 			drop := g.dropObj
 			if tc.input != nil {
 				for _, input := range tc.input {
-					claim.Expires = &metav1.Time{
+					claim.Expiry = &metav1.Time{
 						Time: time.Now().Add(input * time.Millisecond),
 					}
 					TRQ.Spec.Claim = append(TRQ.Spec.Claim, claim)
-					drop.Expires = &metav1.Time{
+					drop.Expiry = &metav1.Time{
 						Time: time.Now().Add(input * time.Millisecond),
 					}
 					TRQ.Spec.Drop = append(TRQ.Spec.Drop, drop)
@@ -243,22 +197,21 @@ func TestCreate(t *testing.T) {
 				TRQ.Spec.Claim = append(TRQ.Spec.Claim, claim)
 				TRQ.Spec.Drop = append(TRQ.Spec.Drop, drop)
 			}
-			g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Create(context.TODO(), TRQ.DeepCopy(), metav1.CreateOptions{})
+			g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), TRQ.DeepCopy(), metav1.CreateOptions{})
 			g.handler.ObjectCreated(TRQ.DeepCopy())
-			defer g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Delete(context.TODO(), TRQ.GetName(), metav1.DeleteOptions{})
+			defer g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Delete(context.TODO(), TRQ.GetName(), metav1.DeleteOptions{})
 			time.Sleep(tc.sleep * time.Millisecond)
-			TRQCopy, err := g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), TRQ.GetName(), metav1.GetOptions{})
+			TRQCopy, err := g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQ.GetName(), metav1.GetOptions{})
 			util.OK(t, err)
-			util.Equals(t, true, TRQCopy.Spec.Enabled)
 			util.Equals(t, tc.expected, (len(TRQCopy.Spec.Claim) + len(TRQCopy.Spec.Drop)))
 		})
 	}
 
 	t.Run("exceeded", func(t *testing.T) {
-		g.edgenetClient.AppsV1alpha().Slices(g.sliceObj.GetNamespace()).Create(context.TODO(), g.sliceObj.DeepCopy(), metav1.CreateOptions{})
+		/*g.edgenetClient.AppsV1alpha().Slices(g.sliceObj.GetNamespace()).Create(context.TODO(), g.sliceObj.DeepCopy(), metav1.CreateOptions{})
 		childNamespace := fmt.Sprintf("%s-slice-%s", g.sliceObj.GetNamespace(), g.sliceObj.GetName())
 		namespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: childNamespace}}
-		namespaceLabels := map[string]string{"owner": "slice", "owner-name": g.sliceObj.GetName(), "authority-name": g.authorityObj.GetName()}
+		namespaceLabels := map[string]string{"owner": "slice", "owner-name": g.sliceObj.GetName(), "tenant-name": g.tenantObj.GetName()}
 		namespace.SetLabels(namespaceLabels)
 		g.client.CoreV1().Namespaces().Create(context.TODO(), &namespace, metav1.CreateOptions{})
 		quota := corev1.ResourceQuota{
@@ -277,19 +230,20 @@ func TestCreate(t *testing.T) {
 
 		TRQ := g.TRQObj
 		TRQ.Status.Exceeded = true
-		g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Create(context.TODO(), TRQ.DeepCopy(), metav1.CreateOptions{})
+		g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), TRQ.DeepCopy(), metav1.CreateOptions{})
 		g.handler.ObjectCreated(TRQ.DeepCopy())
-		defer g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Delete(context.TODO(), TRQ.GetName(), metav1.DeleteOptions{})
-		TRQCopy, err := g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), TRQ.GetName(), metav1.GetOptions{})
+		defer g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Delete(context.TODO(), TRQ.GetName(), metav1.DeleteOptions{})
+		TRQCopy, err := g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQ.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
 		util.Equals(t, true, TRQCopy.Spec.Enabled)
 
 		_, err = g.edgenetClient.AppsV1alpha().Slices(g.sliceObj.GetNamespace()).Get(context.TODO(), g.sliceObj.GetName(), metav1.GetOptions{})
 		util.Equals(t, true, errors.IsNotFound(err))
 
-		TRQCopy, err = g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), TRQ.GetName(), metav1.GetOptions{})
+		TRQCopy, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQ.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
 		util.Equals(t, false, TRQCopy.Status.Exceeded)
+		*/
 	})
 }
 
@@ -298,10 +252,10 @@ func TestUpdate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
 	TRQ := g.TRQObj
-	_, err := g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Create(context.TODO(), TRQ.DeepCopy(), metav1.CreateOptions{})
+	_, err := g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), TRQ.DeepCopy(), metav1.CreateOptions{})
 	util.OK(t, err)
 	g.handler.ObjectCreated(TRQ.DeepCopy())
-	defer g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Delete(context.TODO(), TRQ.GetName(), metav1.DeleteOptions{})
+	defer g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Delete(context.TODO(), TRQ.GetName(), metav1.DeleteOptions{})
 
 	cases := map[string]struct {
 		input    []time.Duration
@@ -318,10 +272,10 @@ func TestUpdate(t *testing.T) {
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
-			TRQCopy, err := g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), TRQ.GetName(), metav1.GetOptions{})
+			TRQCopy, err := g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQ.GetName(), metav1.GetOptions{})
 			util.OK(t, err)
-			TRQCopy.Spec.Claim = []apps_v1alpha.TotalResourceDetails{}
-			TRQCopy.Spec.Drop = []apps_v1alpha.TotalResourceDetails{}
+			TRQCopy.Spec.Claim = []corev1alpha.TenantResourceDetails{}
+			TRQCopy.Spec.Drop = []corev1alpha.TenantResourceDetails{}
 
 			var field fields
 			field.spec = true
@@ -329,11 +283,11 @@ func TestUpdate(t *testing.T) {
 			drop := g.dropObj
 			if tc.input != nil {
 				for _, expiry := range tc.input {
-					claim.Expires = &metav1.Time{
+					claim.Expiry = &metav1.Time{
 						Time: time.Now().Add(expiry * time.Millisecond),
 					}
 					TRQCopy.Spec.Claim = append(TRQCopy.Spec.Claim, claim)
-					drop.Expires = &metav1.Time{
+					drop.Expiry = &metav1.Time{
 						Time: time.Now().Add(expiry * time.Millisecond),
 					}
 					TRQCopy.Spec.Drop = append(TRQCopy.Spec.Drop, drop)
@@ -344,30 +298,29 @@ func TestUpdate(t *testing.T) {
 				TRQCopy.Spec.Drop = append(TRQCopy.Spec.Drop, drop)
 				field.expiry = false
 			}
-			_, err = g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Update(context.TODO(), TRQCopy.DeepCopy(), metav1.UpdateOptions{})
+			_, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), TRQCopy.DeepCopy(), metav1.UpdateOptions{})
 			util.OK(t, err)
 			g.handler.ObjectUpdated(TRQCopy.DeepCopy(), field)
 			time.Sleep(tc.sleep * time.Millisecond)
-			TRQCopy, err = g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), TRQCopy.GetName(), metav1.GetOptions{})
+			TRQCopy, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQCopy.GetName(), metav1.GetOptions{})
 			util.OK(t, err)
-			util.Equals(t, true, TRQCopy.Spec.Enabled)
 			util.Equals(t, tc.expected, (len(TRQCopy.Spec.Claim) + len(TRQCopy.Spec.Drop)))
 		})
 		time.Sleep(500 * time.Millisecond)
 	}
 	t.Run("total quota", func(t *testing.T) {
-		g.edgenetClient.AppsV1alpha().Teams(g.teamObj.GetNamespace()).Create(context.TODO(), g.teamObj.DeepCopy(), metav1.CreateOptions{})
+		/*g.edgenetClient.AppsV1alpha().Teams(g.teamObj.GetNamespace()).Create(context.TODO(), g.teamObj.DeepCopy(), metav1.CreateOptions{})
 		teamChildNamespace := fmt.Sprintf("%s-team-%s", g.teamObj.GetNamespace(), g.teamObj.GetName())
 		namespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: teamChildNamespace}}
-		namespaceLabels := map[string]string{"owner": "team", "owner-name": g.teamObj.GetName(), "authority-name": g.authorityObj.GetName()}
+		namespaceLabels := map[string]string{"owner": "team", "owner-name": g.teamObj.GetName(), "tenant-name": g.tenantObj.GetName()}
 		namespace.SetLabels(namespaceLabels)
 		g.client.CoreV1().Namespaces().Create(context.TODO(), &namespace, metav1.CreateOptions{})
 		defer g.client.CoreV1().Namespaces().Delete(context.TODO(), namespace.GetName(), metav1.DeleteOptions{})
 
-		TRQCopy, _ := g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), TRQ.GetName(), metav1.GetOptions{})
-		TRQCopy.Spec.Claim = []apps_v1alpha.TotalResourceDetails{}
-		TRQCopy.Spec.Drop = []apps_v1alpha.TotalResourceDetails{}
-		_, err = g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Update(context.TODO(), TRQCopy.DeepCopy(), metav1.UpdateOptions{})
+		TRQCopy, _ := g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQ.GetName(), metav1.GetOptions{})
+		TRQCopy.Spec.Claim = []corev1alpha.TenantResourceDetails{}
+		TRQCopy.Spec.Drop = []corev1alpha.TenantResourceDetails{}
+		_, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), TRQCopy.DeepCopy(), metav1.UpdateOptions{})
 		util.OK(t, err)
 		var field fields
 		field.spec = true
@@ -375,25 +328,25 @@ func TestUpdate(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 
 		cases := map[string]struct {
-			input    []apps_v1alpha.TotalResourceDetails
+			input    []corev1alpha.TenantResourceDetails
 			expiry   []time.Duration
 			kind     []string
 			quota    string
 			expected bool
 		}{
-			"claim/high":                                  {[]apps_v1alpha.TotalResourceDetails{g.claimObj}, nil, []string{"Claim"}, "High", false},
-			"claim expires soon/high":                     {[]apps_v1alpha.TotalResourceDetails{g.claimObj}, []time.Duration{50}, []string{"Claim"}, "High", true},
-			"claim-drop/low":                              {[]apps_v1alpha.TotalResourceDetails{g.claimObj, g.dropObj}, nil, []string{"Claim", "Drop"}, "Low", false},
-			"claim-drop/high":                             {[]apps_v1alpha.TotalResourceDetails{g.claimObj, g.dropObj}, nil, []string{"Claim", "Drop"}, "High", true},
-			"claim-drop expires soon/high":                {[]apps_v1alpha.TotalResourceDetails{g.claimObj, g.dropObj}, []time.Duration{800, 80}, []string{"Claim", "Drop"}, "High", true},
-			"claim-claim and then drop expires soon/high": {[]apps_v1alpha.TotalResourceDetails{g.claimObj, g.claimObj, g.dropObj}, []time.Duration{800, 50, 90}, []string{"Claim", "Claim", "Drop"}, "High", false},
-			"drop-claim and then drop expires soon/high":  {[]apps_v1alpha.TotalResourceDetails{g.dropObj, g.claimObj, g.dropObj}, []time.Duration{800, 50, 90}, []string{"Drop", "Claim", "Drop"}, "High", true},
+			"claim/high":                                  {[]corev1alpha.TenantResourceDetails{g.claimObj}, nil, []string{"Claim"}, "High", false},
+			"claim expires soon/high":                     {[]corev1alpha.TenantResourceDetails{g.claimObj}, []time.Duration{50}, []string{"Claim"}, "High", true},
+			"claim-drop/low":                              {[]corev1alpha.TenantResourceDetails{g.claimObj, g.dropObj}, nil, []string{"Claim", "Drop"}, "Low", false},
+			"claim-drop/high":                             {[]corev1alpha.TenantResourceDetails{g.claimObj, g.dropObj}, nil, []string{"Claim", "Drop"}, "High", true},
+			"claim-drop expires soon/high":                {[]corev1alpha.TenantResourceDetails{g.claimObj, g.dropObj}, []time.Duration{800, 80}, []string{"Claim", "Drop"}, "High", true},
+			"claim-claim and then drop expires soon/high": {[]corev1alpha.TenantResourceDetails{g.claimObj, g.claimObj, g.dropObj}, []time.Duration{800, 50, 90}, []string{"Claim", "Claim", "Drop"}, "High", false},
+			"drop-claim and then drop expires soon/high":  {[]corev1alpha.TenantResourceDetails{g.dropObj, g.claimObj, g.dropObj}, []time.Duration{800, 50, 90}, []string{"Drop", "Claim", "Drop"}, "High", true},
 		}
 		for k, tc := range cases {
 			t.Run(k, func(t *testing.T) {
-				TRQCopy, err = g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), TRQ.GetName(), metav1.GetOptions{})
-				TRQCopy.Spec.Claim = []apps_v1alpha.TotalResourceDetails{}
-				TRQCopy.Spec.Drop = []apps_v1alpha.TotalResourceDetails{}
+				TRQCopy, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQ.GetName(), metav1.GetOptions{})
+				TRQCopy.Spec.Claim = []corev1alpha.TenantResourceDetails{}
+				TRQCopy.Spec.Drop = []corev1alpha.TenantResourceDetails{}
 
 				slice := g.sliceObj
 				slice.SetName(k)
@@ -402,7 +355,7 @@ func TestUpdate(t *testing.T) {
 				defer g.edgenetClient.AppsV1alpha().Slices(teamChildNamespace).Delete(context.TODO(), slice.GetName(), metav1.DeleteOptions{})
 				childNamespace := fmt.Sprintf("%s-slice-%s", teamChildNamespace, slice.GetName())
 				namespace = corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: childNamespace}}
-				namespaceLabels = map[string]string{"owner": "slice", "owner-name": slice.GetName(), "authority-name": g.authorityObj.GetName()}
+				namespaceLabels = map[string]string{"owner": "slice", "owner-name": slice.GetName(), "tenant-name": g.tenantObj.GetName()}
 				namespace.SetLabels(namespaceLabels)
 				g.client.CoreV1().Namespaces().Create(context.TODO(), &namespace, metav1.CreateOptions{})
 				defer g.client.CoreV1().Namespaces().Delete(context.TODO(), namespace.GetName(), metav1.DeleteOptions{})
@@ -444,7 +397,7 @@ func TestUpdate(t *testing.T) {
 					if tc.kind[i] == "Claim" {
 						claim := expiry
 						if tc.expiry != nil {
-							claim.Expires = &metav1.Time{
+							claim.Expiry = &metav1.Time{
 								Time: time.Now().Add(tc.expiry[i] * time.Millisecond),
 							}
 							field.expiry = true
@@ -455,7 +408,7 @@ func TestUpdate(t *testing.T) {
 					} else if tc.kind[i] == "Drop" {
 						drop := expiry
 						if tc.expiry != nil {
-							drop.Expires = &metav1.Time{
+							drop.Expiry = &metav1.Time{
 								Time: time.Now().Add(tc.expiry[i] * time.Millisecond),
 							}
 							field.expiry = true
@@ -465,7 +418,7 @@ func TestUpdate(t *testing.T) {
 						TRQCopy.Spec.Drop = append(TRQCopy.Spec.Drop, drop)
 					}
 				}
-				_, err = g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Update(context.TODO(), TRQCopy.DeepCopy(), metav1.UpdateOptions{})
+				_, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), TRQCopy.DeepCopy(), metav1.UpdateOptions{})
 				util.OK(t, err)
 				g.handler.ObjectUpdated(TRQCopy.DeepCopy(), field)
 				time.Sleep(150 * time.Millisecond)
@@ -474,18 +427,18 @@ func TestUpdate(t *testing.T) {
 				util.Equals(t, tc.expected, errors.IsNotFound(err))
 			})
 			time.Sleep(500 * time.Millisecond)
-		}
+		}*/
 	})
 }
 
-func TestCreateTotalResourceQuota(t *testing.T) {
+func TestCreateTenantResourceQuota(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
 
-	_, err := g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), g.TRQObj.GetName(), metav1.GetOptions{})
+	_, err := g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.TRQObj.GetName(), metav1.GetOptions{})
 	util.Equals(t, true, errors.IsNotFound(err))
 	g.handler.Create(g.TRQObj.GetName())
-	_, err = g.edgenetClient.AppsV1alpha().TotalResourceQuotas().Get(context.TODO(), g.TRQObj.GetName(), metav1.GetOptions{})
+	_, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.TRQObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 }
