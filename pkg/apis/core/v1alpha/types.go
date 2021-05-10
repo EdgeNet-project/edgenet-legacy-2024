@@ -43,7 +43,7 @@ type TenantSpec struct {
 	ShortName string  `json:"shortname"`
 	URL       string  `json:"url"`
 	Address   Address `json:"address"`
-	Contact   Contact `json:"contact"`
+	Contact   User    `json:"contact"`
 	User      []User  `json:"user"`
 	Enabled   bool    `json:"enabled"`
 }
@@ -57,22 +57,19 @@ type Address struct {
 	Country string `json:"country"`
 }
 
-// Contact is information about who is responsible for the tenant
-type Contact struct {
-	Username  string `json:"username"`
-	FirstName string `json:"firstname"`
-	LastName  string `json:"lastname"`
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
-}
-
-// User contains personal information including email address for communication and role
+// User contains username, personal information, and role
 type User struct {
 	Username  string `json:"username"`
 	FirstName string `json:"firstname"`
 	LastName  string `json:"lastname"`
 	Email     string `json:"email"`
+	Phone     string `json:"phone"`
 	Role      string `json:"role"`
+}
+
+// GetName provides username
+func (u *User) GetName() string {
+	return u.Username
 }
 
 // TenantStatus is the status for a Tenant resource
@@ -91,6 +88,51 @@ type TenantList struct {
 	metav1.ListMeta `json:"metadata"`
 
 	Items []Tenant `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SubNamespace describes a SubNamespace resource
+type SubNamespace struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the subsidiary namespace resource spec
+	Spec SubNamespaceSpec `json:"spec"`
+	// Status is the subsidiary namespace resource status
+	Status SubNamespaceStatus `json:"status,omitempty"`
+}
+
+// SubNamespaceSpec is the spec for a SubNamespace resource
+type SubNamespaceSpec struct {
+	Resources   Resources    `json:"resources"`
+	Inheritance Inheritance  `json:"inheritance"`
+	Expiry      *metav1.Time `json:"expiry"`
+}
+
+// Inheritance presents the resources that will be inherited
+type Inheritance struct {
+	NetworkPolicy bool `json:"networkpolicy"`
+	RBAC          bool `json:"rbac"`
+}
+
+// SubNamespaceStatus is the status for a SubNamespace resource
+type SubNamespaceStatus struct {
+	State   string   `json:"state"`
+	Message []string `json:"message"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SubNamespaceList is a list of SubNamespace resources
+type SubNamespaceList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	Items []SubNamespace `json:"items"`
 }
 
 // +genclient
@@ -215,14 +257,12 @@ type TenantResourceDetails struct {
 
 // TenantResourceQuotaStatus is the status for a tenant resouce quota resource
 type TenantResourceQuotaStatus struct {
-	Exceeded bool               `json:"exceeded"`
-	Used     TenantResourceUsed `json:"used"`
-	State    string             `json:"state"`
-	Message  []string           `json:"message"`
+	State   string   `json:"state"`
+	Message []string `json:"message"`
 }
 
-// TenantResourceUsed presents the usage of tenant resource quota
-type TenantResourceUsed struct {
+// Resources presents the usage of tenant resource quota
+type Resources struct {
 	CPU    float64 `json:"cpu"`
 	Memory float64 `json:"memory"`
 }

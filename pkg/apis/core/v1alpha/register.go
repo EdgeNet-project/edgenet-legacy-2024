@@ -58,6 +58,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NodeContributionList{},
 		&TenantResourceQuota{},
 		&TenantResourceQuotaList{},
+		&SubNamespace{},
+		&SubNamespaceList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
