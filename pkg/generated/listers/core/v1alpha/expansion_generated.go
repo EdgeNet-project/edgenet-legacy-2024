@@ -26,6 +26,14 @@ type AcceptableUsePolicyListerExpansion interface{}
 // NodeContributionLister.
 type NodeContributionListerExpansion interface{}
 
+// SubNamespaceListerExpansion allows custom methods to be added to
+// SubNamespaceLister.
+type SubNamespaceListerExpansion interface{}
+
+// SubNamespaceNamespaceListerExpansion allows custom methods to be added to
+// SubNamespaceNamespaceLister.
+type SubNamespaceNamespaceListerExpansion interface{}
+
 // TenantListerExpansion allows custom methods to be added to
 // TenantLister.
 type TenantListerExpansion interface{}

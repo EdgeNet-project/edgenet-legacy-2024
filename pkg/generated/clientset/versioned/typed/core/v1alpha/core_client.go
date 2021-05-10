@@ -28,6 +28,7 @@ type CoreV1alphaInterface interface {
 	RESTClient() rest.Interface
 	AcceptableUsePoliciesGetter
 	NodeContributionsGetter
+	SubNamespacesGetter
 	TenantsGetter
 	TenantResourceQuotasGetter
 }
@@ -43,6 +44,10 @@ func (c *CoreV1alphaClient) AcceptableUsePolicies() AcceptableUsePolicyInterface
 
 func (c *CoreV1alphaClient) NodeContributions() NodeContributionInterface {
 	return newNodeContributions(c)
+}
+
+func (c *CoreV1alphaClient) SubNamespaces(namespace string) SubNamespaceInterface {
+	return newSubNamespaces(c, namespace)
 }
 
 func (c *CoreV1alphaClient) Tenants() TenantInterface {

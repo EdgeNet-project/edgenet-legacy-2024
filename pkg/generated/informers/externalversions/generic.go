@@ -63,6 +63,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().AcceptableUsePolicies().Informer()}, nil
 	case corev1alpha.SchemeGroupVersion.WithResource("nodecontributions"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().NodeContributions().Informer()}, nil
+	case corev1alpha.SchemeGroupVersion.WithResource("subnamespaces"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().SubNamespaces().Informer()}, nil
 	case corev1alpha.SchemeGroupVersion.WithResource("tenants"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().Tenants().Informer()}, nil
 	case corev1alpha.SchemeGroupVersion.WithResource("tenantresourcequotas"):

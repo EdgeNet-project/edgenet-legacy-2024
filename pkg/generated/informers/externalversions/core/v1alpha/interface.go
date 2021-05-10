@@ -28,6 +28,8 @@ type Interface interface {
 	AcceptableUsePolicies() AcceptableUsePolicyInformer
 	// NodeContributions returns a NodeContributionInformer.
 	NodeContributions() NodeContributionInformer
+	// SubNamespaces returns a SubNamespaceInformer.
+	SubNamespaces() SubNamespaceInformer
 	// Tenants returns a TenantInformer.
 	Tenants() TenantInformer
 	// TenantResourceQuotas returns a TenantResourceQuotaInformer.
@@ -53,6 +55,11 @@ func (v *version) AcceptableUsePolicies() AcceptableUsePolicyInformer {
 // NodeContributions returns a NodeContributionInformer.
 func (v *version) NodeContributions() NodeContributionInformer {
 	return &nodeContributionInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// SubNamespaces returns a SubNamespaceInformer.
+func (v *version) SubNamespaces() SubNamespaceInformer {
+	return &subNamespaceInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Tenants returns a TenantInformer.

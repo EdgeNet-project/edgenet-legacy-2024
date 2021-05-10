@@ -22,6 +22,8 @@ type AcceptableUsePolicyExpansion interface{}
 
 type NodeContributionExpansion interface{}
 
+type SubNamespaceExpansion interface{}
+
 type TenantExpansion interface{}
 
 type TenantResourceQuotaExpansion interface{}

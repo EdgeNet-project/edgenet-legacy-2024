@@ -36,6 +36,10 @@ func (c *FakeCoreV1alpha) NodeContributions() v1alpha.NodeContributionInterface 
 	return &FakeNodeContributions{c}
 }
 
+func (c *FakeCoreV1alpha) SubNamespaces(namespace string) v1alpha.SubNamespaceInterface {
+	return &FakeSubNamespaces{c, namespace}
+}
+
 func (c *FakeCoreV1alpha) Tenants() v1alpha.TenantInterface {
 	return &FakeTenants{c}
 }
