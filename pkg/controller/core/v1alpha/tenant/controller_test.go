@@ -21,14 +21,13 @@ func TestStartController(t *testing.T) {
 	// Wait for the status update of the created object
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
-	_, err := g.edgenetClient.AppsV1alpha().Users(fmt.Sprintf("tenant-%s", g.tenantObj.GetName())).Get(context.TODO(), g.tenantObj.Spec.Contact.Username, metav1.GetOptions{})
+	tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	user, _ := g.edgenetClient.AppsV1alpha().Users(fmt.Sprintf("tenant-%s", g.tenantObj.GetName())).Get(context.TODO(), g.tenantObj.Spec.Contact.Username, metav1.GetOptions{})
-	util.Equals(t, true, user.Spec.Active)
+	util.Equals(t, tenant.Spec.Contact.Username, tenant.Spec.User[0].Username)
 	// Update an tenant
 	g.tenantObj.Spec.Enabled = false
 	g.edgenetClient.CoreV1alpha().Tenants().Update(context.TODO(), g.tenantObj.DeepCopy(), metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	user, _ = g.edgenetClient.AppsV1alpha().Users(fmt.Sprintf("tenant-%s", g.tenantObj.GetName())).Get(context.TODO(), g.tenantObj.Spec.Contact.Username, metav1.GetOptions{})
-	util.Equals(t, false, user.Spec.Active)
+	_, err = g.client.RbacV1().Roles(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
+	util.Equals(t, "roles.rbac.authorization.k8s.io \"tenant-owner-johndoe\" not found", err.Error())
 }
