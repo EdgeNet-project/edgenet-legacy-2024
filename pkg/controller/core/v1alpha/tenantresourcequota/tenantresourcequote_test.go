@@ -87,7 +87,7 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.Contact{
+			Contact: corev1alpha.User{
 				Email:     "john.doe@edge-net.org",
 				FirstName: "John",
 				LastName:  "Doe",
@@ -263,12 +263,10 @@ func TestUpdate(t *testing.T) {
 		expected int
 	}{
 		"without expiry date": {nil, 30, 2},
-		"expiries soon":       {[]time.Duration{30}, 200, 0},
+		"expiries soon":       {[]time.Duration{30}, 300, 0},
 		"expired":             {[]time.Duration{-100}, 0, 0},
 		"mix/1":               {[]time.Duration{30, 500, -100}, 0, 4},
-		"mix/2":               {[]time.Duration{30, 500, -100}, 200, 2},
-		"mix/3":               {[]time.Duration{30, 10, 500, 800, -10, -100}, 0, 8},
-		"mix/4":               {[]time.Duration{30, 10, 500, 800, -10, -100}, 200, 4},
+		"mix/2":               {[]time.Duration{30, 500, -100}, 300, 2},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
