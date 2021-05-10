@@ -53,7 +53,7 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.Contact{
+			Contact: corev1alpha.User{
 				Email:     "john.doe@edge-net.org",
 				FirstName: "John",
 				LastName:  "Doe",
@@ -120,21 +120,22 @@ func TestCreateClusterRoles(t *testing.T) {
 
 	t.Run("role binding", func(t *testing.T) {
 		cases := map[string]struct {
+			tenant    string
 			namespace string
 			roleName  string
 			user      corev1alpha.User
 			expected  string
 		}{
-			"owner":        {tenant.GetName(), "tenant-owner", tenant.Spec.User[0], fmt.Sprintf("tenant-owner-%s", tenant.Spec.User[0].GetName())},
-			"collaborator": {tenant.GetName(), "tenant-collaborator", user1, fmt.Sprintf("tenant-collaborator-%s", user1.GetName())},
-			"admin":        {tenant.GetName(), "tenant-admin", user2, fmt.Sprintf("tenant-admin-%s", user2.GetName())},
+			"owner":        {tenant.GetName(), tenant.GetName(), "tenant-owner", tenant.Spec.User[0], fmt.Sprintf("tenant-owner-%s", tenant.Spec.User[0].GetName())},
+			"collaborator": {tenant.GetName(), tenant.GetName(), "tenant-collaborator", user1, fmt.Sprintf("tenant-collaborator-%s", user1.GetName())},
+			"admin":        {tenant.GetName(), tenant.GetName(), "tenant-admin", user2, fmt.Sprintf("tenant-admin-%s", user2.GetName())},
 		}
 		for k, tc := range cases {
 			t.Run(k, func(t *testing.T) {
-				CreateObjectSpecificRoleBinding(tc.namespace, tc.roleName, tc.user.DeepCopy(), []metav1.OwnerReference{})
+				CreateObjectSpecificRoleBinding(tc.tenant, tc.namespace, tc.roleName, tc.user)
 				_, err := g.client.RbacV1().RoleBindings(tenant.GetName()).Get(context.TODO(), tc.expected, metav1.GetOptions{})
 				util.OK(t, err)
-				err = CreateObjectSpecificRoleBinding(tc.namespace, tc.roleName, tc.user.DeepCopy(), []metav1.OwnerReference{})
+				err = CreateObjectSpecificRoleBinding(tc.tenant, tc.namespace, tc.roleName, tc.user)
 				util.OK(t, err)
 			})
 		}
@@ -180,23 +181,24 @@ func TestCreateObjectSpecificClusterRole(t *testing.T) {
 
 	t.Run("cluster role binding", func(t *testing.T) {
 		cases := map[string]struct {
+			tenant   string
 			roleName string
 			user     corev1alpha.User
 			expected string
 		}{
-			"tenant":                    {fmt.Sprintf("%s-tenants-%s", tenant1.GetName(), tenant1.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-tenants-%s-%s", tenant1.GetName(), tenant1.GetName(), tenant1.Spec.User[0].GetName())},
-			"tenant resource quota":     {fmt.Sprintf("%s-tenantresourcequotas-%s", tenant1.GetName(), tenant1.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-tenantresourcequotas-%s-%s", tenant1.GetName(), tenant1.GetName(), tenant1.Spec.User[0].GetName())},
-			"node contribution":         {fmt.Sprintf("%s-nodecontributions-%s", tenant1.GetName(), "ple"), tenant1.Spec.User[0], fmt.Sprintf("%s-nodecontributions-%s-%s", tenant1.GetName(), "ple", tenant1.Spec.User[0].GetName())},
-			"user registration request": {fmt.Sprintf("%s-userregistrationrequests-%s", tenant1.GetName(), g.user.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-userregistrationrequests-%s-%s", tenant1.GetName(), g.user.GetName(), tenant1.Spec.User[0].GetName())},
-			"email verification":        {fmt.Sprintf("%s-emailverifications-%s", tenant1.GetName(), "abcdefghi"), g.user, fmt.Sprintf("%s-emailverifications-%s-%s", tenant1.GetName(), "abcdefghi", g.user.GetName())},
-			"acceptable use policy":     {fmt.Sprintf("%s-acceptableusepolicies-%s", tenant1.GetName(), tenant1.Spec.User[0].GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-acceptableusepolicies-%s-%s", tenant1.GetName(), tenant1.Spec.User[0].GetName(), tenant1.Spec.User[0].GetName())},
+			"tenant":                    {tenant1.GetName(), fmt.Sprintf("%s-tenants-%s", tenant1.GetName(), tenant1.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-tenants-%s-%s", tenant1.GetName(), tenant1.GetName(), tenant1.Spec.User[0].GetName())},
+			"tenant resource quota":     {tenant1.GetName(), fmt.Sprintf("%s-tenantresourcequotas-%s", tenant1.GetName(), tenant1.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-tenantresourcequotas-%s-%s", tenant1.GetName(), tenant1.GetName(), tenant1.Spec.User[0].GetName())},
+			"node contribution":         {tenant1.GetName(), fmt.Sprintf("%s-nodecontributions-%s", tenant1.GetName(), "ple"), tenant1.Spec.User[0], fmt.Sprintf("%s-nodecontributions-%s-%s", tenant1.GetName(), "ple", tenant1.Spec.User[0].GetName())},
+			"user registration request": {tenant1.GetName(), fmt.Sprintf("%s-userregistrationrequests-%s", tenant1.GetName(), g.user.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-userregistrationrequests-%s-%s", tenant1.GetName(), g.user.GetName(), tenant1.Spec.User[0].GetName())},
+			"email verification":        {tenant1.GetName(), fmt.Sprintf("%s-emailverifications-%s", tenant1.GetName(), "abcdefghi"), g.user, fmt.Sprintf("%s-emailverifications-%s-%s", tenant1.GetName(), "abcdefghi", g.user.GetName())},
+			"acceptable use policy":     {tenant1.GetName(), fmt.Sprintf("%s-acceptableusepolicies-%s", tenant1.GetName(), tenant1.Spec.User[0].GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-acceptableusepolicies-%s-%s", tenant1.GetName(), tenant1.Spec.User[0].GetName(), tenant1.Spec.User[0].GetName())},
 		}
 		for k, tc := range cases {
 			t.Run(k, func(t *testing.T) {
-				CreateObjectSpecificClusterRoleBinding(tc.roleName, tc.user.DeepCopy(), []metav1.OwnerReference{})
+				CreateObjectSpecificClusterRoleBinding(tc.tenant, tc.roleName, tc.user, []metav1.OwnerReference{})
 				_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), tc.expected, metav1.GetOptions{})
 				util.OK(t, err)
-				err = CreateObjectSpecificClusterRoleBinding(tc.roleName, tc.user.DeepCopy(), []metav1.OwnerReference{})
+				err = CreateObjectSpecificClusterRoleBinding(tc.tenant, tc.roleName, tc.user, []metav1.OwnerReference{})
 				util.OK(t, err)
 			})
 		}
@@ -233,13 +235,13 @@ func TestPermissionSystem(t *testing.T) {
 		})
 	}
 	t.Run("bind cluster role for tenant owner", func(t *testing.T) {
-		CreateObjectSpecificRoleBinding(tenant.GetName(), "tenant-owner", user1.DeepCopy(), []metav1.OwnerReference{})
+		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "tenant-owner", user1)
 	})
 	t.Run("bind cluster role for tenant collaborator", func(t *testing.T) {
-		CreateObjectSpecificRoleBinding(tenant.GetName(), "tenant-collaborator", user2.DeepCopy(), []metav1.OwnerReference{})
+		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "tenant-collaborator", user2)
 	})
 	t.Run("bind cluster role for tenant admin", func(t *testing.T) {
-		CreateObjectSpecificRoleBinding(tenant.GetName(), "tenant-admin", user3.DeepCopy(), []metav1.OwnerReference{})
+		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "tenant-admin", user3)
 	})
 
 	t.Run("create owner specific tenant role", func(t *testing.T) {
@@ -253,12 +255,12 @@ func TestPermissionSystem(t *testing.T) {
 		util.OK(t, err)
 	})
 	t.Run("create owner role binding", func(t *testing.T) {
-		CreateObjectSpecificClusterRoleBinding(fmt.Sprintf("%s-tenants-%s-owner", tenant.GetName(), tenant.GetName()), user1.DeepCopy(), []metav1.OwnerReference{})
+		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("%s-tenants-%s-owner", tenant.GetName(), tenant.GetName()), user1, []metav1.OwnerReference{})
 		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-owner-%s", tenant.GetName(), tenant.GetName(), user1.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
 	t.Run("create admin role binding", func(t *testing.T) {
-		CreateObjectSpecificClusterRoleBinding(fmt.Sprintf("%s-tenants-%s-admin", tenant.GetName(), tenant.GetName()), user3.DeepCopy(), []metav1.OwnerReference{})
+		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("%s-tenants-%s-admin", tenant.GetName(), tenant.GetName()), user3, []metav1.OwnerReference{})
 		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-admin-%s", tenant.GetName(), tenant.GetName(), user3.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
