@@ -19,30 +19,30 @@ func TestStartController(t *testing.T) {
 	// Run the controller in a goroutine
 	go Start(g.client, g.edgenetClient)
 	// Create a resource request
-	TRQObj := g.TRQObj
-	TRQObj.Spec.Claim = append(TRQObj.Spec.Claim, g.claimObj)
-	g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), TRQObj.DeepCopy(), metav1.CreateOptions{})
+	tenantResourceQuotaObj := g.tenantResourceQuotaObj
+	tenantResourceQuotaObj.Spec.Claim = append(tenantResourceQuotaObj.Spec.Claim, g.claimObj)
+	g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuotaObj.DeepCopy(), metav1.CreateOptions{})
 	// Wait for the status update of created object
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
-	TRQCopy, err := g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQObj.GetName(), metav1.GetOptions{})
+	tenantResourceQuota, err := g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	util.Equals(t, success, TRQCopy.Status.State)
-	// Update the TRQ
+	util.Equals(t, success, tenantResourceQuota.Status.State)
+	// Update the tenant resource quota
 	drop := g.dropObj
 	drop.Expiry = &metav1.Time{
 		Time: time.Now().Add(400 * time.Millisecond),
 	}
-	TRQCopy.Spec.Drop = append(TRQCopy.Spec.Drop, drop)
-	g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), TRQCopy.DeepCopy(), metav1.UpdateOptions{})
+	tenantResourceQuota.Spec.Drop = append(tenantResourceQuota.Spec.Drop, drop)
+	g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 200)
-	TRQCopy, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQCopy.GetName(), metav1.GetOptions{})
+	tenantResourceQuota, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	util.Equals(t, 1, len(TRQCopy.Spec.Drop))
+	util.Equals(t, 1, len(tenantResourceQuota.Spec.Drop))
 	time.Sleep(time.Millisecond * 500)
-	TRQCopy, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQCopy.GetName(), metav1.GetOptions{})
+	tenantResourceQuota, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	util.Equals(t, 0, len(TRQCopy.Spec.Drop))
+	util.Equals(t, 0, len(tenantResourceQuota.Spec.Drop))
 
 	expectedMemoryRes := resource.MustParse(g.claimObj.Memory)
 	expectedMemory := expectedMemoryRes.Value()
@@ -54,63 +54,63 @@ func TestStartController(t *testing.T) {
 	node := g.nodeObj
 	nodeCopy, _ := g.client.CoreV1().Nodes().Create(context.TODO(), node.DeepCopy(), metav1.CreateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	TRQCopy, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQCopy.GetName(), metav1.GetOptions{})
+	tenantResourceQuota, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	reward := false
-	for _, claim := range TRQCopy.Spec.Claim {
+	for _, claim := range tenantResourceQuota.Spec.Claim {
 		if claim.Name == "Reward" {
 			reward = true
 		}
 	}
 	util.Equals(t, true, reward)
-	CPUQuota, memoryQuota := getQuotas(TRQCopy.Spec.Claim)
+	cpuQuota, memoryQuota := getQuotas(tenantResourceQuota.Spec.Claim)
 	util.Equals(t, expectedMemoryRew, memoryQuota)
-	util.Equals(t, expectedCPURew, CPUQuota)
+	util.Equals(t, expectedCPURew, cpuQuota)
 
 	nodeCopy.Status.Conditions[0].Status = "False"
 	g.client.CoreV1().Nodes().Update(context.TODO(), nodeCopy.DeepCopy(), metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	TRQCopy, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQCopy.GetName(), metav1.GetOptions{})
+	tenantResourceQuota, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	CPUQuota, memoryQuota = getQuotas(TRQCopy.Spec.Claim)
+	cpuQuota, memoryQuota = getQuotas(tenantResourceQuota.Spec.Claim)
 	util.Equals(t, expectedMemory, memoryQuota)
-	util.Equals(t, expectedCPU, CPUQuota)
+	util.Equals(t, expectedCPU, cpuQuota)
 
 	nodeCopy.Status.Conditions[0].Status = "True"
 	g.client.CoreV1().Nodes().Update(context.TODO(), nodeCopy.DeepCopy(), metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	TRQCopy, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQCopy.GetName(), metav1.GetOptions{})
+	tenantResourceQuota, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	CPUQuota, memoryQuota = getQuotas(TRQCopy.Spec.Claim)
+	cpuQuota, memoryQuota = getQuotas(tenantResourceQuota.Spec.Claim)
 	util.Equals(t, expectedMemoryRew, memoryQuota)
-	util.Equals(t, expectedCPURew, CPUQuota)
+	util.Equals(t, expectedCPURew, cpuQuota)
 
 	nodeCopy.Status.Conditions[0].Status = "Unknown"
 	g.client.CoreV1().Nodes().Update(context.TODO(), nodeCopy.DeepCopy(), metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	TRQCopy, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQCopy.GetName(), metav1.GetOptions{})
+	tenantResourceQuota, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	CPUQuota, memoryQuota = getQuotas(TRQCopy.Spec.Claim)
+	cpuQuota, memoryQuota = getQuotas(tenantResourceQuota.Spec.Claim)
 	util.Equals(t, expectedMemory, memoryQuota)
-	util.Equals(t, expectedCPU, CPUQuota)
+	util.Equals(t, expectedCPU, cpuQuota)
 
 	g.client.CoreV1().Nodes().Delete(context.TODO(), nodeCopy.GetName(), metav1.DeleteOptions{})
 	time.Sleep(time.Millisecond * 500)
-	TRQCopy, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), TRQCopy.GetName(), metav1.GetOptions{})
+	tenantResourceQuota, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	CPUQuota, memoryQuota = getQuotas(TRQCopy.Spec.Claim)
+	cpuQuota, memoryQuota = getQuotas(tenantResourceQuota.Spec.Claim)
 	util.Equals(t, expectedMemory, memoryQuota)
-	util.Equals(t, expectedCPU, CPUQuota)
+	util.Equals(t, expectedCPU, cpuQuota)
 }
 
 func getQuotas(claimRaw []corev1alpha.TenantResourceDetails) (int64, int64) {
-	var CPUQuota int64
+	var cpuQuota int64
 	var memoryQuota int64
 	for _, claimRow := range claimRaw {
 		CPUResource := resource.MustParse(claimRow.CPU)
-		CPUQuota += CPUResource.Value()
+		cpuQuota += CPUResource.Value()
 		memoryResource := resource.MustParse(claimRow.Memory)
 		memoryQuota += memoryResource.Value()
 	}
-	return CPUQuota, memoryQuota
+	return cpuQuota, memoryQuota
 }

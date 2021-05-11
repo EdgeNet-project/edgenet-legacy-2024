@@ -52,18 +52,18 @@ type Handler struct {
 
 // Init handles any handler initialization
 func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
-	log.Info("TenantResourceQuotaHandler.Init")
+	log.Info("tenantResourceQuotaHandler.Init")
 	t.clientset = kubernetes
 	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
 func (t *Handler) ObjectCreated(obj interface{}) {
-	log.Info("TenantResourceQuotaHandler.ObjectCreated")
-	// Create a copy of the TRQ object to make changes on it
-	tenantresourcequota := obj.(*corev1alpha.TenantResourceQuota).DeepCopy()
+	log.Info("tenantResourceQuotaHandler.ObjectCreated")
+	// Make a copy of the tenant resource quota object to make changes on it
+	tenantResourceQuota := obj.(*corev1alpha.TenantResourceQuota).DeepCopy()
 	// Find the tenant from the namespace in which the object is
-	tenant, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantresourcequota.GetName(), metav1.GetOptions{})
+	tenant, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Delete(context.TODO(), tenant.GetName(), metav1.DeleteOptions{})
 	} else {
@@ -71,39 +71,39 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		if tenant.Spec.Enabled {
 			// If the service restarts, it creates all objects again
 			// Because of that, this section covers a variety of possibilities
-			tenantresourcequota.Status.State = success
-			tenantresourcequota.Status.Message = []string{statusDict["TRQ-created"]}
-			tenantresourcequotaUpdated, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().UpdateStatus(context.TODO(), tenantresourcequota, metav1.UpdateOptions{})
+			tenantResourceQuota.Status.State = success
+			tenantResourceQuota.Status.Message = []string{statusDict["TRQ-created"]}
+			tenantResourceQuotaUpdated, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().UpdateStatus(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
 			if err == nil {
-				tenantresourcequota = tenantresourcequotaUpdated
+				tenantResourceQuota = tenantResourceQuotaUpdated
 			} else {
-				log.Infof("Couldn't update the status of tenant resource quota in %s: %s", tenantresourcequota.GetName(), err)
+				log.Infof("Couldn't update the status of tenant resource quota in %s: %s", tenantResourceQuota.GetName(), err)
 			}
 			// Check the total resource consumption in tenant
-			tenantresourcequota, quotaExceeded, cpuDecline, memoryDecline := t.ResourceConsumptionControl(tenantresourcequota, 0, 0)
+			tenantResourceQuota, quotaExceeded, cpuDecline, memoryDecline := t.ResourceConsumptionControl(tenantResourceQuota, 0, 0)
 			// If they reached the limit, remove some subnamespaces randomly
 			if quotaExceeded {
-				t.balanceResourceConsumption(tenantresourcequota.GetName(), cpuDecline, memoryDecline)
+				t.balanceResourceConsumption(tenantResourceQuota.GetName(), cpuDecline, memoryDecline)
 			}
 			// Run timeout function if there is a claim or drop with an expiry date
-			exists := CheckExpiryDate(tenantresourcequota)
+			exists := CheckExpiryDate(tenantResourceQuota)
 			if exists {
-				go t.runTimeout(tenantresourcequota)
+				go t.runTimeout(tenantResourceQuota)
 			}
 		} else {
 			// Block the tenant to prevent using the cluster resources
-			t.prohibitResourceConsumption(tenantresourcequota, tenant)
+			t.prohibitResourceConsumption(tenantResourceQuota, tenant)
 		}
 	}
 }
 
 // ObjectUpdated is called when an object is updated
 func (t *Handler) ObjectUpdated(obj, updated interface{}) {
-	log.Info("TenantResourceQuotaHandler.ObjectUpdated")
-	// Create a copy of the TRQ object to make changes on it
-	tenantresourcequota := obj.(*corev1alpha.TenantResourceQuota).DeepCopy()
+	log.Info("tenantResourceQuotaHandler.ObjectUpdated")
+	// Make a copy of the tenant resource quota object to make changes on it
+	tenantResourceQuota := obj.(*corev1alpha.TenantResourceQuota).DeepCopy()
 	// Find the tenant from the namespace in which the object is
-	tenant, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantresourcequota.GetName(), metav1.GetOptions{})
+	tenant, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Delete(context.TODO(), tenant.GetName(), metav1.DeleteOptions{})
 	} else {
@@ -112,26 +112,26 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 		if tenant.Spec.Enabled {
 			// Start procedures if the spec changes
 			if fieldUpdated.spec {
-				tenantresourcequota, quotaExceeded, cpuDecline, memoryDecline := t.ResourceConsumptionControl(tenantresourcequota, 0, 0)
+				tenantResourceQuota, quotaExceeded, cpuDecline, memoryDecline := t.ResourceConsumptionControl(tenantResourceQuota, 0, 0)
 				if quotaExceeded {
-					t.balanceResourceConsumption(tenantresourcequota.GetName(), cpuDecline, memoryDecline)
+					t.balanceResourceConsumption(tenantResourceQuota.GetName(), cpuDecline, memoryDecline)
 				}
 				if fieldUpdated.expiry {
-					exists := CheckExpiryDate(tenantresourcequota)
+					exists := CheckExpiryDate(tenantResourceQuota)
 					if exists {
-						go t.runTimeout(tenantresourcequota)
+						go t.runTimeout(tenantResourceQuota)
 					}
 				}
 			}
 		} else {
-			t.prohibitResourceConsumption(tenantresourcequota, tenant)
+			t.prohibitResourceConsumption(tenantResourceQuota, tenant)
 		}
 	}
 }
 
 // ObjectDeleted is called when an object is deleted
 func (t *Handler) ObjectDeleted(obj interface{}) {
-	log.Info("TenantResourceQuotaHandler.ObjectDeleted")
+	log.Info("tenantResourceQuotaHandler.ObjectDeleted")
 	// Delete or disable subnamespaces added by tenant, TBD.
 }
 
@@ -140,14 +140,14 @@ func (t *Handler) Create(name string) {
 	_, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		// Set a tenant resource quota
-		TRQ := corev1alpha.TenantResourceQuota{}
-		TRQ.SetName(name)
+		tenantResourceQuota := corev1alpha.TenantResourceQuota{}
+		tenantResourceQuota.SetName(name)
 		claim := corev1alpha.TenantResourceDetails{}
 		claim.Name = "Default"
 		claim.CPU = "12000m"
 		claim.Memory = "12Gi"
-		TRQ.Spec.Claim = append(TRQ.Spec.Claim, claim)
-		_, err = t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), TRQ.DeepCopy(), metav1.CreateOptions{})
+		tenantResourceQuota.Spec.Claim = append(tenantResourceQuota.Spec.Claim, claim)
+		_, err = t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{})
 		if err != nil {
 			log.Infof(statusDict["TRQ-failed"], name, err)
 		}
@@ -167,24 +167,24 @@ func (t *Handler) sendEmail(tenant, subnamespaceOwner, subnamespace, subnamespac
 }
 
 // prohibitResourceConsumption deletes all subnamespaces in tenant
-func (t *Handler) prohibitResourceConsumption(tenantresourcequota *corev1alpha.TenantResourceQuota, tenant *corev1alpha.Tenant) {
+func (t *Handler) prohibitResourceConsumption(tenantResourceQuota *corev1alpha.TenantResourceQuota, tenant *corev1alpha.Tenant) {
 	// Delete all subnamespaces of tenant
 	err := t.edgenetClientset.CoreV1alpha().SubNamespaces(tenant.GetName()).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
 	if err != nil {
-		log.Printf("Subnamespace deletion failed in tenant %s", tenantresourcequota.GetName())
-		t.sendEmail(tenantresourcequota.GetName(), "", "", "", "subnamespace-collection-deletion-failed")
+		log.Printf("Subnamespace deletion failed in tenant %s", tenantResourceQuota.GetName())
+		t.sendEmail(tenantResourceQuota.GetName(), "", "", "", "subnamespace-collection-deletion-failed")
 	}
 }
 
 // CheckExpiryDate to checker whether there is an item with expiry date
-func CheckExpiryDate(tenantresourcequota *corev1alpha.TenantResourceQuota) bool {
+func CheckExpiryDate(tenantResourceQuota *corev1alpha.TenantResourceQuota) bool {
 	exists := false
-	for _, claim := range tenantresourcequota.Spec.Claim {
+	for _, claim := range tenantResourceQuota.Spec.Claim {
 		if claim.Expiry != nil && claim.Expiry.Time.Sub(time.Now()) >= 0 {
 			exists = true
 		}
 	}
-	for _, drop := range tenantresourcequota.Spec.Drop {
+	for _, drop := range tenantResourceQuota.Spec.Drop {
 		if drop.Expiry != nil && drop.Expiry.Time.Sub(time.Now()) >= 0 {
 			exists = true
 		}
@@ -195,16 +195,16 @@ func CheckExpiryDate(tenantresourcequota *corev1alpha.TenantResourceQuota) bool 
 // ResourceConsumptionControl both calculates the tenant resource quota and the total consumption in the tenant.
 // Additionally, when a Slice created it comes along with a resource consumption demand. This function also allows us
 // to compare free resources with demands as well.
-func (t *Handler) ResourceConsumptionControl(tenantresourcequota *corev1alpha.TenantResourceQuota, CPUDemand int64, memoryDemand int64) (*corev1alpha.TenantResourceQuota, bool, int64, int64) {
+func (t *Handler) ResourceConsumptionControl(tenantResourceQuota *corev1alpha.TenantResourceQuota, cpuDemand int64, memoryDemand int64) (*corev1alpha.TenantResourceQuota, bool, int64, int64) {
 	// Find out the tenant resource quota by taking claims and drops into account
-	tenantresourcequota, cpuQuota, memoryQuota := t.calculateTotalQuota(tenantresourcequota)
+	tenantResourceQuota, cpuQuota, memoryQuota := t.calculateTotalQuota(tenantResourceQuota)
 	// Get the total consumption that all namespaces do in tenant
 	var aggregatedCPU, aggregatedMemory int64 = 0, 0
-	t.aggregateConsumedResources(tenantresourcequota.GetName(), &aggregatedCPU, &aggregatedMemory)
-	aggregatedCPU += CPUDemand
+	t.aggregateConsumedResources(tenantResourceQuota.GetName(), &aggregatedCPU, &aggregatedMemory)
+	aggregatedCPU += cpuDemand
 	aggregatedMemory += memoryDemand
 	demand := false
-	if CPUDemand != 0 || memoryDemand != 0 {
+	if cpuDemand != 0 || memoryDemand != 0 {
 		demand = true
 	}
 
@@ -214,23 +214,23 @@ func (t *Handler) ResourceConsumptionControl(tenantresourcequota *corev1alpha.Te
 			quotaExceeded = true
 		}
 	}
-	return tenantresourcequota, quotaExceeded, (aggregatedCPU - cpuQuota), (aggregatedMemory - memoryQuota)
+	return tenantResourceQuota, quotaExceeded, (aggregatedCPU - cpuQuota), (aggregatedMemory - memoryQuota)
 }
 
 // calculateTotalQuota adds the resources defined in claims, and subtracts those in drops to calculate the tenant resource quota.
 // Moreover, the function checkes whether any claim or drop has an expiry date and updates the object if exists.
-func (t *Handler) calculateTotalQuota(tenantresourcequota *corev1alpha.TenantResourceQuota) (*corev1alpha.TenantResourceQuota, int64, int64) {
+func (t *Handler) calculateTotalQuota(tenantResourceQuota *corev1alpha.TenantResourceQuota) (*corev1alpha.TenantResourceQuota, int64, int64) {
 	var cpuQuota int64
 	var memoryQuota int64
 	// To make comparison
-	oldtenantresourcequota := tenantresourcequota.DeepCopy()
+	oldtenantResourceQuota := tenantResourceQuota.DeepCopy()
 	// claimSlice to be manipulated
-	claimSlice := tenantresourcequota.Spec.Claim
+	claimSlice := tenantResourceQuota.Spec.Claim
 	// dropSlice to be manipulated
-	dropSlice := tenantresourcequota.Spec.Drop
-	if len(tenantresourcequota.Spec.Claim) > 0 {
+	dropSlice := tenantResourceQuota.Spec.Drop
+	if len(tenantResourceQuota.Spec.Claim) > 0 {
 		j := 0
-		for _, claim := range tenantresourcequota.Spec.Claim {
+		for _, claim := range tenantResourceQuota.Spec.Claim {
 			if claim.Expiry == nil || (claim.Expiry != nil && claim.Expiry.Time.Sub(time.Now()) >= 0) {
 				CPUResource := resource.MustParse(claim.CPU)
 				cpuQuota += CPUResource.Value()
@@ -244,11 +244,11 @@ func (t *Handler) calculateTotalQuota(tenantresourcequota *corev1alpha.TenantRes
 			j++
 		}
 		// Sync the claims
-		tenantresourcequota.Spec.Claim = claimSlice
+		tenantResourceQuota.Spec.Claim = claimSlice
 	}
-	if len(tenantresourcequota.Spec.Drop) > 0 {
+	if len(tenantResourceQuota.Spec.Drop) > 0 {
 		j := 0
-		for _, drop := range tenantresourcequota.Spec.Drop {
+		for _, drop := range tenantResourceQuota.Spec.Drop {
 			if drop.Expiry == nil || (drop.Expiry != nil && drop.Expiry.Time.Sub(time.Now()) >= 0) {
 				CPUResource := resource.MustParse(drop.CPU)
 				cpuQuota -= CPUResource.Value()
@@ -262,22 +262,22 @@ func (t *Handler) calculateTotalQuota(tenantresourcequota *corev1alpha.TenantRes
 			j++
 		}
 		// Sync the drops
-		tenantresourcequota.Spec.Drop = dropSlice
+		tenantResourceQuota.Spec.Drop = dropSlice
 	}
 	// Check if there is an update
-	if !reflect.DeepEqual(oldtenantresourcequota, tenantresourcequota) {
-		tenantresourcequotaUpdated, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantresourcequota, metav1.UpdateOptions{})
+	if !reflect.DeepEqual(oldtenantResourceQuota, tenantResourceQuota) {
+		tenantResourceQuotaUpdated, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
 		if err == nil {
-			tenantresourcequota = tenantresourcequotaUpdated
-			tenantresourcequota.Status.State = success
-			tenantresourcequota.Status.Message = []string{statusDict["TRQ-applied"]}
+			tenantResourceQuota = tenantResourceQuotaUpdated
+			tenantResourceQuota.Status.State = success
+			tenantResourceQuota.Status.Message = []string{statusDict["TRQ-applied"]}
 		} else {
-			log.Infof("Couldn't update tenant resource quota in %s: %s", tenantresourcequota.GetName(), err)
-			tenantresourcequota.Status.State = failure
-			tenantresourcequota.Status.Message = []string{statusDict["TRQ-appliedFail"]}
+			log.Infof("Couldn't update tenant resource quota in %s: %s", tenantResourceQuota.GetName(), err)
+			tenantResourceQuota.Status.State = failure
+			tenantResourceQuota.Status.Message = []string{statusDict["TRQ-appliedFail"]}
 		}
 	}
-	return tenantresourcequota, cpuQuota, memoryQuota
+	return tenantResourceQuota, cpuQuota, memoryQuota
 }
 
 // aggregateConsumedResources looks out for namespaces in tenant and teams to determine the total consumption
@@ -365,39 +365,39 @@ func (t *Handler) balanceResourceConsumption(tenant string, cpuDecline, memoryDe
 }
 
 // runTimeout puts a procedure in place to remove claims and drops after the timeout
-func (t *Handler) runTimeout(tenantresourcequota *corev1alpha.TenantResourceQuota) {
+func (t *Handler) runTimeout(tenantResourceQuota *corev1alpha.TenantResourceQuota) {
 	timeoutRenewed := make(chan bool, 1)
 	terminated := make(chan bool, 1)
 	var timeout <-chan time.Time
-	timeout = time.After(time.Until(getClosestExpiryDate(tenantresourcequota)))
+	timeout = time.After(time.Until(getClosestExpiryDate(tenantResourceQuota)))
 	closeChannels := func() {
 		close(timeoutRenewed)
 		close(terminated)
 	}
 
 	// Watch the events of tenant resource quota object
-	watchTRQ, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", tenantresourcequota.GetName())})
+	watchTenantResourceQuota, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", tenantResourceQuota.GetName())})
 	if err == nil {
 		go func() {
 			// Get events from watch interface
-			for TRQEvent := range watchTRQ.ResultChan() {
+			for tenantResourceQuotaEvent := range watchTenantResourceQuota.ResultChan() {
 				// Get updated slice object
-				updatedTRQ, status := TRQEvent.Object.(*corev1alpha.TenantResourceQuota)
-				if tenantresourcequota.GetUID() == updatedTRQ.GetUID() {
+				updatedTenantResourceQuota, status := tenantResourceQuotaEvent.Object.(*corev1alpha.TenantResourceQuota)
+				if tenantResourceQuota.GetUID() == updatedTenantResourceQuota.GetUID() {
 					if status {
-						if TRQEvent.Type == "DELETED" {
+						if tenantResourceQuotaEvent.Type == "DELETED" {
 							terminated <- true
 							continue
 						}
-						tenantresourcequota = updatedTRQ
-						exists := CheckExpiryDate(tenantresourcequota)
+						tenantResourceQuota = updatedTenantResourceQuota
+						exists := CheckExpiryDate(tenantResourceQuota)
 						if exists {
-							timeout = time.After(time.Until(getClosestExpiryDate(tenantresourcequota)))
+							timeout = time.After(time.Until(getClosestExpiryDate(tenantResourceQuota)))
 							timeoutRenewed <- true
 						} else {
 							select {
 							case <-terminated:
-								watchTRQ.Stop()
+								watchTenantResourceQuota.Stop()
 							default:
 								terminated <- true
 							}
@@ -421,17 +421,17 @@ timeoutLoop:
 		case <-timeoutRenewed:
 			break timeoutOptions
 		case <-timeout:
-			tenantresourcequota, quotaExceeded, cpuDecline, memoryDecline := t.ResourceConsumptionControl(tenantresourcequota, 0, 0)
+			tenantResourceQuota, quotaExceeded, cpuDecline, memoryDecline := t.ResourceConsumptionControl(tenantResourceQuota, 0, 0)
 			if quotaExceeded {
-				t.balanceResourceConsumption(tenantresourcequota.GetName(), cpuDecline, memoryDecline)
+				t.balanceResourceConsumption(tenantResourceQuota.GetName(), cpuDecline, memoryDecline)
 			}
-			exists := CheckExpiryDate(tenantresourcequota)
+			exists := CheckExpiryDate(tenantResourceQuota)
 			if !exists {
 				terminated <- true
 			}
 			break timeoutOptions
 		case <-terminated:
-			watchTRQ.Stop()
+			watchTenantResourceQuota.Stop()
 			closeChannels()
 			break timeoutLoop
 		}
@@ -439,9 +439,9 @@ timeoutLoop:
 }
 
 // getClosestExpiryDate determines the item, a claim or a drop, having the closest expiry date
-func getClosestExpiryDate(tenantresourcequota *corev1alpha.TenantResourceQuota) time.Time {
+func getClosestExpiryDate(tenantResourceQuota *corev1alpha.TenantResourceQuota) time.Time {
 	var closestDate *metav1.Time
-	for i, claim := range tenantresourcequota.Spec.Claim {
+	for i, claim := range tenantResourceQuota.Spec.Claim {
 		if i == 0 {
 			if claim.Expiry != nil {
 				closestDate = claim.Expiry
@@ -454,7 +454,7 @@ func getClosestExpiryDate(tenantresourcequota *corev1alpha.TenantResourceQuota) 
 			}
 		}
 	}
-	for j, drop := range tenantresourcequota.Spec.Drop {
+	for j, drop := range tenantResourceQuota.Spec.Drop {
 		if j == 0 {
 			if drop.Expiry != nil {
 				closestDate = drop.Expiry
