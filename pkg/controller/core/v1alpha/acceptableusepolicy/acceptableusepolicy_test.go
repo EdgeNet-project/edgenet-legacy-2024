@@ -3,6 +3,7 @@ package acceptableusepolicy
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -23,11 +24,11 @@ import (
 
 // The main structure of test group
 type TestGroup struct {
-	tenantObj     corev1alpha.Tenant
-	AUPObj        corev1alpha.AcceptableUsePolicy
-	client        kubernetes.Interface
-	edgenetClient versioned.Interface
-	handler       Handler
+	tenantObj              corev1alpha.Tenant
+	acceptableUsePolicyObj corev1alpha.AcceptableUsePolicy
+	client                 kubernetes.Interface
+	edgenetClient          versioned.Interface
+	handler                Handler
 }
 
 func TestMain(m *testing.M) {
@@ -44,11 +45,14 @@ func TestMain(m *testing.M) {
 func (g *TestGroup) Init() {
 	tenantObj := corev1alpha.Tenant{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Authority",
+			Kind:       "Tenant",
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "edgenet",
+			Labels: map[string]string{
+				"edge-net.io/generated": "true",
+			},
 		},
 		Spec: corev1alpha.TenantSpec{
 			FullName:  "EdgeNet",
@@ -60,42 +64,56 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.Contact{
+			Contact: corev1alpha.User{
 				Email:     "joe.public@edge-net.org",
 				FirstName: "Joe",
 				LastName:  "Public",
 				Phone:     "+33NUMBER",
 				Username:  "joepublic",
 			},
+			User: []corev1alpha.User{
+				corev1alpha.User{
+					Email:     "joe.public@edge-net.org",
+					FirstName: "Joe",
+					LastName:  "Public",
+					Phone:     "+33NUMBER",
+					Username:  "joepublic",
+					Role:      "Owner",
+				},
+			},
 			Enabled: true,
 		},
 	}
-	AUPObj := corev1alpha.AcceptableUsePolicy{
+	acceptableUsePolicyObj := corev1alpha.AcceptableUsePolicy{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "AcceptableUsePolicy",
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "joepublic",
-			Namespace: "authority-edgenet",
+			Name: "edgenet-joepublic",
+			Labels: map[string]string{
+				"edge-net.io/generated": "true",
+				"edge-net.io/tenant":    "edgenet",
+				"edge-net.io/user":      "joepublic",
+			},
 		},
 		Spec: corev1alpha.AcceptableUsePolicySpec{
 			Accepted: false,
 		},
 	}
 	g.tenantObj = tenantObj
-	g.AUPObj = AUPObj
+	g.acceptableUsePolicyObj = acceptableUsePolicyObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetClient = edgenettestclient.NewSimpleClientset()
-	// authorityHandler := authority.Handler{}
-	// authorityHandler.Init(g.client, g.edgenetClient)
-	// Create Authority
+	// tenantHandler := tenant.Handler{}
+	// tenantHandler.Init(g.client, g.edgenetClient)
+	// Create Tenant
 	g.edgenetClient.CoreV1alpha().Tenants().Create(context.TODO(), g.tenantObj.DeepCopy(), metav1.CreateOptions{})
-	namespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: g.AUPObj.GetNamespace()}}
-	namespaceLabels := map[string]string{"owner": "authority", "owner-name": g.tenantObj.GetName(), "authority-name": g.tenantObj.GetName()}
+	namespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: g.acceptableUsePolicyObj.GetNamespace()}}
+	namespaceLabels := map[string]string{"owner": "tenant", "owner-name": g.tenantObj.GetName(), "tenant-name": g.tenantObj.GetName()}
 	namespace.SetLabels(namespaceLabels)
 	g.client.CoreV1().Namespaces().Create(context.TODO(), &namespace, metav1.CreateOptions{}) // Invoke ObjectCreated to create namespace
-	// Create a user as admin on authority
+	// Create a user as admin on tenant
 	/*
 		user := apps_v1alpha.User{}
 		user.SetName(strings.ToLower(g.tenantObj.Spec.Contact.Username))
@@ -103,11 +121,11 @@ func (g *TestGroup) Init() {
 		user.Spec.FirstName = g.tenantObj.Spec.Contact.FirstName
 		user.Spec.LastName = g.tenantObj.Spec.Contact.LastName
 		user.Spec.Active = true
-		user.Status.AUP = false
+		user.Status.acceptableUsePolicy = false
 		user.Status.Type = "admin"
-		g.edgenetClient.AppsV1alpha().Users(fmt.Sprintf("authority-%s", g.tenantObj.GetName())).Create(context.TODO(), user.DeepCopy(), metav1.CreateOptions{})
+		g.edgenetClient.AppsV1alpha().Users(fmt.Sprintf("tenant-%s", g.tenantObj.GetName())).Create(context.TODO(), user.DeepCopy(), metav1.CreateOptions{})
 	*/
-	// authorityHandler.ObjectCreated(g.tenantObj.DeepCopy())
+	// tenantHandler.ObjectCreated(g.tenantObj.DeepCopy())
 }
 
 func TestHandlerInit(t *testing.T) {
@@ -125,18 +143,18 @@ func TestCreate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
 
-	regular := g.AUPObj
+	regular := g.acceptableUsePolicyObj.DeepCopy()
 	regular.SetUID("regular")
-	accepted := g.AUPObj
+	accepted := g.acceptableUsePolicyObj.DeepCopy()
 	accepted.SetUID("accepted")
 	accepted.Spec.Accepted = true
-	recreation := g.AUPObj
+	recreation := g.acceptableUsePolicyObj.DeepCopy()
 	recreation.SetUID("recreation")
 	recreation.Spec.Accepted = true
 	recreation.Status.Expiry = &metav1.Time{
 		Time: time.Now().Add(1000 * time.Hour),
 	}
-	recreationExpired := g.AUPObj
+	recreationExpired := g.acceptableUsePolicyObj.DeepCopy()
 	recreationExpired.SetUID("recreationExpired")
 	recreationExpired.Spec.Accepted = true
 	recreationExpired.Status.Expiry = &metav1.Time{
@@ -145,68 +163,73 @@ func TestCreate(t *testing.T) {
 	t.Run("regular", func(t *testing.T) {
 		g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), regular.DeepCopy(), metav1.CreateOptions{})
 		defer g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Delete(context.TODO(), regular.GetName(), metav1.DeleteOptions{})
-		g.handler.ObjectCreated(regular.DeepCopy())
-		AUP, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), regular.GetName(), metav1.GetOptions{})
+		g.handler.ObjectCreatedOrUpdated(regular.DeepCopy())
+		acceptableUsePolicy, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), regular.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
-		util.Equals(t, success, AUP.Status.State)
+		util.Equals(t, success, acceptableUsePolicy.Status.State)
 		t.Run("user status", func(t *testing.T) {
-			user, err := g.edgenetClient.AppsV1alpha().Users(AUP.GetNamespace()).Get(context.TODO(), AUP.GetName(), metav1.GetOptions{})
+			aupLabels := acceptableUsePolicy.GetLabels()
+			tenantName := aupLabels["edge-net.io/tenant"]
+			tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
 			util.OK(t, err)
-			util.Equals(t, false, user.Status.AUP)
+
+			tenantLabels := tenant.GetLabels()
+			util.Equals(t, "false", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
 		})
 	})
 	t.Run("accepted already", func(t *testing.T) {
-		user, err := g.edgenetClient.AppsV1alpha().Users(g.AUPObj.GetNamespace()).Get(context.TODO(), g.AUPObj.GetName(), metav1.GetOptions{})
+		g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), accepted.DeepCopy(), metav1.CreateOptions{})
+		defer g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Delete(context.TODO(), accepted.GetName(), metav1.DeleteOptions{})
+		g.handler.ObjectCreatedOrUpdated(accepted.DeepCopy())
+		acceptableUsePolicy, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), accepted.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
-		user.Status.AUP = false
-		g.edgenetClient.AppsV1alpha().Users(user.GetNamespace()).Update(context.TODO(), user, metav1.UpdateOptions{})
-
-		g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(accepted.GetNamespace()).Create(context.TODO(), accepted.DeepCopy(), metav1.CreateOptions{})
-		defer g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(accepted.GetNamespace()).Delete(context.TODO(), accepted.GetName(), metav1.DeleteOptions{})
-		g.handler.ObjectCreated(accepted.DeepCopy())
-		AUP, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(accepted.GetNamespace()).Get(context.TODO(), accepted.GetName(), metav1.GetOptions{})
-		util.OK(t, err)
-		util.Equals(t, success, AUP.Status.State)
+		util.Equals(t, success, acceptableUsePolicy.Status.State)
 		t.Run("user status", func(t *testing.T) {
-			user, err := g.edgenetClient.AppsV1alpha().Users(AUP.GetNamespace()).Get(context.TODO(), AUP.GetName(), metav1.GetOptions{})
+			aupLabels := acceptableUsePolicy.GetLabels()
+			tenantName := aupLabels["edge-net.io/tenant"]
+			tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
 			util.OK(t, err)
-			util.Equals(t, true, user.Status.AUP)
+
+			tenantLabels := tenant.GetLabels()
+			util.Equals(t, "true", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
 		})
 	})
 	t.Run("recreation", func(t *testing.T) {
-		user, err := g.edgenetClient.AppsV1alpha().Users(g.AUPObj.GetNamespace()).Get(context.TODO(), g.AUPObj.GetName(), metav1.GetOptions{})
+		g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), recreation.DeepCopy(), metav1.CreateOptions{})
+		defer g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Delete(context.TODO(), recreation.GetName(), metav1.DeleteOptions{})
+		g.handler.ObjectCreatedOrUpdated(recreation.DeepCopy())
+		acceptableUsePolicy, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), recreation.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
-		user.Status.AUP = false
-		g.edgenetClient.AppsV1alpha().Users(user.GetNamespace()).Update(context.TODO(), user, metav1.UpdateOptions{})
-
-		g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(recreation.GetNamespace()).Create(context.TODO(), recreation.DeepCopy(), metav1.CreateOptions{})
-		defer g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(recreation.GetNamespace()).Delete(context.TODO(), recreation.GetName(), metav1.DeleteOptions{})
-		g.handler.ObjectCreated(recreation.DeepCopy())
-		AUP, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(recreation.GetNamespace()).Get(context.TODO(), recreation.GetName(), metav1.GetOptions{})
-		util.OK(t, err)
-		util.Equals(t, "", AUP.Status.State)
+		util.Equals(t, success, acceptableUsePolicy.Status.State)
 		t.Run("user status", func(t *testing.T) {
-			user, err := g.edgenetClient.AppsV1alpha().Users(AUP.GetNamespace()).Get(context.TODO(), AUP.GetName(), metav1.GetOptions{})
+			aupLabels := acceptableUsePolicy.GetLabels()
+			tenantName := aupLabels["edge-net.io/tenant"]
+			tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
 			util.OK(t, err)
-			util.Equals(t, true, user.Status.AUP)
+
+			tenantLabels := tenant.GetLabels()
+			util.Equals(t, "true", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
 		})
 	})
 	t.Run("recreation of expired one", func(t *testing.T) {
-		user, err := g.edgenetClient.AppsV1alpha().Users(g.AUPObj.GetNamespace()).Get(context.TODO(), g.AUPObj.GetName(), metav1.GetOptions{})
+		g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), recreationExpired.DeepCopy(), metav1.CreateOptions{})
+		defer g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Delete(context.TODO(), recreationExpired.GetName(), metav1.DeleteOptions{})
+		g.handler.ObjectCreatedOrUpdated(recreationExpired.DeepCopy())
+		time.Sleep(time.Millisecond * 100)
+		acceptableUsePolicy, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), recreationExpired.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
-		user.Status.AUP = false
-		g.edgenetClient.AppsV1alpha().Users(user.GetNamespace()).Update(context.TODO(), user, metav1.UpdateOptions{})
-
-		g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(recreationExpired.GetNamespace()).Create(context.TODO(), recreationExpired.DeepCopy(), metav1.CreateOptions{})
-		defer g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(recreationExpired.GetNamespace()).Delete(context.TODO(), recreationExpired.GetName(), metav1.DeleteOptions{})
-		g.handler.ObjectCreated(recreationExpired.DeepCopy())
-		AUP, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(recreationExpired.GetNamespace()).Get(context.TODO(), recreationExpired.GetName(), metav1.GetOptions{})
+		g.handler.ObjectCreatedOrUpdated(acceptableUsePolicy)
+		acceptableUsePolicy, err = g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), recreationExpired.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
-		util.Equals(t, failure, AUP.Status.State)
+		util.Equals(t, failure, acceptableUsePolicy.Status.State)
 		t.Run("user status", func(t *testing.T) {
-			user, err := g.edgenetClient.AppsV1alpha().Users(AUP.GetNamespace()).Get(context.TODO(), AUP.GetName(), metav1.GetOptions{})
+			aupLabels := acceptableUsePolicy.GetLabels()
+			tenantName := aupLabels["edge-net.io/tenant"]
+			tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
 			util.OK(t, err)
-			util.Equals(t, false, user.Status.AUP)
+
+			tenantLabels := tenant.GetLabels()
+			util.Equals(t, "false", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
 		})
 	})
 }
@@ -215,55 +238,62 @@ func TestAccept(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
-	// Create AUP to update later
-	g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(g.AUPObj.GetNamespace()).Create(context.TODO(), g.AUPObj.DeepCopy(), metav1.CreateOptions{})
-	// Invoke ObjectCreated func to create a AUP
-	g.handler.ObjectCreated(g.AUPObj.DeepCopy())
-	AUP, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(g.AUPObj.GetNamespace()).Get(context.TODO(), g.AUPObj.GetName(), metav1.GetOptions{})
+	// Create acceptableUsePolicy to update later
+	g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), g.acceptableUsePolicyObj.DeepCopy(), metav1.CreateOptions{})
+	// Invoke ObjectCreated func to create a acceptableUsePolicy
+	g.handler.ObjectCreatedOrUpdated(g.acceptableUsePolicyObj.DeepCopy())
+	acceptableUsePolicy, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), g.acceptableUsePolicyObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	// Update of AUP status
+	// Update of acceptableUsePolicy status
 	// Building field parameter
-	var field fields
-	field.accepted = true
-	AUP.Spec.Accepted = true
-	g.handler.ObjectUpdated(AUP.DeepCopy(), field)
+	acceptableUsePolicy.Spec.Accepted = true
+	g.handler.ObjectCreatedOrUpdated(acceptableUsePolicy.DeepCopy())
 	time.Sleep(time.Millisecond * 100)
 
-	AUP, err = g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(g.AUPObj.GetNamespace()).Get(context.TODO(), g.AUPObj.GetName(), metav1.GetOptions{})
+	acceptableUsePolicy, err = g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), g.acceptableUsePolicyObj.GetName(), metav1.GetOptions{})
 	t.Run("update", func(t *testing.T) {
 		util.OK(t, err)
-		util.Equals(t, success, AUP.Status.State)
+		util.Equals(t, success, acceptableUsePolicy.Status.State)
 	})
 	t.Run("set expiry date", func(t *testing.T) {
 		expected := metav1.Time{
 			Time: time.Now().Add(4382 * time.Hour),
 		}
-		util.Equals(t, expected.Day(), AUP.Status.Expiry.Day())
-		util.Equals(t, expected.Month(), AUP.Status.Expiry.Month())
-		util.Equals(t, expected.Year(), AUP.Status.Expiry.Year())
+		util.Equals(t, expected.Day(), acceptableUsePolicy.Status.Expiry.Day())
+		util.Equals(t, expected.Month(), acceptableUsePolicy.Status.Expiry.Month())
+		util.Equals(t, expected.Year(), acceptableUsePolicy.Status.Expiry.Year())
 	})
 	t.Run("user status", func(t *testing.T) {
-		user, err := g.edgenetClient.AppsV1alpha().Users(AUP.GetNamespace()).Get(context.TODO(), AUP.GetName(), metav1.GetOptions{})
+		aupLabels := acceptableUsePolicy.GetLabels()
+		tenantName := aupLabels["edge-net.io/tenant"]
+		tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
 		util.OK(t, err)
-		util.Equals(t, true, user.Status.AUP)
+
+		tenantLabels := tenant.GetLabels()
+		util.Equals(t, "true", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
 	})
 	t.Run("timeout", func(t *testing.T) {
-		go g.handler.runApprovalTimeout(AUP)
-		AUP.Status.Expiry = &metav1.Time{
+		go g.handler.runApprovalTimeout(acceptableUsePolicy)
+		acceptableUsePolicy.Status.Expiry = &metav1.Time{
 			Time: time.Now().Add(10 * time.Millisecond),
 		}
-		_, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(AUP.GetNamespace()).Update(context.TODO(), AUP.DeepCopy(), metav1.UpdateOptions{})
+		_, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), acceptableUsePolicy.DeepCopy(), metav1.UpdateOptions{})
 		util.OK(t, err)
 		time.Sleep(100 * time.Millisecond)
 		t.Run("expired", func(t *testing.T) {
-			AUP, err = g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(AUP.GetNamespace()).Get(context.TODO(), AUP.GetName(), metav1.GetOptions{})
+			acceptableUsePolicy, err = g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), acceptableUsePolicy.GetName(), metav1.GetOptions{})
 			util.OK(t, err)
-			util.Equals(t, false, AUP.Spec.Accepted)
+			util.Equals(t, false, acceptableUsePolicy.Spec.Accepted)
+			g.handler.ObjectCreatedOrUpdated(acceptableUsePolicy)
 		})
 		t.Run("user status", func(t *testing.T) {
-			user, err := g.edgenetClient.AppsV1alpha().Users(AUP.GetNamespace()).Get(context.TODO(), AUP.GetName(), metav1.GetOptions{})
+			aupLabels := acceptableUsePolicy.GetLabels()
+			tenantName := aupLabels["edge-net.io/tenant"]
+			tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
 			util.OK(t, err)
-			util.Equals(t, false, user.Status.AUP)
+
+			tenantLabels := tenant.GetLabels()
+			util.Equals(t, "false", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
 		})
 	})
 }

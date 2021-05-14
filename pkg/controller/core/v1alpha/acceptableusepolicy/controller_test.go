@@ -16,26 +16,26 @@ func TestStartController(t *testing.T) {
 	// Run the controller in a goroutine
 	go Start(g.client, g.edgenetClient)
 	// Create an AUP
-	g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(g.AUPObj.GetNamespace()).Create(context.TODO(), g.AUPObj.DeepCopy(), metav1.CreateOptions{})
+	g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), g.acceptableUsePolicyObj.DeepCopy(), metav1.CreateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	AUP, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(g.AUPObj.GetNamespace()).Get(context.TODO(), g.AUPObj.GetName(), metav1.GetOptions{})
+	acceptableUsePolicy, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), g.acceptableUsePolicyObj.GetName(), metav1.GetOptions{})
 	// Check state
 	util.OK(t, err)
-	util.Equals(t, success, AUP.Status.State)
+	util.Equals(t, success, acceptableUsePolicy.Status.State)
 
 	// Update an AUP
-	AUP.Spec.Accepted = true
+	acceptableUsePolicy.Spec.Accepted = true
 	// Requesting server to Update internal representation of AUP
-	g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(AUP.GetNamespace()).Update(context.TODO(), AUP.DeepCopy(), metav1.UpdateOptions{})
+	g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), acceptableUsePolicy.DeepCopy(), metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	AUP, err = g.edgenetClient.CoreV1alpha().AcceptableUsePolicies(AUP.GetNamespace()).Get(context.TODO(), AUP.GetName(), metav1.GetOptions{})
+	acceptableUsePolicy, err = g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), acceptableUsePolicy.GetName(), metav1.GetOptions{})
 	// Check state
 	util.OK(t, err)
-	util.Equals(t, success, AUP.Status.State)
+	util.Equals(t, success, acceptableUsePolicy.Status.State)
 	expected := metav1.Time{
 		Time: time.Now().Add(4382 * time.Hour),
 	}
-	util.Equals(t, expected.Day(), AUP.Status.Expiry.Day())
-	util.Equals(t, expected.Month(), AUP.Status.Expiry.Month())
-	util.Equals(t, expected.Year(), AUP.Status.Expiry.Year())
+	util.Equals(t, expected.Day(), acceptableUsePolicy.Status.Expiry.Day())
+	util.Equals(t, expected.Month(), acceptableUsePolicy.Status.Expiry.Month())
+	util.Equals(t, expected.Year(), acceptableUsePolicy.Status.Expiry.Year())
 }
