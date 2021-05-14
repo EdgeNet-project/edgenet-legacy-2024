@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"syscall"
 	"time"
 
+	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	coreinformer_v1 "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha"
 
@@ -95,11 +97,13 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
-			event.function = update
-			log.Infof("Update tenant: %s", event.key)
-			if err == nil {
-				queue.Add(event)
+			if reflect.DeepEqual(oldObj.(*corev1alpha.Tenant).Status, newObj.(*corev1alpha.Tenant).Status) {
+				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
+				event.function = update
+				log.Infof("Update tenant: %s", event.key)
+				if err == nil {
+					queue.Add(event)
+				}
 			}
 		},
 		DeleteFunc: func(obj interface{}) {

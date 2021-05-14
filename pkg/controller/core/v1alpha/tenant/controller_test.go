@@ -16,7 +16,7 @@ func TestStartController(t *testing.T) {
 	g.Init()
 	// Run controller in a goroutine
 	go Start(g.client, g.edgenetClient)
-	// Create an tenant
+	// Create a tenant
 	g.edgenetClient.CoreV1alpha().Tenants().Create(context.TODO(), g.tenantObj.DeepCopy(), metav1.CreateOptions{})
 	// Wait for the status update of the created object
 	time.Sleep(time.Millisecond * 500)
@@ -24,7 +24,7 @@ func TestStartController(t *testing.T) {
 	tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, tenant.Spec.Contact.Username, tenant.Spec.User[0].Username)
-	// Update an tenant
+	// Update the tenant
 	g.tenantObj.Spec.Enabled = false
 	g.edgenetClient.CoreV1alpha().Tenants().Update(context.TODO(), g.tenantObj.DeepCopy(), metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)

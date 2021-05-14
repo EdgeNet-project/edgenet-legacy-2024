@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"testing"
-	"time"
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
@@ -72,6 +71,16 @@ func (g *TestGroup) Init() {
 				Phone:     "+33NUMBER",
 				Username:  "johndoe",
 			},
+			User: []corev1alpha.User{
+				corev1alpha.User{
+					Email:     "john.doe@edge-net.org",
+					FirstName: "John",
+					LastName:  "Doe",
+					Phone:     "+33NUMBER",
+					Username:  "johndoe",
+					Role:      "Owner",
+				},
+			},
 			Enabled: true,
 		},
 	}
@@ -112,25 +121,9 @@ func (g *TestGroup) Init() {
 		Email:     "joe.public@edge-net.org",
 		Role:      "Admin",
 	}
-	URRObj := registrationv1alpha.UserRequest{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "UserRegistrationRequest",
-			APIVersion: "apps.edgenet.io/v1alpha",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "johnsmith",
-			Namespace: "tenant-edgenet",
-		},
-		Spec: registrationv1alpha.UserRequestSpec{
-			FirstName: "John",
-			LastName:  "Smith",
-			Email:     "john.smith@edge-net.org",
-		},
-	}
 	g.tenantObj = tenantObj
 	g.tenantRequestObj = tenantRequestObj
 	g.userObj = userObj
-	g.userRegistrationObj = URRObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetClient = edgenettestclient.NewSimpleClientset()
 }
@@ -159,7 +152,23 @@ func TestCreate(t *testing.T) {
 	t.Run("user configuration", func(t *testing.T) {
 		tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
-		util.Equals(t, tenant.Spec.Contact.Username, tenant.Spec.User[0].Username)
+
+		aup, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant.GetName(), tenant.Spec.Contact.Username), metav1.GetOptions{})
+		util.OK(t, err)
+		util.Equals(t, false, aup.Spec.Accepted)
+
+		aup.Spec.Accepted = true
+		g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), aup, metav1.UpdateOptions{})
+		g.handler.ObjectCreatedOrUpdated(tenant)
+
+		t.Run("cluster role binding", func(t *testing.T) {
+			_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-owner-%s", g.tenantObj.GetName(), g.tenantObj.GetName(), g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
+			util.OK(t, err)
+		})
+		t.Run("role binding", func(t *testing.T) {
+			_, err := g.client.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
+			util.OK(t, err)
+		})
 	})
 	t.Run("tenant resource quota", func(t *testing.T) {
 		_, err := g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
@@ -169,14 +178,6 @@ func TestCreate(t *testing.T) {
 		_, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-owner", g.tenantObj.GetName(), g.tenantObj.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
-	t.Run("cluster role binding", func(t *testing.T) {
-		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-owner-%s", g.tenantObj.GetName(), g.tenantObj.GetName(), g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
-		util.OK(t, err)
-	})
-	t.Run("role binding", func(t *testing.T) {
-		_, err := g.client.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
-		util.OK(t, err)
-	})
 }
 
 func TestCollision(t *testing.T) {
@@ -184,33 +185,36 @@ func TestCollision(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
 
-	tenantRequest1 := g.tenantRequestObj
+	tenantRequest1 := g.tenantRequestObj.DeepCopy()
 	tenantRequest1.Spec.Contact.Email = g.tenantObj.Spec.Contact.Email
-	tenantRequest2 := g.tenantRequestObj
+	tenantRequest2 := g.tenantRequestObj.DeepCopy()
 	tenantRequest2.SetName(g.tenantObj.GetName())
-	tenantRequest3 := g.tenantRequestObj
+	tenantRequest3 := g.tenantRequestObj.DeepCopy()
 
 	user1 := g.userObj
 	user1.Email = g.tenantObj.Spec.Contact.Email
 	user2 := g.userObj
 
-	tenant1 := g.tenantObj
+	tenant1 := g.tenantObj.DeepCopy()
 	tenant1.SetName("tenant-1-diff")
 	tenant1.Spec.Contact.Email = user1.Email
-	tenant2 := g.tenantObj
+	tenant1.Spec.User[0].Email = user1.Email
+
+	tenant2 := g.tenantObj.DeepCopy()
 	tenant2.SetName("tenant-2-diff")
 	tenant2.Spec.Contact.Email = user2.Email
+	tenant2.Spec.User[0].Email = user2.Email
 
 	cases := map[string]struct {
 		request  interface{}
 		kind     string
 		expected bool
 	}{
-		"ar/email":   {tenantRequest1.DeepCopy(), "TenantRequest", true},
-		"ar/name":    {tenantRequest2.DeepCopy(), "TenantRequest", true},
-		"ar/none":    {tenantRequest3.DeepCopy(), "TenantRequest", false},
-		"user/email": {tenant1.DeepCopy(), "User", true},
-		"user/none":  {tenant2.DeepCopy(), "User", false},
+		"ar/email":   {tenantRequest1, "TenantRequest", true},
+		"ar/name":    {tenantRequest2, "TenantRequest", true},
+		"ar/none":    {tenantRequest3, "TenantRequest", false},
+		"user/email": {tenant1, "User", true},
+		"user/none":  {tenant2, "User", false},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
@@ -222,10 +226,8 @@ func TestCollision(t *testing.T) {
 				_, err = g.edgenetClient.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tc.request.(*registrationv1alpha.TenantRequest).GetName(), metav1.GetOptions{})
 				util.Equals(t, tc.expected, errors.IsNotFound(err))
 			} else if tc.kind == "User" {
-				_, err := g.edgenetClient.CoreV1alpha().Tenants().Create(context.TODO(), tc.request.(*corev1alpha.Tenant).DeepCopy(), metav1.CreateOptions{})
-				g.handler.ObjectCreatedOrUpdated(tc.request.(*corev1alpha.Tenant).DeepCopy())
+				_, err := g.edgenetClient.CoreV1alpha().Tenants().Create(context.TODO(), tc.request.(*corev1alpha.Tenant), metav1.CreateOptions{})
 				util.OK(t, err)
-				time.Sleep(time.Millisecond * 500)
 				defer g.edgenetClient.CoreV1alpha().Tenants().Delete(context.TODO(), tc.request.(*corev1alpha.Tenant).GetName(), metav1.DeleteOptions{})
 				exists, message := g.handler.checkDuplicateObject(g.tenantObj.DeepCopy())
 				log.Println(message)
@@ -239,7 +241,7 @@ func TestUpdate(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
-	// Create an tenant to update later
+	// Create a tenant to update later
 	g.edgenetClient.CoreV1alpha().Tenants().Create(context.TODO(), g.tenantObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoke ObjectCreatedOrUpdated func to create a user
 	g.handler.ObjectCreatedOrUpdated(g.tenantObj.DeepCopy())
@@ -248,6 +250,19 @@ func TestUpdate(t *testing.T) {
 	util.Equals(t, tenant.Spec.Contact.Username, tenant.Spec.User[0].Username)
 	tenant.Spec.User = append(tenant.Spec.User, g.userObj)
 	g.handler.ObjectCreatedOrUpdated(tenant)
+	aup, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant.GetName(), tenant.Spec.Contact.Username), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, false, aup.Spec.Accepted)
+	aup.Spec.Accepted = true
+	g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), aup, metav1.UpdateOptions{})
+	aup, err = g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant.GetName(), g.userObj.Username), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, false, aup.Spec.Accepted)
+	aup.Spec.Accepted = true
+	g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), aup, metav1.UpdateOptions{})
+
+	g.handler.ObjectCreatedOrUpdated(tenant)
+
 	_, err = g.client.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
 	util.OK(t, err)
 	_, err = g.client.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("tenant-admin-%s", g.userObj.Username), metav1.GetOptions{})
