@@ -2,7 +2,6 @@ package emailverification
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -17,19 +16,18 @@ func TestStartController(t *testing.T) {
 	g.Init()
 	// Run the controller in a goroutine
 	go Start(g.client, g.edgenetClient)
-	// Create a EV object
-	g.edgenetClient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Create(context.TODO(), g.EVObj.DeepCopy(), metav1.CreateOptions{})
+	// Create a emailVerification object
+	g.edgenetClient.RegistrationV1alpha().EmailVerifications().Create(context.TODO(), g.emailVerification.DeepCopy(), metav1.CreateOptions{})
 	// Wait for the status update of created object
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
-	EV, _ := g.edgenetClient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.EVObj.GetName(), metav1.GetOptions{})
-	util.NotEquals(t, nil, EV.Status.Expiry)
-	// Update an EV
-	g.EVObj.Spec.Verified = true
-	g.edgenetClient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Update(context.TODO(), g.EVObj.DeepCopy(), metav1.UpdateOptions{})
+	emailVerification, _ := g.edgenetClient.RegistrationV1alpha().EmailVerifications().Get(context.TODO(), g.emailVerification.GetName(), metav1.GetOptions{})
+	util.NotEquals(t, nil, emailVerification.Status.Expiry)
+	// Update an emailVerification
+	g.emailVerification.Spec.Verified = true
+	g.edgenetClient.RegistrationV1alpha().EmailVerifications().Update(context.TODO(), g.emailVerification.DeepCopy(), metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	// Checking if handler created user from user registration and deleted user registration
-	_, err := g.edgenetClient.AppsV1alpha().EmailVerifications(fmt.Sprintf("authority-%s", g.authorityObj.GetName())).Get(context.TODO(), g.EVObj.GetName(), metav1.GetOptions{})
-	// Handler will delete EV if verified
-	util.Equals(t, true, errors.IsNotFound(err))
+	_, err := g.edgenetClient.RegistrationV1alpha().EmailVerifications().Get(context.TODO(), g.emailVerification.GetName(), metav1.GetOptions{})
+	util.Equals(t, false, errors.IsNotFound(err))
+	// TODO: Check the status of the relevant object
 }
