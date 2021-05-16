@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package authorityrequest
+package tenantrequest
 
 import (
 	"context"
@@ -22,9 +22,9 @@ import (
 	"reflect"
 	"time"
 
-	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/authority"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/v1alpha/emailverification"
+	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenant"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/emailverification"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 
@@ -50,184 +50,192 @@ type Handler struct {
 
 // Init handles any handler initialization
 func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
-	log.Info("authorityRequestHandler.Init")
+	log.Info("TenantRequestHandler.Init")
 	t.clientset = kubernetes
 	t.edgenetClientset = edgenet
 }
 
 // ObjectCreated is called when an object is created
 func (t *Handler) ObjectCreated(obj interface{}) {
-	log.Info("authorityRequestHandler.ObjectCreated")
-	// Create a copy of the authority request object to make changes on it
-	authorityRequestCopy := obj.(*corev1alpha.AuthorityRequest).DeepCopy()
-	defer t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(context.TODO(), authorityRequestCopy, metav1.UpdateOptions{})
-	// Check if the email address of user or authority name is already taken
-	exists, message := t.checkDuplicateObject(authorityRequestCopy)
+	log.Info("TenantRequestHandler.ObjectCreated")
+	// Make a copy of the tenant request object to make changes on it
+	tenantRequest := obj.(*registrationv1alpha.TenantRequest).DeepCopy()
+	defer t.edgenetClientset.RegistrationV1alpha().TenantRequests().UpdateStatus(context.TODO(), tenantRequest, metav1.UpdateOptions{})
+	// Check if the email address of user or tenant name is already taken
+	exists, message := t.checkDuplicateObject(tenantRequest)
 	if exists {
-		authorityRequestCopy.Status.State = failure
-		authorityRequestCopy.Status.Message = message
+		tenantRequest.Status.State = failure
+		tenantRequest.Status.Message = message
 		// Run timeout goroutine
-		go t.runApprovalTimeout(authorityRequestCopy)
+		go t.runApprovalTimeout(tenantRequest)
 		// Set the approval timeout which is 24 hours
-		authorityRequestCopy.Status.Expiry = &metav1.Time{
+		tenantRequest.Status.Expiry = &metav1.Time{
 			Time: time.Now().Add(24 * time.Hour),
 		}
 		return
 	}
-	if authorityRequestCopy.Spec.Approved {
-		authorityHandler := authority.Handler{}
-		authorityHandler.Init(t.clientset, t.edgenetClientset)
-		created := !authorityHandler.Create(authorityRequestCopy)
+	if tenantRequest.Spec.Approved {
+		tenantHandler := tenant.Handler{}
+		tenantHandler.Init(t.clientset, t.edgenetClientset)
+		created := !tenantHandler.Create(tenantRequest)
 		if created {
 			return
 		} else {
-			t.sendEmail("authority-creation-failure", authorityRequestCopy)
-			authorityRequestCopy.Status.State = failure
-			authorityRequestCopy.Status.Message = []string{statusDict["authority-failed"]}
+			t.sendEmail("tenant-creation-failure", tenantRequest)
+			tenantRequest.Status.State = failure
+			tenantRequest.Status.Message = []string{statusDict["tenant-failed"]}
 		}
 
 	}
 	// If the service restarts, it creates all objects again
 	// Because of that, this section covers a variety of possibilities
-	if authorityRequestCopy.Status.Expiry == nil {
+	if tenantRequest.Status.Expiry == nil {
 		// Run timeout goroutine
-		go t.runApprovalTimeout(authorityRequestCopy)
+		go t.runApprovalTimeout(tenantRequest)
 		// Set the approval timeout which is 72 hours
-		authorityRequestCopy.Status.Expiry = &metav1.Time{
+		tenantRequest.Status.Expiry = &metav1.Time{
 			Time: time.Now().Add(72 * time.Hour),
 		}
 		emailVerificationHandler := emailverification.Handler{}
 		emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-		created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
+		created := emailVerificationHandler.Create(tenantRequest, SetAsOwnerReference(tenantRequest))
 		if created {
 			// Update the status as successful
-			authorityRequestCopy.Status.State = success
-			authorityRequestCopy.Status.Message = []string{statusDict["email-ok"]}
+			tenantRequest.Status.State = success
+			tenantRequest.Status.Message = []string{statusDict["email-ok"]}
 		} else {
-			authorityRequestCopy.Status.State = issue
-			authorityRequestCopy.Status.Message = []string{statusDict["email-fail"]}
+			tenantRequest.Status.State = issue
+			tenantRequest.Status.Message = []string{statusDict["email-fail"]}
 		}
 
 	} else {
-		go t.runApprovalTimeout(authorityRequestCopy)
+		go t.runApprovalTimeout(tenantRequest)
 	}
 }
 
 // ObjectUpdated is called when an object is updated
 func (t *Handler) ObjectUpdated(obj interface{}) {
-	log.Info("authorityRequestHandler.ObjectUpdated")
-	// Create a copy of the authority request object to make changes on it
-	authorityRequestCopy := obj.(*corev1alpha.AuthorityRequest).DeepCopy()
+	log.Info("TenantRequestHandler.ObjectUpdated")
+	// Make a copy of the tenant request object to make changes on it
+	tenantRequest := obj.(*registrationv1alpha.TenantRequest).DeepCopy()
 	changeStatus := false
-	// Check if the email address of user or authority name is already taken
-	exists, message := t.checkDuplicateObject(authorityRequestCopy)
+	// Check if the email address of user or tenant name is already taken
+	exists, message := t.checkDuplicateObject(tenantRequest)
 	if !exists {
-		// Check whether the request for authority creation approved
-		if authorityRequestCopy.Spec.Approved {
-			authorityHandler := authority.Handler{}
-			authorityHandler.Init(t.clientset, t.edgenetClientset)
-			changeStatus := authorityHandler.Create(authorityRequestCopy)
+		// Check whether the request for tenant creation approved
+		if tenantRequest.Spec.Approved {
+			tenantHandler := tenant.Handler{}
+			tenantHandler.Init(t.clientset, t.edgenetClientset)
+			changeStatus := tenantHandler.Create(tenantRequest)
 			if changeStatus {
-				t.sendEmail("authority-creation-failure", authorityRequestCopy)
-				authorityRequestCopy.Status.State = failure
-				authorityRequestCopy.Status.Message = []string{statusDict["authority-failed"]}
+				t.sendEmail("tenant-creation-failure", tenantRequest)
+				tenantRequest.Status.State = failure
+				tenantRequest.Status.Message = []string{statusDict["tenant-failed"]}
 			}
-		} else if !authorityRequestCopy.Spec.Approved && authorityRequestCopy.Status.State == failure {
+		} else if !tenantRequest.Spec.Approved && tenantRequest.Status.State == failure {
 			emailVerificationHandler := emailverification.Handler{}
 			emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-			created := emailVerificationHandler.Create(authorityRequestCopy, SetAsOwnerReference(authorityRequestCopy))
+			created := emailVerificationHandler.Create(tenantRequest, SetAsOwnerReference(tenantRequest))
 			if created {
 				// Update the status as successful
-				authorityRequestCopy.Status.State = success
-				authorityRequestCopy.Status.Message = []string{statusDict["email-ok"]}
+				tenantRequest.Status.State = success
+				tenantRequest.Status.Message = []string{statusDict["email-ok"]}
 			} else {
-				authorityRequestCopy.Status.State = issue
-				authorityRequestCopy.Status.Message = []string{statusDict["email-fail"]}
+				tenantRequest.Status.State = issue
+				tenantRequest.Status.Message = []string{statusDict["email-fail"]}
 			}
 			changeStatus = true
 		}
-	} else if exists && !reflect.DeepEqual(authorityRequestCopy.Status.Message, message) {
-		authorityRequestCopy.Status.State = failure
-		authorityRequestCopy.Status.Message = message
+	} else if exists && !reflect.DeepEqual(tenantRequest.Status.Message, message) {
+		tenantRequest.Status.State = failure
+		tenantRequest.Status.Message = message
 		changeStatus = true
 	}
 	if changeStatus {
-		t.edgenetClientset.AppsV1alpha().AuthorityRequests().UpdateStatus(context.TODO(), authorityRequestCopy, metav1.UpdateOptions{})
+		t.edgenetClientset.RegistrationV1alpha().TenantRequests().UpdateStatus(context.TODO(), tenantRequest, metav1.UpdateOptions{})
 	}
 }
 
 // ObjectDeleted is called when an object is deleted
 func (t *Handler) ObjectDeleted(obj interface{}) {
-	log.Info("authorityRequestHandler.ObjectDeleted")
+	log.Info("TenantRequestHandler.ObjectDeleted")
 	// Mail notification, TBD
 }
 
 // sendEmail to send notification to participants
-func (t *Handler) sendEmail(subject string, authorityRequestCopy *corev1alpha.AuthorityRequest) {
+func (t *Handler) sendEmail(subject string, tenantRequest *registrationv1alpha.TenantRequest) {
 	// Set the HTML template variables
 	var contentData = mailer.CommonContentData{}
-	contentData.CommonData.Authority = authorityRequestCopy.GetName()
-	contentData.CommonData.Username = authorityRequestCopy.Spec.Contact.Username
-	contentData.CommonData.Name = fmt.Sprintf("%s %s", authorityRequestCopy.Spec.Contact.FirstName, authorityRequestCopy.Spec.Contact.LastName)
-	contentData.CommonData.Email = []string{authorityRequestCopy.Spec.Contact.Email}
+	contentData.CommonData.Tenant = tenantRequest.GetName()
+	contentData.CommonData.Username = tenantRequest.Spec.Contact.Username
+	contentData.CommonData.Name = fmt.Sprintf("%s %s", tenantRequest.Spec.Contact.FirstName, tenantRequest.Spec.Contact.LastName)
+	contentData.CommonData.Email = []string{tenantRequest.Spec.Contact.Email}
 	mailer.Send(subject, contentData)
 }
 
 // checkDuplicateObject checks whether a user exists with the same email address
-func (t *Handler) checkDuplicateObject(authorityRequestCopy *corev1alpha.AuthorityRequest) (bool, []string) {
+func (t *Handler) checkDuplicateObject(tenantRequest *registrationv1alpha.TenantRequest) (bool, []string) {
 	exists := false
 	message := []string{}
 	// To check username on the users resource
-	_, err := t.edgenetClientset.AppsV1alpha().Authorities().Get(context.TODO(), authorityRequestCopy.GetName(), metav1.GetOptions{})
+	_, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantRequest.GetName(), metav1.GetOptions{})
 	if !errors.IsNotFound(err) {
 		exists = true
-		message = append(message, fmt.Sprintf(statusDict["authority-taken"], authorityRequestCopy.GetName()))
-		if !reflect.DeepEqual(authorityRequestCopy.Status.Message, message) {
-			t.sendEmail("authority-validation-failure-name", authorityRequestCopy)
+		message = append(message, fmt.Sprintf(statusDict["tenant-taken"], tenantRequest.GetName()))
+		if !reflect.DeepEqual(tenantRequest.Status.Message, message) {
+			t.sendEmail("tenant-validation-failure-name", tenantRequest)
 		}
 	} else {
 		// To check email address among users
-		userRaw, _ := t.edgenetClientset.AppsV1alpha().Users("").List(context.TODO(), metav1.ListOptions{})
-		for _, userRow := range userRaw.Items {
-			if userRow.Spec.Email == authorityRequestCopy.Spec.Contact.Email {
+		tenantRaw, _ := t.edgenetClientset.CoreV1alpha().Tenants().List(context.TODO(), metav1.ListOptions{})
+		for _, tenantRow := range tenantRaw.Items {
+			if tenantRow.Spec.Contact.Email == tenantRequest.Spec.Contact.Email {
 				exists = true
-				message = append(message, fmt.Sprintf(statusDict["email-exist"], authorityRequestCopy.Spec.Contact.Email))
+				message = append(message, fmt.Sprintf(statusDict["email-exist"], tenantRequest.Spec.Contact.Email))
 				break
+			} else {
+				for _, userRow := range tenantRow.Spec.User {
+					if userRow.Email == tenantRequest.Spec.Contact.Email {
+						exists = true
+						message = append(message, fmt.Sprintf(statusDict["email-exist"], tenantRequest.Spec.Contact.Email))
+						break
+					}
+				}
 			}
 		}
 		// To check email address among user registration requests
-		URRRaw, _ := t.edgenetClientset.AppsV1alpha().UserRegistrationRequests("").List(context.TODO(), metav1.ListOptions{})
-		for _, URRRow := range URRRaw.Items {
-			if URRRow.Spec.Email == authorityRequestCopy.Spec.Contact.Email {
+		userRequestRaw, _ := t.edgenetClientset.RegistrationV1alpha().UserRequests().List(context.TODO(), metav1.ListOptions{})
+		for _, userRequestRow := range userRequestRaw.Items {
+			if userRequestRow.Spec.Email == tenantRequest.Spec.Contact.Email {
 				exists = true
-				message = append(message, fmt.Sprintf(statusDict["email-used-reg"], authorityRequestCopy.Spec.Contact.Email))
+				message = append(message, fmt.Sprintf(statusDict["email-used-reg"], tenantRequest.Spec.Contact.Email))
 				break
 			}
 		}
-		// To check email address given at authority request
-		authorityRequestRaw, _ := t.edgenetClientset.AppsV1alpha().AuthorityRequests().List(context.TODO(), metav1.ListOptions{})
-		for _, authorityRequestRow := range authorityRequestRaw.Items {
-			if authorityRequestRow.Spec.Contact.Email == authorityRequestCopy.Spec.Contact.Email && authorityRequestRow.GetUID() != authorityRequestCopy.GetUID() {
+		// To check email address given at tenant request
+		tenantRequestRaw, _ := t.edgenetClientset.RegistrationV1alpha().TenantRequests().List(context.TODO(), metav1.ListOptions{})
+		for _, tenantRequestRow := range tenantRequestRaw.Items {
+			if tenantRequestRow.Spec.Contact.Email == tenantRequest.Spec.Contact.Email && tenantRequestRow.GetUID() != tenantRequest.GetUID() {
 				exists = true
-				message = append(message, fmt.Sprintf(statusDict["email-used-auth"], authorityRequestCopy.Spec.Contact.Email))
+				message = append(message, fmt.Sprintf(statusDict["email-used-auth"], tenantRequest.Spec.Contact.Email))
 				break
 			}
 		}
-		if exists && !reflect.DeepEqual(authorityRequestCopy.Status.Message, message) {
-			t.sendEmail("authority-validation-failure-email", authorityRequestCopy)
+		if exists && !reflect.DeepEqual(tenantRequest.Status.Message, message) {
+			t.sendEmail("tenant-validation-failure-email", tenantRequest)
 		}
 	}
 	return exists, message
 }
 
 // runApprovalTimeout puts a procedure in place to remove requests by approval or timeout
-func (t *Handler) runApprovalTimeout(authorityRequestCopy *corev1alpha.AuthorityRequest) {
+func (t *Handler) runApprovalTimeout(tenantRequest *registrationv1alpha.TenantRequest) {
 	registrationApproved := make(chan bool, 1)
 	timeoutRenewed := make(chan bool, 1)
 	terminated := make(chan bool, 1)
 	var timeout <-chan time.Time
-	if authorityRequestCopy.Status.Expiry != nil {
-		timeout = time.After(time.Until(authorityRequestCopy.Status.Expiry.Time))
+	if tenantRequest.Status.Expiry != nil {
+		timeout = time.After(time.Until(tenantRequest.Status.Expiry.Time))
 	}
 	closeChannels := func() {
 		close(registrationApproved)
@@ -235,40 +243,40 @@ func (t *Handler) runApprovalTimeout(authorityRequestCopy *corev1alpha.Authority
 		close(terminated)
 	}
 
-	// Watch the events of authority request object
-	watchAuthorityRequest, err := t.edgenetClientset.AppsV1alpha().AuthorityRequests().Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", authorityRequestCopy.GetName())})
+	// Watch the events of tenant request object
+	watchTenantRequest, err := t.edgenetClientset.RegistrationV1alpha().TenantRequests().Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", tenantRequest.GetName())})
 	if err == nil {
 		go func() {
 			// Get events from watch interface
-			for authorityRequestEvent := range watchAuthorityRequest.ResultChan() {
-				// Get updated authority request object
-				updatedAuthorityRequest, status := authorityRequestEvent.Object.(*corev1alpha.AuthorityRequest)
-				if authorityRequestCopy.GetUID() == updatedAuthorityRequest.GetUID() {
+			for tenantRequestEvent := range watchTenantRequest.ResultChan() {
+				// Get updated tenant request object
+				updatedTenantRequest, status := tenantRequestEvent.Object.(*registrationv1alpha.TenantRequest)
+				if tenantRequest.GetUID() == updatedTenantRequest.GetUID() {
 					if status {
-						if authorityRequestEvent.Type == "DELETED" {
+						if tenantRequestEvent.Type == "DELETED" {
 							terminated <- true
 							continue
 						}
 
-						if updatedAuthorityRequest.Spec.Approved == true {
+						if updatedTenantRequest.Spec.Approved == true {
 							registrationApproved <- true
 							break
-						} else if updatedAuthorityRequest.Status.Expiry != nil {
+						} else if updatedTenantRequest.Status.Expiry != nil {
 							// Check whether expiration date updated - TBD
-							if updatedAuthorityRequest.Status.Expiry.Time.Sub(time.Now()) >= 0 {
-								timeout = time.After(time.Until(updatedAuthorityRequest.Status.Expiry.Time))
+							if updatedTenantRequest.Status.Expiry.Time.Sub(time.Now()) >= 0 {
+								timeout = time.After(time.Until(updatedTenantRequest.Status.Expiry.Time))
 								timeoutRenewed <- true
 							} else {
 								terminated <- true
 							}
 						}
-						authorityRequestCopy = updatedAuthorityRequest
+						tenantRequest = updatedTenantRequest
 					}
 				}
 			}
 		}()
 	} else {
-		// In case of any malfunction of watching authorityrequest resources,
+		// In case of any malfunction of watching tenantrequest resources,
 		// there is a timeout at 72 hours
 		timeout = time.After(72 * time.Hour)
 	}
@@ -280,28 +288,28 @@ timeoutLoop:
 	timeoutOptions:
 		select {
 		case <-registrationApproved:
-			watchAuthorityRequest.Stop()
+			watchTenantRequest.Stop()
 			closeChannels()
 			break timeoutLoop
 		case <-timeoutRenewed:
 			break timeoutOptions
 		case <-timeout:
-			watchAuthorityRequest.Stop()
+			watchTenantRequest.Stop()
 			closeChannels()
-			t.edgenetClientset.AppsV1alpha().AuthorityRequests().Delete(context.TODO(), authorityRequestCopy.GetName(), metav1.DeleteOptions{})
+			t.edgenetClientset.RegistrationV1alpha().TenantRequests().Delete(context.TODO(), tenantRequest.GetName(), metav1.DeleteOptions{})
 			break timeoutLoop
 		case <-terminated:
-			watchAuthorityRequest.Stop()
+			watchTenantRequest.Stop()
 			closeChannels()
 			break timeoutLoop
 		}
 	}
 }
 
-// SetAsOwnerReference put the authorityrequest as owner
-func SetAsOwnerReference(authorityRequestCopy *corev1alpha.AuthorityRequest) []metav1.OwnerReference {
+// SetAsOwnerReference put the tenantrequest as owner
+func SetAsOwnerReference(tenantRequest *registrationv1alpha.TenantRequest) []metav1.OwnerReference {
 	ownerReferences := []metav1.OwnerReference{}
-	newNamespaceRef := *metav1.NewControllerRef(authorityRequestCopy, apps_v1alpha.SchemeGroupVersion.WithKind("AuthorityRequest"))
+	newNamespaceRef := *metav1.NewControllerRef(tenantRequest, registrationv1alpha.SchemeGroupVersion.WithKind("TenantRequest"))
 	takeControl := false
 	newNamespaceRef.Controller = &takeControl
 	ownerReferences = append(ownerReferences, newNamespaceRef)
