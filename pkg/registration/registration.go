@@ -57,7 +57,7 @@ var Clientset kubernetes.Interface
 var dir = "../.."
 
 // MakeUser generates key and certificate and then set user credentials into the config file.
-func MakeUser(authority, username, email string) ([]byte, []byte, error) {
+func MakeUser(tenant, username, email string) ([]byte, []byte, error) {
 	// The code below inits dir
 	if flag.Lookup("dir") != nil {
 		dir = flag.Lookup("dir").Value.(flag.Getter).Get().(string)
@@ -76,7 +76,7 @@ func MakeUser(authority, username, email string) ([]byte, []byte, error) {
 
 	subject := pkix.Name{
 		CommonName:   email,
-		Organization: []string{authority},
+		Organization: []string{tenant},
 	}
 	// Opening the default path for headnode
 	file, err := os.Open(fmt.Sprintf("%s/configs/headnode.yaml", dir))
@@ -98,7 +98,7 @@ func MakeUser(authority, username, email string) ([]byte, []byte, error) {
 
 	var CSRCopy *certv1.CertificateSigningRequest
 	CSRObject := certv1.CertificateSigningRequest{}
-	CSRObject.Name = fmt.Sprintf("%s-%s", authority, username)
+	CSRObject.Name = fmt.Sprintf("%s-%s", tenant, username)
 	CSRObject.Spec.Usages = []certv1.KeyUsage{"client auth"}
 	CSRObject.Spec.Request = csr
 	CSRObject.Spec.SignerName = "kubernetes.io/kube-apiserver-client"
@@ -187,7 +187,7 @@ check:
 
 // MakeConfig reads cluster, server, and CA info of the current context from the config file
 // to use them on the creation of kubeconfig. Then generates kubeconfig by certs.
-func MakeConfig(authority, username, email string, clientCert, clientKey []byte) error {
+func MakeConfig(tenant, username, email string, clientCert, clientKey []byte) error {
 	// Define the cluster and server by taking advantage of the current config file
 	/*cluster, server, CA, err := util.GetClusterServerOfCurrentContext()
 	if err != nil {
@@ -196,10 +196,10 @@ func MakeConfig(authority, username, email string, clientCert, clientKey []byte)
 	}*/
 	// Put the collected data into new kubeconfig file
 	/*newKubeConfig := kubeconfigutil.CreateWithCerts(server, cluster, email, CA, clientKey, clientCert)
-	newKubeConfig.Contexts[newKubeConfig.CurrentContext].Namespace = fmt.Sprintf("authority-%s", authority)
-	kubeconfigutil.WriteToDisk(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", authority, username), newKubeConfig)*/
+	newKubeConfig.Contexts[newKubeConfig.CurrentContext].Namespace = fmt.Sprintf("tenant-%s", tenant)
+	kubeconfigutil.WriteToDisk(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", tenant, username), newKubeConfig)*/
 	// Check if the creation process is completed
-	/*_, err = ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", authority, username))
+	/*_, err = ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", tenant, username))
 	if err != nil {
 		log.Println(err)
 		return err
@@ -224,11 +224,11 @@ func MakeConfig(authority, username, email string, clientCert, clientKey []byte)
 	}
 	rawConfig.AuthInfos = map[string]*api.AuthInfo{}
 	userContext := rawConfig.Contexts[rawConfig.CurrentContext]
-	userContext.Namespace = fmt.Sprintf("authority-%s", authority)
+	userContext.Namespace = fmt.Sprintf("tenant-%s", tenant)
 	userContext.AuthInfo = email
 	rawConfig.Contexts = map[string]*api.Context{}
-	rawConfig.Contexts[authority] = userContext
-	rawConfig.CurrentContext = authority
+	rawConfig.Contexts[tenant] = userContext
+	rawConfig.CurrentContext = tenant
 
 	authInfo := api.AuthInfo{}
 	authInfo.Username = email
@@ -236,8 +236,8 @@ func MakeConfig(authority, username, email string, clientCert, clientKey []byte)
 	authInfo.ClientKeyData = clientKey
 	rawConfig.AuthInfos[email] = &authInfo
 
-	clientcmd.WriteToFile(rawConfig, fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, authority, username))
-	_, err = ioutil.ReadFile(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, authority, username))
+	clientcmd.WriteToFile(rawConfig, fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, tenant, username))
+	_, err = ioutil.ReadFile(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, tenant, username))
 	if err != nil {
 		log.Println(err)
 		return err

@@ -8,14 +8,14 @@ RUN apk update && \
 ADD . "$GOPATH/src/github.com/EdgeNet-project/edgenet"
 
 RUN cd "$GOPATH/src/github.com/EdgeNet-project/edgenet" && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o /go/bin/authorityrequest ./cmd/authorityrequest/
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o /go/bin/tenantrequest ./cmd/tenantrequest/
 
 
 
 FROM alpine:latest
 
-WORKDIR /root/cmd/authorityrequest/
+WORKDIR /root/cmd/tenantrequest/
 
-COPY --from=builder /go/bin/authorityrequest .
+COPY --from=builder /go/bin/tenantrequest .
 
-CMD ["./authorityrequest"]
+CMD ["./tenantrequest"]

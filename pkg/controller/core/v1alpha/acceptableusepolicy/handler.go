@@ -58,9 +58,8 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 	acceptableUsePolicy := obj.(*corev1alpha.AcceptableUsePolicy).DeepCopy()
 	aupLabels := acceptableUsePolicy.GetLabels()
 	tenantName := aupLabels["edge-net.io/tenant"]
-	// Find the authority from the namespace in which the object is
 	tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
-	// Check if the authority is active
+	// Check if the tenant is active
 	if tenant.Spec.Enabled && acceptableUsePolicy.Spec.Accepted {
 		if acceptableUsePolicy.Status.Expiry == nil || (acceptableUsePolicy.Status.Expiry != nil && acceptableUsePolicy.Status.Expiry.Time.Sub(time.Now()) > 0) {
 			// Set a 6-month timeout cycle
@@ -99,7 +98,7 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 		t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().UpdateStatus(context.TODO(), acceptableUsePolicy, metav1.UpdateOptions{})
 	} else {
 		acceptableUsePolicy.Status.State = failure
-		acceptableUsePolicy.Status.Message = []string{statusDict["authority-disabled"]}
+		acceptableUsePolicy.Status.Message = []string{statusDict["tenant-disabled"]}
 		t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().UpdateStatus(context.TODO(), acceptableUsePolicy, metav1.UpdateOptions{})
 	}
 

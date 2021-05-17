@@ -170,13 +170,13 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			if ready == trueStr {
 				for _, owner := range nodeObj.GetOwnerReferences() {
 					if owner.Kind == "Tenant" {
-						TenantResourceQuotaCopy, err := edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
+						tenantResourceQuota, err := edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
 						if err == nil {
 							exists := false
 							CPUAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
 							memoryAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Memory().Value())*1.3), resource.BinarySI).DeepCopy()
-							claims := TenantResourceQuotaCopy.Spec.Claim
-							for i, claimRow := range TenantResourceQuotaCopy.Spec.Claim {
+							claims := tenantResourceQuota.Spec.Claim
+							for i, claimRow := range tenantResourceQuota.Spec.Claim {
 								if claimRow.Name == "Reward" {
 									exists = true
 									rewardedCPU := resource.MustParse(claimRow.CPU)
@@ -194,11 +194,11 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 								claim.Name = "Reward"
 								claim.CPU = CPUAward.String()
 								claim.Memory = memoryAward.String()
-								TenantResourceQuotaCopy.Spec.Claim = append(TenantResourceQuotaCopy.Spec.Claim, claim)
+								tenantResourceQuota.Spec.Claim = append(tenantResourceQuota.Spec.Claim, claim)
 							} else {
-								TenantResourceQuotaCopy.Spec.Claim = claims
+								tenantResourceQuota.Spec.Claim = claims
 							}
-							edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), TenantResourceQuotaCopy, metav1.UpdateOptions{})
+							edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
 						}
 					}
 				}
@@ -213,13 +213,13 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 				(oldReady == unknownStr && newReady == trueStr) {
 				for _, owner := range newObj.GetOwnerReferences() {
 					if owner.Kind == "Tenant" {
-						TenantResourceQuotaCopy, err := edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
+						tenantResourceQuota, err := edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
 						if err == nil {
 							exists := false
 							CPUAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
 							memoryAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Memory().Value())*1.3), resource.BinarySI).DeepCopy()
-							claims := TenantResourceQuotaCopy.Spec.Claim
-							for i, claimRow := range TenantResourceQuotaCopy.Spec.Claim {
+							claims := tenantResourceQuota.Spec.Claim
+							for i, claimRow := range tenantResourceQuota.Spec.Claim {
 								if claimRow.Name == "Reward" {
 									exists = true
 									rewardedCPU := resource.MustParse(claimRow.CPU)
@@ -237,11 +237,11 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 								claim.Name = "Reward"
 								claim.CPU = CPUAward.String()
 								claim.Memory = memoryAward.String()
-								TenantResourceQuotaCopy.Spec.Claim = append(TenantResourceQuotaCopy.Spec.Claim, claim)
+								tenantResourceQuota.Spec.Claim = append(tenantResourceQuota.Spec.Claim, claim)
 							} else {
-								TenantResourceQuotaCopy.Spec.Claim = claims
+								tenantResourceQuota.Spec.Claim = claims
 							}
-							edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), TenantResourceQuotaCopy, metav1.UpdateOptions{})
+							edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
 						}
 					}
 				}
@@ -249,12 +249,12 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 				(oldReady == trueStr && newReady == unknownStr) {
 				for _, owner := range newObj.GetOwnerReferences() {
 					if owner.Kind == "Tenant" {
-						TenantResourceQuotaCopy, err := edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
+						tenantResourceQuota, err := edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
 						if err == nil {
 							CPUAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
 							memoryAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Memory().Value())*1.3), resource.BinarySI).DeepCopy()
-							claims := TenantResourceQuotaCopy.Spec.Claim
-							for i, claimRow := range TenantResourceQuotaCopy.Spec.Claim {
+							claims := tenantResourceQuota.Spec.Claim
+							for i, claimRow := range tenantResourceQuota.Spec.Claim {
 								if claimRow.Name == "Reward" {
 									rewardedCPU := resource.MustParse(claimRow.CPU)
 									rewardedCPU.Sub(CPUAward)
@@ -266,8 +266,8 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 									claims = append(claims, claimRow)
 								}
 							}
-							TenantResourceQuotaCopy.Spec.Claim = claims
-							edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), TenantResourceQuotaCopy, metav1.UpdateOptions{})
+							tenantResourceQuota.Spec.Claim = claims
+							edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
 						}
 					}
 				}
@@ -280,12 +280,12 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			if ready == trueStr {
 				for _, owner := range nodeObj.GetOwnerReferences() {
 					if owner.Kind == "Tenant" {
-						TenantResourceQuotaCopy, err := edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
+						tenantResourceQuota, err := edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
 						if err == nil {
 							CPUAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
 							memoryAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Memory().Value())*1.3), resource.BinarySI).DeepCopy()
-							claims := TenantResourceQuotaCopy.Spec.Claim
-							for i, claimRow := range TenantResourceQuotaCopy.Spec.Claim {
+							claims := tenantResourceQuota.Spec.Claim
+							for i, claimRow := range tenantResourceQuota.Spec.Claim {
 								if claimRow.Name == "Reward" {
 									rewardedCPU := resource.MustParse(claimRow.CPU)
 									rewardedCPU.Sub(CPUAward)
@@ -297,8 +297,8 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 									claims = append(claims, claimRow)
 								}
 							}
-							TenantResourceQuotaCopy.Spec.Claim = claims
-							edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), TenantResourceQuotaCopy, metav1.UpdateOptions{})
+							tenantResourceQuota.Spec.Claim = claims
+							edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
 						}
 					}
 				}

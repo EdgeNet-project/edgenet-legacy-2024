@@ -52,7 +52,7 @@ func SetKubeConfig() {
 	flag.Parse()
 }
 
-// CreateEdgeNetClientSet generates the clientset to interact with custom resources of selective deployment, authority, user, and slice
+// CreateEdgeNetClientSet generates the clientset to interact with custom resources of selective deployment, tenant, user, and slice
 func CreateEdgeNetClientSet() (*edgenetclientset.Clientset, error) {
 	// Use the current context in kubeconfig
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)

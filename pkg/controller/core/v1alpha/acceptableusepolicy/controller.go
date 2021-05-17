@@ -63,7 +63,7 @@ var statusDict = map[string]string{
 	"aup-set-fail":       "Expiry date couldn't be set",
 	"aup-expired":        "Acceptable use policy expired",
 	"aup-agreed":         "Acceptable Use Policy Agreed and Renewed",
-	"authority-disabled": "Authority disabled",
+	"tenant-disabled": "Tenant disabled",
 }
 
 // Start function is entry point of the controller

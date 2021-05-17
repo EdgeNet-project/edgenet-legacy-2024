@@ -15,7 +15,7 @@ var errorDict = map[string]string{
 	"edgenet-sync":   "EdgeNet clientset sync problem",
 	"dupl-val":       "Duplicate value cannot be detected",
 	"node-detect":    "Empty Host field get not detected",
-	"auth-enabled":   "Authority enabled field check failed",
+	"auth-enabled":   "Tenant enabled field check failed",
 	"node-upd":       "Host field detection failed when updating",
 	"email-sent":     "Send email failed in nodecontribution pkg",
 	"getcm-install":  "Get install Debian/Centos Commands Failed",

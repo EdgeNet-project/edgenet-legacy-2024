@@ -63,7 +63,7 @@ func (t *SDHandler) Init(kubernetes kubernetes.Interface, edgenet versioned.Inte
 // ObjectCreated is called when an object is created
 func (t *SDHandler) ObjectCreated(obj interface{}) {
 	log.Info("SDHandler.ObjectCreated")
-	// Create a copy of the selectivedeployment object to make changes on it
+	// Make a copy of the selectivedeployment object to make changes on it
 	sdCopy := obj.(*apps_v1alpha.SelectiveDeployment).DeepCopy()
 	t.applyCriteria(sdCopy, "create")
 }
@@ -71,7 +71,7 @@ func (t *SDHandler) ObjectCreated(obj interface{}) {
 // ObjectUpdated is called when an object is updated
 func (t *SDHandler) ObjectUpdated(obj interface{}) {
 	log.Info("SDHandler.ObjectUpdated")
-	// Create a copy of the selectivedeployment object to make changes on it
+	// Make a copy of the selectivedeployment object to make changes on it
 	sdCopy := obj.(*apps_v1alpha.SelectiveDeployment).DeepCopy()
 	t.applyCriteria(sdCopy, "update")
 }
@@ -602,9 +602,9 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 	return nodeSelectorTermList, failureCounter
 }
 
-// SetAsOwnerReference returns the authority as owner
+// SetAsOwnerReference returns the tenant as owner
 func SetAsOwnerReference(sdCopy *apps_v1alpha.SelectiveDeployment) []metav1.OwnerReference {
-	// The following section makes authority become the owner
+	// The following section makes tenant become the owner
 	ownerReferences := []metav1.OwnerReference{}
 	newSDRef := *metav1.NewControllerRef(sdCopy, apps_v1alpha.SchemeGroupVersion.WithKind("SelectiveDeployment"))
 	takeControl := false

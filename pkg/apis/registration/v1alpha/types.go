@@ -130,9 +130,7 @@ type EmailVerification struct {
 
 // EmailVerificationSpec is the spec for a EmailVerification resource
 type EmailVerificationSpec struct {
-	Kind     string `json:"kind"`
-	Tenant   string `json:"tenant"`
-	User     string `json:"user"`
+	Email    string `json:"email"`
 	Verified bool   `json:"verified"`
 }
 

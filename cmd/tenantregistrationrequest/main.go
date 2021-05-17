@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/authorityrequest"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/tenantrequest"
 )
 
 func main() {
@@ -20,6 +20,6 @@ func main() {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	// Start the controller to provide the functionalities of authorityrequest resource
-	authorityrequest.Start(clientset, edgenetClientset)
+	// Start the controller to provide the functionalities of tenantrequest resource
+	tenantrequest.Start(clientset, edgenetClientset)
 }

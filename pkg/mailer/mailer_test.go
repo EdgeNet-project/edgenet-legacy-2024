@@ -41,7 +41,7 @@ func TestNotification(t *testing.T) {
 	}
 
 	contentData := CommonContentData{}
-	contentData.CommonData.Authority = "test"
+	contentData.CommonData.Tenant = "test"
 	contentData.CommonData.Username = "johndoe"
 	contentData.CommonData.Name = "John"
 	contentData.CommonData.Email = []string{"john.doe@edge-net.org"}
@@ -55,9 +55,9 @@ func TestNotification(t *testing.T) {
 
 	resourceAllocationData := ResourceAllocationData{}
 	resourceAllocationData.Name = "test"
-	resourceAllocationData.OwnerNamespace = "authority-test"
-	resourceAllocationData.ChildNamespace = "authority-test-namespace-test"
-	resourceAllocationData.Authority = "test"
+	resourceAllocationData.OwnerNamespace = "tenant-test"
+	resourceAllocationData.ChildNamespace = "tenant-test-namespace-test"
+	resourceAllocationData.Tenant = "test"
 	resourceAllocationData.CommonData = contentData.CommonData
 
 	verifyContentData := VerifyContentData{}
@@ -67,15 +67,15 @@ func TestNotification(t *testing.T) {
 	createKubeconfig := func(contentData interface{}, done chan bool) {
 		registrationData := contentData.(CommonContentData)
 		// Creating temp config file to be consumed by setUserRegistrationContent()
-		var file, err = os.Create(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, registrationData.CommonData.Authority,
+		var file, err = os.Create(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, registrationData.CommonData.Tenant,
 			registrationData.CommonData.Username))
 		if err != nil {
-			t.Errorf("Failed to create temp %s/assets/kubeconfigs/%s-%s.cfg file", dir, registrationData.CommonData.Authority,
+			t.Errorf("Failed to create temp %s/assets/kubeconfigs/%s-%s.cfg file", dir, registrationData.CommonData.Tenant,
 				registrationData.CommonData.Username)
 		}
 		<-done
 		file.Close()
-		os.Remove(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, registrationData.CommonData.Authority,
+		os.Remove(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, registrationData.CommonData.Tenant,
 			registrationData.CommonData.Username))
 	}
 
@@ -83,47 +83,47 @@ func TestNotification(t *testing.T) {
 		Content  interface{}
 		Expected []string
 	}{
-		"user-email-verification":                    {verifyContentData, []string{verifyContentData.CommonData.Authority, verifyContentData.CommonData.Username, verifyContentData.Code}},
-		"user-email-verification-update":             {verifyContentData, []string{verifyContentData.CommonData.Authority, verifyContentData.CommonData.Username, verifyContentData.Code}},
-		"user-email-verified-alert":                  {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"user-email-verified-notification":           {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"user-registration-successful":               {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"authority-email-verification":               {verifyContentData, []string{verifyContentData.CommonData.Authority, verifyContentData.CommonData.Username, verifyContentData.CommonData.Name, verifyContentData.Code}},
-		"authority-email-verified-alert":             {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"authority-creation-successful":              {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username}},
-		"acceptable-use-policy-accepted":             {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username}},
-		"acceptable-use-policy-renewal":              {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"acceptable-use-policy-expired":              {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"slice-creation":                             {resourceAllocationData, []string{resourceAllocationData.CommonData.Authority, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
-		"slice-removal":                              {resourceAllocationData, []string{resourceAllocationData.CommonData.Authority, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
-		"slice-reminder":                             {resourceAllocationData, []string{resourceAllocationData.CommonData.Authority, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
-		"slice-deletion":                             {resourceAllocationData, []string{resourceAllocationData.CommonData.Authority, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
-		"slice-crash":                                {resourceAllocationData, []string{resourceAllocationData.CommonData.Authority, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name}},
-		"slice-total-quota-exceeded":                 {resourceAllocationData, []string{resourceAllocationData.CommonData.Authority, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name}},
-		"slice-lack-of-quota":                        {resourceAllocationData, []string{resourceAllocationData.CommonData.Authority, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name}},
-		"slice-deletion-failed":                      {resourceAllocationData, []string{resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name}},
-		"slice-collection-deletion-failed":           {resourceAllocationData, []string{resourceAllocationData.CommonData.Authority, resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name}},
-		"team-creation":                              {resourceAllocationData, []string{resourceAllocationData.CommonData.Authority, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
-		"team-removal":                               {resourceAllocationData, []string{resourceAllocationData.CommonData.Authority, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
-		"team-deletion":                              {resourceAllocationData, []string{resourceAllocationData.CommonData.Authority, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
-		"team-crash":                                 {resourceAllocationData, []string{resourceAllocationData.CommonData.Authority, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Authority, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name}},
-		"node-contribution-successful":               {multiProviderData, []string{multiProviderData.CommonData.Authority, multiProviderData.CommonData.Username, multiProviderData.CommonData.Name, multiProviderData.Name, multiProviderData.Host, multiProviderData.Message[0]}},
-		"node-contribution-failure":                  {multiProviderData, []string{multiProviderData.CommonData.Authority, multiProviderData.CommonData.Username, multiProviderData.CommonData.Name, multiProviderData.Name, multiProviderData.Host, multiProviderData.Message[0]}},
-		"node-contribution-failure-support":          {multiProviderData, []string{multiProviderData.CommonData.Authority, multiProviderData.Name, multiProviderData.Host, multiProviderData.Message[0]}},
-		"authority-validation-failure-name":          {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"authority-validation-failure-email":         {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"authority-email-verification-malfunction":   {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username}},
-		"authority-creation-failure":                 {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"authority-email-verification-dubious":       {contentData, []string{contentData.CommonData.Authority}},
-		"user-validation-failure-name":               {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"user-validation-failure-email":              {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"user-email-verification-malfunction":        {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username}},
-		"user-creation-failure":                      {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"user-cert-failure":                          {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"user-kubeconfig-failure":                    {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username, contentData.CommonData.Name}},
-		"user-email-verification-dubious":            {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username}},
-		"user-email-verification-update-malfunction": {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username}},
-		"user-deactivation-failure":                  {contentData, []string{contentData.CommonData.Authority, contentData.CommonData.Username}},
+		"user-email-verification":                    {verifyContentData, []string{verifyContentData.CommonData.Tenant, verifyContentData.CommonData.Username, verifyContentData.Code}},
+		"user-email-verification-update":             {verifyContentData, []string{verifyContentData.CommonData.Tenant, verifyContentData.CommonData.Username, verifyContentData.Code}},
+		"user-email-verified-alert":                  {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"user-email-verified-notification":           {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"user-registration-successful":               {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"tenant-email-verification":               {verifyContentData, []string{verifyContentData.CommonData.Tenant, verifyContentData.CommonData.Username, verifyContentData.CommonData.Name, verifyContentData.Code}},
+		"tenant-email-verified-alert":             {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"tenant-creation-successful":              {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username}},
+		"acceptable-use-policy-accepted":             {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username}},
+		"acceptable-use-policy-renewal":              {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"acceptable-use-policy-expired":              {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"slice-creation":                             {resourceAllocationData, []string{resourceAllocationData.CommonData.Tenant, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
+		"slice-removal":                              {resourceAllocationData, []string{resourceAllocationData.CommonData.Tenant, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
+		"slice-reminder":                             {resourceAllocationData, []string{resourceAllocationData.CommonData.Tenant, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
+		"slice-deletion":                             {resourceAllocationData, []string{resourceAllocationData.CommonData.Tenant, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
+		"slice-crash":                                {resourceAllocationData, []string{resourceAllocationData.CommonData.Tenant, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name}},
+		"slice-total-quota-exceeded":                 {resourceAllocationData, []string{resourceAllocationData.CommonData.Tenant, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name}},
+		"slice-lack-of-quota":                        {resourceAllocationData, []string{resourceAllocationData.CommonData.Tenant, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name}},
+		"slice-deletion-failed":                      {resourceAllocationData, []string{resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name}},
+		"slice-collection-deletion-failed":           {resourceAllocationData, []string{resourceAllocationData.CommonData.Tenant, resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name}},
+		"team-creation":                              {resourceAllocationData, []string{resourceAllocationData.CommonData.Tenant, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
+		"team-removal":                               {resourceAllocationData, []string{resourceAllocationData.CommonData.Tenant, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
+		"team-deletion":                              {resourceAllocationData, []string{resourceAllocationData.CommonData.Tenant, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name, resourceAllocationData.ChildNamespace}},
+		"team-crash":                                 {resourceAllocationData, []string{resourceAllocationData.CommonData.Tenant, resourceAllocationData.CommonData.Username, resourceAllocationData.CommonData.Name, resourceAllocationData.Tenant, resourceAllocationData.OwnerNamespace, resourceAllocationData.Name}},
+		"node-contribution-successful":               {multiProviderData, []string{multiProviderData.CommonData.Tenant, multiProviderData.CommonData.Username, multiProviderData.CommonData.Name, multiProviderData.Name, multiProviderData.Host, multiProviderData.Message[0]}},
+		"node-contribution-failure":                  {multiProviderData, []string{multiProviderData.CommonData.Tenant, multiProviderData.CommonData.Username, multiProviderData.CommonData.Name, multiProviderData.Name, multiProviderData.Host, multiProviderData.Message[0]}},
+		"node-contribution-failure-support":          {multiProviderData, []string{multiProviderData.CommonData.Tenant, multiProviderData.Name, multiProviderData.Host, multiProviderData.Message[0]}},
+		"tenant-validation-failure-name":          {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"tenant-validation-failure-email":         {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"tenant-email-verification-malfunction":   {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username}},
+		"tenant-creation-failure":                 {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"tenant-email-verification-dubious":       {contentData, []string{contentData.CommonData.Tenant}},
+		"user-validation-failure-name":               {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"user-validation-failure-email":              {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"user-email-verification-malfunction":        {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username}},
+		"user-creation-failure":                      {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"user-cert-failure":                          {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"user-kubeconfig-failure":                    {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username, contentData.CommonData.Name}},
+		"user-email-verification-dubious":            {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username}},
+		"user-email-verification-update-malfunction": {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username}},
+		"user-deactivation-failure":                  {contentData, []string{contentData.CommonData.Tenant, contentData.CommonData.Username}},
 	}
 
 	for k, tc := range cases {

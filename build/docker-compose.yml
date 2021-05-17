@@ -20,24 +20,24 @@ services:
     image: edgenet-selectivedeployment:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-  edgenet-authority:
-    container_name: edgenet-authority
+  edgenet-tenant:
+    container_name: edgenet-tenant
     restart: always
     build:
       context: ../
-      dockerfile: ./build/authority/Dockerfile
-    image: edgenet-authority:v1.0.0
+      dockerfile: ./build/tenant/Dockerfile
+    image: edgenet-tenant:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
       - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
-  edgenet-authorityrequest:
-    container_name: edgenet-authorityrequest
+  edgenet-tenantrequest:
+    container_name: edgenet-tenantrequest
     restart: always
     build:
       context: ../
-      dockerfile: ./build/authorityrequest/Dockerfile
-    image: edgenet-authorityrequest:v1.0.0
+      dockerfile: ./build/tenantrequest/Dockerfile
+    image: edgenet-tenantrequest:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
       - ../configs/:/root/configs/

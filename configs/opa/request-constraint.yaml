@@ -6,7 +6,7 @@ spec:
   match:
     kinds:
       - apiGroups: ["apps.edgenet.io"]
-        kinds: ["AuthorityRequest", "UserRegistrationRequest"]
+        kinds: ["TenantRequest", "UserRequest"]
   parameters:
     values:
       - false

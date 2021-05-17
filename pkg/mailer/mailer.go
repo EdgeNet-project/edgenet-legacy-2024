@@ -35,10 +35,10 @@ import (
 
 // commonData to have the common data
 type commonData struct {
-	Authority string
-	Username  string
-	Name      string
-	Email     []string
+	Tenant   string
+	Username string
+	Name     string
+	Email    []string
 }
 
 // CommonContentData to set the common variables
@@ -46,13 +46,13 @@ type CommonContentData struct {
 	CommonData commonData
 }
 
-// ResourceAllocationData to set the team and slice variables
+// ResourceAllocationData to set the team and subnamespace variables
 type ResourceAllocationData struct {
 	CommonData     commonData
 	Name           string
 	OwnerNamespace string
 	ChildNamespace string
-	Authority      string
+	Tenant         string
 }
 
 // MultiProviderData to set the node contribution variables
@@ -197,28 +197,26 @@ func prepareNotification(subject string, contentData interface{}, smtpServer smt
 		to, body = setUserVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	case "user-registration-successful":
 		to, body = setUserRegistrationContent(contentData, smtpServer.From)
-	case "authority-email-verification":
-		to, body = setAuthorityEmailVerificationContent(contentData, smtpServer.From)
-	case "authority-email-verified-alert":
-		to, body = setAuthorityVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To})
-	case "authority-creation-successful":
-		to, body = setAuthorityRequestContent(contentData, smtpServer.From)
+	case "tenant-email-verification":
+		to, body = setTenantEmailVerificationContent(contentData, smtpServer.From)
+	case "tenant-email-verified-alert":
+		to, body = setTenantVerifiedAlertContent(contentData, smtpServer.From, []string{smtpServer.To})
+	case "tenant-creation-successful":
+		to, body = setTenantRequestContent(contentData, smtpServer.From)
 	case "acceptable-use-policy-accepted":
 		to, body = setAUPConfirmationContent(contentData, smtpServer.From)
 	case "acceptable-use-policy-renewal":
 		to, body = setAUPRenewalContent(contentData, smtpServer.From)
 	case "acceptable-use-policy-expired":
 		to, body = setAUPExpiredContent(contentData, smtpServer.From)
-	case "slice-creation", "slice-removal", "slice-reminder", "slice-deletion", "slice-crash", "slice-total-quota-exceeded", "slice-lack-of-quota",
-		"slice-deletion-failed", "slice-collection-deletion-failed":
-		to, body = setSliceContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
-	case "team-creation", "team-removal", "team-deletion", "team-crash":
-		to, body = setTeamContent(contentData, smtpServer.From, subject)
+	case "subnamespace-creation", "subnamespace-removal", "subnamespace-reminder", "subnamespace-deletion", "subnamespace-crash", "subnamespace-tenant-quota-exceeded", "subnamespace-lack-of-quota",
+		"subnamespace-deletion-failed", "subnamespace-collection-deletion-failed":
+		to, body = setSubNamespaceContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	case "node-contribution-successful", "node-contribution-failure", "node-contribution-failure-support":
 		to, body = setNodeContributionContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
-	case "authority-validation-failure-name", "authority-validation-failure-email", "authority-email-verification-malfunction",
-		"authority-creation-failure", "authority-email-verification-dubious":
-		to, body = setAuthorityFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
+	case "tenant-validation-failure-name", "tenant-validation-failure-email", "tenant-email-verification-malfunction",
+		"tenant-creation-failure", "tenant-email-verification-dubious":
+		to, body = setTenantFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	case "user-validation-failure-name", "user-validation-failure-email", "user-email-verification-malfunction", "user-creation-failure", "user-cert-failure",
 		"user-kubeconfig-failure", "user-email-verification-dubious", "user-email-verification-update-malfunction", "user-deactivation-failure":
 		to, body = setUserFailureContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
@@ -276,15 +274,15 @@ func setUserFailureContent(contentData interface{}, from string, to []string, su
 	return to, body
 }
 
-// setAuthorityFailureContent to create an email body related to failures during authority creation
-func setAuthorityFailureContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
+// setTenantFailureContent to create an email body related to failures during tenant creation
+func setTenantFailureContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
 	NCData := contentData.(CommonContentData)
 	// The HTML template
 	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
-	title := "[EdgeNet Admin] Authority Establishment Failure"
-	if subject == "authority-validation-failure-name" || subject == "authority-validation-failure-email" {
-		title = "[EdgeNet] Authority Establishment Failure"
+	title := "[EdgeNet Admin] Tenant Establishment Failure"
+	if subject == "tenant-validation-failure-name" || subject == "tenant-validation-failure-email" {
+		title = "[EdgeNet] Tenant Establishment Failure"
 		// This represents receivers' email addresses
 		to = NCData.CommonData.Email
 	}
@@ -343,41 +341,41 @@ func setTeamContent(contentData interface{}, from, subject string) ([]string, by
 	return to, body
 }
 
-// setSliceContent to create an email body related to the slice emails
-func setSliceContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
-	sliceData := contentData.(ResourceAllocationData)
+// setSubNamespaceContent to create an email body related to the subnamespace emails
+func setSubNamespaceContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
+	subnamespaceData := contentData.(ResourceAllocationData)
 	// The HTML template
 	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
 	delimiter := ""
-	title := "[EdgeNet] Slice event"
+	title := "[EdgeNet] SubNamespace event"
 	switch subject {
-	case "slice-creation":
+	case "subnamespace-creation":
 		// This represents receivers' email addresses
-		to = sliceData.CommonData.Email
-		title = "[EdgeNet] Slice invitation"
-	case "slice-removal":
-		to = sliceData.CommonData.Email
-		title = "[EdgeNet] Slice farewell message"
-	case "slice-reminder":
-		to = sliceData.CommonData.Email
-		title = "[EdgeNet] Slice renewal reminder"
-	case "slice-deletion":
-		to = sliceData.CommonData.Email
-		title = "[EdgeNet] Slice deleted"
-	case "slice-crash":
-		to = sliceData.CommonData.Email
-		title = "[EdgeNet] Slice creation failed"
-	case "slice-total-quota-exceeded":
-		to = sliceData.CommonData.Email
-		title = "[EdgeNet] Slice could not be created"
-	case "slice-lack-of-quota":
-		to = sliceData.CommonData.Email
-		title = "[EdgeNet] Slice profile could not be changed"
-	case "slice-deletion-failed", "slice-collection-deletion-failed":
-		title = "[EdgeNet] Slice deletion failed"
+		to = subnamespaceData.CommonData.Email
+		title = "[EdgeNet] SubNamespace invitation"
+	case "subnamespace-removal":
+		to = subnamespaceData.CommonData.Email
+		title = "[EdgeNet] SubNamespace farewell message"
+	case "subnamespace-reminder":
+		to = subnamespaceData.CommonData.Email
+		title = "[EdgeNet] SubNamespace renewal reminder"
+	case "subnamespace-deletion":
+		to = subnamespaceData.CommonData.Email
+		title = "[EdgeNet] SubNamespace deleted"
+	case "subnamespace-crash":
+		to = subnamespaceData.CommonData.Email
+		title = "[EdgeNet] SubNamespace creation failed"
+	case "subnamespace-tenant-quota-exceeded":
+		to = subnamespaceData.CommonData.Email
+		title = "[EdgeNet] SubNamespace could not be created"
+	case "subnamespace-lack-of-quota":
+		to = subnamespaceData.CommonData.Email
+		title = "[EdgeNet] SubNamespace profile could not be changed"
+	case "subnamespace-deletion-failed", "subnamespace-collection-deletion-failed":
+		title = "[EdgeNet] SubNamespace deletion failed"
 	}
 	body := setCommonEmailHeaders(title, from, to, delimiter)
-	t.Execute(&body, sliceData)
+	t.Execute(&body, subnamespaceData)
 
 	return to, body
 }
@@ -424,22 +422,22 @@ func setAUPRenewalContent(contentData interface{}, from string) ([]string, bytes
 	return to, body
 }
 
-// setAuthorityRequestContent to create an email body related to the authority creation activity
-func setAuthorityRequestContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+// setTenantRequestContent to create an email body related to the tenant creation activity
+func setTenantRequestContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
 	registrationData := contentData.(CommonContentData)
 	// This represents receivers' email addresses
 	to := registrationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/authority-creation.html", dir))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/tenant-creation.html", dir))
 	delimiter := ""
-	body := setCommonEmailHeaders("[EdgeNet] Authority Successfully Created", from, to, delimiter)
+	body := setCommonEmailHeaders("[EdgeNet] Tenant Successfully Created", from, to, delimiter)
 	t.Execute(&body, registrationData)
 
 	return to, body
 }
 
-// setAuthorityEmailVerificationContent to create an email body related to the email verification
-func setAuthorityEmailVerificationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
+// setTenantEmailVerificationContent to create an email body related to the email verification
+func setTenantEmailVerificationContent(contentData interface{}, from string) ([]string, bytes.Buffer) {
 	verificationData := contentData.(VerifyContentData)
 	file, err := os.Open(fmt.Sprintf("%s/configs/console.yaml", dir))
 	if err != nil {
@@ -455,21 +453,21 @@ func setAuthorityEmailVerificationContent(contentData interface{}, from string) 
 	// This represents receivers' email addresses
 	to := verificationData.CommonData.Email
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/authority-email-verification.html", dir))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/tenant-email-verification.html", dir))
 	delimiter := ""
-	body := setCommonEmailHeaders("[EdgeNet] Authority Registration Request - Do You Confirm?", from, to, delimiter)
+	body := setCommonEmailHeaders("[EdgeNet] Tenant Registration Request - Do You Confirm?", from, to, delimiter)
 	t.Execute(&body, verificationData)
 
 	return to, body
 }
 
-// setAuthorityVerifiedAlertContent to create an email body related to the email verified alert
-func setAuthorityVerifiedAlertContent(contentData interface{}, from string, to []string) ([]string, bytes.Buffer) {
+// setTenantVerifiedAlertContent to create an email body related to the email verified alert
+func setTenantVerifiedAlertContent(contentData interface{}, from string, to []string) ([]string, bytes.Buffer) {
 	alertData := contentData.(CommonContentData)
 	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/authority-email-verified-alert.html", dir))
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/tenant-email-verified-alert.html", dir))
 	delimiter := ""
-	body := setCommonEmailHeaders("[EdgeNet Admin] Authority Request - Email Verified", from, to, delimiter)
+	body := setCommonEmailHeaders("[EdgeNet Admin] Tenant Request - Email Verified", from, to, delimiter)
 	t.Execute(&body, alertData)
 
 	return to, body
@@ -492,7 +490,7 @@ func setUserRegistrationContent(contentData interface{}, from string) ([]string,
 	headers += "Content-Disposition: attachment;filename=\"edgenet-kubeconfig.cfg\"\r\n"
 	// Read the kubeconfig file created for web authentication
 	// It will be in the attachment of email
-	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, registrationData.CommonData.Authority,
+	rawFile, fileErr := ioutil.ReadFile(fmt.Sprintf("%s/assets/kubeconfigs/%s-%s.cfg", dir, registrationData.CommonData.Tenant,
 		registrationData.CommonData.Username))
 	if fileErr != nil {
 		log.Panic(fileErr)

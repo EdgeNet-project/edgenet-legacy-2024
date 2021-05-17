@@ -59,6 +59,7 @@ type Address struct {
 
 // User contains username, personal information, and role
 type User struct {
+	Tenant    string `json:"tenant"`
 	Username  string `json:"username"`
 	FirstName string `json:"firstname"`
 	LastName  string `json:"lastname"`
@@ -70,6 +71,11 @@ type User struct {
 // GetName provides username
 func (u *User) GetName() string {
 	return u.Username
+}
+
+// GetTenant provides tenant name
+func (u *User) GetTenant() string {
+	return u.Tenant
 }
 
 // TenantStatus is the status for a Tenant resource

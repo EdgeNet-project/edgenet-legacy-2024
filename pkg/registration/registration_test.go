@@ -20,7 +20,7 @@ import (
 )
 
 type TestGroup struct {
-	authorityObj  apps_v1alpha.Authority
+	tenantObj  corev1alpha.Tenant
 	userObj       apps_v1alpha.User
 	client        kubernetes.Interface
 	edgenetclient versioned.Interface
@@ -33,15 +33,15 @@ func TestMain(m *testing.M) {
 }
 
 func (g *TestGroup) Init() {
-	authorityObj := apps_v1alpha.Authority{
+	tenantObj := corev1alpha.Tenant{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Authority",
+			Kind:       "Tenant",
 			APIVersion: "apps.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "edgenet",
 		},
-		Spec: apps_v1alpha.AuthoritySpec{
+		Spec: corev1alpha.TenantSpec{
 			FullName:  "EdgeNet",
 			ShortName: "EdgeNet",
 			URL:       "https://www.edge-net.org",
@@ -68,7 +68,7 @@ func (g *TestGroup) Init() {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "johndoe",
-			Namespace: "authority-edgenet",
+			Namespace: "tenant-edgenet",
 		},
 		Spec: apps_v1alpha.UserSpec{
 			FirstName: "EdgeNet",
@@ -80,7 +80,7 @@ func (g *TestGroup) Init() {
 			Type: "admin",
 		},
 	}
-	g.authorityObj = authorityObj
+	g.tenantObj = tenantObj
 	g.userObj = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
@@ -102,7 +102,7 @@ func TestKubeconfigWithUser(t *testing.T) {
 				case <-timeout:
 					break check
 				case <-ticker:
-					CSRObj, getErr := Clientset.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", g.authorityObj.GetName(), g.userObj.GetName()), metav1.GetOptions{})
+					CSRObj, getErr := Clientset.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), g.userObj.GetName()), metav1.GetOptions{})
 					if getErr == nil {
 						CSRObj.Status.Certificate = CSRObj.Spec.Request
 						_, updateErr := Clientset.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), CSRObj, metav1.UpdateOptions{})
@@ -114,11 +114,11 @@ func TestKubeconfigWithUser(t *testing.T) {
 			}
 		}()
 
-		cert, key, err := MakeUser(g.authorityObj.GetName(), g.userObj.GetName(), g.userObj.Spec.Email)
+		cert, key, err := MakeUser(g.tenantObj.GetName(), g.userObj.GetName(), g.userObj.Spec.Email)
 		util.OK(t, err)
 
 		t.Run("generate config", func(t *testing.T) {
-			err = MakeConfig(g.authorityObj.GetName(), g.userObj.GetName(), g.userObj.Spec.Email, cert, key)
+			err = MakeConfig(g.tenantObj.GetName(), g.userObj.GetName(), g.userObj.Spec.Email, cert, key)
 			util.OK(t, err)
 		})
 	})
@@ -163,7 +163,7 @@ func TestKubeconfigWithServiceAccount(t *testing.T) {
 		output := CreateConfig(&serviceAccount)
 
 		list := []string{
-			"certificate-authority-data",
+			"certificate-tenant-data",
 			"clusters",
 			"cluster",
 			"server",

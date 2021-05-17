@@ -8,11 +8,11 @@ spec:
       matchExpressions:
       - key: owner
         operator: In
-        values: ["authority","slice","team"]
+        values: ["tenant","slice","team"]
     kinds:
       - apiGroups: ["rbac.authorization.k8s.io"]
         kinds: ["RoleBinding"]
   parameters:
     roles:
       - kind: Role
-        name: ["user", "slice", "team", "authority"]
+        name: ["user", "slice", "team", "tenant"]

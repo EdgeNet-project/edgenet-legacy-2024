@@ -94,10 +94,10 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 		}
 
 		if tenant.Status.State != failure {
-			// Update authority status
+			// Update tenant status
 			tenant.Status.State = established
-			tenant.Status.Message = []string{statusDict["authority-ok"]}
-			t.sendEmail(tenant, "authority-creation-successful")
+			tenant.Status.Message = []string{statusDict["tenant-ok"]}
+			t.sendEmail(tenant, "tenant-creation-successful")
 		}
 		t.edgenetClientset.CoreV1alpha().Tenants().UpdateStatus(context.TODO(), tenant, metav1.UpdateOptions{})
 	} else {
