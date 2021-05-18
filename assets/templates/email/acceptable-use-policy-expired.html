@@ -68,7 +68,7 @@
                                 <tr>
                                   <td style="word-break: break-word; padding: 0;">
                                     <span class="f-fallback">
-                                      <strong>Authority:</strong> {{.CommonData.Authority}}
+                                      <strong>Tenant:</strong> {{.CommonData.Tenant}}
                                     </span>
                                   </td>
                                 </tr>
@@ -88,7 +88,7 @@
                                   <td style="word-break: break-word; padding: 10px 0 0 0;">
                                     <span class="f-fallback">
                                         <strong>Kubectl command:</strong>
-                                        <span style="background-color: #1f1f1f; color: #629755; border: 1px solid #A4BCB6; display: block; padding: 20px; white-space: pre">kubectl patch aup {{.CommonData.Username}} -n authority-{{.CommonData.Authority}} --type='json' -p='[{"op": "replace", "path": "/spec/accepted", "value": true}]' --kubeconfig ./edgenet-kubeconfig.cfg</span>
+                                        <span style="background-color: #1f1f1f; color: #629755; border: 1px solid #A4BCB6; display: block; padding: 20px; white-space: pre">kubectl patch aup {{.CommonData.Username}} --type='json' -p='[{"op": "replace", "path": "/spec/accepted", "value": true}]' --kubeconfig ./edgenet-kubeconfig.cfg</span>
                                     </span>
                                   </td>
                                 </tr>
