@@ -32,8 +32,8 @@ type TestGroup struct {
 }
 
 func TestMain(m *testing.M) {
-	flag.String("dir", "../../../..", "Override the directory.")
-	flag.String("smtp-path", "../../../../configs/smtp_test.yaml", "Set SMTP path.")
+	flag.String("dir", "../../../../..", "Override the directory.")
+	flag.String("smtp-path", "../../../../../configs/smtp_test.yaml", "Set SMTP path.")
 	flag.Parse()
 
 	log.SetOutput(ioutil.Discard)
@@ -142,7 +142,7 @@ func TestCreate(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
-
+	go g.handler.RunExpiryController()
 	regular := g.acceptableUsePolicyObj.DeepCopy()
 	regular.SetUID("regular")
 	accepted := g.acceptableUsePolicyObj.DeepCopy()
@@ -200,7 +200,7 @@ func TestCreate(t *testing.T) {
 		g.handler.ObjectCreatedOrUpdated(recreation.DeepCopy())
 		acceptableUsePolicy, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), recreation.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
-		util.Equals(t, success, acceptableUsePolicy.Status.State)
+		util.Equals(t, "", acceptableUsePolicy.Status.State)
 		t.Run("user status", func(t *testing.T) {
 			aupLabels := acceptableUsePolicy.GetLabels()
 			tenantName := aupLabels["edge-net.io/tenant"]
@@ -238,6 +238,7 @@ func TestAccept(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
+	go g.handler.RunExpiryController()
 	// Create acceptableUsePolicy to update later
 	g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), g.acceptableUsePolicyObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoke ObjectCreated func to create a acceptableUsePolicy
@@ -273,7 +274,6 @@ func TestAccept(t *testing.T) {
 		util.Equals(t, "true", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
 	})
 	t.Run("timeout", func(t *testing.T) {
-		go g.handler.runApprovalTimeout(acceptableUsePolicy)
 		acceptableUsePolicy.Status.Expiry = &metav1.Time{
 			Time: time.Now().Add(10 * time.Millisecond),
 		}

@@ -59,10 +59,10 @@ const success = "Successful"
 
 // Dictionary of status messages
 var statusDict = map[string]string{
-	"aup-ok":             "Acceptable use policy approved",
-	"aup-set-fail":       "Expiry date couldn't be set",
-	"aup-expired":        "Acceptable use policy expired",
-	"aup-agreed":         "Acceptable Use Policy Agreed and Renewed",
+	"aup-ok":          "Acceptable use policy approved",
+	"aup-set-fail":    "Expiry date couldn't be set",
+	"aup-expired":     "Acceptable use policy expired",
+	"aup-agreed":      "Acceptable Use Policy Agreed and Renewed",
 	"tenant-disabled": "Tenant disabled",
 }
 
@@ -142,6 +142,7 @@ func (c *controller) run(stopCh <-chan struct{}, clientset kubernetes.Interface,
 	defer c.queue.ShutDown()
 	c.logger.Info("run: initiating")
 	c.handler.Init(clientset, edgenetClientset)
+	go c.handler.RunExpiryController()
 	// Run the informer to list and watch resources
 	go c.informer.Run(stopCh)
 
