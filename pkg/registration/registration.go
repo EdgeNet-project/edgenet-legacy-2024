@@ -32,7 +32,7 @@ import (
 	"regexp"
 	"time"
 
-	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 
 	yaml "gopkg.in/yaml.v2"
 	certv1 "k8s.io/api/certificates/v1"
@@ -85,6 +85,7 @@ func MakeUser(tenant, username, email string) ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 	decoder := yaml.NewDecoder(file)
+
 	var headnode headnode
 	err = decoder.Decode(&headnode)
 	if err != nil {
@@ -93,49 +94,48 @@ func MakeUser(tenant, username, email string) ([]byte, []byte, error) {
 	}
 	dnsSANs := []string{headnode.DNS}
 	ipSANs := []net.IP{net.ParseIP(headnode.IP)}
+	csrRequest, _ := cert.MakeCSR(key, &subject, dnsSANs, ipSANs)
 
-	csr, _ := cert.MakeCSR(key, &subject, dnsSANs, ipSANs)
-
-	var CSRCopy *certv1.CertificateSigningRequest
-	CSRObject := certv1.CertificateSigningRequest{}
-	CSRObject.Name = fmt.Sprintf("%s-%s", tenant, username)
-	CSRObject.Spec.Usages = []certv1.KeyUsage{"client auth"}
-	CSRObject.Spec.Request = csr
-	CSRObject.Spec.SignerName = "kubernetes.io/kube-apiserver-client"
-	CSRCopy, err = Clientset.CertificatesV1().CertificateSigningRequests().Create(context.TODO(), &CSRObject, metav1.CreateOptions{})
+	var csrObject *certv1.CertificateSigningRequest = new(certv1.CertificateSigningRequest)
+	csrObject.Name = fmt.Sprintf("%s-%s", tenant, username)
+	csrObject.Spec.Usages = []certv1.KeyUsage{"client auth"}
+	csrObject.Spec.Request = csrRequest
+	csrObject.Spec.SignerName = "kubernetes.io/kube-apiserver-client"
+	csr, err := Clientset.CertificatesV1().CertificateSigningRequests().Create(context.TODO(), csrObject, metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
-	CSRCopy.Status.Conditions = append(CSRCopy.Status.Conditions, certv1.CertificateSigningRequestCondition{
+
+	csr.Status.Conditions = append(csr.Status.Conditions, certv1.CertificateSigningRequestCondition{
 		Type:           certv1.CertificateApproved,
 		Reason:         "User creation is completed",
-		Message:        "This CSR was approved automatically by EdgeNet",
+		Message:        "This CSR has been approved automatically by EdgeNet",
 		Status:         "True",
 		LastUpdateTime: metav1.Now(),
 	})
 
-	_, err = Clientset.CertificatesV1().CertificateSigningRequests().UpdateApproval(context.TODO(), CSRCopy.GetName(), CSRCopy, metav1.UpdateOptions{})
+	_, err = Clientset.CertificatesV1().CertificateSigningRequests().UpdateApproval(context.TODO(), csr.GetName(), csr, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
 	timeout := time.After(5 * time.Minute)
-	ticker := time.Tick(15 * time.Second)
+	ticker := time.Tick(3 * time.Second)
 check:
 	for {
 		select {
 		case <-timeout:
 			return nil, nil, err
 		case <-ticker:
-			CSRCopy, err = Clientset.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), CSRCopy.GetName(), metav1.GetOptions{})
+			csr, err = Clientset.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), csr.GetName(), metav1.GetOptions{})
 			if err != nil {
 				return nil, nil, err
 			}
-			if len(CSRCopy.Status.Certificate) != 0 {
+			if len(csr.Status.Certificate) != 0 {
 				break check
 			}
 		}
 	}
-	err = ioutil.WriteFile(fmt.Sprintf("%s.crt", path), CSRCopy.Status.Certificate, 0700)
+	err = ioutil.WriteFile(fmt.Sprintf("%s.crt", path), csr.Status.Certificate, 0700)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -160,7 +160,7 @@ check:
 	}
 	authInfo := api.AuthInfo{}
 	authInfo.Username = email
-	authInfo.ClientCertificateData = CSRCopy.Status.Certificate
+	authInfo.ClientCertificateData = csr.Status.Certificate
 	authInfo.ClientKeyData = pemdata
 	rawConfig.AuthInfos[email] = &authInfo
 	err = clientcmd.ModifyConfig(kubeConfig.ConfigAccess(), rawConfig, false)
@@ -182,7 +182,7 @@ check:
 		return nil, nil, err
 	}*/
 
-	return CSRCopy.Status.Certificate, pemdata, nil
+	return csr.Status.Certificate, pemdata, nil
 }
 
 // MakeConfig reads cluster, server, and CA info of the current context from the config file
@@ -247,11 +247,11 @@ func MakeConfig(tenant, username, email string, clientCert, clientKey []byte) er
 }
 
 // CreateServiceAccount makes a service account to serve for permanent jobs.
-func CreateServiceAccount(userCopy *apps_v1alpha.User, accountType string, ownerReferences []metav1.OwnerReference) (*corev1.ServiceAccount, error) {
+func CreateServiceAccount(userCopy corev1alpha.User, accountType string, ownerReferences []metav1.OwnerReference) (*corev1.ServiceAccount, error) {
 	// Set the name of service account according to the type
 	name := userCopy.GetName()
 	serviceAccount := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: name, OwnerReferences: ownerReferences}}
-	serviceAccountCreated, err := Clientset.CoreV1().ServiceAccounts(userCopy.GetNamespace()).Create(context.TODO(), serviceAccount, metav1.CreateOptions{})
+	serviceAccountCreated, err := Clientset.CoreV1().ServiceAccounts(userCopy.Tenant).Create(context.TODO(), serviceAccount, metav1.CreateOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
@@ -333,11 +333,5 @@ func CreateConfig(serviceAccount *corev1.ServiceAccount) string {
 		log.Println(err)
 		return fmt.Sprintf("Err: %s", err)
 	}
-
-	/*dat, err := ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/edgenet-%s-%s.cfg", serviceAccount.GetNamespace(), serviceAccount.GetName()))
-	if err != nil {
-		log.Println(err)
-		return fmt.Sprintf("Err: %s", err)
-	}*/
 	return string(dat)
 }

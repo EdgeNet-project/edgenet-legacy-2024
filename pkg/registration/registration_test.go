@@ -8,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	apps_v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
+	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
+
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
@@ -20,8 +21,8 @@ import (
 )
 
 type TestGroup struct {
-	tenantObj  corev1alpha.Tenant
-	userObj       apps_v1alpha.User
+	tenantObj     corev1alpha.Tenant
+	userObj       corev1alpha.User
 	client        kubernetes.Interface
 	edgenetclient versioned.Interface
 }
@@ -45,13 +46,13 @@ func (g *TestGroup) Init() {
 			FullName:  "EdgeNet",
 			ShortName: "EdgeNet",
 			URL:       "https://www.edge-net.org",
-			Address: apps_v1alpha.Address{
+			Address: corev1alpha.Address{
 				City:    "Paris - NY - CA",
 				Country: "France - US",
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: apps_v1alpha.Contact{
+			Contact: corev1alpha.User{
 				Email:     "john.doe@edge-net.org",
 				FirstName: "John",
 				LastName:  "Doe",
@@ -61,24 +62,13 @@ func (g *TestGroup) Init() {
 			Enabled: true,
 		},
 	}
-	userObj := apps_v1alpha.User{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "User",
-			APIVersion: "apps.edgenet.io/v1alpha",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "johndoe",
-			Namespace: "tenant-edgenet",
-		},
-		Spec: apps_v1alpha.UserSpec{
-			FirstName: "EdgeNet",
-			LastName:  "EdgeNet",
-			Email:     "john.doe@edge-net.org",
-			Active:    true,
-		},
-		Status: apps_v1alpha.UserStatus{
-			Type: "admin",
-		},
+	userObj := corev1alpha.User{
+		Tenant:    "edgenet",
+		Username:  "johndoe",
+		FirstName: "EdgeNet",
+		LastName:  "EdgeNet",
+		Email:     "john.doe@edge-net.org",
+		Role:      "Admin",
 	}
 	g.tenantObj = tenantObj
 	g.userObj = userObj
@@ -114,11 +104,11 @@ func TestKubeconfigWithUser(t *testing.T) {
 			}
 		}()
 
-		cert, key, err := MakeUser(g.tenantObj.GetName(), g.userObj.GetName(), g.userObj.Spec.Email)
+		cert, key, err := MakeUser(g.tenantObj.GetName(), g.userObj.GetName(), g.userObj.Email)
 		util.OK(t, err)
 
 		t.Run("generate config", func(t *testing.T) {
-			err = MakeConfig(g.tenantObj.GetName(), g.userObj.GetName(), g.userObj.Spec.Email, cert, key)
+			err = MakeConfig(g.tenantObj.GetName(), g.userObj.GetName(), g.userObj.Email, cert, key)
 			util.OK(t, err)
 		})
 	})
@@ -128,8 +118,7 @@ func TestKubeconfigWithServiceAccount(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 	t.Run("create service account", func(t *testing.T) {
-		serviceAccount, err := CreateServiceAccount(g.userObj.DeepCopy(), "User", []metav1.OwnerReference{})
-
+		serviceAccount, err := CreateServiceAccount(g.userObj, "User", []metav1.OwnerReference{})
 		util.OK(t, err)
 		t.Run("generate config without secret", func(t *testing.T) {
 			output := CreateConfig(serviceAccount)
@@ -141,7 +130,7 @@ func TestKubeconfigWithServiceAccount(t *testing.T) {
 		secret := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-token-1234",
-				Namespace: g.userObj.GetNamespace(),
+				Namespace: g.userObj.Tenant,
 			},
 		}
 		secret.Data = make(map[string][]byte)
@@ -149,21 +138,20 @@ func TestKubeconfigWithServiceAccount(t *testing.T) {
 		serviceAccount := corev1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      g.userObj.GetName(),
-				Namespace: g.userObj.GetNamespace(),
+				Namespace: g.userObj.Tenant,
 			},
 			Secrets: []corev1.ObjectReference{
 				corev1.ObjectReference{
 					Name:      "test-token-1234",
-					Namespace: g.userObj.GetNamespace(),
+					Namespace: g.userObj.Tenant,
 				},
 			},
 		}
 		_, err := g.client.CoreV1().Secrets(secret.Namespace).Create(context.TODO(), &secret, metav1.CreateOptions{})
 		util.OK(t, err)
 		output := CreateConfig(&serviceAccount)
-
 		list := []string{
-			"certificate-tenant-data",
+			"certificate-authority-data",
 			"clusters",
 			"cluster",
 			"server",

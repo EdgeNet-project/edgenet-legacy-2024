@@ -36,7 +36,7 @@ import (
 
 // A part of the general structure of a kubeconfig file
 type clusterDetails struct {
-	CA     []byte `json:"certificate-tenant-data"`
+	CA     []byte `json:"certificate-authority-data"`
 	Server string `json:"server"`
 }
 type clusters struct {
@@ -129,7 +129,7 @@ func GetClusterServerOfCurrentContext() (string, string, []byte, error) {
 		}
 	}*/
 	var server string = rawConfig.Clusters[cluster].Server
-	var CA []byte = rawConfig.Clusters[cluster].CertificateTenantData
+	var CA []byte = rawConfig.Clusters[cluster].CertificateAuthorityData
 	/*for _, clusterRaw := range rawConfig.Clusters {
 		if clusterRaw.Name == cluster {
 			server = clusterRaw.Cluster.Server

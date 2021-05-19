@@ -209,9 +209,6 @@ func prepareNotification(subject string, contentData interface{}, smtpServer smt
 		to, body = setAUPRenewalContent(contentData, smtpServer.From)
 	case "acceptable-use-policy-expired":
 		to, body = setAUPExpiredContent(contentData, smtpServer.From)
-	case "subnamespace-creation", "subnamespace-removal", "subnamespace-reminder", "subnamespace-deletion", "subnamespace-crash", "subnamespace-tenant-quota-exceeded", "subnamespace-lack-of-quota",
-		"subnamespace-deletion-failed", "subnamespace-collection-deletion-failed":
-		to, body = setSubNamespaceContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	case "node-contribution-successful", "node-contribution-failure", "node-contribution-failure-support":
 		to, body = setNodeContributionContent(contentData, smtpServer.From, []string{smtpServer.To}, subject)
 	case "tenant-validation-failure-name", "tenant-validation-failure-email", "tenant-email-verification-malfunction",
@@ -312,70 +309,6 @@ func setNodeContributionContent(contentData interface{}, from string, to []strin
 	}
 	body := setCommonEmailHeaders(title, from, to, delimiter)
 	t.Execute(&body, NCData)
-
-	return to, body
-}
-
-// setTeamContent to create an email body related to the team invitation
-func setTeamContent(contentData interface{}, from, subject string) ([]string, bytes.Buffer) {
-	teamData := contentData.(ResourceAllocationData)
-	// This represents receivers' email addresses
-	to := teamData.CommonData.Email
-	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
-	delimiter := ""
-	title := "[EdgeNet] Team event"
-	switch subject {
-	case "team-creation":
-		title = "[EdgeNet] Team invitation"
-	case "team-removal":
-		title = "[EdgeNet] Team farewell message"
-	case "team-deletion":
-		title = "[EdgeNet] Team deleted"
-	case "team-crash":
-		title = "[EdgeNet] Team creation failed"
-	}
-	body := setCommonEmailHeaders(title, from, to, delimiter)
-	t.Execute(&body, teamData)
-
-	return to, body
-}
-
-// setSubNamespaceContent to create an email body related to the subnamespace emails
-func setSubNamespaceContent(contentData interface{}, from string, to []string, subject string) ([]string, bytes.Buffer) {
-	subnamespaceData := contentData.(ResourceAllocationData)
-	// The HTML template
-	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, subject))
-	delimiter := ""
-	title := "[EdgeNet] SubNamespace event"
-	switch subject {
-	case "subnamespace-creation":
-		// This represents receivers' email addresses
-		to = subnamespaceData.CommonData.Email
-		title = "[EdgeNet] SubNamespace invitation"
-	case "subnamespace-removal":
-		to = subnamespaceData.CommonData.Email
-		title = "[EdgeNet] SubNamespace farewell message"
-	case "subnamespace-reminder":
-		to = subnamespaceData.CommonData.Email
-		title = "[EdgeNet] SubNamespace renewal reminder"
-	case "subnamespace-deletion":
-		to = subnamespaceData.CommonData.Email
-		title = "[EdgeNet] SubNamespace deleted"
-	case "subnamespace-crash":
-		to = subnamespaceData.CommonData.Email
-		title = "[EdgeNet] SubNamespace creation failed"
-	case "subnamespace-tenant-quota-exceeded":
-		to = subnamespaceData.CommonData.Email
-		title = "[EdgeNet] SubNamespace could not be created"
-	case "subnamespace-lack-of-quota":
-		to = subnamespaceData.CommonData.Email
-		title = "[EdgeNet] SubNamespace profile could not be changed"
-	case "subnamespace-deletion-failed", "subnamespace-collection-deletion-failed":
-		title = "[EdgeNet] SubNamespace deletion failed"
-	}
-	body := setCommonEmailHeaders(title, from, to, delimiter)
-	t.Execute(&body, subnamespaceData)
 
 	return to, body
 }

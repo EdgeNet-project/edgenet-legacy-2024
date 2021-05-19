@@ -28,7 +28,7 @@ type testGroup struct {
 }
 
 func TestMain(m *testing.M) {
-	flag.String("geolite-path", "../../../../assets/database/GeoLite2-City/GeoLite2-City.mmdb", "Set GeoIP DB path.")
+	flag.String("geolite-path", "../../../../../assets/database/GeoLite2-City/GeoLite2-City.mmdb", "Set GeoIP DB path.")
 	flag.Parse()
 
 	log.SetOutput(ioutil.Discard)

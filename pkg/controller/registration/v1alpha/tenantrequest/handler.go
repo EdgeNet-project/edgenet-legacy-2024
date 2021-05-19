@@ -68,9 +68,9 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		tenantRequest.Status.Message = message
 		// Run timeout goroutine
 		go t.runApprovalTimeout(tenantRequest)
-		// Set the approval timeout which is 24 hours
+		// Set the approval timeout which is 72 hours
 		tenantRequest.Status.Expiry = &metav1.Time{
-			Time: time.Now().Add(24 * time.Hour),
+			Time: time.Now().Add(72 * time.Hour),
 		}
 		return
 	}
@@ -80,12 +80,10 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		created := !tenantHandler.Create(tenantRequest)
 		if created {
 			return
-		} else {
-			t.sendEmail("tenant-creation-failure", tenantRequest)
-			tenantRequest.Status.State = failure
-			tenantRequest.Status.Message = []string{statusDict["tenant-failed"]}
 		}
-
+		t.sendEmail("tenant-creation-failure", tenantRequest)
+		tenantRequest.Status.State = failure
+		tenantRequest.Status.Message = []string{statusDict["tenant-failed"]}
 	}
 	// If the service restarts, it creates all objects again
 	// Because of that, this section covers a variety of possibilities
@@ -107,7 +105,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			tenantRequest.Status.State = issue
 			tenantRequest.Status.Message = []string{statusDict["email-fail"]}
 		}
-
 	} else {
 		go t.runApprovalTimeout(tenantRequest)
 	}
