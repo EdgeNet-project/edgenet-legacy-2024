@@ -62,10 +62,13 @@ const established = "Established"
 
 // Dictionary of status messages
 var statusDict = map[string]string{
+	"request-approved":  "Tenant request has been approved",
 	"tenant-ok":         "Tenant successfully established",
-	"namespace-failure": "Tenant namespace cannot be created",
+	"namespace-failure": "Tenant core namespace cannot be created",
 	"user-failed":       "User creation failed",
 	"email-exist":       "Email address, %s, already exists for another user account",
+	"cert-fail":         "Client cert generation failed for user %s",
+	"kubeconfig-fail":   "Kubeconfig file creation failed for user %s",
 }
 
 // Start function is entry point of the controller
