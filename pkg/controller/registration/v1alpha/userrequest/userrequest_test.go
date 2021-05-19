@@ -155,7 +155,7 @@ func TestCreate(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetClient)
 	t.Run("set expiry date", func(t *testing.T) {
 		g.edgenetClient.RegistrationV1alpha().UserRequests().Create(context.TODO(), g.userRequestObj.DeepCopy(), metav1.CreateOptions{})
-		g.handler.ObjectCreated(g.userRequestObj.DeepCopy())
+		g.handler.ObjectCreatedOrUpdated(g.userRequestObj.DeepCopy())
 		userRequest, _ := g.edgenetClient.RegistrationV1alpha().UserRequests().Get(context.TODO(), g.userRequestObj.GetName(), metav1.GetOptions{})
 		expected := metav1.Time{
 			Time: time.Now().Add(72 * time.Hour),
@@ -211,7 +211,7 @@ func TestCreate(t *testing.T) {
 			t.Run(k, func(t *testing.T) {
 				_, err := g.edgenetClient.RegistrationV1alpha().UserRequests().Create(context.TODO(), tc.request.DeepCopy(), metav1.CreateOptions{})
 				util.OK(t, err)
-				g.handler.ObjectCreated(tc.request.DeepCopy())
+				g.handler.ObjectCreatedOrUpdated(tc.request.DeepCopy())
 				userRequest, err := g.edgenetClient.RegistrationV1alpha().UserRequests().Get(context.TODO(), tc.request.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
 				util.Equals(t, tc.expected, userRequest.Status.Message[0])
@@ -268,7 +268,7 @@ func TestUpdate(t *testing.T) {
 				tc.request.Status = status
 				_, err := g.edgenetClient.RegistrationV1alpha().UserRequests().Update(context.TODO(), tc.request.DeepCopy(), metav1.UpdateOptions{})
 				util.OK(t, err)
-				g.handler.ObjectUpdated(tc.request.DeepCopy())
+				g.handler.ObjectCreatedOrUpdated(tc.request.DeepCopy())
 				userRequest, err := g.edgenetClient.RegistrationV1alpha().UserRequests().Get(context.TODO(), tc.request.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
 				util.EqualsMultipleExp(t, tc.expected, userRequest.Status.State)
@@ -281,7 +281,7 @@ func TestUpdate(t *testing.T) {
 		// Updating user registration status to approved
 		g.userRequestObj.Spec.Approved = true
 		// Requesting server to update internal representation of user registration object and transition it to user
-		g.handler.ObjectUpdated(g.userRequestObj.DeepCopy())
+		g.handler.ObjectCreatedOrUpdated(g.userRequestObj.DeepCopy())
 		// Checking if handler created user from user registration
 		//_, err := g.edgenetClient.AppsV1alpha().Users().Get(context.TODO(), g.userRequestObj.GetName(), metav1.GetOptions{})
 		//util.OK(t, err)

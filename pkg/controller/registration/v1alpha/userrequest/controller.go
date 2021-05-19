@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"syscall"
 	"time"
 
+	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	registrationinformerv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha"
 
@@ -95,11 +97,13 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
-			event.function = update
-			log.Infof("Update userrequest: %s", event.key)
-			if err == nil {
-				queue.Add(event)
+			if reflect.DeepEqual(oldObj.(*registrationv1alpha.UserRequest).Status, newObj.(*registrationv1alpha.UserRequest).Status) {
+				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
+				event.function = update
+				log.Infof("Update userrequest: %s", event.key)
+				if err == nil {
+					queue.Add(event)
+				}
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
@@ -198,10 +202,10 @@ func (c *controller) processNextItem() bool {
 	} else {
 		if event.(informerevent).function == create {
 			c.logger.Infof("Controller.processNextItem: object created detected: %s", keyRaw)
-			c.handler.ObjectCreated(item)
+			c.handler.ObjectCreatedOrUpdated(item)
 		} else if event.(informerevent).function == update {
 			c.logger.Infof("Controller.processNextItem: object updated detected: %s", keyRaw)
-			c.handler.ObjectUpdated(item)
+			c.handler.ObjectCreatedOrUpdated(item)
 		}
 	}
 	c.queue.Forget(event.(informerevent).key)

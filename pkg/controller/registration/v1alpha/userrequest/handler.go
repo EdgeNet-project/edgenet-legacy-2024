@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"time"
 
+	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/emailverification"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
@@ -35,8 +36,7 @@ import (
 // HandlerInterface interface contains the methods that are required
 type HandlerInterface interface {
 	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
-	ObjectCreated(obj interface{})
-	ObjectUpdated(obj interface{})
+	ObjectCreatedOrUpdated(obj interface{})
 	ObjectDeleted(obj interface{})
 }
 
@@ -54,18 +54,18 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 }
 
 // ObjectCreated is called when an object is created
-func (t *Handler) ObjectCreated(obj interface{}) {
+func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 	log.Info("UserRequestHandler.ObjectCreated")
 	// Make a copy of the user registration request object to make changes on it
 	userRequest := obj.(*registrationv1alpha.UserRequest).DeepCopy()
 	// Check if the email address is already taken
-	exists, message := t.checkDuplicateObject(userRequest, "tenant-name")
+	exists, message := t.checkDuplicateObject(userRequest, userRequest.Spec.Tenant)
 	if exists {
 		userRequest.Status.State = failure
 		userRequest.Status.Message = message
-		// Set the approval timeout which is 24 hours
+		// Set the approval timeout which is 72 hours
 		userRequest.Status.Expiry = &metav1.Time{
-			Time: time.Now().Add(24 * time.Hour),
+			Time: time.Now().Add(72 * time.Hour),
 		}
 		t.edgenetClientset.RegistrationV1alpha().UserRequests().UpdateStatus(context.TODO(), userRequest, metav1.UpdateOptions{})
 		// Run timeout goroutine
@@ -76,27 +76,18 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 	// Check if the tenant is active
 	if tenant.Spec.Enabled {
 		if userRequest.Spec.Approved {
-			/*userHandler := user.Handler{}
-			userHandler.Init(t.clientset, t.edgenetClientset)
-			created := !userHandler.Create(userRequest)
-			if created {
-				return
+			user := corev1alpha.User{}
+			user.Username = userRequest.GetName()
+			user.FirstName = userRequest.Spec.FirstName
+			user.LastName = userRequest.Spec.LastName
+			user.Email = userRequest.Spec.Email
+			tenant.Spec.User = append(tenant.Spec.User, user)
+			if _, err := t.edgenetClientset.CoreV1alpha().Tenants().Update(context.TODO(), tenant, metav1.UpdateOptions{}); err != nil {
+				t.sendEmail(userRequest, tenant.GetName(), "user-creation-failure")
+				userRequest.Status.State = failure
+				userRequest.Status.Message = []string{statusDict["user-failed"]}
 			}
-			t.sendEmail(userRequest, userRequestOwnerNamespace.Labels["tenant-name"], "user-creation-failure")*/
-			userRequest.Status.State = failure
-			userRequest.Status.Message = []string{statusDict["user-failed"]}
-			userRequestUpdated, err := t.edgenetClientset.RegistrationV1alpha().UserRequests().UpdateStatus(context.TODO(), userRequest, metav1.UpdateOptions{})
-			if err == nil {
-				userRequest = userRequestUpdated
-			}
-		}
-		// If the service restarts, it creates all objects again
-		// Because of that, this section covers a variety of possibilities
-		if userRequest.Status.Expiry == nil {
-			// Set the approval timeout which is 72 hours
-			userRequest.Status.Expiry = &metav1.Time{
-				Time: time.Now().Add(72 * time.Hour),
-			}
+		} else if !userRequest.Spec.Approved {
 			emailVerificationHandler := emailverification.Handler{}
 			emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
 			created := emailVerificationHandler.Create(userRequest, SetAsOwnerReference(userRequest))
@@ -108,57 +99,14 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 				userRequest.Status.State = issue
 				userRequest.Status.Message = []string{statusDict["email-fail"]}
 			}
-			t.edgenetClientset.RegistrationV1alpha().UserRequests().UpdateStatus(context.TODO(), userRequest, metav1.UpdateOptions{})
-
-			// Run timeout goroutine
-			go t.runApprovalTimeout(userRequest)
-		}
-	} else {
-		t.edgenetClientset.RegistrationV1alpha().UserRequests().Delete(context.TODO(), userRequest.GetName(), metav1.DeleteOptions{})
-	}
-}
-
-// ObjectUpdated is called when an object is updated
-func (t *Handler) ObjectUpdated(obj interface{}) {
-	log.Info("UserRequestHandler.ObjectUpdated")
-	// Make a copy of the user registration request object to make changes on it
-	userRequest := obj.(*registrationv1alpha.UserRequest).DeepCopy()
-	changeStatus := false
-	tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), userRequest.Spec.Tenant, metav1.GetOptions{})
-	if tenant.Spec.Enabled {
-		// Check again if the email address is already taken
-		exists, message := t.checkDuplicateObject(userRequest, userRequest.Spec.Tenant)
-		if !exists {
-			// Check whether the request for user registration approved
-			if userRequest.Spec.Approved {
-				/*userHandler := user.Handler{}
-				userHandler.Init(t.clientset, t.edgenetClientset)
-				changeStatus := userHandler.Create(userRequest)
-				if changeStatus {
-					t.sendEmail(userRequest, userRequestOwnerNamespace.Labels["tenant-name"], "user-creation-failure")
-					userRequest.Status.State = failure
-					userRequest.Status.Message = []string{statusDict["user-failed"]}
-				}*/
-			} else if !userRequest.Spec.Approved && userRequest.Status.State == failure {
-				emailVerificationHandler := emailverification.Handler{}
-				emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-				created := emailVerificationHandler.Create(userRequest, SetAsOwnerReference(userRequest))
-				if created {
-					// Update the status as successful
-					userRequest.Status.State = success
-					userRequest.Status.Message = []string{statusDict["email-ok"]}
-				} else {
-					userRequest.Status.State = issue
-					userRequest.Status.Message = []string{statusDict["email-fail"]}
+			if userRequest.Status.Expiry == nil {
+				// Set the approval timeout which is 72 hours
+				userRequest.Status.Expiry = &metav1.Time{
+					Time: time.Now().Add(72 * time.Hour),
 				}
-				changeStatus = true
+				// Run timeout goroutine
+				go t.runApprovalTimeout(userRequest)
 			}
-		} else if exists && !reflect.DeepEqual(userRequest.Status.Message, message) {
-			userRequest.Status.State = failure
-			userRequest.Status.Message = message
-			changeStatus = true
-		}
-		if changeStatus {
 			t.edgenetClientset.RegistrationV1alpha().UserRequests().UpdateStatus(context.TODO(), userRequest, metav1.UpdateOptions{})
 		}
 	} else {
@@ -185,16 +133,12 @@ func (t *Handler) sendEmail(userRequest *registrationv1alpha.UserRequest, tenant
 
 // runApprovalTimeout puts a procedure in place to remove requests by approval or timeout
 func (t *Handler) runApprovalTimeout(userRequest *registrationv1alpha.UserRequest) {
-	registrationApproved := make(chan bool, 1)
-	timeoutRenewed := make(chan bool, 1)
 	terminated := make(chan bool, 1)
 	var timeout <-chan time.Time
 	if userRequest.Status.Expiry != nil {
 		timeout = time.After(time.Until(userRequest.Status.Expiry.Time))
 	}
 	closeChannels := func() {
-		close(registrationApproved)
-		close(timeoutRenewed)
 		close(terminated)
 	}
 
@@ -209,24 +153,10 @@ func (t *Handler) runApprovalTimeout(userRequest *registrationv1alpha.UserReques
 				// FieldSelector doesn't work properly, and will be checked in for next releases.
 				if userRequest.GetUID() == updatedUserRequest.GetUID() {
 					if status {
-						if userRequestEvent.Type == "DELETED" {
+						if userRequestEvent.Type == "DELETED" || updatedUserRequest.Spec.Approved {
 							terminated <- true
 							continue
 						}
-
-						if updatedUserRequest.Spec.Approved == true {
-							registrationApproved <- true
-							break
-						} else if !updatedUserRequest.Spec.Approved && updatedUserRequest.Status.Expiry != nil {
-							// Check whether expiration date updated - TBD
-							if updatedUserRequest.Status.Expiry.Time.Sub(time.Now()) >= 0 {
-								timeout = time.After(time.Until(updatedUserRequest.Status.Expiry.Time))
-								timeoutRenewed <- true
-							} else {
-								terminated <- true
-							}
-						}
-						userRequest = updatedUserRequest
 					}
 				}
 			}
@@ -237,28 +167,15 @@ func (t *Handler) runApprovalTimeout(userRequest *registrationv1alpha.UserReques
 		timeout = time.After(72 * time.Hour)
 	}
 
-	// Infinite loop
-timeoutLoop:
-	for {
-		// Wait on multiple channel operations
-	timeoutOptions:
-		select {
-		case <-registrationApproved:
-			watchUserRequest.Stop()
-			closeChannels()
-			break timeoutLoop
-		case <-timeoutRenewed:
-			break timeoutOptions
-		case <-timeout:
-			watchUserRequest.Stop()
-			t.edgenetClientset.RegistrationV1alpha().UserRequests().Delete(context.TODO(), userRequest.GetName(), metav1.DeleteOptions{})
-			closeChannels()
-			break timeoutLoop
-		case <-terminated:
-			watchUserRequest.Stop()
-			closeChannels()
-			break timeoutLoop
-		}
+	// Wait on multiple channel operations
+	select {
+	case <-timeout:
+		watchUserRequest.Stop()
+		t.edgenetClientset.RegistrationV1alpha().UserRequests().Delete(context.TODO(), userRequest.GetName(), metav1.DeleteOptions{})
+		closeChannels()
+	case <-terminated:
+		watchUserRequest.Stop()
+		closeChannels()
 	}
 }
 
