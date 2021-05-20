@@ -43,22 +43,11 @@ spec:
             spec:
               type: object
               required:
-                - kind
-                - user
+                - email
                 - verified
               properties:
-                kind:
+                email:
                   type: string
-                  enum:
-                    - TenantRequest
-                    - UserRequest
-                    - Tenant
-                tenant:
-                  type: string
-                  pattern: "^[a-z0-9]*$"
-                user:
-                  type: string
-                  pattern: "^[a-z0-9]*$"
                 verified:
                   type: boolean
             status:

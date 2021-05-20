@@ -311,7 +311,7 @@ func TestCreateEmailVerification(t *testing.T) {
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
-			status := g.handler.Create(tc.input, []metav1.OwnerReference{})
+			_, status := g.handler.Create(tc.input, []metav1.OwnerReference{})
 			util.Equals(t, tc.expected, status)
 		})
 	}

@@ -96,12 +96,26 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 		}
 		emailVerificationHandler := emailverification.Handler{}
 		emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-		created := emailVerificationHandler.Create(tenantRequest, SetAsOwnerReference(tenantRequest))
+		code, created := emailVerificationHandler.Create(tenantRequest, SetAsOwnerReference(tenantRequest))
+
+		labels := tenantRequest.GetLabels()
+		if labels == nil {
+			labels = map[string]string{fmt.Sprintf("edge-net.io/emailverification/%s", tenantRequest.Spec.Contact.Username): code}
+		} else {
+			labels[fmt.Sprintf("edge-net.io/emailverification/%s", tenantRequest.Spec.Contact.Username)] = code
+		}
+		tenantRequest.SetLabels(labels)
+		tenantRequestUpdated, err := t.edgenetClientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
+		if err == nil {
+			tenantRequest = tenantRequestUpdated
+		}
+
 		if created {
 			// Update the status as successful
 			tenantRequest.Status.State = success
 			tenantRequest.Status.Message = []string{statusDict["email-ok"]}
 		} else {
+			// TO-DO: Define error message more precisely
 			tenantRequest.Status.State = issue
 			tenantRequest.Status.Message = []string{statusDict["email-fail"]}
 		}
@@ -132,7 +146,20 @@ func (t *Handler) ObjectUpdated(obj interface{}) {
 		} else if !tenantRequest.Spec.Approved && tenantRequest.Status.State == failure {
 			emailVerificationHandler := emailverification.Handler{}
 			emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-			created := emailVerificationHandler.Create(tenantRequest, SetAsOwnerReference(tenantRequest))
+			code, created := emailVerificationHandler.Create(tenantRequest, SetAsOwnerReference(tenantRequest))
+
+			labels := tenantRequest.GetLabels()
+			if labels == nil {
+				labels = map[string]string{fmt.Sprintf("edge-net.io/emailverification/%s", tenantRequest.Spec.Contact.Username): code}
+			} else {
+				labels[fmt.Sprintf("edge-net.io/emailverification/%s", tenantRequest.Spec.Contact.Username)] = code
+			}
+			tenantRequest.SetLabels(labels)
+			tenantRequestUpdated, err := t.edgenetClientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
+			if err == nil {
+				tenantRequest = tenantRequestUpdated
+			}
+
 			if created {
 				// Update the status as successful
 				tenantRequest.Status.State = success
