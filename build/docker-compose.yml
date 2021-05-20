@@ -1,137 +1,100 @@
 version: '3.1'
 
 services:
-  edgenet-nodelabeler:
-    container_name: edgenet-nodelabeler
+  nodelabeler:
+    container_name: nodelabeler
     restart: always
     build:
       context: ../
       dockerfile: ./build/nodelabeler/Dockerfile
-    image: edgenet-nodelabeler:v1.0.0
+    image: nodelabeler:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
       - ../assets/database/:/root/assets/database/
-  edgenet-selectivedeployment:
-    container_name: edgenet-selectivedeployment
+  selectivedeployment:
+    container_name: selectivedeployment
     restart: always
     build:
       context: ../
       dockerfile: ./build/selectivedeployment/Dockerfile
-    image: edgenet-selectivedeployment:v1.0.0
+    image: selectivedeployment:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-  edgenet-tenant:
-    container_name: edgenet-tenant
+  tenant:
+    container_name: tenant
     restart: always
     build:
       context: ../
       dockerfile: ./build/tenant/Dockerfile
-    image: edgenet-tenant:v1.0.0
+    image: tenant:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
       - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
-  edgenet-tenantrequest:
-    container_name: edgenet-tenantrequest
+  tenantregistrationrequest:
+    container_name: tenantregistrationrequest
     restart: always
     build:
       context: ../
-      dockerfile: ./build/tenantrequest/Dockerfile
-    image: edgenet-tenantrequest:v1.0.0
+      dockerfile: ./build/tenantregistrationrequest/Dockerfile
+    image: tenantregistrationrequest:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
       - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
-  edgenet-user:
-    container_name: edgenet-user
-    restart: always
-    build:
-      context: ../
-      dockerfile: ./build/user/Dockerfile
-    image: edgenet-user:v1.0.0
-    volumes:
-      - ~/.kube/:/root/.kube/
-      - ../configs/:/root/configs/
-      - ../assets/templates/:/root/assets/templates/
-      - ../assets/certs:/root/assets/certs
-      - ../assets/kubeconfigs:/root/assets/kubeconfigs
-  edgenet-userregistrationrequest:
-    container_name: edgenet-userregistrationrequest
+  userregistrationrequest:
+    container_name: userregistrationrequest
     restart: always
     build:
       context: ../
       dockerfile: ./build/userregistrationrequest/Dockerfile
-    image: edgenet-userregistrationrequest:v1.0.0
+    image: userregistrationrequest:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
       - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
-  edgenet-acceptableusepolicy:
-    container_name: edgenet-acceptableusepolicy
+  acceptableusepolicy:
+    container_name: acceptableusepolicy
     restart: always
     build:
       context: ../
       dockerfile: ./build/acceptableusepolicy/Dockerfile
-    image: edgenet-acceptableusepolicy:v1.0.0
+    image: acceptableusepolicy:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
       - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
-  edgenet-emailverification:
-    container_name: edgenet-emailverification
+  emailverification:
+    container_name: emailverification
     restart: always
     build:
       context: ../
       dockerfile: ./build/emailverification/Dockerfile
-    image: edgenet-emailverification:v1.0.0
+    image: emailverification:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
       - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
-  edgenet-slice:
-    container_name: edgenet-slice
-    restart: always
-    build:
-      context: ../
-      dockerfile: ./build/slice/Dockerfile
-    image: edgenet-slice:v1.0.0
-    volumes:
-      - ~/.kube/:/root/.kube/
-      - ../configs/:/root/configs/
-      - ../assets/kubeconfigs:/root/assets/kubeconfigs
-      - ../assets/templates/:/root/assets/templates/
-  edgenet-team:
-    container_name: edgenet-team
-    restart: always
-    build:
-      context: ../
-      dockerfile: ./build/team/Dockerfile
-    image: edgenet-team:v1.0.0
-    volumes:
-      - ~/.kube/:/root/.kube/
-      - ../configs/:/root/configs/
-      - ../assets/kubeconfigs:/root/assets/kubeconfigs
-      - ../assets/templates/:/root/assets/templates/
-  edgenet-nodecontribution:
-    container_name: edgenet-nodecontribution
+  nodecontribution:
+    container_name: nodecontribution
     restart: always
     build:
       context: ../
       dockerfile: ./build/nodecontribution/Dockerfile
-    image: edgenet-nodecontribution:v1.0.0
+    image: nodecontribution:v1.0.0
     volumes:
       - /etc/kubernetes/:/etc/kubernetes/
       - ~/.kube/:/root/.kube/
       - ~/.ssh/:/root/.ssh/
       - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
-  edgenet-totalresourcequota:
-    container_name: edgenet-totalresourcequota
+  tenantresourcequota:
+    container_name: tenantresourcequota
     restart: always
     build:
       context: ../
-      dockerfile: ./build/totalresourcequota/Dockerfile
-    image: edgenet-totalresourcequota:v1.0.0
+      dockerfile: ./build/tenantresourcequota/Dockerfile
+    image: tenantresourcequota:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
       - ../configs/:/root/configs/
