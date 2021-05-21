@@ -104,10 +104,16 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 	}
 
 	tenantLabels := tenant.GetLabels()
-	if tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())] != strconv.FormatBool(acceptableUsePolicy.Spec.Accepted) {
-		tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())] = strconv.FormatBool(acceptableUsePolicy.Spec.Accepted)
+	if tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted-%s", acceptableUsePolicy.GetName())] != strconv.FormatBool(acceptableUsePolicy.Spec.Accepted) {
+		if tenantLabels == nil {
+			tenantLabels = map[string]string{fmt.Sprintf("edge-net.io/aup-accepted-%s", acceptableUsePolicy.GetName()): strconv.FormatBool(acceptableUsePolicy.Spec.Accepted)}
+		} else {
+			tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted-%s", acceptableUsePolicy.GetName())] = strconv.FormatBool(acceptableUsePolicy.Spec.Accepted)
+		}
+		tenant.SetLabels(tenantLabels)
 		if _, err := t.edgenetClientset.CoreV1alpha().Tenants().Update(context.TODO(), tenant, metav1.UpdateOptions{}); err != nil {
 			// TODO: Define the error precisely
+			log.Println(err)
 		}
 	}
 }

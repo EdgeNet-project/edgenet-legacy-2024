@@ -165,8 +165,8 @@ func TestCreate(t *testing.T) {
 	t.Run("user configuration", func(t *testing.T) {
 		tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
-
-		aup, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant.GetName(), tenant.Spec.Contact.Username), metav1.GetOptions{})
+		time.Sleep(500 * time.Millisecond)
+		aup, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), tenant.Spec.Contact.Username, metav1.GetOptions{})
 		util.OK(t, err)
 		util.Equals(t, false, aup.Spec.Accepted)
 
@@ -176,11 +176,11 @@ func TestCreate(t *testing.T) {
 		g.handler.ObjectCreatedOrUpdated(tenant)
 
 		t.Run("cluster role binding", func(t *testing.T) {
-			_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-owner-%s", g.tenantObj.GetName(), g.tenantObj.GetName(), g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
+			_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner-%s", g.tenantObj.GetName(), g.tenantObj.GetName(), g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
 			util.OK(t, err)
 		})
 		t.Run("role binding", func(t *testing.T) {
-			_, err := g.client.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
+			_, err := g.client.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
 			util.OK(t, err)
 		})
 	})
@@ -189,7 +189,7 @@ func TestCreate(t *testing.T) {
 		util.OK(t, err)
 	})
 	t.Run("cluster roles", func(t *testing.T) {
-		_, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-owner", g.tenantObj.GetName(), g.tenantObj.GetName()), metav1.GetOptions{})
+		_, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner", g.tenantObj.GetName(), g.tenantObj.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
 }
@@ -265,12 +265,13 @@ func TestUpdate(t *testing.T) {
 	tenant.Spec.User = append(tenant.Spec.User, g.userObj)
 	g.mockSigner(tenant.GetName(), tenant.Spec.User)
 	g.handler.ObjectCreatedOrUpdated(tenant)
-	aup, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant.GetName(), tenant.Spec.Contact.Username), metav1.GetOptions{})
+	time.Sleep(500 * time.Millisecond)
+	aup, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), tenant.Spec.Contact.Username, metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, false, aup.Spec.Accepted)
 	aup.Spec.Accepted = true
 	g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), aup, metav1.UpdateOptions{})
-	aup, err = g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant.GetName(), g.userObj.Username), metav1.GetOptions{})
+	aup, err = g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), g.userObj.Username, metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, false, aup.Spec.Accepted)
 	aup.Spec.Accepted = true
@@ -278,18 +279,18 @@ func TestUpdate(t *testing.T) {
 	g.mockSigner(tenant.GetName(), tenant.Spec.User)
 	g.handler.ObjectCreatedOrUpdated(tenant)
 
-	_, err = g.client.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
+	_, err = g.client.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
 	util.OK(t, err)
-	_, err = g.client.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("tenant-admin-%s", g.userObj.Username), metav1.GetOptions{})
+	_, err = g.client.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-admin-%s", g.userObj.Username), metav1.GetOptions{})
 	util.OK(t, err)
 	tenant.Spec.Enabled = false
 	g.mockSigner(tenant.GetName(), tenant.Spec.User)
 	g.handler.ObjectCreatedOrUpdated(tenant)
 
-	_, err = g.client.RbacV1().Roles(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
-	util.Equals(t, "roles.rbac.authorization.k8s.io \"tenant-owner-johndoe\" not found", err.Error())
-	_, err = g.client.RbacV1().Roles(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("tenant-admin-%s", g.userObj.Username), metav1.GetOptions{})
-	util.Equals(t, "roles.rbac.authorization.k8s.io \"tenant-admin-joepublic\" not found", err.Error())
+	_, err = g.client.RbacV1().Roles(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
+	util.Equals(t, "roles.rbac.authorization.k8s.io \"edgenet:tenant-owner-johndoe\" not found", err.Error())
+	_, err = g.client.RbacV1().Roles(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-admin-%s", g.userObj.Username), metav1.GetOptions{})
+	util.Equals(t, "roles.rbac.authorization.k8s.io \"edgenet:tenant-admin-joepublic\" not found", err.Error())
 }
 
 func (g *TestGroup) mockSigner(tenant string, userRaw []corev1alpha.User) {

@@ -58,29 +58,33 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 	log.Info("EVHandler.ObjectCreated")
 	// Make a copy of the email verification object to make changes on it
 	emailVerification := obj.(*registrationv1alpha.EmailVerification).DeepCopy()
+	if emailVerification.Status.State != verified {
+		/*emailVerificationLabels := emailVerification.GetLabels()
+		tenant := emailVerificationLabels["edge-net.io/tenant"]
 
-	/*emailVerificationLabels := emailVerification.GetLabels()
-	tenant := emailVerificationLabels["edge-net.io/tenant"]
+		kind := emailVerificationLabels["edge-net.io/kind"]
+		if kind == "tenant" {
 
-	kind := emailVerificationLabels["edge-net.io/kind"]
-	if kind == "tenant" {
+		} else if kind == "user" {
 
-	} else if kind == "user" {
+		}*/
 
-	}*/
-
-	if emailVerification.Spec.Verified {
-		t.statusUpdate(emailVerification)
-	} else {
-		if emailVerification.Status.Expiry == nil {
-			// Set the email verification timeout which is 24 hours
-			emailVerification.Status.Expiry = &metav1.Time{
-				Time: time.Now().Add(24 * time.Hour),
-			}
+		if emailVerification.Spec.Verified {
+			emailVerification.Status.State = verified
 			t.edgenetClientset.RegistrationV1alpha().EmailVerifications().UpdateStatus(context.TODO(), emailVerification, metav1.UpdateOptions{})
+
+			t.statusUpdate(emailVerification.GetLabels())
+		} else {
+			if emailVerification.Status.Expiry == nil {
+				// Set the email verification timeout which is 24 hours
+				emailVerification.Status.Expiry = &metav1.Time{
+					Time: time.Now().Add(24 * time.Hour),
+				}
+				t.edgenetClientset.RegistrationV1alpha().EmailVerifications().UpdateStatus(context.TODO(), emailVerification, metav1.UpdateOptions{})
+			}
+			// Run timeout goroutine
+			go t.runVerificationTimeout(emailVerification)
 		}
-		// Run timeout goroutine
-		go t.runVerificationTimeout(emailVerification)
 	}
 }
 
@@ -150,22 +154,22 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 		emailVerification.SetName(code)
 		emailVerification.Spec.Email = userRequest.Spec.Email
 		// labels: tenant, user, code - attach to the email verification and tenant
-		labels := map[string]string{"edge-net.io/tenant": userRequest.Spec.Tenant, "edge-net.io/user": userRequest.GetName(), "edge-net.io/registration": "user"}
+		labels := map[string]string{"edge-net.io/tenant": strings.ToLower(userRequest.Spec.Tenant), "edge-net.io/user": userRequest.GetName(), "edge-net.io/registration": "user"}
 		emailVerification.SetLabels(labels)
 		_, err := t.edgenetClientset.RegistrationV1alpha().EmailVerifications().Create(context.TODO(), emailVerification.DeepCopy(), metav1.CreateOptions{})
 		if err == nil {
 			created = true
-			t.sendEmail("user-email-verification", userRequest.Spec.Tenant, userRequest.GetNamespace(), userRequest.GetName(),
+			t.sendEmail("user-email-verification", strings.ToLower(userRequest.Spec.Tenant), userRequest.GetNamespace(), userRequest.GetName(),
 				fmt.Sprintf("%s %s", userRequest.Spec.FirstName, userRequest.Spec.LastName), userRequest.Spec.Email, code)
 		} else {
-			t.sendEmail("user-email-verification-malfunction", userRequest.Spec.Tenant, userRequest.GetNamespace(), userRequest.GetName(),
+			t.sendEmail("user-email-verification-malfunction", strings.ToLower(userRequest.Spec.Tenant), userRequest.GetNamespace(), userRequest.GetName(),
 				fmt.Sprintf("%s %s", userRequest.Spec.FirstName, userRequest.Spec.LastName), userRequest.Spec.Email, "")
 		}
 	}
 	return code, created
 }
 
-// sendEmail to send notification to tenant-admins and authorized users about email verification
+// sendEmail to send notification to edgenet:tenant-admins and authorized users about email verification
 func (t *Handler) sendEmail(subject, tenant, namespace, username, fullname, email, code string) {
 	// Set the HTML template variables
 	var contentData interface{}
@@ -183,7 +187,7 @@ func (t *Handler) sendEmail(subject, tenant, namespace, username, fullname, emai
 		verifyContent.CommonData = collective.CommonData
 		contentData = verifyContent
 	} else if subject == "user-email-verified-alert" {
-		// Put the email addresses of the tenant-admins and authorized users in the email to be sent list
+		// Put the email addresses of the edgenet:tenant-admins and authorized users in the email to be sent list
 		/*userRaw, _ := t.edgenetClientset.RegistrationV1alpha().Users(namespace).List(context.TODO(), metav1.ListOptions{})
 		for _, userRow := range userRaw.Items {
 			if strings.ToLower(userRow.Status.Type) == "admin" {
@@ -200,8 +204,7 @@ func (t *Handler) sendEmail(subject, tenant, namespace, username, fullname, emai
 }
 
 // statusUpdate to update the objects that are relevant the request and send email
-func (t *Handler) statusUpdate(emailVerification *registrationv1alpha.EmailVerification) {
-	labels := emailVerification.GetLabels()
+func (t *Handler) statusUpdate(labels map[string]string) {
 	// Update the status of request related to email verification
 	if strings.ToLower(labels["edge-net.io/registration"]) == "tenant" {
 		tenantRequest, _ := t.edgenetClientset.RegistrationV1alpha().TenantRequests().Get(context.TODO(), labels["edge-net.io/tenant"], metav1.GetOptions{})
@@ -216,7 +219,7 @@ func (t *Handler) statusUpdate(emailVerification *registrationv1alpha.EmailVerif
 		userRequestObj, _ := t.edgenetClientset.RegistrationV1alpha().UserRequests().Get(context.TODO(), labels["edge-net.io/user"], metav1.GetOptions{})
 		userRequestObj.Status.EmailVerified = true
 		t.edgenetClientset.RegistrationV1alpha().UserRequests().UpdateStatus(context.TODO(), userRequestObj, metav1.UpdateOptions{})
-		// Send email to inform tenant-admins and authorized users
+		// Send email to inform edgenet:tenant-admins and authorized users
 		t.sendEmail("user-email-verified-alert", labels["edge-net.io/tenant"], "", labels["edge-net.io/user"],
 			fmt.Sprintf("%s %s", userRequestObj.Spec.FirstName, userRequestObj.Spec.LastName), "", "")
 	} else if strings.ToLower(labels["edge-net.io/registration"]) == "email" {

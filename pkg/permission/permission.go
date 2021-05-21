@@ -100,7 +100,8 @@ func CheckAuthorization(namespace, email, resource, resourceName, scope string) 
 
 // CreateClusterRoles generate a cluster role for tenant owners, admins, and collaborators
 func CreateClusterRoles() error {
-	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"core.edgenet.io"}, Resources: []string{"subnamespaces", "subnamespaces/status"}, Verbs: []string{"*"}},
+	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"core.edgenet.io"}, Resources: []string{"subnamespaces"}, Verbs: []string{"*"}},
+		{APIGroups: []string{"core.edgenet.io"}, Resources: []string{"subnamespaces/status"}, Verbs: []string{"get", "list", "watch"}},
 		{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"selectivedeployments"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"rbac.authorization.k8s.io"}, Resources: []string{"roles", "rolebindings"}, Verbs: []string{"*"}},
 		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"}, Verbs: []string{"*"}},
@@ -110,7 +111,7 @@ func CreateClusterRoles() error {
 		{APIGroups: []string{"extensions"}, Resources: []string{"daemonsets", "deployments", "ingresses", "networkpolicies", "replicasets", "replicationcontrollers"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"networking.k8s.io"}, Resources: []string{"ingresses", "networkpolicies"}, Verbs: []string{"*"}},
 		{APIGroups: []string{""}, Resources: []string{"events", "controllerrevisions"}, Verbs: []string{"get", "list", "watch"}}}
-	ownerRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "tenant-owner"}, Rules: policyRule}
+	ownerRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "edgenet:tenant-owner"}, Rules: policyRule}
 	ownerRole.SetLabels(labels)
 	_, err := Clientset.RbacV1().ClusterRoles().Create(context.TODO(), ownerRole, metav1.CreateOptions{})
 	if err != nil {
@@ -128,7 +129,7 @@ func CreateClusterRoles() error {
 			}
 		}
 	}
-	adminRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "tenant-admin"}, Rules: policyRule}
+	adminRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "edgenet:tenant-admin"}, Rules: policyRule}
 	adminRole.SetLabels(labels)
 	_, err = Clientset.RbacV1().ClusterRoles().Create(context.TODO(), adminRole, metav1.CreateOptions{})
 	if err != nil {
@@ -154,7 +155,7 @@ func CreateClusterRoles() error {
 		{APIGroups: []string{"batch"}, Resources: []string{"cronjobs", "jobs"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"extensions"}, Resources: []string{"daemonsets", "deployments", "ingresses", "networkpolicies", "replicasets", "replicationcontrollers"}, Verbs: []string{"*"}},
 		{APIGroups: []string{""}, Resources: []string{"events", "controllerrevisions"}, Verbs: []string{"get", "list", "watch"}}}
-	collaboratorRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "tenant-collaborator"}, Rules: policyRule}
+	collaboratorRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "edgenet:tenant-collaborator"}, Rules: policyRule}
 	collaboratorRole.SetLabels(labels)
 	_, err = Clientset.RbacV1().ClusterRoles().Create(context.TODO(), collaboratorRole, metav1.CreateOptions{})
 	if err != nil {
@@ -176,15 +177,16 @@ func CreateClusterRoles() error {
 }
 
 // CreateObjectSpecificClusterRole generates a object specific cluster role to allow the user access
-func CreateObjectSpecificClusterRole(tenant, resource, resourceName, name string, verbs []string, ownerReferences []metav1.OwnerReference) error {
-	objectName := fmt.Sprintf("%s-%s-%s-%s", tenant, resource, resourceName, name)
-	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{resource, fmt.Sprintf("%s/status", resource)},
-		ResourceNames: []string{resourceName}, Verbs: verbs}}
+func CreateObjectSpecificClusterRole(tenant, apiGroup, resource, resourceName, name string, verbs []string, ownerReferences []metav1.OwnerReference) error {
+	objectName := fmt.Sprintf("edgenet:%s:%s:%s-%s", tenant, resource, resourceName, name)
+	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{apiGroup}, Resources: []string{resource}, ResourceNames: []string{resourceName}, Verbs: verbs},
+		{APIGroups: []string{apiGroup}, Resources: []string{fmt.Sprintf("%s/status", resource)}, ResourceNames: []string{resourceName}, Verbs: []string{"get", "list", "watch"}},
+	}
 	role := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: objectName, OwnerReferences: ownerReferences},
 		Rules: policyRule}
 	roleLabels := map[string]string{"edge-net.io/tenant": tenant}
 	for key, value := range labels {
-		roleLabels[value] = key
+		roleLabels[key] = value
 	}
 	role.SetLabels(roleLabels)
 	_, err := Clientset.RbacV1().ClusterRoles().Create(context.TODO(), role, metav1.CreateOptions{})
@@ -215,7 +217,7 @@ func CreateObjectSpecificClusterRoleBinding(tenant, roleName string, user corev1
 	roleBind.ObjectMeta.OwnerReferences = ownerReferences
 	roleBindLabels := map[string]string{"edge-net.io/tenant": tenant}
 	for key, value := range labels {
-		roleBindLabels[value] = key
+		roleBindLabels[key] = value
 	}
 	roleBind.SetLabels(roleBindLabels)
 	_, err := Clientset.RbacV1().ClusterRoleBindings().Create(context.TODO(), roleBind, metav1.CreateOptions{})
@@ -246,7 +248,7 @@ func CreateObjectSpecificRoleBinding(tenant, namespace, roleName string, user co
 		Subjects: rbSubjects, RoleRef: roleRef}
 	roleBindLabels := map[string]string{"edge-net.io/tenant": tenant}
 	for key, value := range labels {
-		roleBindLabels[value] = key
+		roleBindLabels[key] = value
 	}
 	roleBind.SetLabels(roleBindLabels)
 	_, err := Clientset.RbacV1().RoleBindings(namespace).Create(context.TODO(), roleBind, metav1.CreateOptions{})

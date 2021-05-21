@@ -17,7 +17,6 @@ limitations under the License.
 package emailverification
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -30,8 +29,6 @@ import (
 	registrationinformerv1 "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha"
 
 	log "github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -57,6 +54,7 @@ type informerevent struct {
 const create = "create"
 const update = "update"
 const delete = "delete"
+const verified = "Verified"
 
 // Start function is entry point of the controller
 func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
@@ -112,9 +110,6 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		queue:    queue,
 		handler:  EVHandler,
 	}
-
-	registrationNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "registration"}}
-	clientset.CoreV1().Namespaces().Create(context.TODO(), registrationNamespace, metav1.CreateOptions{})
 
 	// A channel to terminate elegantly
 	stopCh := make(chan struct{})

@@ -187,7 +187,7 @@ func TestCreate(t *testing.T) {
 		urr4Comparison.SetName("duplicate")
 		urr4Comparison.SetUID("UID")
 
-		// Create a user, an tenant request, and user registration request for comparison
+		// Create a user, a tenant request, and user registration request for comparison
 		tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
 		tenant.Spec.User = append(tenant.Spec.User, g.userObj)
@@ -240,7 +240,7 @@ func TestUpdate(t *testing.T) {
 		urrUpdate4 := urr
 		urrUpdate4.Spec.Email = "different@edge-net.org"
 
-		// Create a user, an tenant request, and user registration request for comparison
+		// Create a user, a tenant request, and user registration request for comparison
 		tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
 		tenant.Spec.User = append(tenant.Spec.User, g.userObj)

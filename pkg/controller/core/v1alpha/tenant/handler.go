@@ -95,15 +95,16 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 		if err == nil || errors.IsAlreadyExists(err) {
 			tenantStatus = t.applyQuota(tenant, tenantStatus)
 			tenantStatus = t.configurePermissions(tenant, tenantStatus, ownerReferences, &wg)
-			tenant.Status = tenantStatus
 		}
 
-		if tenant.Status.State != failure {
+		if tenant.Status.State == "" && tenantStatus.State != failure {
+			// TODO: Only at the first creation
 			// Update tenant status
-			tenant.Status.State = established
-			tenant.Status.Message = []string{statusDict["tenant-ok"]}
+			tenantStatus.State = established
+			tenantStatus.Message = []string{statusDict["tenant-ok"]}
 			t.sendEmail(tenant, corev1alpha.User{}, "tenant-creation-successful")
 		}
+		tenant.Status = tenantStatus
 		t.edgenetClientset.CoreV1alpha().Tenants().UpdateStatus(context.TODO(), tenant, metav1.UpdateOptions{})
 		wg.Done()
 	} else {
@@ -158,6 +159,8 @@ func (t *Handler) Create(obj interface{}) bool {
 			tenantRequest.Status.State = "Approved"
 			tenantRequest.Status.Message = []string{statusDict["request-approved"]}
 			t.edgenetClientset.RegistrationV1alpha().TenantRequests().UpdateStatus(context.TODO(), tenantRequest, metav1.UpdateOptions{})
+		} else {
+			log.Println(err)
 		}
 	}
 
@@ -194,11 +197,11 @@ func (t *Handler) applyQuota(tenant *corev1alpha.Tenant, tenantStatus corev1alph
 
 func (t *Handler) configurePermissions(tenant *corev1alpha.Tenant, tenantStatus corev1alpha.TenantStatus, ownerReferences []metav1.OwnerReference, wg *sync.WaitGroup) corev1alpha.TenantStatus {
 	// Create the cluster roles
-	if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "tenants", tenant.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
+	if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "core.edgenet.io", "tenants", tenant.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
 		log.Infof("Couldn't create owner cluster role %s: %s", tenant.GetName(), err)
 		// TODO: Provide err information at the status
 	}
-	if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "tenants", tenant.GetName(), "admin", []string{"get"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
+	if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "core.edgenet.io", "tenants", tenant.GetName(), "admin", []string{"get"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
 		log.Infof("Couldn't create admin cluster role %s: %s", tenant.GetName(), err)
 		// TODO: Provide err information at the status
 	}
@@ -210,11 +213,26 @@ func (t *Handler) configurePermissions(tenant *corev1alpha.Tenant, tenantStatus 
 		// TODO: Provide err information at the status
 	}
 
+	var acceptableUsePolicyAccess = func(user corev1alpha.User, acceptableUsePolicy string) {
+		if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "core.edgenet.io", "acceptableusepolicies", acceptableUsePolicy, "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
+			log.Infof("Couldn't create aup cluster role %s, %s: %s", tenant.GetName(), acceptableUsePolicy, err)
+			// TODO: Provide err information at the status
+		}
+		clusterRoleName := fmt.Sprintf("edgenet:%s:acceptableusepolicies:%s-%s", tenant.GetName(), acceptableUsePolicy, "owner")
+		if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, user, ownerReferences); err != nil {
+			t.sendEmail(tenant, corev1alpha.User{}, "user-creation-failure")
+			// TODO: Define the error precisely
+			tenantStatus.State = failure
+			tenantStatus.Message = append(tenant.Status.Message, []string{statusDict["user-failed"], err.Error()}...)
+		}
+	}
+
 	for _, userRow := range tenant.Spec.User {
 		policyStatus := false
-		acceptableUsePolicy, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant.GetName(), userRow.GetName()), metav1.GetOptions{})
+		acceptableUsePolicy, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), userRow.GetName(), metav1.GetOptions{})
 		if err == nil {
 			policyStatus = acceptableUsePolicy.Spec.Accepted
+			acceptableUsePolicyAccess(userRow, acceptableUsePolicy.GetName())
 		} else if errors.IsNotFound(err) {
 			// Create the client certs for permanent use
 			userRow.Tenant = tenant.GetName()
@@ -231,26 +249,27 @@ func (t *Handler) configurePermissions(tenant *corev1alpha.Tenant, tenantStatus 
 				t.sendEmail(tenant, userRow, "user-kubeconfig-failure")
 			}
 
-			if tenant.Status.State != failure {
+			if tenantStatus.State != failure {
 				go func() {
 					wg.Wait()
+					// Generate an acceptable use policy object attached to user
+					aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/user": userRow.GetName()}
+					userAcceptableUsePolicy := &corev1alpha.AcceptableUsePolicy{TypeMeta: metav1.TypeMeta{Kind: "AcceptableUsePolicy", APIVersion: "apps.edgenet.io/v1alpha"},
+						ObjectMeta: metav1.ObjectMeta{Name: userRow.GetName(), OwnerReferences: ownerReferences}, Spec: corev1alpha.AcceptableUsePolicySpec{Accepted: false}}
+					userAcceptableUsePolicy.SetLabels(aupLabels)
+					if _, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), userAcceptableUsePolicy, metav1.CreateOptions{}); err != nil {
+						// TODO: Define the error precisely
+					}
+					acceptableUsePolicyAccess(userRow, userAcceptableUsePolicy.GetName())
 					t.sendEmail(tenant, userRow, "user-registration-successful")
 				}()
 			}
-
-			// Generate an acceptable use policy object attached to user
-			aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/user": userRow.GetName()}
-			userAcceptableUsePolicy := &corev1alpha.AcceptableUsePolicy{TypeMeta: metav1.TypeMeta{Kind: "AcceptableUsePolicy", APIVersion: "apps.edgenet.io/v1alpha"},
-				ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", tenant.GetName(), userRow.GetName()), OwnerReferences: ownerReferences}, Spec: corev1alpha.AcceptableUsePolicySpec{Accepted: false}}
-			userAcceptableUsePolicy.SetLabels(aupLabels)
-			if _, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), userAcceptableUsePolicy, metav1.CreateOptions{}); err != nil {
-				// TODO: Define the error precisely
-			}
 		}
+
 		if policyStatus {
 			// Prepare role bindings
 			// Create the owner role binding
-			if err := permission.CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), fmt.Sprintf("tenant-%s", strings.ToLower(userRow.Role)), userRow); err != nil {
+			if err := permission.CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), fmt.Sprintf("edgenet:tenant-%s", strings.ToLower(userRow.Role)), userRow); err != nil {
 				t.sendEmail(tenant, corev1alpha.User{}, "user-creation-failure")
 				// TODO: Define the error precisely
 				tenantStatus.State = failure
@@ -259,7 +278,7 @@ func (t *Handler) configurePermissions(tenant *corev1alpha.Tenant, tenantStatus 
 
 			if strings.ToLower(userRow.Role) != "collaborator" {
 				// Create the cluster role binding related to the tenant object
-				clusterRoleName := fmt.Sprintf("%s-tenants-%s-%s", tenant.GetName(), tenant.GetName(), strings.ToLower(userRow.Role))
+				clusterRoleName := fmt.Sprintf("edgenet:%s:tenants:%s-%s", tenant.GetName(), tenant.GetName(), strings.ToLower(userRow.Role))
 				if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, userRow, ownerReferences); err != nil {
 					t.sendEmail(tenant, corev1alpha.User{}, "user-creation-failure")
 					// TODO: Define the error precisely
@@ -282,13 +301,18 @@ func (t *Handler) sendEmail(tenant *corev1alpha.Tenant, user corev1alpha.User, s
 		contentData.CommonData.Username = user.GetName()
 		contentData.CommonData.Name = fmt.Sprintf("%s %s", user.FirstName, user.LastName)
 		contentData.CommonData.Email = []string{user.Email}
+		mailer.Send(subject, contentData)
 	} else {
 		contentData.CommonData.Tenant = tenant.GetName()
-		contentData.CommonData.Username = tenant.Spec.Contact.Username
-		contentData.CommonData.Name = fmt.Sprintf("%s %s", tenant.Spec.Contact.FirstName, tenant.Spec.Contact.LastName)
-		contentData.CommonData.Email = []string{tenant.Spec.Contact.Email}
+		for _, user := range tenant.Spec.User {
+			if user.Role == "Owner" || user.Role == "Admin" {
+				contentData.CommonData.Username = user.Username
+				contentData.CommonData.Name = fmt.Sprintf("%s %s", user.FirstName, user.LastName)
+				contentData.CommonData.Email = []string{user.Email}
+				mailer.Send(subject, contentData)
+			}
+		}
 	}
-	mailer.Send(subject, contentData)
 }
 
 // checkDuplicateObject checks whether a user exists with the same email address

@@ -98,9 +98,9 @@ func TestCreateClusterRoles(t *testing.T) {
 	cases := map[string]struct {
 		expected string
 	}{
-		"default tenant owner": {"tenant-owner"},
-		"default tenant admin": {"tenant-admin"},
-		"default collaborator": {"tenant-collaborator"},
+		"default tenant owner": {"edgenet:tenant-owner"},
+		"default tenant admin": {"edgenet:tenant-admin"},
+		"default collaborator": {"edgenet:tenant-collaborator"},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
@@ -126,9 +126,9 @@ func TestCreateClusterRoles(t *testing.T) {
 			user      corev1alpha.User
 			expected  string
 		}{
-			"owner":        {tenant.GetName(), tenant.GetName(), "tenant-owner", tenant.Spec.User[0], fmt.Sprintf("tenant-owner-%s", tenant.Spec.User[0].GetName())},
-			"collaborator": {tenant.GetName(), tenant.GetName(), "tenant-collaborator", user1, fmt.Sprintf("tenant-collaborator-%s", user1.GetName())},
-			"admin":        {tenant.GetName(), tenant.GetName(), "tenant-admin", user2, fmt.Sprintf("tenant-admin-%s", user2.GetName())},
+			"owner":        {tenant.GetName(), tenant.GetName(), "edgenet:tenant-owner", tenant.Spec.User[0], fmt.Sprintf("edgenet:tenant-owner-%s", tenant.Spec.User[0].GetName())},
+			"collaborator": {tenant.GetName(), tenant.GetName(), "edgenet:tenant-collaborator", user1, fmt.Sprintf("edgenet:tenant-collaborator-%s", user1.GetName())},
+			"admin":        {tenant.GetName(), tenant.GetName(), "edgenet:tenant-admin", user2, fmt.Sprintf("edgenet:tenant-admin-%s", user2.GetName())},
 		}
 		for k, tc := range cases {
 			t.Run(k, func(t *testing.T) {
@@ -154,27 +154,28 @@ func TestCreateObjectSpecificClusterRole(t *testing.T) {
 
 	cases := map[string]struct {
 		tenant       corev1alpha.Tenant
+		apiGroup     string
 		resource     string
 		resourceName string
 		verbs        []string
 		expected     string
 	}{
-		"tenant":                    {tenant1, "tenants", tenant1.GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("%s-tenants-%s-name", tenant1.GetName(), tenant1.GetName())},
-		"tenant resource quota":     {tenant1, "tenantresourcequotas", tenant1.GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("%s-tenantresourcequotas-%s-name", tenant1.GetName(), tenant1.GetName())},
-		"node contribution":         {tenant2, "nodecontributions", "ple", []string{"get", "update", "patch", "delete"}, fmt.Sprintf("%s-nodecontributions-%s-name", tenant2.GetName(), "ple")},
-		"user registration request": {tenant1, "userregistrationrequests", g.user.GetName(), []string{"get", "update", "patch", "delete"}, fmt.Sprintf("%s-userregistrationrequests-%s-name", tenant1.GetName(), g.user.GetName())},
-		"email verification":        {tenant2, "emailverifications", "abcdefghi", []string{"get", "update", "patch", "delete"}, fmt.Sprintf("%s-emailverifications-%s-name", tenant2.GetName(), "abcdefghi")},
-		"acceptable use policy":     {tenant1, "acceptableusepolicies", tenant1.Spec.User[0].GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("%s-acceptableusepolicies-%s-name", tenant1.GetName(), tenant1.Spec.User[0].GetName())},
+		"tenant":                    {tenant1, "core.edgenet.io", "tenants", tenant1.GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("edgenet:%s:tenants:%s-name", tenant1.GetName(), tenant1.GetName())},
+		"tenant resource quota":     {tenant1, "core.edgenet.io", "tenantresourcequotas", tenant1.GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("edgenet:%s:tenantresourcequotas:%s-name", tenant1.GetName(), tenant1.GetName())},
+		"node contribution":         {tenant2, "core.edgenet.io", "nodecontributions", "ple", []string{"get", "update", "patch", "delete"}, fmt.Sprintf("edgenet:%s:nodecontributions:%s-name", tenant2.GetName(), "ple")},
+		"user registration request": {tenant1, "registration.edgenet.io", "userrequests", g.user.GetName(), []string{"get", "update", "patch", "delete"}, fmt.Sprintf("edgenet:%s:userrequests:%s-name", tenant1.GetName(), g.user.GetName())},
+		"email verification":        {tenant2, "registration.edgenet.io", "emailverifications", "abcdefghi", []string{"get", "update", "patch", "delete"}, fmt.Sprintf("edgenet:%s:emailverifications:%s-name", tenant2.GetName(), "abcdefghi")},
+		"acceptable use policy":     {tenant1, "core.edgenet.io", "acceptableusepolicies", tenant1.Spec.User[0].GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("edgenet:%s:acceptableusepolicies:%s-name", tenant1.GetName(), tenant1.Spec.User[0].GetName())},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
-			CreateObjectSpecificClusterRole(tc.tenant.GetName(), tc.resource, tc.resourceName, "name", tc.verbs, []metav1.OwnerReference{})
+			CreateObjectSpecificClusterRole(tc.tenant.GetName(), tc.apiGroup, tc.resource, tc.resourceName, "name", tc.verbs, []metav1.OwnerReference{})
 			clusterRole, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), tc.expected, metav1.GetOptions{})
 			util.OK(t, err)
 			if err == nil {
 				util.Equals(t, tc.verbs, clusterRole.Rules[0].Verbs)
 			}
-			err = CreateObjectSpecificClusterRole(tc.tenant.GetName(), tc.resource, tc.resourceName, "name", tc.verbs, []metav1.OwnerReference{})
+			err = CreateObjectSpecificClusterRole(tc.tenant.GetName(), tc.apiGroup, tc.resource, tc.resourceName, "name", tc.verbs, []metav1.OwnerReference{})
 			util.OK(t, err)
 		})
 	}
@@ -189,7 +190,7 @@ func TestCreateObjectSpecificClusterRole(t *testing.T) {
 			"tenant":                    {tenant1.GetName(), fmt.Sprintf("%s-tenants-%s", tenant1.GetName(), tenant1.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-tenants-%s-%s", tenant1.GetName(), tenant1.GetName(), tenant1.Spec.User[0].GetName())},
 			"tenant resource quota":     {tenant1.GetName(), fmt.Sprintf("%s-tenantresourcequotas-%s", tenant1.GetName(), tenant1.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-tenantresourcequotas-%s-%s", tenant1.GetName(), tenant1.GetName(), tenant1.Spec.User[0].GetName())},
 			"node contribution":         {tenant1.GetName(), fmt.Sprintf("%s-nodecontributions-%s", tenant1.GetName(), "ple"), tenant1.Spec.User[0], fmt.Sprintf("%s-nodecontributions-%s-%s", tenant1.GetName(), "ple", tenant1.Spec.User[0].GetName())},
-			"user registration request": {tenant1.GetName(), fmt.Sprintf("%s-userregistrationrequests-%s", tenant1.GetName(), g.user.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-userregistrationrequests-%s-%s", tenant1.GetName(), g.user.GetName(), tenant1.Spec.User[0].GetName())},
+			"user registration request": {tenant1.GetName(), fmt.Sprintf("%s-userrequests-%s", tenant1.GetName(), g.user.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-userrequests-%s-%s", tenant1.GetName(), g.user.GetName(), tenant1.Spec.User[0].GetName())},
 			"email verification":        {tenant1.GetName(), fmt.Sprintf("%s-emailverifications-%s", tenant1.GetName(), "abcdefghi"), g.user, fmt.Sprintf("%s-emailverifications-%s-%s", tenant1.GetName(), "abcdefghi", g.user.GetName())},
 			"acceptable use policy":     {tenant1.GetName(), fmt.Sprintf("%s-acceptableusepolicies-%s", tenant1.GetName(), tenant1.Spec.User[0].GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-acceptableusepolicies-%s-%s", tenant1.GetName(), tenant1.Spec.User[0].GetName(), tenant1.Spec.User[0].GetName())},
 		}
@@ -224,9 +225,9 @@ func TestPermissionSystem(t *testing.T) {
 	cases := map[string]struct {
 		expected string
 	}{
-		"create cluster role for tenant owner":         {"tenant-owner"},
-		"create cluster role for default collaborator": {"tenant-collaborator"},
-		"create cluster role for default tenant admin": {"tenant-admin"},
+		"create cluster role for tenant owner":         {"edgenet:tenant-owner"},
+		"create cluster role for default collaborator": {"edgenet:tenant-collaborator"},
+		"create cluster role for default tenant admin": {"edgenet:tenant-admin"},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
@@ -235,33 +236,33 @@ func TestPermissionSystem(t *testing.T) {
 		})
 	}
 	t.Run("bind cluster role for tenant owner", func(t *testing.T) {
-		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "tenant-owner", user1)
+		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "edgenet:tenant-owner", user1)
 	})
 	t.Run("bind cluster role for tenant collaborator", func(t *testing.T) {
-		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "tenant-collaborator", user2)
+		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "edgenet:tenant-collaborator", user2)
 	})
 	t.Run("bind cluster role for tenant admin", func(t *testing.T) {
-		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "tenant-admin", user3)
+		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "edgenet:tenant-admin", user3)
 	})
 
 	t.Run("create owner specific tenant role", func(t *testing.T) {
-		CreateObjectSpecificClusterRole(tenant.GetName(), "tenants", tenant.GetName(), "owner", []string{"get", "update", "patch"}, []metav1.OwnerReference{})
-		_, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-owner", tenant.GetName(), tenant.GetName()), metav1.GetOptions{})
+		CreateObjectSpecificClusterRole(tenant.GetName(), "core.edgenet.io", "tenants", tenant.GetName(), "owner", []string{"get", "update", "patch"}, []metav1.OwnerReference{})
+		_, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner", tenant.GetName(), tenant.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
 	t.Run("create admin specific tenant role", func(t *testing.T) {
-		CreateObjectSpecificClusterRole(tenant.GetName(), "tenants", tenant.GetName(), "admin", []string{"get"}, []metav1.OwnerReference{})
-		_, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-admin", tenant.GetName(), tenant.GetName()), metav1.GetOptions{})
+		CreateObjectSpecificClusterRole(tenant.GetName(), "core.edgenet.io", "tenants", tenant.GetName(), "admin", []string{"get"}, []metav1.OwnerReference{})
+		_, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-admin", tenant.GetName(), tenant.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
 	t.Run("create owner role binding", func(t *testing.T) {
-		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("%s-tenants-%s-owner", tenant.GetName(), tenant.GetName()), user1, []metav1.OwnerReference{})
-		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-owner-%s", tenant.GetName(), tenant.GetName(), user1.GetName()), metav1.GetOptions{})
+		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("edgenet:%s:tenants:%s-owner", tenant.GetName(), tenant.GetName()), user1, []metav1.OwnerReference{})
+		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner-%s", tenant.GetName(), tenant.GetName(), user1.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
 	t.Run("create admin role binding", func(t *testing.T) {
-		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("%s-tenants-%s-admin", tenant.GetName(), tenant.GetName()), user3, []metav1.OwnerReference{})
-		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("%s-tenants-%s-admin-%s", tenant.GetName(), tenant.GetName(), user3.GetName()), metav1.GetOptions{})
+		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("edgenet:%s:tenants:%s-admin", tenant.GetName(), tenant.GetName()), user3, []metav1.OwnerReference{})
+		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-admin-%s", tenant.GetName(), tenant.GetName(), user3.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
 

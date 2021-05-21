@@ -188,7 +188,7 @@ func TestCreate(t *testing.T) {
 		tenantRequest4 := g.tenantRequestObj.DeepCopy()
 		tenantRequest4.SetName("different")
 		tenantRequest4.Spec.Contact.Email = g.userRequestObj.Spec.Email
-		// Create a user, an tenant request, and user registration request for comparison
+		// Create a user, a tenant request, and user registration request for comparison
 		tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
 		tenant.Spec.User = append(tenant.Spec.User, g.userObj)
@@ -241,7 +241,7 @@ func TestUpdate(t *testing.T) {
 		tenantRequest4 := tenantRequest.DeepCopy()
 		tenantRequest4.Spec.Contact.Email = "different@edge-net.org"
 
-		// Create a user, an tenant request, and user registration request for comparison
+		// Create a user, a tenant request, and user registration request for comparison
 		_, err := g.edgenetClient.RegistrationV1alpha().UserRequests().Create(context.TODO(), g.userRequestObj.DeepCopy(), metav1.CreateOptions{})
 		util.OK(t, err)
 		_, err = g.edgenetClient.RegistrationV1alpha().TenantRequests().Create(context.TODO(), tenantRequestComparison.DeepCopy(), metav1.CreateOptions{})

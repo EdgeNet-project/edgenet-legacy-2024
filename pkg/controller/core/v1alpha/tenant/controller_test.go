@@ -32,6 +32,6 @@ func TestStartController(t *testing.T) {
 	tenant.Spec.Enabled = false
 	g.edgenetClient.CoreV1alpha().Tenants().Update(context.TODO(), tenant, metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	_, err = g.client.RbacV1().Roles(tenant.GetName()).Get(context.TODO(), fmt.Sprintf("tenant-owner-%s", tenant.Spec.Contact.Username), metav1.GetOptions{})
-	util.Equals(t, "roles.rbac.authorization.k8s.io \"tenant-owner-johndoe\" not found", err.Error())
+	_, err = g.client.RbacV1().Roles(tenant.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-owner-%s", tenant.Spec.Contact.Username), metav1.GetOptions{})
+	util.Equals(t, "roles.rbac.authorization.k8s.io \"edgenet:tenant-owner-johndoe\" not found", err.Error())
 }

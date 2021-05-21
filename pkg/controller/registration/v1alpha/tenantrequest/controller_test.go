@@ -17,18 +17,18 @@ func TestStartController(t *testing.T) {
 	go Start(g.client, g.edgenetClient)
 	tenantRequestTest := g.tenantRequestObj.DeepCopy()
 	tenantRequestTest.SetName("tenant-request-controller-test")
-	// Create an tenant request
+	// Create a tenant request
 	g.edgenetClient.RegistrationV1alpha().TenantRequests().Create(context.TODO(), tenantRequestTest, metav1.CreateOptions{})
 	// Wait for the status update of created object
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
 	tenantRequest, _ := g.edgenetClient.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
 	util.NotEquals(t, nil, tenantRequest.Status.Expiry)
-	// Update an tenant request
+	// Update a tenant request
 	tenantRequest.Spec.Contact.Email = "different-email@edge-net.org"
 	tenantRequest, _ = g.edgenetClient.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
-	// Update an tenant request
+	// Update a tenant request
 	tenantRequest.Spec.Approved = true
 	g.edgenetClient.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)

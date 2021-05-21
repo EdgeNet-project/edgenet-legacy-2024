@@ -174,7 +174,7 @@ func TestCreate(t *testing.T) {
 			util.OK(t, err)
 
 			tenantLabels := tenant.GetLabels()
-			util.Equals(t, "false", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
+			util.Equals(t, "false", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted-%s", acceptableUsePolicy.GetName())])
 		})
 	})
 	t.Run("accepted already", func(t *testing.T) {
@@ -191,7 +191,7 @@ func TestCreate(t *testing.T) {
 			util.OK(t, err)
 
 			tenantLabels := tenant.GetLabels()
-			util.Equals(t, "true", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
+			util.Equals(t, "true", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted-%s", acceptableUsePolicy.GetName())])
 		})
 	})
 	t.Run("recreation", func(t *testing.T) {
@@ -208,7 +208,7 @@ func TestCreate(t *testing.T) {
 			util.OK(t, err)
 
 			tenantLabels := tenant.GetLabels()
-			util.Equals(t, "true", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
+			util.Equals(t, "true", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted-%s", acceptableUsePolicy.GetName())])
 		})
 	})
 	t.Run("recreation of expired one", func(t *testing.T) {
@@ -229,7 +229,7 @@ func TestCreate(t *testing.T) {
 			util.OK(t, err)
 
 			tenantLabels := tenant.GetLabels()
-			util.Equals(t, "false", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
+			util.Equals(t, "false", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted-%s", acceptableUsePolicy.GetName())])
 		})
 	})
 }
@@ -271,7 +271,7 @@ func TestAccept(t *testing.T) {
 		util.OK(t, err)
 
 		tenantLabels := tenant.GetLabels()
-		util.Equals(t, "true", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
+		util.Equals(t, "true", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted-%s", acceptableUsePolicy.GetName())])
 	})
 	t.Run("timeout", func(t *testing.T) {
 		acceptableUsePolicy.Status.Expiry = &metav1.Time{
@@ -293,7 +293,7 @@ func TestAccept(t *testing.T) {
 			util.OK(t, err)
 
 			tenantLabels := tenant.GetLabels()
-			util.Equals(t, "false", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted/%s", acceptableUsePolicy.GetName())])
+			util.Equals(t, "false", tenantLabels[fmt.Sprintf("edge-net.io/aup-accepted-%s", acceptableUsePolicy.GetName())])
 		})
 	})
 }
