@@ -153,6 +153,7 @@ func TestCreate(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
+	go g.handler.RunExpiryController()
 	t.Run("set expiry date", func(t *testing.T) {
 		g.edgenetClient.RegistrationV1alpha().UserRequests().Create(context.TODO(), g.userRequestObj.DeepCopy(), metav1.CreateOptions{})
 		g.handler.ObjectCreatedOrUpdated(g.userRequestObj.DeepCopy())
@@ -166,7 +167,6 @@ func TestCreate(t *testing.T) {
 	})
 	t.Run("timeout", func(t *testing.T) {
 		userRequest, _ := g.edgenetClient.RegistrationV1alpha().UserRequests().Get(context.TODO(), g.userRequestObj.GetName(), metav1.GetOptions{})
-		go g.handler.runApprovalTimeout(userRequest)
 		userRequest.Status.Expiry = &metav1.Time{
 			Time: time.Now().Add(10 * time.Millisecond),
 		}

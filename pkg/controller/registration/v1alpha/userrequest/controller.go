@@ -57,9 +57,11 @@ const delete = "delete"
 const failure = "Failure"
 const issue = "Malfunction"
 const success = "Successful"
+const approved = "Approved"
 
 // Dictionary of status messages
 var statusDict = map[string]string{
+	"user-approved":     "User request has been approved",
 	"user-failed":       "User creation failed",
 	"email-ok":          "Everything is OK, verification email sent",
 	"email-fail":        "Couldn't send verification email",
@@ -67,6 +69,7 @@ var statusDict = map[string]string{
 	"email-existregist": "Email address, %s, already exists for another user registration request",
 	"email-existauth":   "Email address, %s, already exists for another tenant request",
 	"username-exist":    "Username, %s, already exists for another user account",
+	"role-failed":       "Cluster role generation failed",
 }
 
 // Start function is entry point of the controller
@@ -144,6 +147,7 @@ func (c *controller) run(stopCh <-chan struct{}, clientset kubernetes.Interface,
 	defer c.queue.ShutDown()
 	c.logger.Info("run: initiating")
 	c.handler.Init(clientset, edgenetClientset)
+	go c.handler.RunExpiryController()
 	// Run the informer to list and watch resources
 	go c.informer.Run(stopCh)
 

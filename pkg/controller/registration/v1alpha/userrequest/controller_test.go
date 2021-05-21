@@ -15,12 +15,15 @@ func TestStartController(t *testing.T) {
 	g.Init()
 	// Run the controller in a goroutine
 	go Start(g.client, g.edgenetClient)
+	userRequestTest := g.userRequestObj.DeepCopy()
+	userRequestTest.SetName("user-request-controller-test")
+
 	// Create a user registration object
-	g.edgenetClient.RegistrationV1alpha().UserRequests().Create(context.TODO(), g.userRequestObj.DeepCopy(), metav1.CreateOptions{})
+	g.edgenetClient.RegistrationV1alpha().UserRequests().Create(context.TODO(), userRequestTest, metav1.CreateOptions{})
 	// Wait for the status update of created object
 	time.Sleep(time.Millisecond * 500)
 	// Get the object and check the status
-	userRequest, err := g.edgenetClient.RegistrationV1alpha().UserRequests().Get(context.TODO(), g.userRequestObj.GetName(), metav1.GetOptions{})
+	userRequest, err := g.edgenetClient.RegistrationV1alpha().UserRequests().Get(context.TODO(), userRequestTest.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	expected := metav1.Time{
 		Time: time.Now().Add(72 * time.Hour),
@@ -29,7 +32,11 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, expected.Month(), userRequest.Status.Expiry.Month())
 	util.Equals(t, expected.Year(), userRequest.Status.Expiry.Year())
 	util.EqualsMultipleExp(t, []string{statusDict["email-ok"], statusDict["email-fail"]}, userRequest.Status.Message[0])
-	// Update a Tenant request
+	// Update a user request
+	userRequest.Spec.Email = "different-email@edge-net.org"
+	userRequest, _ = g.edgenetClient.RegistrationV1alpha().UserRequests().Update(context.TODO(), userRequest, metav1.UpdateOptions{})
+	time.Sleep(time.Millisecond * 500)
+	// Update a user request
 	userRequest.Spec.Approved = true
 	g.edgenetClient.RegistrationV1alpha().UserRequests().Update(context.TODO(), userRequest, metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
