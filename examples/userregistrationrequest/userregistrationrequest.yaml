@@ -1,9 +1,0 @@
-apiVersion: apps.edgenet.io/v1alpha
-kind: UserRegistrationRequest
-metadata:
-  name: bsenel
-  namespace: authority-edgenet
-spec:
-  firstname: Firstname
-  lastname: Lastname
-  email: usersu@lip6.fr
