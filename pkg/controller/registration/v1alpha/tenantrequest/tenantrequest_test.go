@@ -12,7 +12,6 @@ import (
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
-
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
@@ -36,8 +35,8 @@ type TestGroup struct {
 }
 
 func TestMain(m *testing.M) {
-	flag.String("dir", "../../../..", "Override the directory.")
-	flag.String("smtp-path", "../../../../configs/smtp_test.yaml", "Set SMTP path.")
+	flag.String("dir", "../../../../..", "Override the directory.")
+	flag.String("smtp-path", "../../../../../configs/smtp_test.yaml", "Set SMTP path.")
 	flag.Parse()
 
 	log.SetOutput(ioutil.Discard)
@@ -135,8 +134,8 @@ func (g *TestGroup) Init() {
 	namespaceLabels := map[string]string{"owner": "tenant", "owner-name": g.tenantObj.GetName(), "tenant-name": g.tenantObj.GetName()}
 	namespace.SetLabels(namespaceLabels)
 	g.client.CoreV1().Namespaces().Create(context.TODO(), &namespace, metav1.CreateOptions{})*/
-	// Invoke ObjectCreated to create namespace
-	// tenantHandler.ObjectCreated(g.tenantObj.DeepCopy())
+	// Invoke ObjectCreatedOrUpdated to create namespace
+	// tenantHandler.ObjectCreatedOrUpdated(g.tenantObj.DeepCopy())
 }
 
 func TestHandlerInit(t *testing.T) {
@@ -153,9 +152,10 @@ func TestCreate(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
+	go g.handler.RunExpiryController()
 	// Creation of Tenant request
 	g.edgenetClient.RegistrationV1alpha().TenantRequests().Create(context.TODO(), g.tenantRequestObj.DeepCopy(), metav1.CreateOptions{})
-	g.handler.ObjectCreated(g.tenantRequestObj.DeepCopy())
+	g.handler.ObjectCreatedOrUpdated(g.tenantRequestObj.DeepCopy())
 	t.Run("set expiry date", func(t *testing.T) {
 		tenantRequest, _ := g.edgenetClient.RegistrationV1alpha().TenantRequests().Get(context.TODO(), g.tenantRequestObj.GetName(), metav1.GetOptions{})
 		expected := metav1.Time{
@@ -167,7 +167,6 @@ func TestCreate(t *testing.T) {
 	})
 	t.Run("timeout", func(t *testing.T) {
 		tenantRequest, _ := g.edgenetClient.RegistrationV1alpha().TenantRequests().Get(context.TODO(), g.tenantRequestObj.GetName(), metav1.GetOptions{})
-		go g.handler.runApprovalTimeout(tenantRequest)
 		tenantRequest.Status.Expiry = &metav1.Time{
 			Time: time.Now().Add(10 * time.Millisecond),
 		}
@@ -213,7 +212,7 @@ func TestCreate(t *testing.T) {
 			t.Run(k, func(t *testing.T) {
 				_, err := g.edgenetClient.RegistrationV1alpha().TenantRequests().Create(context.TODO(), tc.request.DeepCopy(), metav1.CreateOptions{})
 				util.OK(t, err)
-				g.handler.ObjectCreated(tc.request.DeepCopy())
+				g.handler.ObjectCreatedOrUpdated(tc.request.DeepCopy())
 				tenantRequest, err := g.edgenetClient.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tc.request.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
 				util.Equals(t, tc.expected, tenantRequest.Status.Message[0])
@@ -265,7 +264,7 @@ func TestUpdate(t *testing.T) {
 				tc.request.Status = status
 				_, err := g.edgenetClient.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tc.request.DeepCopy(), metav1.UpdateOptions{})
 				util.OK(t, err)
-				g.handler.ObjectUpdated(tc.request.DeepCopy())
+				g.handler.ObjectCreatedOrUpdated(tc.request.DeepCopy())
 				tenantRequest, err := g.edgenetClient.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tc.request.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
 				util.EqualsMultipleExp(t, tc.expected, tenantRequest.Status.State)
@@ -278,7 +277,7 @@ func TestUpdate(t *testing.T) {
 		// Updating tenant request status to approved
 		g.tenantRequestObj.Spec.Approved = true
 		// Requesting server to update internal representation of tenant request object and transition it to tenant
-		g.handler.ObjectUpdated(g.tenantRequestObj.DeepCopy())
+		g.handler.ObjectCreatedOrUpdated(g.tenantRequestObj.DeepCopy())
 		// Checking if handler created tenant from request
 		_, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantRequestObj.GetName(), metav1.GetOptions{})
 		util.OK(t, err)

@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"syscall"
 	"time"
 
+	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	registrationinformerv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha"
 
@@ -55,9 +57,11 @@ const delete = "delete"
 const failure = "Failure"
 const issue = "Malfunction"
 const success = "Successful"
+const approved = "Approved"
 
 // Dictionary of status messages
 var statusDict = map[string]string{
+	"tenant-approved": "Tenant request has been approved",
 	"tenant-failed":   "Tenant successfully failed",
 	"tenant-taken":    "Tenant name, %s, is already taken",
 	"email-ok":        "Everything is OK, verification email sent",
@@ -96,11 +100,13 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
-			event.function = update
-			log.Infof("Update tenantrequest: %s", event.key)
-			if err == nil {
-				queue.Add(event)
+			if reflect.DeepEqual(oldObj.(*registrationv1alpha.TenantRequest).Status, newObj.(*registrationv1alpha.TenantRequest).Status) {
+				event.key, err = cache.MetaNamespaceKeyFunc(newObj)
+				event.function = update
+				log.Infof("Update tenantrequest: %s", event.key)
+				if err == nil {
+					queue.Add(event)
+				}
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
@@ -141,6 +147,7 @@ func (c *controller) run(stopCh <-chan struct{}, clientset kubernetes.Interface,
 	defer c.queue.ShutDown()
 	c.logger.Info("run: initiating")
 	c.handler.Init(clientset, edgenetClientset)
+	go c.handler.RunExpiryController()
 	// Run the informer to list and watch resources
 	go c.informer.Run(stopCh)
 
@@ -199,10 +206,10 @@ func (c *controller) processNextItem() bool {
 	} else {
 		if event.(informerevent).function == create {
 			c.logger.Infof("Controller.processNextItem: object created detected: %s", keyRaw)
-			c.handler.ObjectCreated(item)
+			c.handler.ObjectCreatedOrUpdated(item)
 		} else if event.(informerevent).function == update {
 			c.logger.Infof("Controller.processNextItem: object updated detected: %s", keyRaw)
-			c.handler.ObjectUpdated(item)
+			c.handler.ObjectCreatedOrUpdated(item)
 		}
 	}
 	c.queue.Forget(event.(informerevent).key)
