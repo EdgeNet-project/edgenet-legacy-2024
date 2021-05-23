@@ -328,27 +328,19 @@ func GetConditionReadyStatus(node *corev1.Node) string {
 	}
 	return ""
 }
-//GetLivenessStatus return the liveness Status of the pods in the node
+
 func GetLivenessStatus(node *corev1.Node) string {
-	Liveness_Status="True" //Node is alive.
-	t=&corev1.EventList.Items[len(&corev1.EventList.Items)-1].EventTime
-	time.sleep(5 * time second)
-	for _, ev := range &corev1.EventList.Items{
-		if ev.Source.host == node.ObjectMeta.name{
-			if ev.Message == "Liveness probe failed: cat: can't open '/tmp/healthy': No such file or directory"{
-				Liveness_Status="False" //Node is dead.
-				break
-			}
-		}
-		if ev.EventTime<t{
+	LivenessStatus:="True" 
+	eventRaw, _ := clientset.CoreV1().Events("default").List(context.TODO(), metav1.ListOptions{FieldSelector: "involvedObject.name=liveness-exec"})
+	for _, eventRow := range eventRaw.Items {
+		if eventRow.Reason == "Unhealthy" && eventRow.Source.host == node.ObjectMeta.name{
+			LivenessStatus="False"
 			break
 		}
-    return Liveness_Status
-
+	}
+    return LivenessStatus
 	}
 
-
-}
 
 // getNodeByHostname uses clientset to get namespace requested
 func getNodeByHostname(hostname string) (string, error) {
