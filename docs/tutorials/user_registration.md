@@ -1,8 +1,8 @@
-# Registering a user in an authority
+# Registering a user in a tenant
 
-This support page describes whether and how you can register a *user* in an authority with EdgeNet.
-Your registration in an authority is subject to the approval of that authority's admin. However, anyone
-who wants to use EdgeNet can make registration request in an authority only to become a user.
+This support page describes whether and how you can register a *user* in a tenant with EdgeNet.
+Your registration in a tenant is subject to the approval of that tenant's administrator. However, anyone
+who wants to use EdgeNet can make registration request in a tenant only to become a user.
 
 ## Technologies you will use
 
@@ -12,7 +12,7 @@ Or, you can register via [the console](https://console.edge-net.org/signup) with
 
 ## What you will do
 
-You will use a public kubeconfig file provided by EdgeNet to create a *registration request* object that is associated with your e-mail address. Object creation generates an e-mail to you, containing a one-time code. You will authenticate yourself by using that code to patch the object. This will alert the authority administrators, who will, if all is in order, approve your request. With approval, you receive via e-mail a kubeconfig file that is specific to you and that allows you to act as a user of the authority from which you make the request.
+You will use a public kubeconfig file provided by EdgeNet to create a *registration request* object that is associated with your e-mail address. Object creation generates an e-mail to you, containing a one-time code. You will authenticate yourself by using that code to patch the object. This will alert the tenant administrators, who will, if all is in order, approve your request. With approval, you receive via e-mail a kubeconfig file that is specific to you and that allows you to act as a user of the tenant from which you make the request.
 
 ## Steps
 
@@ -30,8 +30,9 @@ The public file does not allow any actions beyond the creation of a user registr
 
 ### Prepare a description of your user
 
-The [``.yaml`` format](https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/) is used to describe Kubernetes objects. Create one for the user registration request object, following the model of the example shown below. Your ``.yaml``file must specify the following information regarding your future authority:
-- the **username** that will be used by the EdgeNet system; it must follow [Kubernetes' rules for names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/) and must be different from any existing EdgeNet authority names
+The [``.yaml`` format](https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/) is used to describe Kubernetes objects. Create one for the user registration request object, following the model of the example shown below. Your ``.yaml``file must specify the following information regarding your future tenant:
+- the **username** that will be used by the EdgeNet system; it must follow [Kubernetes' rules for names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/) and must be different from any existing EdgeNet tenant names
+- the **tenant** name; it must follow [Kubernetes' rules for names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/)
 - a **first name** (human readable)
 - a **last name** (human readable)
 - an **e-mail address**, which should be an institutional e-mail address
@@ -40,12 +41,12 @@ In what follows, we will assume that this file is saved in your working director
 
 Example:
 ```yaml
-apiVersion: apps.edgenet.io/v1alpha
-kind: UserRegistrationRequest
+apiVersion: registration.edgenet.io/v1alpha
+kind: UserRequest
 metadata:
   name: bsenel
-  namespace: authority-edgenet
 spec:
+  tenant: lip6-lab
   firstname: Berat
   lastname: Senel
   email: berat.senel@lip6.fr
@@ -68,13 +69,13 @@ The e-mail that you receive will contain a ``kubectl`` command that you can copy
 In the example here, the one-time code is ``bsv10kgeyo7pmazwpr``:
 
 ```
-kubectl patch emailverification bsv10kgeyo7pmazwpr -n registration --type='json' -p='[{"op": "replace", "path": "/spec/verified", "value": true}]' --kubeconfig ./public.cfg
+kubectl patch emailverification bsv10kgeyo7pmazwpr --type='json' -p='[{"op": "replace", "path": "/spec/verified", "value": true}]' --kubeconfig ./public.cfg
 ```
 
-After you have done this, the EdgeNet system sends a notification e-mail to the authority administrators, informing them of your registration request.
+After you have done this, the EdgeNet system sends a notification e-mail to the tenant administrators, informing them of your registration request.
 
 ### Wait for approval and receipt of your permanent access credential
 
-At this point, the authority administrators will, if needed, contact you, and, provided everything is in order, approve your registration request. Upon approval, you will receive an email that confirms that your registration is complete, and contains your user information and user-specific kubeconfig file.
+At this point, the tenant administrators will, if needed, contact you, and, provided everything is in order, approve your registration request. Upon approval, you will receive an email that confirms that your registration is complete, and contains your user information and user-specific kubeconfig file.
 
 You can now start using EdgeNet, as a regular user, with your user-specific kubeconfig file.
