@@ -35,7 +35,6 @@ spec:
               type: object
               required:
                 - claim
-                - enabled
               properties:
                 claim:
                   type: array

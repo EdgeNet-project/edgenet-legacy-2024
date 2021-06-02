@@ -118,7 +118,7 @@ spec:
                     properties:
                       username:
                         type: string
-                        pattern: "^[a-z0-9]*$"
+                        pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                       firstname:
                         type: string
                       lastname:
