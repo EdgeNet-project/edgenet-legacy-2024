@@ -24,9 +24,9 @@ spec:
       subresources:
         status: {}
       additionalPrinterColumns:
-        - name: User
+        - name: Email
           type: string
-          jsonPath: .spec.user
+          jsonPath: .spec.email
         - name: Verified
           type: boolean
           jsonPath: .spec.verified
