@@ -269,8 +269,8 @@ type TenantResourceQuotaStatus struct {
 
 // Resources presents the usage of tenant resource quota
 type Resources struct {
-	CPU    float64 `json:"cpu"`
-	Memory float64 `json:"memory"`
+	CPU    string `json:"cpu"`
+	Memory string `json:"memory"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
