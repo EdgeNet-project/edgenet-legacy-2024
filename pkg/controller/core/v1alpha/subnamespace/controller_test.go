@@ -26,11 +26,6 @@ func TestStartController(t *testing.T) {
 	// Get the object and check the status
 	_, err = g.client.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subNamespaceControllerTest.GetName()), metav1.GetOptions{})
 	util.OK(t, err)
-	// util.Equals(t, tenant.Spec.Contact.Username, tenant.Spec.User[0].Username)
-	// Update the tenant
-	// tenant.Spec.Enabled = false
-	//g.edgenetClient.CoreV1alpha().Tenants().Update(context.TODO(), tenant, metav1.UpdateOptions{})
-	//time.Sleep(time.Millisecond * 500)
-	//_, err = g.client.RbacV1().Roles(tenant.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-owner-%s", tenant.Spec.Contact.Username), metav1.GetOptions{})
-	//util.Equals(t, "roles.rbac.authorization.k8s.io \"edgenet:tenant-owner-johndoe\" not found", err.Error())
+	err = g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Delete(context.TODO(), subNamespaceControllerTest.GetName(), metav1.DeleteOptions{})
+	util.OK(t, err)
 }

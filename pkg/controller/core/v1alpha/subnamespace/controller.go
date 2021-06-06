@@ -58,18 +58,14 @@ const create = "create"
 const update = "update"
 const delete = "delete"
 const failure = "Failure"
-const success = "Successful"
 const established = "Established"
 
 // Dictionary of status messages
 var statusDict = map[string]string{
-	"request-approved":  "SubNamespace request has been approved",
-	"subnamespace-ok":   "SubNamespace successfully established",
-	"namespace-failure": "SubNamespace core namespace cannot be created",
-	"user-failed":       "User creation failed",
-	"email-exist":       "Email address, %s, already exists for another user account",
-	"cert-fail":         "Client cert generation failed for user %s",
-	"kubeconfig-fail":   "Kubeconfig file creation failed for user %s",
+	"subnamespace-ok":      "Subsidiary Namespace successfully established",
+	"subnamespace-failure": "Subsidiary Namespace cannot be created",
+	"namespace-exists":     "Name of the namespace, %s, conflicts with another one in the tenant",
+	"quota-exceeded":       "Tenant resource quota exceeded",
 }
 
 // Start function is entry point of the controller

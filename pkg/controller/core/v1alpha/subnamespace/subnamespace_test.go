@@ -14,6 +14,8 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -148,6 +150,9 @@ func (g *TestGroup) Init() {
 	g.client.CoreV1().Namespaces().Create(context.TODO(), &namespace, metav1.CreateOptions{})
 	g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), g.trqObj.DeepCopy(), metav1.CreateOptions{})
 	g.client.CoreV1().ResourceQuotas(namespace.GetName()).Create(context.TODO(), g.resourceQuotaObj.DeepCopy(), metav1.CreateOptions{})
+	g.client.RbacV1().Roles(namespace.GetName()).Create(context.TODO(), &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: "edgenet-test"}}, metav1.CreateOptions{})
+	g.client.RbacV1().RoleBindings(namespace.GetName()).Create(context.TODO(), &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "edgenet-test"}}, metav1.CreateOptions{})
+	g.client.NetworkingV1().NetworkPolicies(namespace.GetName()).Create(context.TODO(), &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "edgenet-test"}}, metav1.CreateOptions{})
 }
 
 // TestHandlerInit for handler initialization
@@ -171,8 +176,10 @@ func TestCreate(t *testing.T) {
 	subnamespace1.SetName("all")
 	subnamespace2 := g.subNamespaceObj.DeepCopy()
 	subnamespace2.SetName("rbac")
+	subnamespace2.Spec.Inheritance.NetworkPolicy = false
 	subnamespace3 := g.subNamespaceObj.DeepCopy()
 	subnamespace3.SetName("networkpolicy")
+	subnamespace3.Spec.Inheritance.RBAC = false
 	subnamespace4 := g.subNamespaceObj.DeepCopy()
 	subnamespace4.SetName("expiry")
 
@@ -190,24 +197,24 @@ func TestCreate(t *testing.T) {
 		util.Equals(t, int64(2), coreResourceQuota.Spec.Hard.Cpu().Value())
 		util.Equals(t, int64(2147483648), coreResourceQuota.Spec.Hard.Memory().Value())
 
-		if roleRaw, err := g.client.RbacV1().Roles(childNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace1.Spec.Inheritance.RBAC {
+		if roleRaw, err := g.client.RbacV1().Roles(subnamespace1.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 			// TODO: Provide err information at the status
 			for _, roleRow := range roleRaw.Items {
-				_, err := g.client.RbacV1().Roles(childNamespace.GetNamespace()).Get(context.TODO(), roleRow.GetName(), metav1.GetOptions{})
+				_, err := g.client.RbacV1().Roles(childNamespace.GetName()).Get(context.TODO(), roleRow.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
 			}
 		}
-		if roleBindingRaw, err := g.client.RbacV1().RoleBindings(childNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace1.Spec.Inheritance.RBAC {
+		if roleBindingRaw, err := g.client.RbacV1().RoleBindings(subnamespace1.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 			// TODO: Provide err information at the status
 			for _, roleBindingRow := range roleBindingRaw.Items {
-				_, err := g.client.RbacV1().RoleBindings(childNamespace.GetNamespace()).Get(context.TODO(), roleBindingRow.GetName(), metav1.GetOptions{})
+				_, err := g.client.RbacV1().RoleBindings(childNamespace.GetName()).Get(context.TODO(), roleBindingRow.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
 			}
 		}
-		if networkPolicyRaw, err := g.client.NetworkingV1().NetworkPolicies(childNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace1.Spec.Inheritance.NetworkPolicy {
+		if networkPolicyRaw, err := g.client.NetworkingV1().NetworkPolicies(subnamespace1.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 			// TODO: Provide err information at the status
 			for _, networkPolicyRow := range networkPolicyRaw.Items {
-				_, err := g.client.NetworkingV1().NetworkPolicies(childNamespace.GetNamespace()).Get(context.TODO(), networkPolicyRow.GetName(), metav1.GetOptions{})
+				_, err := g.client.NetworkingV1().NetworkPolicies(childNamespace.GetName()).Get(context.TODO(), networkPolicyRow.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
 			}
 		}
@@ -221,24 +228,24 @@ func TestCreate(t *testing.T) {
 		g.handler.ObjectCreatedOrUpdated(subnamespace2)
 		childNamespace, err := g.client.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subnamespace2.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
-		if roleRaw, err := g.client.RbacV1().Roles(childNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace2.Spec.Inheritance.RBAC {
+		if roleRaw, err := g.client.RbacV1().Roles(subnamespace2.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace2.Spec.Inheritance.RBAC {
 			// TODO: Provide err information at the status
 			for _, roleRow := range roleRaw.Items {
-				_, err := g.client.RbacV1().Roles(childNamespace.GetNamespace()).Get(context.TODO(), roleRow.GetName(), metav1.GetOptions{})
+				_, err := g.client.RbacV1().Roles(childNamespace.GetName()).Get(context.TODO(), roleRow.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
 			}
 		}
-		if roleBindingRaw, err := g.client.RbacV1().RoleBindings(childNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace2.Spec.Inheritance.RBAC {
+		if roleBindingRaw, err := g.client.RbacV1().RoleBindings(subnamespace2.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace2.Spec.Inheritance.RBAC {
 			// TODO: Provide err information at the status
 			for _, roleBindingRow := range roleBindingRaw.Items {
-				_, err := g.client.RbacV1().RoleBindings(childNamespace.GetNamespace()).Get(context.TODO(), roleBindingRow.GetName(), metav1.GetOptions{})
+				_, err := g.client.RbacV1().RoleBindings(childNamespace.GetName()).Get(context.TODO(), roleBindingRow.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
 			}
 		}
-		if networkPolicyRaw, err := g.client.NetworkingV1().NetworkPolicies(childNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace2.Spec.Inheritance.NetworkPolicy {
+		if networkPolicyRaw, err := g.client.NetworkingV1().NetworkPolicies(subnamespace2.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace2.Spec.Inheritance.NetworkPolicy {
 			// TODO: Provide err information at the status
 			for _, networkPolicyRow := range networkPolicyRaw.Items {
-				_, err := g.client.NetworkingV1().NetworkPolicies(childNamespace.GetNamespace()).Get(context.TODO(), networkPolicyRow.GetName(), metav1.GetOptions{})
+				_, err := g.client.NetworkingV1().NetworkPolicies(childNamespace.GetName()).Get(context.TODO(), networkPolicyRow.GetName(), metav1.GetOptions{})
 				util.Equals(t, true, errors.IsNotFound(err))
 			}
 		}
@@ -252,25 +259,25 @@ func TestCreate(t *testing.T) {
 		g.handler.ObjectCreatedOrUpdated(subnamespace3)
 		childNamespace, err := g.client.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subnamespace3.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
-		if roleRaw, err := g.client.RbacV1().Roles(childNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace3.Spec.Inheritance.RBAC {
+		if roleRaw, err := g.client.RbacV1().Roles(subnamespace3.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace3.Spec.Inheritance.RBAC {
 			// TODO: Provide err information at the status
 			for _, roleRow := range roleRaw.Items {
-				_, err := g.client.RbacV1().Roles(childNamespace.GetNamespace()).Get(context.TODO(), roleRow.GetName(), metav1.GetOptions{})
+				_, err := g.client.RbacV1().Roles(childNamespace.GetName()).Get(context.TODO(), roleRow.GetName(), metav1.GetOptions{})
 				util.Equals(t, true, errors.IsNotFound(err))
 
 			}
 		}
-		if roleBindingRaw, err := g.client.RbacV1().RoleBindings(childNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace3.Spec.Inheritance.RBAC {
+		if roleBindingRaw, err := g.client.RbacV1().RoleBindings(subnamespace3.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace3.Spec.Inheritance.RBAC {
 			// TODO: Provide err information at the status
 			for _, roleBindingRow := range roleBindingRaw.Items {
-				_, err := g.client.RbacV1().RoleBindings(childNamespace.GetNamespace()).Get(context.TODO(), roleBindingRow.GetName(), metav1.GetOptions{})
+				_, err := g.client.RbacV1().RoleBindings(childNamespace.GetName()).Get(context.TODO(), roleBindingRow.GetName(), metav1.GetOptions{})
 				util.Equals(t, true, errors.IsNotFound(err))
 			}
 		}
-		if networkPolicyRaw, err := g.client.NetworkingV1().NetworkPolicies(childNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace3.Spec.Inheritance.NetworkPolicy {
+		if networkPolicyRaw, err := g.client.NetworkingV1().NetworkPolicies(subnamespace3.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace3.Spec.Inheritance.NetworkPolicy {
 			// TODO: Provide err information at the status
 			for _, networkPolicyRow := range networkPolicyRaw.Items {
-				_, err := g.client.NetworkingV1().NetworkPolicies(childNamespace.GetNamespace()).Get(context.TODO(), networkPolicyRow.GetName(), metav1.GetOptions{})
+				_, err := g.client.NetworkingV1().NetworkPolicies(childNamespace.GetName()).Get(context.TODO(), networkPolicyRow.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
 			}
 		}
@@ -288,4 +295,38 @@ func TestCreate(t *testing.T) {
 		_, err = g.client.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subnamespace4.GetName()), metav1.GetOptions{})
 		util.Equals(t, true, errors.IsNotFound(err))
 	})
+}
+
+func TestQuota(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	g.handler.Init(g.client, g.edgenetClient)
+	go g.handler.RunExpiryController()
+
+	subnamespace1 := g.subNamespaceObj.DeepCopy()
+	subnamespace1.SetName("all")
+	subnamespace2 := g.subNamespaceObj.DeepCopy()
+	subnamespace2.SetName("rbac")
+	subnamespace2.Spec.Inheritance.NetworkPolicy = false
+	subnamespace3 := g.subNamespaceObj.DeepCopy()
+	subnamespace3.SetName("networkpolicy")
+	subnamespace3.Spec.Inheritance.RBAC = false
+
+	_, err := g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Create(context.TODO(), subnamespace1, metav1.CreateOptions{})
+	util.OK(t, err)
+	g.handler.ObjectCreatedOrUpdated(subnamespace1)
+	_, err = g.client.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subnamespace1.GetName()), metav1.GetOptions{})
+	util.OK(t, err)
+
+	_, err = g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Create(context.TODO(), subnamespace2, metav1.CreateOptions{})
+	util.OK(t, err)
+	g.handler.ObjectCreatedOrUpdated(subnamespace2)
+	_, err = g.client.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subnamespace2.GetName()), metav1.GetOptions{})
+	util.Equals(t, true, errors.IsNotFound(err))
+
+	_, err = g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Create(context.TODO(), subnamespace3, metav1.CreateOptions{})
+	util.OK(t, err)
+	g.handler.ObjectCreatedOrUpdated(subnamespace3)
+	_, err = g.client.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subnamespace3.GetName()), metav1.GetOptions{})
+	util.Equals(t, true, errors.IsNotFound(err))
 }

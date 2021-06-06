@@ -207,7 +207,6 @@ func (t *Handler) ResourceConsumptionControl(tenantResourceQuota *corev1alpha.Te
 	if cpuDemand != 0 || memoryDemand != 0 {
 		demand = true
 	}
-
 	quotaExceeded := false
 	if (aggregatedCPU == 0 && aggregatedMemory == 0 && demand) || (aggregatedCPU > 0 || aggregatedMemory > 0) {
 		if cpuQuota < aggregatedCPU || memoryQuota < aggregatedMemory {
@@ -223,7 +222,7 @@ func (t *Handler) calculateTotalQuota(tenantResourceQuota *corev1alpha.TenantRes
 	var cpuQuota int64
 	var memoryQuota int64
 	// To make comparison
-	oldtenantResourceQuota := tenantResourceQuota.DeepCopy()
+	oldTenantResourceQuota := tenantResourceQuota.DeepCopy()
 	// claimSlice to be manipulated
 	claimSlice := tenantResourceQuota.Spec.Claim
 	// dropSlice to be manipulated
@@ -232,8 +231,8 @@ func (t *Handler) calculateTotalQuota(tenantResourceQuota *corev1alpha.TenantRes
 		j := 0
 		for _, claim := range tenantResourceQuota.Spec.Claim {
 			if claim.Expiry == nil || (claim.Expiry != nil && claim.Expiry.Time.Sub(time.Now()) >= 0) {
-				CPUResource := resource.MustParse(claim.CPU)
-				cpuQuota += CPUResource.Value()
+				cpuResource := resource.MustParse(claim.CPU)
+				cpuQuota += cpuResource.Value()
 				memoryResource := resource.MustParse(claim.Memory)
 				memoryQuota += memoryResource.Value()
 			} else {
@@ -250,8 +249,8 @@ func (t *Handler) calculateTotalQuota(tenantResourceQuota *corev1alpha.TenantRes
 		j := 0
 		for _, drop := range tenantResourceQuota.Spec.Drop {
 			if drop.Expiry == nil || (drop.Expiry != nil && drop.Expiry.Time.Sub(time.Now()) >= 0) {
-				CPUResource := resource.MustParse(drop.CPU)
-				cpuQuota -= CPUResource.Value()
+				cpuResource := resource.MustParse(drop.CPU)
+				cpuQuota -= cpuResource.Value()
 				memoryResource := resource.MustParse(drop.Memory)
 				memoryQuota -= memoryResource.Value()
 			} else {
@@ -265,7 +264,7 @@ func (t *Handler) calculateTotalQuota(tenantResourceQuota *corev1alpha.TenantRes
 		tenantResourceQuota.Spec.Drop = dropSlice
 	}
 	// Check if there is an update
-	if !reflect.DeepEqual(oldtenantResourceQuota, tenantResourceQuota) {
+	if !reflect.DeepEqual(oldTenantResourceQuota, tenantResourceQuota) {
 		tenantResourceQuotaUpdated, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
 		if err == nil {
 			tenantResourceQuota = tenantResourceQuotaUpdated
@@ -282,16 +281,14 @@ func (t *Handler) calculateTotalQuota(tenantResourceQuota *corev1alpha.TenantRes
 
 // aggregateConsumedResources looks out for namespaces in tenant and teams to determine the total consumption
 func (t *Handler) aggregateConsumedResources(namespace string, aggregatedCPU *int64, aggregatedMemory *int64) {
-	var wg sync.WaitGroup
-	wg.Add(1)
-	defer wg.Wait()
-	defer wg.Done()
 	// Check out the resource quotas in the namespace rather than in its profile
 	resourceQuotasRaw, _ := t.clientset.CoreV1().ResourceQuotas(namespace).List(context.TODO(), metav1.ListOptions{})
 	if len(resourceQuotasRaw.Items) != 0 {
 		for _, resourceQuotasRow := range resourceQuotasRaw.Items {
-			*aggregatedCPU += resourceQuotasRow.Spec.Hard.Cpu().Value()
-			*aggregatedMemory += resourceQuotasRow.Spec.Hard.Memory().Value()
+			if resourceQuotasRow.GetName() != "core-quota" {
+				*aggregatedCPU += resourceQuotasRow.Spec.Hard.Cpu().Value()
+				*aggregatedMemory += resourceQuotasRow.Spec.Hard.Memory().Value()
+			}
 		}
 	}
 
@@ -299,9 +296,7 @@ func (t *Handler) aggregateConsumedResources(namespace string, aggregatedCPU *in
 	if len(subNamespaceRaw.Items) != 0 {
 		for _, subNamespaceRow := range subNamespaceRaw.Items {
 			subNamespaceStr := fmt.Sprintf("%s-%s", subNamespaceRow.GetNamespace(), subNamespaceRow.GetName())
-			wg.Add(1)
-			go t.aggregateConsumedResources(subNamespaceStr, aggregatedCPU, aggregatedMemory)
-			wg.Done()
+			t.aggregateConsumedResources(subNamespaceStr, aggregatedCPU, aggregatedMemory)
 		}
 	}
 }
