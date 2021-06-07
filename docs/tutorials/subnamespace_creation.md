@@ -38,14 +38,14 @@ The [``.yaml`` format](https://kubernetes.io/docs/concepts/overview/working-with
 - the **inheritance** of the subnamespace; the information provided consists of:
   - a **networkpolicy** inheritance from parent
   - a **rbac** inheritance from parent
-- the **expiry** of the subnamespace; this should be the date that you want the subnamespace to expire. This field is not mandatory to define.
+- the **expiry** of the subnamespace; this should be in the dateTime format of [RFC3339](https://xml2rfc.tools.ietf.org/public/rfc/html/rfc3339.html#anchor14). This field is not mandatory to define.
 
 In what follows, we will assume that this file is saved in your working directory on your system as ``./subnamespace.yaml``.
 
 Example:
 ```yaml
 apiVersion: core.edgenet.io/v1alpha
-kind: SubNamespaces
+kind: SubNamespace
 metadata:
   name: iris
 spec:
@@ -55,7 +55,7 @@ spec:
   inheritance:
     networkpolicy: true
     rbac: true
-  expiry: "24/05/2021 18:00:00"
+  expiry: "2021-06-01T18:00:00Z"
 ```
 
 ### Create your subsidiary namespace

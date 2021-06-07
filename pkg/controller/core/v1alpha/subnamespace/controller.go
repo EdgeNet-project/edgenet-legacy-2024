@@ -28,8 +28,6 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	coreinformer_v1 "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha"
 
-	"github.com/EdgeNet-project/edgenet/pkg/permission"
-
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -124,10 +122,6 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		queue:    queue,
 		handler:  subnamespaceHandler,
 	}
-
-	// Create the roles of EdgeNet users
-	permission.Clientset = clientset
-	permission.CreateClusterRoles()
 
 	// A channel to terminate elegantly
 	stopCh := make(chan struct{})

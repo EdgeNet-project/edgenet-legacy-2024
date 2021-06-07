@@ -27,12 +27,18 @@ spec:
         - name: Type
           type: string
           jsonPath: .spec.type
-        - name: Profile
+        - name: CPU Allocation
           type: string
-          jsonPath: .spec.profile
-        - name: Expiry
+          jsonPath: .spec.resources.cpu
+        - name: Memory Allocation
           type: string
-          jsonPath: .status.expiry
+          jsonPath: .spec.resources.memory
+        - name: Network Policy Inheritance
+          type: string
+          jsonPath: .spec.resources.cpu
+        - name: RBAC Inheritance
+          type: string
+          jsonPath: .spec.resources.memory
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -63,7 +69,7 @@ spec:
                       default: true
                 expiry:
                   type: string
-                  format: date
+                  format: dateTime
                   nullable: true
             status:
               type: object
@@ -79,4 +85,4 @@ spec:
   names:
     plural: subnamespaces
     singular: subnamespace
-    kind: Subnamespace
+    kind: SubNamespace
