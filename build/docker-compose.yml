@@ -101,3 +101,14 @@ services:
       - ../configs/:/root/configs/
       - ../assets/kubeconfigs:/root/assets/kubeconfigs
       - ../assets/templates/:/root/assets/templates/
+  subnamespace:
+    container_name: subnamespace
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/subnamespace/Dockerfile
+    image: subnamespace:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+      - ../configs/:/root/configs/
+      - ../assets/templates/:/root/assets/templates/
