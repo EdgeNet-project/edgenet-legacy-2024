@@ -1,6 +1,6 @@
 # Registering an EdgeNet tenant
 
-This tutorial describes whether and how you can set up an *tenant* on EdgeNet, with yourself as the tenant owner. An tenant owner takes responsibility for the approval of EdgeNet users who they can vouch for.
+This tutorial describes whether and how you can set up an *tenant* on EdgeNet, with yourself as the tenant owner. A tenant owner takes responsibility for the approval of EdgeNet users who they can vouch for.
 
 Authorizations to use EdgeNet are handed out hierarchically, establishing a chain of responsibility. We, as the central administrators of EdgeNet, approve the establishment of tenants and their owners. An owner, in turn, approves the creation of individual user accounts. The owner can give some of those users administrative rights to, in turn, approve other users.
 
