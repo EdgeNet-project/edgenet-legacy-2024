@@ -24,9 +24,9 @@ spec:
       subresources:
         status: {}
       additionalPrinterColumns:
-        - name: Type
+        - name: Status
           type: string
-          jsonPath: .spec.type
+          jsonPath: .status.state
         - name: CPU Allocation
           type: string
           jsonPath: .spec.resources.cpu
@@ -35,10 +35,10 @@ spec:
           jsonPath: .spec.resources.memory
         - name: Network Policy Inheritance
           type: string
-          jsonPath: .spec.resources.cpu
+          jsonPath: .spec.inheritance.networkpolicy
         - name: RBAC Inheritance
           type: string
-          jsonPath: .spec.resources.memory
+          jsonPath: .spec.inheritance.rbac
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
