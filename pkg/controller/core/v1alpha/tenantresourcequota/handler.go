@@ -136,7 +136,9 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // Create generates a tenant resource quota with the name provided
-func (t *Handler) Create(name string) {
+func (t *Handler) Create(name string) (string, string) {
+	cpuQuota := "0m"
+	memoryQuota := "0Mi"
 	_, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		// Set a tenant resource quota
@@ -151,7 +153,11 @@ func (t *Handler) Create(name string) {
 		if err != nil {
 			log.Infof(statusDict["TRQ-failed"], name, err)
 		}
+
+		cpuQuota = claim.CPU
+		memoryQuota = claim.Memory
 	}
+	return cpuQuota, memoryQuota
 }
 
 // sendEmail to send notification to participants

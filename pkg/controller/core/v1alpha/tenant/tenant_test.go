@@ -137,9 +137,6 @@ func TestHandlerInit(t *testing.T) {
 	g.handler.Init(g.client, g.edgenetClient)
 	util.Equals(t, g.client, g.handler.clientset)
 	util.Equals(t, g.edgenetClient, g.handler.edgenetClientset)
-	util.Equals(t, "core-quota", g.handler.resourceQuota.Name)
-	util.NotEquals(t, nil, g.handler.resourceQuota.Spec.Hard)
-	util.Equals(t, int64(0), g.handler.resourceQuota.Spec.Hard.Pods().Value())
 }
 
 func TestCreateTenant(t *testing.T) {

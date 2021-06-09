@@ -50,7 +50,6 @@ type HandlerInterface interface {
 type Handler struct {
 	clientset        kubernetes.Interface
 	edgenetClientset versioned.Interface
-	resourceQuota    *corev1.ResourceQuota
 }
 
 // Init handles any handler initialization
@@ -58,15 +57,7 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 	log.Info("TenantHandler.Init")
 	t.clientset = kubernetes
 	t.edgenetClientset = edgenet
-	t.resourceQuota = &corev1.ResourceQuota{}
-	t.resourceQuota.Name = "core-quota"
-	t.resourceQuota.Spec = corev1.ResourceQuotaSpec{
-		Hard: map[corev1.ResourceName]resource.Quantity{
-			"cpu":              resource.MustParse("8000m"),
-			"memory":           resource.MustParse("8192Mi"),
-			"requests.storage": resource.MustParse("8Gi"),
-		},
-	}
+
 	permission.Clientset = t.clientset
 	registration.Clientset = t.clientset
 }
@@ -185,10 +176,19 @@ func (t *Handler) createCoreNamespace(tenant *corev1alpha.Tenant, tenantStatus c
 func (t *Handler) applyQuota(tenant *corev1alpha.Tenant, tenantStatus corev1alpha.TenantStatus) corev1alpha.TenantStatus {
 	trqHandler := tenantresourcequota.Handler{}
 	trqHandler.Init(t.clientset, t.edgenetClientset)
-	trqHandler.Create(tenant.GetName())
+	cpuQuota, memoryQuota := trqHandler.Create(tenant.GetName())
 
+	resourceQuota := corev1.ResourceQuota{}
+	resourceQuota.Name = "core-quota"
+	resourceQuota.Spec = corev1.ResourceQuotaSpec{
+		Hard: map[corev1.ResourceName]resource.Quantity{
+			"cpu":              resource.MustParse(cpuQuota),
+			"memory":           resource.MustParse(memoryQuota),
+			"requests.storage": resource.MustParse("8Gi"),
+		},
+	}
 	// Create the resource quota to prevent users from using this namespace for their applications
-	if _, err := t.clientset.CoreV1().ResourceQuotas(tenant.GetName()).Create(context.TODO(), t.resourceQuota, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := t.clientset.CoreV1().ResourceQuotas(tenant.GetName()).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 		log.Infof("Couldn't create resource quota in %s: %s", tenant.GetName(), err)
 		// TODO: Provide err information at the status
 	}
