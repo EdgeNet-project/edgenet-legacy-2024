@@ -245,7 +245,6 @@ spec:
                 - name: ping-destination
                   image: busybox
                   command: ['/bin/sh', '-c', 'sleep infinity']
-                  terminationGracePeriodSeconds: 0
                   resources:
                     limits:
                       cpu: 50m
@@ -253,6 +252,7 @@ spec:
                     requests:
                       cpu: 50m
                       memory: 50Mi
+              terminationGracePeriodSeconds: 0
   selector:
     - value:
         - North_America
@@ -272,6 +272,7 @@ spec:
         kind: DaemonSet
         metadata:
           name: ping-source
+          namespace: <your-core-namespace>
           labels:
             app: ping-source
         spec:
@@ -291,7 +292,6 @@ spec:
                 - name: ping-source
                   image: busybox
                   command: ['/bin/sh', '-c', 'sleep infinity']
-                  terminationGracePeriodSeconds: 0
                   resources:
                     limits:
                       cpu: 50m
@@ -299,6 +299,7 @@ spec:
                     requests:
                       cpu: 50m
                       memory: 50Mi
+              terminationGracePeriodSeconds: 0
   selector:
     - value:
         - North_America
