@@ -144,8 +144,8 @@ func (t *Handler) Create(name string) {
 		tenantResourceQuota.SetName(name)
 		claim := corev1alpha.TenantResourceDetails{}
 		claim.Name = "Default"
-		claim.CPU = "12000m"
-		claim.Memory = "12Gi"
+		claim.CPU = "8000m"
+		claim.Memory = "8192Mi"
 		tenantResourceQuota.Spec.Claim = append(tenantResourceQuota.Spec.Claim, claim)
 		_, err = t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{})
 		if err != nil {
