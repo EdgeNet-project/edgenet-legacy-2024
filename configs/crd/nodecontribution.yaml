@@ -52,7 +52,7 @@ spec:
               properties:
                 tenant:
                   type: string
-                  pattern: "^[a-z0-9]*$"
+                  pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                 host:
                   type: string
                 port:
@@ -75,7 +75,7 @@ spec:
                           - Namespace
                       identifier:
                         type: string
-                        pattern: "^[a-z0-9]*$"
+                        pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
             status:
               type: object
               properties:
