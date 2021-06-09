@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"testing"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
+	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -39,8 +42,8 @@ func TestMain(m *testing.M) {
 	flag.String("smtp-path", "../../../../../configs/smtp_test.yaml", "Set SMTP path.")
 	flag.Parse()
 
-	//log.SetOutput(ioutil.Discard)
-	//logrus.SetOutput(ioutil.Discard)
+	log.SetOutput(ioutil.Discard)
+	logrus.SetOutput(ioutil.Discard)
 	os.Exit(m.Run())
 }
 
@@ -145,7 +148,7 @@ func (g *TestGroup) Init() {
 	// Imitate tenant creation processes
 	g.edgenetClient.CoreV1alpha().Tenants().Create(context.TODO(), g.tenantObj.DeepCopy(), metav1.CreateOptions{})
 	namespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: g.tenantObj.GetName()}}
-	namespaceLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": g.tenantObj.GetName()}
+	namespaceLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": g.tenantObj.GetName(), "edge-net.io/kind": "core"}
 	namespace.SetLabels(namespaceLabels)
 	g.client.CoreV1().Namespaces().Create(context.TODO(), &namespace, metav1.CreateOptions{})
 	g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), g.trqObj.DeepCopy(), metav1.CreateOptions{})

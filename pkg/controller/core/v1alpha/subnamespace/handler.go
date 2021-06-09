@@ -23,7 +23,6 @@ import (
 	"time"
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenantresourcequota"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/google/uuid"
 
@@ -84,108 +83,92 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 			}
 		}()
 
-		tenantResourceQuota, _ := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), labels["edge-net.io/tenant"], metav1.GetOptions{})
-		trqHandler := tenantresourcequota.Handler{}
-		trqHandler.Init(t.clientset, t.edgenetClientset)
 		cpuResource := resource.MustParse(subNamespace.Spec.Resources.CPU)
 		cpuDemand := cpuResource.Value()
 		memoryResource := resource.MustParse(subNamespace.Spec.Resources.Memory)
 		memoryDemand := memoryResource.Value()
-		_, quotaExceeded, cpuDecline, memoryDecline := trqHandler.ResourceConsumptionControl(tenantResourceQuota, cpuDemand, memoryDemand)
-		childNamespace, err := t.clientset.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", labels["edge-net.io/tenant"], subNamespace.GetName()), metav1.GetOptions{})
-		if err == nil {
-			childNamespaceLabels := childNamespace.GetLabels()
-			if childNamespaceLabels["edge-net.io/owner"] != fmt.Sprintf("%s-%s", subNamespace.GetNamespace(), subNamespace.GetName()) {
-				// TODO: Error handling
-				subNamespace.Status.State = failure
-				subNamespace.Status.Message = []string{fmt.Sprintf(statusDict["namespace-exists"], fmt.Sprintf("%s-%s", subNamespace.GetNamespace(), subNamespace.GetName()))}
-				return
-			}
-		} else {
-			if !quotaExceeded {
-				childNamespaceObj := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", labels["edge-net.io/tenant"], subNamespace.GetName())}}
-				namespaceLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/kind": "sub", "edge-net.io/tenant": labels["edge-net.io/tenant"], "edge-net.io/owner": fmt.Sprintf("%s-%s", subNamespace.GetNamespace(), subNamespace.GetName())}
-				childNamespaceObj.SetLabels(namespaceLabels)
-				childNamespace, err = t.clientset.CoreV1().Namespaces().Create(context.TODO(), childNamespaceObj, metav1.CreateOptions{})
-				if err != nil {
-					// TODO: Error handling
-					subNamespace.Status.State = failure
-					subNamespace.Status.Message = []string{statusDict["subnamespace-failure"]}
-				}
-			} else {
-				// TODO: Error handling
+		if parentResourceQuota, err := t.clientset.CoreV1().ResourceQuotas(subNamespace.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", labels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
+			if parentResourceQuota.Spec.Hard.Cpu().Value() < cpuDemand && parentResourceQuota.Spec.Hard.Memory().Value() < memoryDemand {
 				subNamespace.Status.State = failure
 				subNamespace.Status.Message = []string{statusDict["quota-exceeded"]}
-				return
-			}
-		}
-
-		coreQuotaCPU := -cpuDemand
-		coreQuotaMemory := -memoryDemand
-		if subResourceQuota, err := t.clientset.CoreV1().ResourceQuotas(childNamespace.GetName()).Get(context.TODO(), "sub-quota", metav1.GetOptions{}); err == nil {
-			if subResourceQuota.Spec.Hard.Cpu().Value() >= cpuDecline && subResourceQuota.Spec.Hard.Memory().Value() >= memoryDecline {
-				quotaExceeded = false
 			} else {
-				return
-			}
-			coreQuotaCPU += subResourceQuota.Spec.Hard.Cpu().Value()
-			coreQuotaMemory += subResourceQuota.Spec.Hard.Memory().Value()
-			subResourceQuota.Spec.Hard["cpu"] = *resource.NewQuantity(cpuDemand, resource.DecimalSI)
-			subResourceQuota.Spec.Hard["memory"] = *resource.NewQuantity(memoryDemand, resource.BinarySI)
-			t.clientset.CoreV1().ResourceQuotas(childNamespace.GetName()).Update(context.TODO(), subResourceQuota, metav1.UpdateOptions{})
-		} else {
-			subResourceQuota := &corev1.ResourceQuota{}
-			subResourceQuota.Name = "sub-quota"
-			subResourceQuota.Spec = corev1.ResourceQuotaSpec{
-				Hard: map[corev1.ResourceName]resource.Quantity{
-					"cpu":    cpuResource,
-					"memory": memoryResource,
-				},
-			}
-			t.clientset.CoreV1().ResourceQuotas(childNamespace.GetName()).Create(context.TODO(), subResourceQuota, metav1.CreateOptions{})
-		}
+				childNamespace, err := t.clientset.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", labels["edge-net.io/tenant"], subNamespace.GetName()), metav1.GetOptions{})
+				if err == nil {
+					childNamespaceLabels := childNamespace.GetLabels()
+					if childNamespaceLabels["edge-net.io/owner"] != fmt.Sprintf("%s-%s", subNamespace.GetNamespace(), subNamespace.GetName()) {
+						// TODO: Error handling
+						subNamespace.Status.State = failure
+						subNamespace.Status.Message = []string{fmt.Sprintf(statusDict["namespace-exists"], fmt.Sprintf("%s-%s", subNamespace.GetNamespace(), subNamespace.GetName()))}
+						return
+					}
+				} else {
+					childNamespaceObj := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", labels["edge-net.io/tenant"], subNamespace.GetName())}}
+					namespaceLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/kind": "sub", "edge-net.io/tenant": labels["edge-net.io/tenant"], "edge-net.io/owner": fmt.Sprintf("%s-%s", subNamespace.GetNamespace(), subNamespace.GetName())}
+					childNamespaceObj.SetLabels(namespaceLabels)
+					childNamespace, err = t.clientset.CoreV1().Namespaces().Create(context.TODO(), childNamespaceObj, metav1.CreateOptions{})
+					if err != nil {
+						// TODO: Error handling
+						subNamespace.Status.State = failure
+						subNamespace.Status.Message = []string{statusDict["subnamespace-failure"]}
+					}
+				}
 
-		if !quotaExceeded {
-			coreResourceQuota, _ := t.clientset.CoreV1().ResourceQuotas(labels["edge-net.io/tenant"]).Get(context.TODO(), "core-quota", metav1.GetOptions{})
-			coreQuotaCPU += coreResourceQuota.Spec.Hard.Cpu().Value()
-			coreQuotaMemory += coreResourceQuota.Spec.Hard.Memory().Value()
-			coreResourceQuota.Spec.Hard["cpu"] = *resource.NewQuantity(coreQuotaCPU, resource.DecimalSI)
-			coreResourceQuota.Spec.Hard["memory"] = *resource.NewQuantity(coreQuotaMemory, resource.BinarySI)
-			t.clientset.CoreV1().ResourceQuotas(labels["edge-net.io/tenant"]).Update(context.TODO(), coreResourceQuota, metav1.UpdateOptions{})
+				parentQuotaCPU := -cpuDemand
+				parentQuotaMemory := -memoryDemand
+				if subResourceQuota, err := t.clientset.CoreV1().ResourceQuotas(childNamespace.GetName()).Get(context.TODO(), "sub-quota", metav1.GetOptions{}); err == nil {
+					parentQuotaCPU += subResourceQuota.Spec.Hard.Cpu().Value()
+					parentQuotaMemory += subResourceQuota.Spec.Hard.Memory().Value()
+					subResourceQuota.Spec.Hard["cpu"] = *resource.NewQuantity(cpuDemand, resource.DecimalSI)
+					subResourceQuota.Spec.Hard["memory"] = *resource.NewQuantity(memoryDemand, resource.BinarySI)
+					t.clientset.CoreV1().ResourceQuotas(childNamespace.GetName()).Update(context.TODO(), subResourceQuota, metav1.UpdateOptions{})
+				} else {
+					subResourceQuota := &corev1.ResourceQuota{}
+					subResourceQuota.Name = "sub-quota"
+					subResourceQuota.Spec = corev1.ResourceQuotaSpec{
+						Hard: map[corev1.ResourceName]resource.Quantity{
+							"cpu":    cpuResource,
+							"memory": memoryResource,
+						},
+					}
+					t.clientset.CoreV1().ResourceQuotas(childNamespace.GetName()).Create(context.TODO(), subResourceQuota, metav1.CreateOptions{})
+				}
 
-			if roleRaw, err := t.clientset.RbacV1().Roles(subNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subNamespace.Spec.Inheritance.RBAC {
-				// TODO: Provide err information at the status
-				for _, roleRow := range roleRaw.Items {
-					role := roleRow.DeepCopy()
-					role.SetNamespace(childNamespace.GetName())
-					role.SetUID(types.UID(uuid.New().String()))
-					t.clientset.RbacV1().Roles(childNamespace.GetName()).Create(context.TODO(), role, metav1.CreateOptions{})
+				parentQuotaCPU += parentResourceQuota.Spec.Hard.Cpu().Value()
+				parentQuotaMemory += parentResourceQuota.Spec.Hard.Memory().Value()
+				parentResourceQuota.Spec.Hard["cpu"] = *resource.NewQuantity(parentQuotaCPU, resource.DecimalSI)
+				parentResourceQuota.Spec.Hard["memory"] = *resource.NewQuantity(parentQuotaMemory, resource.BinarySI)
+				t.clientset.CoreV1().ResourceQuotas(labels["edge-net.io/tenant"]).Update(context.TODO(), parentResourceQuota, metav1.UpdateOptions{})
+
+				if roleRaw, err := t.clientset.RbacV1().Roles(subNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subNamespace.Spec.Inheritance.RBAC {
+					// TODO: Provide err information at the status
+					for _, roleRow := range roleRaw.Items {
+						role := roleRow.DeepCopy()
+						role.SetNamespace(childNamespace.GetName())
+						role.SetUID(types.UID(uuid.New().String()))
+						t.clientset.RbacV1().Roles(childNamespace.GetName()).Create(context.TODO(), role, metav1.CreateOptions{})
+					}
 				}
-			}
-			if roleBindingRaw, err := t.clientset.RbacV1().RoleBindings(subNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subNamespace.Spec.Inheritance.RBAC {
-				// TODO: Provide err information at the status
-				for _, roleBindingRow := range roleBindingRaw.Items {
-					roleBinding := roleBindingRow.DeepCopy()
-					roleBinding.SetNamespace(childNamespace.GetName())
-					roleBinding.SetUID(types.UID(uuid.New().String()))
-					t.clientset.RbacV1().RoleBindings(childNamespace.GetName()).Create(context.TODO(), roleBinding, metav1.CreateOptions{})
+				if roleBindingRaw, err := t.clientset.RbacV1().RoleBindings(subNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subNamespace.Spec.Inheritance.RBAC {
+					// TODO: Provide err information at the status
+					for _, roleBindingRow := range roleBindingRaw.Items {
+						roleBinding := roleBindingRow.DeepCopy()
+						roleBinding.SetNamespace(childNamespace.GetName())
+						roleBinding.SetUID(types.UID(uuid.New().String()))
+						t.clientset.RbacV1().RoleBindings(childNamespace.GetName()).Create(context.TODO(), roleBinding, metav1.CreateOptions{})
+					}
 				}
-			}
-			if networkPolicyRaw, err := t.clientset.NetworkingV1().NetworkPolicies(subNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subNamespace.Spec.Inheritance.NetworkPolicy {
-				// TODO: Provide err information at the status
-				for _, networkPolicyRow := range networkPolicyRaw.Items {
-					networkPolicy := networkPolicyRow.DeepCopy()
-					networkPolicy.SetNamespace(childNamespace.GetName())
-					networkPolicy.SetUID(types.UID(uuid.New().String()))
-					t.clientset.NetworkingV1().NetworkPolicies(childNamespace.GetName()).Create(context.TODO(), networkPolicy, metav1.CreateOptions{})
+				if networkPolicyRaw, err := t.clientset.NetworkingV1().NetworkPolicies(subNamespace.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subNamespace.Spec.Inheritance.NetworkPolicy {
+					// TODO: Provide err information at the status
+					for _, networkPolicyRow := range networkPolicyRaw.Items {
+						networkPolicy := networkPolicyRow.DeepCopy()
+						networkPolicy.SetNamespace(childNamespace.GetName())
+						networkPolicy.SetUID(types.UID(uuid.New().String()))
+						t.clientset.NetworkingV1().NetworkPolicies(childNamespace.GetName()).Create(context.TODO(), networkPolicy, metav1.CreateOptions{})
+					}
 				}
+				subNamespace.Status.State = established
+				subNamespace.Status.Message = []string{statusDict["subnamespace-ok"]}
 			}
-			subNamespace.Status.State = established
-			subNamespace.Status.Message = []string{statusDict["subnamespace-ok"]}
-		} else {
-			// TODO: Error handling
-			subNamespace.Status.State = failure
-			subNamespace.Status.Message = []string{statusDict["quota-exceeded"]}
 		}
 	}
 }
@@ -231,19 +214,19 @@ func (t *Handler) RunExpiryController() {
 							if childNamespaceObj, err := t.clientset.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", parentNamespaceLabels["edge-net.io/tenant"], updatedSubNamespace.GetName()), metav1.GetOptions{}); err == nil {
 								childNamespaceObjLabels := childNamespaceObj.GetLabels()
 								if childNamespaceObjLabels != nil && childNamespaceObjLabels["edge-net.io/generated"] == "true" && childNamespaceObjLabels["edge-net.io/owner"] == fmt.Sprintf("%s-%s", updatedSubNamespace.GetNamespace(), updatedSubNamespace.GetName()) {
-									coreResourceQuota, _ := t.clientset.CoreV1().ResourceQuotas(childNamespaceObjLabels["edge-net.io/tenant"]).Get(context.TODO(), "core-quota", metav1.GetOptions{})
-									coreQuotaCPU := coreResourceQuota.Spec.Hard.Cpu().Value()
-									coreQuotaMemory := coreResourceQuota.Spec.Hard.Memory().Value()
-									if subResourceQuota, err := t.clientset.CoreV1().ResourceQuotas(childNamespaceObj.GetName()).Get(context.TODO(), "sub-quota", metav1.GetOptions{}); err == nil {
-										coreQuotaCPU += subResourceQuota.Spec.Hard.Cpu().Value()
-										coreQuotaMemory += subResourceQuota.Spec.Hard.Memory().Value()
-									}
-									coreResourceQuota.Spec.Hard["cpu"] = *resource.NewQuantity(coreQuotaCPU, resource.DecimalSI)
-									coreResourceQuota.Spec.Hard["memory"] = *resource.NewQuantity(coreQuotaMemory, resource.BinarySI)
-									t.clientset.CoreV1().ResourceQuotas(childNamespaceObjLabels["edge-net.io/tenant"]).Update(context.TODO(), coreResourceQuota, metav1.UpdateOptions{})
+									if parentResourceQuota, err := t.clientset.CoreV1().ResourceQuotas(updatedSubNamespace.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", parentNamespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
+										parentQuotaCPU := parentResourceQuota.Spec.Hard.Cpu().Value()
+										parentQuotaMemory := parentResourceQuota.Spec.Hard.Memory().Value()
+										if subResourceQuota, err := t.clientset.CoreV1().ResourceQuotas(childNamespaceObj.GetName()).Get(context.TODO(), "sub-quota", metav1.GetOptions{}); err == nil {
+											parentQuotaCPU += subResourceQuota.Spec.Hard.Cpu().Value()
+											parentQuotaMemory += subResourceQuota.Spec.Hard.Memory().Value()
+										}
+										parentResourceQuota.Spec.Hard["cpu"] = *resource.NewQuantity(parentQuotaCPU, resource.DecimalSI)
+										parentResourceQuota.Spec.Hard["memory"] = *resource.NewQuantity(parentQuotaMemory, resource.BinarySI)
+										t.clientset.CoreV1().ResourceQuotas(updatedSubNamespace.GetNamespace()).Update(context.TODO(), parentResourceQuota, metav1.UpdateOptions{})
 
-									log.Println(updatedSubNamespace.GetName())
-									t.clientset.CoreV1().Namespaces().Delete(context.TODO(), childNamespaceObj.GetName(), metav1.DeleteOptions{})
+										t.clientset.CoreV1().Namespaces().Delete(context.TODO(), childNamespaceObj.GetName(), metav1.DeleteOptions{})
+									}
 								}
 							}
 						}
@@ -287,19 +270,19 @@ infiniteLoop:
 						if childNamespaceObj, err := t.clientset.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", parentNamespaceLabels["edge-net.io/tenant"], subNamespaceRow.GetName()), metav1.GetOptions{}); err == nil {
 							childNamespaceObjLabels := childNamespaceObj.GetLabels()
 							if childNamespaceObjLabels != nil && childNamespaceObjLabels["edge-net.io/generated"] == "true" && childNamespaceObjLabels["edge-net.io/owner"] == fmt.Sprintf("%s-%s", subNamespaceRow.GetNamespace(), subNamespaceRow.GetName()) {
-								coreResourceQuota, _ := t.clientset.CoreV1().ResourceQuotas(childNamespaceObjLabels["edge-net.io/tenant"]).Get(context.TODO(), "core-quota", metav1.GetOptions{})
-								coreQuotaCPU := coreResourceQuota.Spec.Hard.Cpu().Value()
-								coreQuotaMemory := coreResourceQuota.Spec.Hard.Memory().Value()
-								if subResourceQuota, err := t.clientset.CoreV1().ResourceQuotas(childNamespaceObj.GetName()).Get(context.TODO(), "sub-quota", metav1.GetOptions{}); err == nil {
-									coreQuotaCPU += subResourceQuota.Spec.Hard.Cpu().Value()
-									coreQuotaMemory += subResourceQuota.Spec.Hard.Memory().Value()
-								}
-								coreResourceQuota.Spec.Hard["cpu"] = *resource.NewQuantity(coreQuotaCPU, resource.DecimalSI)
-								coreResourceQuota.Spec.Hard["memory"] = *resource.NewQuantity(coreQuotaMemory, resource.BinarySI)
-								t.clientset.CoreV1().ResourceQuotas(childNamespaceObjLabels["edge-net.io/tenant"]).Update(context.TODO(), coreResourceQuota, metav1.UpdateOptions{})
+								if parentResourceQuota, err := t.clientset.CoreV1().ResourceQuotas(subNamespaceRow.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", parentNamespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
+									parentQuotaCPU := parentResourceQuota.Spec.Hard.Cpu().Value()
+									parentQuotaMemory := parentResourceQuota.Spec.Hard.Memory().Value()
+									if subResourceQuota, err := t.clientset.CoreV1().ResourceQuotas(childNamespaceObj.GetName()).Get(context.TODO(), "sub-quota", metav1.GetOptions{}); err == nil {
+										parentQuotaCPU += subResourceQuota.Spec.Hard.Cpu().Value()
+										parentQuotaMemory += subResourceQuota.Spec.Hard.Memory().Value()
+									}
+									parentResourceQuota.Spec.Hard["cpu"] = *resource.NewQuantity(parentQuotaCPU, resource.DecimalSI)
+									parentResourceQuota.Spec.Hard["memory"] = *resource.NewQuantity(parentQuotaMemory, resource.BinarySI)
+									t.clientset.CoreV1().ResourceQuotas(subNamespaceRow.GetNamespace()).Update(context.TODO(), parentResourceQuota, metav1.UpdateOptions{})
 
-								log.Println(subNamespaceRow.GetName())
-								t.clientset.CoreV1().Namespaces().Delete(context.TODO(), childNamespaceObj.GetName(), metav1.DeleteOptions{})
+									t.clientset.CoreV1().Namespaces().Delete(context.TODO(), childNamespaceObj.GetName(), metav1.DeleteOptions{})
+								}
 							}
 						}
 					}
