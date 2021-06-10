@@ -8,6 +8,10 @@ If you believe that you may be eligible to act as the local owner of a tenant, p
 
 If you would like to use EdgeNet but do not believe that you can act as a local owner, we encourage you to identify someone at your institution who is already an owner, or who would be willing to register as one. Once the registration of the tenant where you want to join is completed, please follow the instructions at [Registering a user in a tenant](#registering-a-user-in-a-tenant).
 
+1. [Registering a tenant](#registering-a-tenant)
+2. [Registering a user in a tenant](#registering-a-user-in-a-tenant)
+3. [Deploying containers](#deploying-containers)
+
 ## Registering a tenant
 
 In this section we show how you can set up a *tenant* on EdgeNet, with yourself as the tenant owner. A tenant owner takes responsibility for the approval of EdgeNet users who they can vouch for.
