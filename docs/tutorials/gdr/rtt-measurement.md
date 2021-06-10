@@ -107,8 +107,9 @@ spec:
 
 Using ``kubectl``, create a tenant request object:
 
-```
+```bash
 kubectl create -f ./tenantrequest.yaml --kubeconfig ./public.cfg
+# tenantrequest.registration.edgenet.io/lip6-lab created
 ```
 
 This will cause an e-mail containing a one-time code to be sent to the address that you specified.
@@ -119,8 +120,9 @@ The e-mail that you receive will contain a ``kubectl`` command that you can copy
 
 In the example here, the one-time code is ``bsv10kgeyo7pmazwpr``:
 
-```
+```bash
 kubectl patch emailverification bsv10kgeyo7pmazwpr --type='json' -p='[{"op": "replace", "path": "/spec/verified", "value": true}]' --kubeconfig ./public.cfg
+# emailverification.registration.edgenet.io/bsv10kgeyo7pmazwpr patched
 ```
 
 After you have done this, the EdgeNet system sends a notification e-mail to EdgeNet's central administrators, informing them of your registration request.
@@ -128,6 +130,14 @@ After you have done this, the EdgeNet system sends a notification e-mail to Edge
 #### Wait for approval and receipt of your permanent access credential
 
 At this point, the EdgeNet central administrators will, if needed, contact you, and, provided everything is in order, approve your registration request. Upon approval, you will receive two emails. The first one confirms that your registration is complete, while the second one contains your user information and user-specific kubeconfig file.
+
+The second email will contain the instructions to approve the [Acceptable Use Policy](https://www.edge-net.org/pages/usage-policy.html).
+Download the attached `edgenet-kubeconfig.cfg` file and run the command provided in the email.
+For example, for the `timurfriedman` user:
+```bash
+kubectl patch aup timurfriedman --type='json' -p='[{"op": "replace", "path": "/spec/accepted", "value": true}]' --kubeconfig ./edgenet-kubeconfig.cfg
+# acceptableusepolicy.core.edgenet.io/timurfriedman patched
+```
 
 You can now start using EdgeNet, as both administrator of your local tenant and as a regular user, with your user-specific kubeconfig file.
 
