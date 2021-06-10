@@ -431,7 +431,7 @@ kubectl get pods -l app=ping-source -o name | cut -d'/' -f2
 
 Execute `ping` inside the container:
 
-```
+```bash
 kubectl exec -it POD_NAME -- ping DESTINATION_INTERNAL_IP -c 10
 # PING 192.168.190.205 (192.168.190.205): 56 data bytes
 # 64 bytes from 192.168.190.205: seq=0 ttl=62 time=27.660 ms
