@@ -337,7 +337,7 @@ spec:
 When the ``selectivedeployment.yaml`` file is ready, you can create it as below:
 
 ```bash
-kubectl create -f selectivedeployment.yaml --kubeconfig /path/to/kubeconfig.cfg
+kubectl create -f selectivedeployment.yaml --kubeconfig edgenet-kubeconfig.cfg
 # selectivedeployment.apps.edgenet.io/rtt-experiment-destination created
 # selectivedeployment.apps.edgenet.io/rtt-experiment-source created
 ```
@@ -345,7 +345,7 @@ kubectl create -f selectivedeployment.yaml --kubeconfig /path/to/kubeconfig.cfg
 To delete it:
 
 ```bash
-kubectl delete -f selectivedeployment.yaml
+kubectl delete -f selectivedeployment.yaml --kubeconfig edgenet-kubeconfig.cfg
 # selectivedeployment.apps.edgenet.io "rtt-experiment-destination" deleted
 # selectivedeployment.apps.edgenet.io "rtt-experiment-source" deleted
 ```
