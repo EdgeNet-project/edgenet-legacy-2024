@@ -169,7 +169,7 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 	return code, created
 }
 
-// sendEmail to send notification to edgenet:tenant-admins and authorized users about email verification
+// sendEmail to send notification to tenant admins and authorized users about email verification
 func (t *Handler) sendEmail(subject, tenant, namespace, username, fullname, email, code string) {
 	// Set the HTML template variables
 	var contentData interface{}
@@ -187,13 +187,13 @@ func (t *Handler) sendEmail(subject, tenant, namespace, username, fullname, emai
 		verifyContent.CommonData = collective.CommonData
 		contentData = verifyContent
 	} else if subject == "user-email-verified-alert" {
-		// Put the email addresses of the edgenet:tenant-admins and authorized users in the email to be sent list
-		/*userRaw, _ := t.edgenetClientset.RegistrationV1alpha().Users(namespace).List(context.TODO(), metav1.ListOptions{})
-		for _, userRow := range userRaw.Items {
-			if strings.ToLower(userRow.Status.Type) == "admin" {
-				collective.CommonData.Email = append(collective.CommonData.Email, userRow.Spec.Email)
+		// Put the email addresses of the tenant admins and authorized users in the email to be sent list
+		tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenant, metav1.GetOptions{})
+		for _, userRow := range tenant.Spec.User {
+			if strings.ToLower(userRow.Role) == "owner" || strings.ToLower(userRow.Role) == "admin" {
+				collective.CommonData.Email = append(collective.CommonData.Email, userRow.Email)
 			}
-		}*/
+		}
 		contentData = collective
 	} else {
 		collective.CommonData.Email = []string{email}
@@ -219,7 +219,7 @@ func (t *Handler) statusUpdate(labels map[string]string) {
 		userRequestObj, _ := t.edgenetClientset.RegistrationV1alpha().UserRequests().Get(context.TODO(), labels["edge-net.io/user"], metav1.GetOptions{})
 		userRequestObj.Status.EmailVerified = true
 		t.edgenetClientset.RegistrationV1alpha().UserRequests().UpdateStatus(context.TODO(), userRequestObj, metav1.UpdateOptions{})
-		// Send email to inform edgenet:tenant-admins and authorized users
+		// Send email to inform edgenet tenant admins and authorized users
 		t.sendEmail("user-email-verified-alert", labels["edge-net.io/tenant"], "", labels["edge-net.io/user"],
 			fmt.Sprintf("%s %s", userRequestObj.Spec.FirstName, userRequestObj.Spec.LastName), "", "")
 	} else if strings.ToLower(labels["edge-net.io/registration"]) == "email" {
