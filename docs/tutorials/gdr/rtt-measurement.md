@@ -10,11 +10,11 @@ If you would like to use EdgeNet but do not believe that you can act as a local 
 
 ## Registering a tenant
 
-This tutorial describes whether and how you can set up an *tenant* on EdgeNet, with yourself as the tenant owner. A tenant owner takes responsibility for the approval of EdgeNet users who they can vouch for.
+In this section we show how you can set up a *tenant* on EdgeNet, with yourself as the tenant owner. A tenant owner takes responsibility for the approval of EdgeNet users who they can vouch for.
 
 Authorizations to use EdgeNet are handed out hierarchically, establishing a chain of responsibility. We, as the central administrators of EdgeNet, approve the establishment of tenants and their owners. An owner, in turn, approves the creation of individual user accounts. The owner can give some of those users administrative rights to, in turn, approve other users.
 
-A local tenant owner also approves the creation of *subsidiary namespaces*, which allows to share tenant resource quota with a group of users. And an owner manages, either directly or through a user to whom they delegate this role, any *nodes* that are contributed on behalf of the tenant to the EdgeNet cluster.
+A local tenant owner also approves the creation of *subsidiary namespaces*, which allows sharing tenant resource quotas with a group of users. And an owner manages, either directly or through a user to whom they delegate this role, any *nodes* that are contributed on behalf of the tenant to the EdgeNet cluster.
 
 #### A note on terminology for PlanetLab users
 
@@ -120,7 +120,7 @@ You can now start using EdgeNet, as both administrator of your local tenant and 
 
 ## Registering a user in a tenant
 
-This support page describes whether and how you can register a *user* in a tenant with EdgeNet.
+In this section we show how you can register a *user* in a tenant with EdgeNet.
 Your registration in a tenant is subject to the approval of that tenant's administrator. However, anyone
 who wants to use EdgeNet can make registration request in a tenant only to become a user.
 
@@ -206,7 +206,7 @@ The novel multi-tenancy model allows users to deploy their pods (containers) acr
 
 ### Creating a selective deployment
 
-EdgeNet is shining out with the geodiversity of its cluster. To take advantage of it, Selective Deployment is a feature that EdgeNet brings to Kubernetes to allow users to deploy pods onto nodes based on their locations.
+EdgeNet is shining out with the geodiversity of its cluster. To take advantage of it, **Selective Deployment** is a feature that EdgeNet brings to Kubernetes to allow users to deploy pods onto nodes based on their locations.
 
 In this tutorial, you will use the ping tool to measure RTT between a destination and sources. Therefore, you need to prepare two selective deployments, one for the destination and one for the sources. Here is an example ``selectivedeployment.yaml`` file:
 
@@ -315,7 +315,19 @@ spec:
 
 When the ``selectivedeployment.yaml`` file is ready, you can create it as below:
 
-```kubectl create -f selectivedeployment.yaml --kubeconfig /path/to/kubeconfig.cfg```
+```bash
+kubectl create -f selectivedeployment.yaml --kubeconfig /path/to/kubeconfig.cfg
+# selectivedeployment.apps.edgenet.io/rtt-experiment-destination created
+# selectivedeployment.apps.edgenet.io/rtt-experiment-source created
+```
+
+To delete it:
+
+```bash
+kubectl delete -f selectivedeployment.yaml
+# selectivedeployment.apps.edgenet.io "rtt-experiment-destination" deleted
+# selectivedeployment.apps.edgenet.io "rtt-experiment-source" deleted
+```
 
 ### Monitoring the deployment
 
@@ -323,21 +335,77 @@ At this step, you will verify the deployment status. We omit ``--kubeconfig`` an
 
 You can check the statuses of selective deployments (sd) as below:
 
-```kubectl describe sd rtt-experiment-destination rtt-experiment-source```
+```bash
+kubectl get sd
+# NAME                         READY   STATUS    AGE
+# rtt-experiment-destination   1/1     Running   35s
+# rtt-experiment-source        1/1     Running   35s
+```
+
+```bash
+kubectl describe sd rtt-experiment-destination
+# Name:         rtt-experiment-destination
+# Namespace:    ...
+# Labels:       <none>
+# Annotations:  <none>
+# API Version:  apps.edgenet.io/v1alpha
+# Kind:         SelectiveDeployment
+# Metadata: ...
+```
 
 View the statuses of deployment and daemonset:
 
-```kubectl describe deployment ping-destination```
+```bash
+kubectl describe deployment ping-destination
+# Name:                   ping-destination
+# Namespace:              ...
+# CreationTimestamp:      Thu, 10 Jun 2021 09:36:41 +0200
+# Labels:                 app=ping-destination
+# Annotations:            deployment.kubernetes.io/revision: 1
+# Selector:               app=ping-destination
+# Replicas:               1 desired | 1 updated | 1 total | 1 available | 0 unavailable
+# StrategyType:           RollingUpdate
+# ...
+```
 
-```kubectl describe daemonset ping-source```
+```bash
+kubectl describe daemonset ping-source
+# Name:           ping-source
+# Selector:       app=ping-source
+# Node-Selector:  <none>
+# Labels:         app=ping-source
+# Annotations:    deprecated.daemonset.template.generation: 1
+# Desired Number of Nodes Scheduled: 3
+# Current Number of Nodes Scheduled: 3
+# Number of Nodes Scheduled with Up-to-date Pods: 3
+# Number of Nodes Scheduled with Available Pods: 2
+# Number of Nodes Misscheduled: 0
+# Pods Status:  2 Running / 1 Waiting / 0 Succeeded / 0 Failed
+# ...
+```
 
 It is also possible to list the pods:
 
-```kubectl get pods -o wide```
+```bash
+kubectl get pods -o wide
+# NAME                                READY   STATUS    RESTARTS   AGE     IP                NODE                             
+# ping-destination-67d885476d-bdbhp   1/1     Running   0          2m48s   192.168.190.255   bbn-1.edge-net.io
+# ping-source-57t9g                   1/1     Running   0          2m48s   192.168.62.42     aws-eu-west-1a-7fe2.edge-net.io
+# ping-source-7hlt2                   1/1     Running   0          2m48s   192.168.255.111   case-1.edge-net.io
+# ping-source-xb7cb                   1/1     Running   0          2m48s   192.168.190.203   bbn-1.edge-net.io
+```
 
 To get the logs of a pod:
 
-```kubectl logs POD_NAME```
+```bash
+kubectl logs POD_NAME
+```
+
+To get a shell to a running container:
+
+```bash
+kubectl exec -it POD_NAME -- sh
+```
 
 ### Using the ping command
 
@@ -347,26 +415,55 @@ From this point on, you will ping toward the destination from the sources by the
 
 Retrieve the destination pod's internal IP address by:
 
-```kubectl get pods -l app=ping-destination -o jsonpath='{.items[0].status.podIP}'```
+```bash
+kubectl get pods -l app=ping-destination -o jsonpath='{.items[0].status.podIP}'
+# 192.168.190.204 (example)
+```
 
 List the source pod names:
 
-```kubectl get pods -l app=ping-source -o name | cut -d'/' -f2```
+```bash
+kubectl get pods -l app=ping-source -o name | cut -d'/' -f2
+# ping-source-5fn22 (example)
+# ping-source-r6d9j (example)
+# ping-source-w6pvp (example)
+```
 
-Get a shell to a running container:
+Execute `ping` inside the container:
 
-```kubectl exec -it POD_NAME -- ping DESTINATION_INTERNAL_IP -c 10```
+```
+kubectl exec -it POD_NAME -- ping DESTINATION_INTERNAL_IP -c 10
+# PING 192.168.190.205 (192.168.190.205): 56 data bytes
+# 64 bytes from 192.168.190.205: seq=0 ttl=62 time=27.660 ms
+# 64 bytes from 192.168.190.205: seq=1 ttl=62 time=27.592 ms
+# 64 bytes from 192.168.190.205: seq=2 ttl=62 time=27.430 ms
+# ...
+```
 
 #### Ping to External IP address
 
 Retrieve the destination pod's internal IP address by:
 
-```kubectl get pods -l app=ping-destination -o jsonpath='{.items[0].status.hostIP}'```
+```bash
+kubectl get pods -l app=ping-destination -o jsonpath='{.items[0].status.hostIP}'
+# 192.1.242.150 (example)
+```
 
 List the source pod names:
 
-```kubectl get pods -l app=ping-source -o name | cut -d'/' -f2```
+```bash
+kubectl get pods -l app=ping-source -o name | cut -d'/' -f2
+# ping-source-5fn22 (example)
+# ping-source-r6d9j (example)
+# ping-source-w6pvp (example)
+```
 
-Get a shell to a running container:
+Execute `ping` inside the container:
 
-```kubectl exec -it POD_NAME -- ping DESTINATION_EXTERNAL_IP -c 10```
+```bash
+kubectl exec -it POD_NAME -- ping DESTINATION_EXTERNAL_IP -c 10
+# PING 192.1.242.150 (192.1.242.150): 56 data bytes
+# 64 bytes from 192.1.242.150: seq=0 ttl=54 time=27.654 ms
+# 64 bytes from 192.1.242.150: seq=1 ttl=54 time=27.395 ms
+# 64 bytes from 192.1.242.150: seq=2 ttl=54 time=27.463 ms
+```
