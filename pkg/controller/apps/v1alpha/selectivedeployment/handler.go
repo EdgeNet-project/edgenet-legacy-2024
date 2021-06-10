@@ -180,7 +180,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 				failureCounter += failureCount
 				_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Create(context.TODO(), configuredDeployment.(*appsv1.Deployment), metav1.CreateOptions{})
 				if err != nil {
-					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDeployment.GetName()))
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["deployment-creation-failure"], sdDeployment.GetName(), err))
 					failureCounter++
 				}
 			} else {
@@ -191,7 +191,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().Deployments(sdCopy.GetNamespace()).Update(context.TODO(), configuredDeployment.(*appsv1.Deployment), metav1.UpdateOptions{})
 					if err != nil {
-						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDeployment.GetName()))
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDeployment.GetName(), err))
 						failureCounter++
 					}
 				} else {
@@ -210,7 +210,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 				failureCounter += failureCount
 				_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Create(context.TODO(), configuredDaemonSet.(*appsv1.DaemonSet), metav1.CreateOptions{})
 				if err != nil {
-					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDaemonset.GetName()))
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDaemonset.GetName(), err))
 					failureCounter++
 				}
 			} else {
@@ -221,7 +221,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().DaemonSets(sdCopy.GetNamespace()).Update(context.TODO(), configuredDaemonSet.(*appsv1.DaemonSet), metav1.UpdateOptions{})
 					if err != nil {
-						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDaemonset.GetName()))
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], sdDaemonset.GetName(), err))
 						failureCounter++
 					}
 				} else {
@@ -240,7 +240,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 				failureCounter += failureCount
 				_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Create(context.TODO(), configuredStatefulSet.(*appsv1.StatefulSet), metav1.CreateOptions{})
 				if err != nil {
-					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-creation-failure"], sdStatefulset.GetName()))
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-creation-failure"], sdStatefulset.GetName(), err))
 					failureCounter++
 				}
 			} else {
@@ -251,7 +251,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 					failureCounter += failureCount
 					_, err = t.clientset.AppsV1().StatefulSets(sdCopy.GetNamespace()).Update(context.TODO(), configuredStatefulSet.(*appsv1.StatefulSet), metav1.UpdateOptions{})
 					if err != nil {
-						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-creation-failure"], sdStatefulset.GetName()))
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-creation-failure"], sdStatefulset.GetName(), err))
 						failureCounter++
 					}
 				} else {
@@ -270,7 +270,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 				failureCounter += failureCount
 				_, err = t.clientset.BatchV1().Jobs(sdCopy.GetNamespace()).Create(context.TODO(), configuredJob.(*batchv1.Job), metav1.CreateOptions{})
 				if err != nil {
-					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["job-creation-failure"], sdJob.GetName()))
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["job-creation-failure"], sdJob.GetName(), err))
 					failureCounter++
 				}
 			} else {
@@ -281,7 +281,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 					failureCounter += failureCount
 					_, err = t.clientset.BatchV1().Jobs(sdCopy.GetNamespace()).Update(context.TODO(), configuredJob.(*batchv1.Job), metav1.UpdateOptions{})
 					if err != nil {
-						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["job-creation-failure"], sdJob.GetName()))
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["job-creation-failure"], sdJob.GetName(), err))
 						failureCounter++
 					}
 				} else {
@@ -300,7 +300,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 				failureCounter += failureCount
 				_, err = t.clientset.BatchV1beta1().CronJobs(sdCopy.GetNamespace()).Create(context.TODO(), configuredCronJob.(*batchv1beta.CronJob), metav1.CreateOptions{})
 				if err != nil {
-					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-creation-failure"], sdCronJob.GetName()))
+					sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-creation-failure"], sdCronJob.GetName(), err))
 					failureCounter++
 				}
 			} else {
@@ -311,7 +311,7 @@ func (t *SDHandler) applyCriteria(sdCopy *apps_v1alpha.SelectiveDeployment, even
 					failureCounter += failureCount
 					_, err = t.clientset.BatchV1beta1().CronJobs(sdCopy.GetNamespace()).Update(context.TODO(), configuredCronJob.(*batchv1beta.CronJob), metav1.UpdateOptions{})
 					if err != nil {
-						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-creation-failure"], sdCronJob.GetName()))
+						sdCopy.Status.Message = append(sdCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-creation-failure"], sdCronJob.GetName(), err))
 						failureCounter++
 					}
 				} else {
