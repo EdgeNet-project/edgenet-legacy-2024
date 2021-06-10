@@ -196,7 +196,7 @@ func MakeConfig(tenant, username, email string, clientCert, clientKey []byte) er
 	}*/
 	// Put the collected data into new kubeconfig file
 	/*newKubeConfig := kubeconfigutil.CreateWithCerts(server, cluster, email, CA, clientKey, clientCert)
-	newKubeConfig.Contexts[newKubeConfig.CurrentContext].Namespace = fmt.Sprintf("tenant-%s", tenant)
+	newKubeConfig.Contexts[newKubeConfig.CurrentContext].Namespace = tenant
 	kubeconfigutil.WriteToDisk(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", tenant, username), newKubeConfig)*/
 	// Check if the creation process is completed
 	/*_, err = ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", tenant, username))
@@ -224,7 +224,7 @@ func MakeConfig(tenant, username, email string, clientCert, clientKey []byte) er
 	}
 	rawConfig.AuthInfos = map[string]*api.AuthInfo{}
 	userContext := rawConfig.Contexts[rawConfig.CurrentContext]
-	userContext.Namespace = fmt.Sprintf("tenant-%s", tenant)
+	userContext.Namespace = tenant
 	userContext.AuthInfo = email
 	rawConfig.Contexts = map[string]*api.Context{}
 	rawConfig.Contexts[tenant] = userContext
