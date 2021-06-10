@@ -8,9 +8,18 @@ If you believe that you may be eligible to act as the local owner of a tenant, p
 
 If you would like to use EdgeNet but do not believe that you can act as a local owner, we encourage you to identify someone at your institution who is already an owner, or who would be willing to register as one. Once the registration of the tenant where you want to join is completed, please follow the instructions at [Registering a user in a tenant](#registering-a-user-in-a-tenant).
 
+1. [Prerequisites](#prerequisites)
 1. [Registering a tenant](#registering-a-tenant)
-2. [Registering a user in a tenant](#registering-a-user-in-a-tenant)
-3. [Deploying containers](#deploying-containers)
+1. [Registering a user in a tenant](#registering-a-user-in-a-tenant)
+1. [Deploying containers](#deploying-containers)
+
+## Prerequisites
+
+To follow this tutorial you will need [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview/), the [Kubernetes](https://kubernetes.io/) command-line interface.
+
+- [Install kubectl on Linux](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux)
+- [Install kubectl on macOS](https://kubernetes.io/docs/tasks/tools/install-kubectl-macos)
+- [Install kubectl on Windows](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows)
 
 ## Registering a tenant
 
