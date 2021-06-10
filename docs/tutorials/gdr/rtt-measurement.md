@@ -33,12 +33,6 @@ A local tenant owner also approves the creation of *subsidiary namespaces*, whic
 
 For those of you familiar with PlanetLab, a tenant is similar to a *site* and a local tenant owner is similar to a *PI*.
 
-### Technologies you will use
-
-You will use [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview/), the [Kubernetes](https://kubernetes.io/) command-line interface, in conjunction with e-mail.
-
-Or, you can register via [the console](https://console.edge-net.org/signup) with an attractive user interface design to facilitate the process. If you take yourself to the console, you no longer need to follow these instructions as it provides you a classical registration procedure.
-
 ### What you will do
 
 You will use a public kubeconfig file provided by EdgeNet to create a *registration request* object that is associated with your e-mail address. Object creation generates an e-mail to you, containing a one-time code. You will authenticate yourself by using that code to patch the object. This will alert EdgeNet's central administrators, who will, if all is in order, approve your request. With approval, you receive via e-mail a kubeconfig file that is specific to you and that allows you to act as both the local owner and a user of your tenant.
@@ -147,12 +141,6 @@ In this section we show how you can register a *user* in a tenant with EdgeNet.
 Your registration in a tenant is subject to the approval of that tenant's administrator. However, anyone
 who wants to use EdgeNet can make registration request in a tenant only to become a user.
 
-### Technologies you will use
-
-You will use [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview/), the [Kubernetes](https://kubernetes.io/) command-line interface, in conjunction with e-mail.
-
-Or, you can register via [the console](https://console.edge-net.org/signup) with an attractive user interface design to facilitate the process. If you take yourself to the console, you no longer need to follow these instructions as it provides you a classical registration procedure.
-
 ### What you will do
 
 You will use a public kubeconfig file provided by EdgeNet to create a *registration request* object that is associated with your e-mail address. Object creation generates an e-mail to you, containing a one-time code. You will authenticate yourself by using that code to patch the object. This will alert the tenant administrators, who will, if all is in order, approve your request. With approval, you receive via e-mail a kubeconfig file that is specific to you and that allows you to act as a user of the tenant from which you make the request.
@@ -199,8 +187,9 @@ spec:
 
 Using ``kubectl``, create a user registration request object:
 
-```
+```bash
 kubectl create -f ./userregistrationrequest.yaml --kubeconfig ./public.cfg
+# userrequest.registration.edgenet.io/bsenel created
 ```
 
 This will cause an e-mail containing a one-time code to be sent to the address that you specified.
@@ -211,8 +200,9 @@ The e-mail that you receive will contain a ``kubectl`` command that you can copy
 
 In the example here, the one-time code is ``bsv10kgeyo7pmazwpr``:
 
-```
+```bash
 kubectl patch emailverification bsv10kgeyo7pmazwpr --type='json' -p='[{"op": "replace", "path": "/spec/verified", "value": true}]' --kubeconfig ./public.cfg
+# emailverification.registration.edgenet.io/bsv10kgeyo7pmazwpr patched
 ```
 
 After you have done this, the EdgeNet system sends a notification e-mail to the tenant administrators, informing them of your registration request.
@@ -220,6 +210,14 @@ After you have done this, the EdgeNet system sends a notification e-mail to the 
 #### Wait for approval and receipt of your permanent access credential
 
 At this point, the tenant administrators will, if needed, contact you, and, provided everything is in order, approve your registration request. Upon approval, you will receive an email that confirms that your registration is complete, and contains your user information and user-specific kubeconfig file.
+
+The email will contain the instructions to approve the [Acceptable Use Policy](https://www.edge-net.org/pages/usage-policy.html).
+Download the attached `edgenet-kubeconfig.cfg` file and run the command provided in the email.
+For example, for the `bsenel` user:
+```bash
+kubectl patch aup bsenel --type='json' -p='[{"op": "replace", "path": "/spec/accepted", "value": true}]' --kubeconfig ./edgenet-kubeconfig.cfg
+# acceptableusepolicy.core.edgenet.io/bsenel patched
+```
 
 You can now start using EdgeNet, as a regular user, with your user-specific kubeconfig file.
 
