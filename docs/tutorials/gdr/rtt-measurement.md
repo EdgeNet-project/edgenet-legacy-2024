@@ -177,7 +177,7 @@ kind: UserRequest
 metadata:
   name: bsenel
 spec:
-  tenant: lip6-lab
+  tenant: gdr-tutorial
   firstname: Berat
   lastname: Senel
   email: berat.senel@lip6.fr
@@ -236,34 +236,34 @@ In this tutorial, you will use the ping tool to measure RTT between a destinatio
 apiVersion: apps.edgenet.io/v1alpha
 kind: SelectiveDeployment
 metadata:
-  name: rtt-experiment-destination
-  namespace: <your-core-namespace>
+  name: rtt-experiment-destination-<username>
+  namespace: gdr-tutorial
 spec:
   workloads:
     deployment:
       - apiVersion: apps/v1
         kind: Deployment
         metadata:
-          name: ping-destination
-          namespace: <your-core-namespace>
+          name: ping-destination-<username>
+          namespace: gdr-tutorial
           labels:
-            app: ping-destination
+            app: ping-destination-<username>
         spec:
           replicas: 1
           selector:
             matchLabels:
-              app: ping-destination
+              app: ping-destination-<username>
           template:
             metadata:
               labels:
-                app: ping-destination
+                app: ping-destination-<username>
             spec:
               tolerations:
                 - key: node-role.kubernetes.io/master
                   operator: Exists
                   effect: NoSchedule
               containers:
-                - name: ping-destination
+                - name: ping-destination-<username>
                   image: busybox
                   command: ['/bin/sh', '-c', 'sleep infinity']
                   resources:
@@ -284,33 +284,33 @@ spec:
 apiVersion: apps.edgenet.io/v1alpha
 kind: SelectiveDeployment
 metadata:
-  name: rtt-experiment-source
-  namespace: <your-core-namespace>
+  name: rtt-experiment-source-<username>
+  namespace: gdr-tutorial
 spec:
   workloads:
     daemonset:
       - apiVersion: apps/v1
         kind: DaemonSet
         metadata:
-          name: ping-source
-          namespace: <your-core-namespace>
+          name: ping-source-<username>
+          namespace: gdr-tutorial
           labels:
-            app: ping-source
+            app: ping-source-<username>
         spec:
           selector:
             matchLabels:
-              app: ping-source
+              app: ping-source-<username>
           template:
             metadata:
               labels:
-                app: ping-source
+                app: ping-source-<username>
             spec:
               tolerations:
                 - key: node-role.kubernetes.io/master
                   operator: Exists
                   effect: NoSchedule
               containers:
-                - name: ping-source
+                - name: ping-source-<username>
                   image: busybox
                   command: ['/bin/sh', '-c', 'sleep infinity']
                   resources:
