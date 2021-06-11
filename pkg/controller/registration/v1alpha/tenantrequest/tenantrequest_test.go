@@ -3,7 +3,6 @@ package tenantrequest
 import (
 	"context"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -176,103 +175,12 @@ func TestCreate(t *testing.T) {
 		_, err = g.edgenetClient.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tenantRequest.GetName(), metav1.GetOptions{})
 		util.Equals(t, true, errors.IsNotFound(err))
 	})
-	t.Run("collision", func(t *testing.T) {
-		tenantRequest1 := g.tenantRequestObj.DeepCopy()
-		tenantRequest1.SetName(g.tenantObj.GetName())
-		tenantRequest2 := g.tenantRequestObj.DeepCopy()
-		tenantRequest2.SetName("different")
-		tenantRequest2.SetUID("UIDtenantRequest2")
-		tenantRequest3 := g.tenantRequestObj.DeepCopy()
-		tenantRequest3.SetName("different")
-		tenantRequest3.Spec.Contact.Email = g.userObj.Email
-		tenantRequest4 := g.tenantRequestObj.DeepCopy()
-		tenantRequest4.SetName("different")
-		tenantRequest4.Spec.Contact.Email = g.userRequestObj.Spec.Email
-		// Create a user, a tenant request, and user registration request for comparison
-		tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
-		util.OK(t, err)
-		tenant.Spec.User = append(tenant.Spec.User, g.userObj)
-		_, err = g.edgenetClient.CoreV1alpha().Tenants().Update(context.TODO(), tenant, metav1.UpdateOptions{})
-		util.OK(t, err)
-		_, err = g.edgenetClient.RegistrationV1alpha().UserRequests().Create(context.TODO(), g.userRequestObj.DeepCopy(), metav1.CreateOptions{})
-		util.OK(t, err)
-		_, err = g.edgenetClient.RegistrationV1alpha().TenantRequests().Create(context.TODO(), g.tenantRequestObj.DeepCopy(), metav1.CreateOptions{})
-		util.OK(t, err)
-
-		cases := map[string]struct {
-			request  *registrationv1alpha.TenantRequest
-			expected string
-		}{
-			"name/tenant":                   {tenantRequest1, fmt.Sprintf(statusDict["tenant-taken"], tenantRequest1.GetName())},
-			"email/tenantrequest":           {tenantRequest2, fmt.Sprintf(statusDict["email-used-auth"], tenantRequest2.Spec.Contact.Email)},
-			"email/user":                    {tenantRequest3, fmt.Sprintf(statusDict["email-exist"], tenantRequest3.Spec.Contact.Email)},
-			"email/userregistrationrequest": {tenantRequest4, fmt.Sprintf(statusDict["email-used-reg"], tenantRequest4.Spec.Contact.Email)},
-		}
-		for k, tc := range cases {
-			t.Run(k, func(t *testing.T) {
-				_, err := g.edgenetClient.RegistrationV1alpha().TenantRequests().Create(context.TODO(), tc.request.DeepCopy(), metav1.CreateOptions{})
-				util.OK(t, err)
-				g.handler.ObjectCreatedOrUpdated(tc.request.DeepCopy())
-				tenantRequest, err := g.edgenetClient.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tc.request.GetName(), metav1.GetOptions{})
-				util.OK(t, err)
-				util.Equals(t, tc.expected, tenantRequest.Status.Message[0])
-				g.edgenetClient.RegistrationV1alpha().TenantRequests().Delete(context.TODO(), tc.request.GetName(), metav1.DeleteOptions{})
-			})
-		}
-	})
 }
 
 func TestUpdate(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
-	t.Run("collision", func(t *testing.T) {
-		tenantRequest := g.tenantRequestObj
-		tenantRequestComparison := tenantRequest.DeepCopy()
-		tenantRequestComparison.SetUID("UID")
-		tenantRequestComparison.SetName("different")
-		tenantRequestComparison.Spec.Contact.Email = "duplicate@edge-net.org"
-		tenantRequest1 := tenantRequest.DeepCopy()
-		tenantRequest1.Spec.Contact.Email = tenantRequestComparison.Spec.Contact.Email
-		tenantRequest2 := tenantRequest.DeepCopy()
-		tenantRequest2.Spec.Contact.Email = g.userObj.Email
-		tenantRequest3 := tenantRequest.DeepCopy()
-		tenantRequest3.Spec.Contact.Email = g.userRequestObj.Spec.Email
-		tenantRequest4 := tenantRequest.DeepCopy()
-		tenantRequest4.Spec.Contact.Email = "different@edge-net.org"
-
-		// Create a user, a tenant request, and user registration request for comparison
-		_, err := g.edgenetClient.RegistrationV1alpha().UserRequests().Create(context.TODO(), g.userRequestObj.DeepCopy(), metav1.CreateOptions{})
-		util.OK(t, err)
-		_, err = g.edgenetClient.RegistrationV1alpha().TenantRequests().Create(context.TODO(), tenantRequestComparison.DeepCopy(), metav1.CreateOptions{})
-		util.OK(t, err)
-		_, err = g.edgenetClient.RegistrationV1alpha().TenantRequests().Create(context.TODO(), tenantRequest.DeepCopy(), metav1.CreateOptions{})
-		util.OK(t, err)
-
-		var status = registrationv1alpha.TenantRequestStatus{}
-		cases := map[string]struct {
-			request  *registrationv1alpha.TenantRequest
-			expected []string
-		}{
-			"email/tenantrequest/duplicate":           {tenantRequest1, []string{failure}},
-			"email/user/duplicate":                    {tenantRequest2, []string{failure}},
-			"email/userregistrationrequest/duplicate": {tenantRequest3, []string{failure}},
-			"email/unique":                            {tenantRequest4, []string{success, issue, ""}},
-		}
-		for k, tc := range cases {
-			t.Run(k, func(t *testing.T) {
-				tc.request.Status = status
-				_, err := g.edgenetClient.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tc.request.DeepCopy(), metav1.UpdateOptions{})
-				util.OK(t, err)
-				g.handler.ObjectCreatedOrUpdated(tc.request.DeepCopy())
-				tenantRequest, err := g.edgenetClient.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tc.request.GetName(), metav1.GetOptions{})
-				util.OK(t, err)
-				util.EqualsMultipleExp(t, tc.expected, tenantRequest.Status.State)
-				status = tenantRequest.Status
-			})
-		}
-	})
-
 	t.Run("approval", func(t *testing.T) {
 		// Updating tenant request status to approved
 		g.tenantRequestObj.Spec.Approved = true

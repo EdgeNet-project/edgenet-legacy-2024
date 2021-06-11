@@ -17,7 +17,6 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
@@ -189,62 +188,6 @@ func TestCreate(t *testing.T) {
 		_, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner", g.tenantObj.GetName(), g.tenantObj.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
-}
-
-func TestCollision(t *testing.T) {
-	g := TestGroup{}
-	g.Init()
-	g.handler.Init(g.client, g.edgenetClient)
-
-	tenantRequest1 := g.tenantRequestObj.DeepCopy()
-	tenantRequest1.Spec.Contact.Email = g.tenantObj.Spec.Contact.Email
-	tenantRequest2 := g.tenantRequestObj.DeepCopy()
-	tenantRequest2.SetName(g.tenantObj.GetName())
-	tenantRequest3 := g.tenantRequestObj.DeepCopy()
-
-	user1 := g.userObj
-	user1.Email = g.tenantObj.Spec.Contact.Email
-	user2 := g.userObj
-
-	tenant1 := g.tenantObj.DeepCopy()
-	tenant1.SetName("tenant-1-diff")
-	tenant1.Spec.Contact.Email = user1.Email
-	tenant1.Spec.User[0].Email = user1.Email
-
-	tenant2 := g.tenantObj.DeepCopy()
-	tenant2.SetName("tenant-2-diff")
-	tenant2.Spec.Contact.Email = user2.Email
-	tenant2.Spec.User[0].Email = user2.Email
-
-	cases := map[string]struct {
-		request  interface{}
-		kind     string
-		expected bool
-	}{
-		"ar/email":   {tenantRequest1, "TenantRequest", true},
-		"ar/name":    {tenantRequest2, "TenantRequest", true},
-		"ar/none":    {tenantRequest3, "TenantRequest", false},
-		"user/email": {tenant1, "User", true},
-		"user/none":  {tenant2, "User", false},
-	}
-	for k, tc := range cases {
-		t.Run(k, func(t *testing.T) {
-			if tc.kind == "TenantRequest" {
-				_, err := g.edgenetClient.RegistrationV1alpha().TenantRequests().Create(context.TODO(), tc.request.(*registrationv1alpha.TenantRequest), metav1.CreateOptions{})
-				util.OK(t, err)
-				defer g.edgenetClient.RegistrationV1alpha().TenantRequests().Delete(context.TODO(), tc.request.(*registrationv1alpha.TenantRequest).GetName(), metav1.DeleteOptions{})
-				g.handler.checkDuplicateObject(g.tenantObj.DeepCopy())
-				_, err = g.edgenetClient.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tc.request.(*registrationv1alpha.TenantRequest).GetName(), metav1.GetOptions{})
-				util.Equals(t, tc.expected, errors.IsNotFound(err))
-			} else if tc.kind == "User" {
-				_, err := g.edgenetClient.CoreV1alpha().Tenants().Create(context.TODO(), tc.request.(*corev1alpha.Tenant), metav1.CreateOptions{})
-				util.OK(t, err)
-				defer g.edgenetClient.CoreV1alpha().Tenants().Delete(context.TODO(), tc.request.(*corev1alpha.Tenant).GetName(), metav1.DeleteOptions{})
-				exists, _ := g.handler.checkDuplicateObject(g.tenantObj.DeepCopy())
-				util.Equals(t, tc.expected, exists)
-			}
-		})
-	}
 }
 
 func TestUpdate(t *testing.T) {

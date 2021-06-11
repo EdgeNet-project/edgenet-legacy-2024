@@ -29,7 +29,6 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 
 	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
@@ -70,70 +69,59 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 				}
 			}
 		}()
-		// Check if the email address of user or tenant name is already taken
-		exists, message := t.checkDuplicateObject(tenantRequest)
-		if exists {
-			tenantRequest.Status.State = failure
-			tenantRequest.Status.Message = message
-			// Set the approval timeout which is 72 hours
-			tenantRequest.Status.Expiry = &metav1.Time{
-				Time: time.Now().Add(72 * time.Hour),
+		if tenantRequest.Spec.Approved {
+			tenantHandler := tenant.Handler{}
+			tenantHandler.Init(t.clientset, t.edgenetClientset)
+			created := tenantHandler.Create(tenantRequest)
+			if created {
+				tenantRequest.Status.State = approved
+				tenantRequest.Status.Message = []string{statusDict["tenant-approved"]}
+			} else {
+				t.sendEmail("tenant-creation-failure", tenantRequest)
+				tenantRequest.Status.State = failure
+				tenantRequest.Status.Message = []string{statusDict["tenant-failed"]}
 			}
 		} else {
-			if tenantRequest.Spec.Approved {
-				tenantHandler := tenant.Handler{}
-				tenantHandler.Init(t.clientset, t.edgenetClientset)
-				created := tenantHandler.Create(tenantRequest)
+			if tenantRequest.Status.Expiry == nil {
+				// Set the approval timeout which is 72 hours
+				tenantRequest.Status.Expiry = &metav1.Time{
+					Time: time.Now().Add(72 * time.Hour),
+				}
+			}
+			isCreated := false
+			labels := tenantRequest.GetLabels()
+			if labels != nil && labels[fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username)] != "" {
+				if _, err := t.edgenetClientset.RegistrationV1alpha().EmailVerifications().Get(context.TODO(), labels[fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username)], metav1.GetOptions{}); err == nil {
+					isCreated = true
+				}
+			}
+			if !isCreated {
+				emailVerificationHandler := emailverification.Handler{}
+				emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
+				code, created := emailVerificationHandler.Create(tenantRequest, SetAsOwnerReference(tenantRequest))
 				if created {
-					tenantRequest.Status.State = approved
-					tenantRequest.Status.Message = []string{statusDict["tenant-approved"]}
-				} else {
-					t.sendEmail("tenant-creation-failure", tenantRequest)
-					tenantRequest.Status.State = failure
-					tenantRequest.Status.Message = []string{statusDict["tenant-failed"]}
-				}
-			} else {
-				if tenantRequest.Status.Expiry == nil {
-					// Set the approval timeout which is 72 hours
-					tenantRequest.Status.Expiry = &metav1.Time{
-						Time: time.Now().Add(72 * time.Hour),
+					if labels == nil {
+						labels = map[string]string{fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username): code}
+					} else if labels[fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username)] == "" {
+						labels[fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username)] = code
 					}
-				}
-				isCreated := false
-				labels := tenantRequest.GetLabels()
-				if labels != nil && labels[fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username)] != "" {
-					if _, err := t.edgenetClientset.RegistrationV1alpha().EmailVerifications().Get(context.TODO(), labels[fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username)], metav1.GetOptions{}); err == nil {
-						isCreated = true
+					tenantRequest.SetLabels(labels)
+					tenantRequestUpdated, err := t.edgenetClientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
+					if err == nil {
+						tenantRequest = tenantRequestUpdated
 					}
-				}
-				if !isCreated {
-					emailVerificationHandler := emailverification.Handler{}
-					emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-					code, created := emailVerificationHandler.Create(tenantRequest, SetAsOwnerReference(tenantRequest))
-					if created {
-						if labels == nil {
-							labels = map[string]string{fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username): code}
-						} else if labels[fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username)] == "" {
-							labels[fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username)] = code
-						}
-						tenantRequest.SetLabels(labels)
-						tenantRequestUpdated, err := t.edgenetClientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
-						if err == nil {
-							tenantRequest = tenantRequestUpdated
-						}
-						// Update the status as successful
-						tenantRequest.Status.State = success
-						tenantRequest.Status.Message = []string{statusDict["email-ok"]}
-					} else {
-						// TO-DO: Define error message more precisely
-						tenantRequest.Status.State = issue
-						tenantRequest.Status.Message = []string{statusDict["email-fail"]}
-					}
-				} else if isCreated && tenantRequest.Status.State == failure {
 					// Update the status as successful
 					tenantRequest.Status.State = success
 					tenantRequest.Status.Message = []string{statusDict["email-ok"]}
+				} else {
+					// TO-DO: Define error message more precisely
+					tenantRequest.Status.State = issue
+					tenantRequest.Status.Message = []string{statusDict["email-fail"]}
 				}
+			} else if isCreated && tenantRequest.Status.State == failure {
+				// Update the status as successful
+				tenantRequest.Status.State = success
+				tenantRequest.Status.Message = []string{statusDict["email-ok"]}
 			}
 		}
 	}
@@ -154,61 +142,6 @@ func (t *Handler) sendEmail(subject string, tenantRequest *registrationv1alpha.T
 	contentData.CommonData.Name = fmt.Sprintf("%s %s", tenantRequest.Spec.Contact.FirstName, tenantRequest.Spec.Contact.LastName)
 	contentData.CommonData.Email = []string{tenantRequest.Spec.Contact.Email}
 	mailer.Send(subject, contentData)
-}
-
-// checkDuplicateObject checks whether a user exists with the same email address
-func (t *Handler) checkDuplicateObject(tenantRequest *registrationv1alpha.TenantRequest) (bool, []string) {
-	exists := false
-	message := []string{}
-	// To check username on the users resource
-	_, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantRequest.GetName(), metav1.GetOptions{})
-	if !errors.IsNotFound(err) {
-		exists = true
-		message = append(message, fmt.Sprintf(statusDict["tenant-taken"], tenantRequest.GetName()))
-		if !reflect.DeepEqual(tenantRequest.Status.Message, message) {
-			t.sendEmail("tenant-validation-failure-name", tenantRequest)
-		}
-	} else {
-		// To check email address among users
-		tenantRaw, _ := t.edgenetClientset.CoreV1alpha().Tenants().List(context.TODO(), metav1.ListOptions{})
-		for _, tenantRow := range tenantRaw.Items {
-			if tenantRow.Spec.Contact.Email == tenantRequest.Spec.Contact.Email {
-				exists = true
-				message = append(message, fmt.Sprintf(statusDict["email-exist"], tenantRequest.Spec.Contact.Email))
-				break
-			} else {
-				for _, userRow := range tenantRow.Spec.User {
-					if userRow.Email == tenantRequest.Spec.Contact.Email {
-						exists = true
-						message = append(message, fmt.Sprintf(statusDict["email-exist"], tenantRequest.Spec.Contact.Email))
-						break
-					}
-				}
-			}
-		}
-		// To check email address among user registration requests
-		userRequestRaw, _ := t.edgenetClientset.RegistrationV1alpha().UserRequests().List(context.TODO(), metav1.ListOptions{})
-		for _, userRequestRow := range userRequestRaw.Items {
-			if userRequestRow.Spec.Email == tenantRequest.Spec.Contact.Email {
-				exists = true
-				message = append(message, fmt.Sprintf(statusDict["email-used-reg"], tenantRequest.Spec.Contact.Email))
-				break
-			}
-		}
-		// To check email address given at tenant request
-		tenantRequestRaw, _ := t.edgenetClientset.RegistrationV1alpha().TenantRequests().List(context.TODO(), metav1.ListOptions{})
-		for _, tenantRequestRow := range tenantRequestRaw.Items {
-			if tenantRequestRow.Spec.Contact.Email == tenantRequest.Spec.Contact.Email && tenantRequestRow.GetUID() != tenantRequest.GetUID() {
-				exists = true
-				message = append(message, fmt.Sprintf(statusDict["email-used-auth"], tenantRequest.Spec.Contact.Email))
-				break
-			}
-		}
-		if exists && !reflect.DeepEqual(tenantRequest.Status.Message, message) {
-			t.sendEmail("tenant-validation-failure-email", tenantRequest)
-		}
-	}
-	return exists, message
 }
 
 // RunExpiryController puts a procedure in place to turn accepted policies into not accepted

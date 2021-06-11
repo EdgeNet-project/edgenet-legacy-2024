@@ -248,23 +248,20 @@ func (t *Handler) checkDuplicateObject(userRequest *registrationv1alpha.UserRequ
 	message := []string{}
 
 	// To check email address among users
-	tenantRaw, _ := t.edgenetClientset.CoreV1alpha().Tenants().List(context.TODO(), metav1.ListOptions{})
-	for _, tenantRow := range tenantRaw.Items {
-		for _, userRow := range tenantRow.Spec.User {
-			if tenantRow.GetName() == strings.ToLower(userRequest.Spec.Tenant) && userRow.GetName() == userRequest.GetName() {
-				exists = true
-				message = append(message, fmt.Sprintf(statusDict["username-exist"], userRequest.GetName()))
-				if exists && !reflect.DeepEqual(userRequest.Status.Message, message) {
-					t.sendEmail(userRequest, tenantName, "user-validation-failure-name")
-				}
-				break
+	tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
+	for _, userRow := range tenant.Spec.User {
+		if tenant.GetName() == strings.ToLower(userRequest.Spec.Tenant) && userRow.GetName() == userRequest.GetName() {
+			exists = true
+			message = append(message, fmt.Sprintf(statusDict["username-exist"], userRequest.GetName()))
+			if exists && !reflect.DeepEqual(userRequest.Status.Message, message) {
+				t.sendEmail(userRequest, tenantName, "user-validation-failure-name")
 			}
-
-			if tenantRow.Spec.Contact.Email == userRequest.Spec.Email || userRow.Email == userRequest.Spec.Email {
-				exists = true
-				message = append(message, fmt.Sprintf(statusDict["email-exist"], userRequest.Spec.Email))
-				break
-			}
+			break
+		}
+		if tenant.Spec.Contact.Email == userRequest.Spec.Email || userRow.Email == userRequest.Spec.Email {
+			exists = true
+			message = append(message, fmt.Sprintf(statusDict["email-exist"], userRequest.Spec.Email))
+			break
 		}
 	}
 
@@ -272,21 +269,12 @@ func (t *Handler) checkDuplicateObject(userRequest *registrationv1alpha.UserRequ
 		// To check email address
 		userRequestRaw, _ := t.edgenetClientset.RegistrationV1alpha().UserRequests().List(context.TODO(), metav1.ListOptions{})
 		for _, userRequestRow := range userRequestRaw.Items {
-			if userRequestRow.Spec.Email == userRequest.Spec.Email && userRequestRow.GetUID() != userRequest.GetUID() {
+			if strings.ToLower(userRequestRow.Spec.Tenant) == tenantName && userRequestRow.Spec.Email == userRequest.Spec.Email && userRequestRow.GetUID() != userRequest.GetUID() {
 				exists = true
 				message = append(message, fmt.Sprintf(statusDict["email-existregist"], userRequest.Spec.Email))
 			}
 		}
-		if !exists {
-			// To check email address given at tenantRequest
-			tenantRequestRaw, _ := t.edgenetClientset.RegistrationV1alpha().TenantRequests().List(context.TODO(), metav1.ListOptions{})
-			for _, tenantRequestRow := range tenantRequestRaw.Items {
-				if tenantRequestRow.Spec.Contact.Email == userRequest.Spec.Email {
-					exists = true
-					message = append(message, fmt.Sprintf(statusDict["email-existauth"], userRequest.Spec.Email))
-				}
-			}
-		}
+
 		if exists && !reflect.DeepEqual(userRequest.Status.Message, message) {
 			t.sendEmail(userRequest, tenantName, "user-validation-failure-email")
 		}

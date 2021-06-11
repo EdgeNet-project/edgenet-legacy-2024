@@ -19,7 +19,6 @@ package tenant
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 
@@ -67,15 +66,6 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 	log.Info("TenantHandler.ObjectCreatedOrUpdated")
 	// Make a copy of the tenant object to make changes on it
 	tenant := obj.(*corev1alpha.Tenant).DeepCopy()
-	// Check if the email address is already taken
-	exists, message := t.checkDuplicateObject(tenant)
-	if exists {
-		tenant.Status.State = failure
-		tenant.Status.Message = []string{message}
-		tenant.Spec.Enabled = false
-		t.edgenetClientset.CoreV1alpha().Tenants().UpdateStatus(context.TODO(), tenant, metav1.UpdateOptions{})
-		return
-	}
 	tenantStatus := corev1alpha.TenantStatus{}
 	if tenant.Spec.Enabled == true {
 		// When a tenant is deleted, the owner references feature allows the namespace to be automatically removed
@@ -313,41 +303,6 @@ func (t *Handler) sendEmail(tenant *corev1alpha.Tenant, user corev1alpha.User, s
 			}
 		}
 	}
-}
-
-// checkDuplicateObject checks whether a user exists with the same email address
-func (t *Handler) checkDuplicateObject(tenant *corev1alpha.Tenant) (bool, string) {
-	exists := false
-	var message string
-	// To check email address
-	tenantRaw, _ := t.edgenetClientset.CoreV1alpha().Tenants().List(context.TODO(), metav1.ListOptions{})
-	for _, tenantRow := range tenantRaw.Items {
-		if tenantRow.GetName() == tenant.GetName() {
-			continue
-		}
-
-		for _, userRow := range tenantRow.Spec.User {
-			if userRow.Email == tenant.Spec.Contact.Email {
-				exists = true
-				message = fmt.Sprintf(statusDict["email-exist"], tenant.Spec.Contact.Email)
-				break
-			}
-		}
-	}
-	if !exists {
-		// Update the tenant requests that have duplicate values, if any
-		tenantRequestRaw, _ := t.edgenetClientset.RegistrationV1alpha().TenantRequests().List(context.TODO(), metav1.ListOptions{})
-		for _, tenantRequestRow := range tenantRequestRaw.Items {
-			if tenantRequestRow.Status.State == success {
-				if tenantRequestRow.GetName() == tenant.GetName() || tenantRequestRow.Spec.Contact.Email == tenant.Spec.Contact.Email {
-					t.edgenetClientset.RegistrationV1alpha().TenantRequests().Delete(context.TODO(), tenantRequestRow.GetName(), metav1.DeleteOptions{})
-				}
-			}
-		}
-	} else if exists && !reflect.DeepEqual(tenant.Status.Message, message) {
-		t.sendEmail(tenant, corev1alpha.User{}, "tenant-validation-failure-email")
-	}
-	return exists, message
 }
 
 // SetAsOwnerReference returns the tenant as owner

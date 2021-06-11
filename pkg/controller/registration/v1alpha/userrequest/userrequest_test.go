@@ -181,11 +181,9 @@ func TestCreate(t *testing.T) {
 		urr2 := g.userRequestObj
 		urr2.Spec.Email = g.userObj.Email
 		urr3 := g.userRequestObj
-		urr3.Spec.Email = g.tenantRequestObj.Spec.Contact.Email
-		urr4 := g.userRequestObj
-		urr4Comparison := urr4
-		urr4Comparison.SetName("duplicate")
-		urr4Comparison.SetUID("UID")
+		urr3Comparison := urr3
+		urr3Comparison.SetName("duplicate")
+		urr3Comparison.SetUID("UID")
 
 		// Create a user, a tenant request, and user registration request for comparison
 		tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
@@ -195,17 +193,16 @@ func TestCreate(t *testing.T) {
 		util.OK(t, err)
 		_, err = g.edgenetClient.RegistrationV1alpha().TenantRequests().Create(context.TODO(), g.tenantRequestObj.DeepCopy(), metav1.CreateOptions{})
 		util.OK(t, err)
-		_, err = g.edgenetClient.RegistrationV1alpha().UserRequests().Create(context.TODO(), urr4Comparison.DeepCopy(), metav1.CreateOptions{})
+		_, err = g.edgenetClient.RegistrationV1alpha().UserRequests().Create(context.TODO(), urr3Comparison.DeepCopy(), metav1.CreateOptions{})
 		util.OK(t, err)
 
 		cases := map[string]struct {
 			request  registrationv1alpha.UserRequest
 			expected string
 		}{
-			"username/user":       {urr1, fmt.Sprintf(statusDict["username-exist"], urr1.GetName())},
-			"email/user":          {urr2, fmt.Sprintf(statusDict["email-exist"], urr2.Spec.Email)},
-			"email/tenantrequest": {urr3, fmt.Sprintf(statusDict["email-existauth"], urr3.Spec.Email)},
-			"email/userrequest":   {urr4, fmt.Sprintf(statusDict["email-existregist"], urr4.Spec.Email)},
+			"username/user":     {urr1, fmt.Sprintf(statusDict["username-exist"], urr1.GetName())},
+			"email/user":        {urr2, fmt.Sprintf(statusDict["email-exist"], urr2.Spec.Email)},
+			"email/userrequest": {urr3, fmt.Sprintf(statusDict["email-existregist"], urr3.Spec.Email)},
 		}
 		for k, tc := range cases {
 			t.Run(k, func(t *testing.T) {
@@ -260,7 +257,7 @@ func TestUpdate(t *testing.T) {
 		}{
 			"email/userrequest/duplicate":   {urrUpdate1, []string{failure}},
 			"email/user/duplicate":          {urrUpdate2, []string{failure}},
-			"email/tenantrequest/duplicate": {urrUpdate3, []string{failure}},
+			"email/tenantrequest/duplicate": {urrUpdate3, []string{success, issue, ""}},
 			"email/unique":                  {urrUpdate4, []string{success, issue, ""}},
 		}
 		for k, tc := range cases {
