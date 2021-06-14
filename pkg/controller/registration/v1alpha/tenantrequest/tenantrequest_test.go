@@ -3,8 +3,10 @@ package tenantrequest
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"net/mail"
 	"os"
 	"testing"
 	"time"
@@ -26,7 +28,6 @@ import (
 type TestGroup struct {
 	tenantObj        corev1alpha.Tenant
 	tenantRequestObj registrationv1alpha.TenantRequest
-	userObj          corev1alpha.User
 	userRequestObj   registrationv1alpha.UserRequest
 	client           kubernetes.Interface
 	edgenetClient    versioned.Interface
@@ -63,7 +64,7 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.User{
+			Contact: corev1alpha.Contact{
 				Email:     "john.doe@edge-net.org",
 				FirstName: "John",
 				LastName:  "Doe",
@@ -91,7 +92,7 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.User{
+			Contact: corev1alpha.Contact{
 				Email:     "tom.public@edge-net.org",
 				FirstName: "Tom",
 				LastName:  "Public",
@@ -99,11 +100,6 @@ func (g *TestGroup) Init() {
 				Username:  "tompublic",
 			},
 		},
-	}
-	userObj := corev1alpha.User{
-		FirstName: "John",
-		LastName:  "Doe",
-		Email:     "john.doe@edge-net.org",
 	}
 	userRequestObj := registrationv1alpha.UserRequest{
 		TypeMeta: metav1.TypeMeta{
@@ -114,6 +110,7 @@ func (g *TestGroup) Init() {
 			Name: "johnsmith",
 		},
 		Spec: registrationv1alpha.UserRequestSpec{
+			Tenant:    "edgenet",
 			FirstName: "John",
 			LastName:  "Smith",
 			Email:     "john.smith@edge-net.org",
@@ -121,7 +118,6 @@ func (g *TestGroup) Init() {
 	}
 	g.tenantObj = tenantObj
 	g.tenantRequestObj = tenantRequestObj
-	g.userObj = userObj
 	g.userRequestObj = userRequestObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetClient = edgenettestclient.NewSimpleClientset()
@@ -185,9 +181,62 @@ func TestUpdate(t *testing.T) {
 		// Updating tenant request status to approved
 		g.tenantRequestObj.Spec.Approved = true
 		// Requesting server to update internal representation of tenant request object and transition it to tenant
+		g.mockSigner(g.tenantRequestObj.GetName())
 		g.handler.ObjectCreatedOrUpdated(g.tenantRequestObj.DeepCopy())
 		// Checking if handler created tenant from request
 		_, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantRequestObj.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
 	})
+}
+
+func (g *TestGroup) mockSigner(tenant string) {
+	// Mock the signer
+	go func() {
+		timeout := time.After(10 * time.Second)
+		ticker := time.Tick(1 * time.Second)
+	check:
+		for {
+			select {
+			case <-timeout:
+				break check
+			case <-ticker:
+				allDone := true
+				if clusterRoleBindingRaw, err := g.client.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant)}); err == nil {
+				users:
+					for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
+						labels := clusterRoleBindingRow.GetLabels()
+						if labels != nil && labels["edge-net.io/username"] != "" && labels["edge-net.io/user-template-hash"] != "" {
+							for _, subject := range clusterRoleBindingRow.Subjects {
+								if subject.Kind == "User" {
+									_, err := mail.ParseAddress(subject.Name)
+									if err == nil {
+										_, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", labels["edge-net.io/username"], labels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
+										if err != nil {
+											continue
+										}
+										csrObj, err := g.client.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant, labels["edge-net.io/username"]), metav1.GetOptions{})
+										if err != nil {
+											allDone = false
+											break users
+										}
+										csrObj.Status.Certificate = csrObj.Spec.Request
+										if _, err := g.client.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), csrObj, metav1.UpdateOptions{}); err != nil {
+											allDone = false
+											break users
+										}
+									}
+								}
+							}
+						}
+					}
+				} else {
+					log.Println(err)
+				}
+
+				if allDone {
+					break check
+				}
+			}
+		}
+	}()
 }

@@ -43,8 +43,7 @@ type TenantSpec struct {
 	ShortName string  `json:"shortname"`
 	URL       string  `json:"url"`
 	Address   Address `json:"address"`
-	Contact   User    `json:"contact"`
-	User      []User  `json:"user"`
+	Contact   Contact `json:"contact"`
 	Enabled   bool    `json:"enabled"`
 }
 
@@ -57,25 +56,13 @@ type Address struct {
 	Country string `json:"country"`
 }
 
-// User contains username, personal information, and role
-type User struct {
-	Tenant    string `json:"tenant"`
+// Contact contains username, personal information, and role
+type Contact struct {
 	Username  string `json:"username"`
 	FirstName string `json:"firstname"`
 	LastName  string `json:"lastname"`
 	Email     string `json:"email"`
 	Phone     string `json:"phone"`
-	Role      string `json:"role"`
-}
-
-// GetName provides username
-func (u *User) GetName() string {
-	return u.Username
-}
-
-// GetTenant provides tenant name
-func (u *User) GetTenant() string {
-	return u.Tenant
 }
 
 // TenantStatus is the status for a Tenant resource

@@ -6,9 +6,11 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 	"testing"
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
+	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
@@ -22,7 +24,7 @@ import (
 
 type TestGroup struct {
 	tenant        corev1alpha.Tenant
-	user          corev1alpha.User
+	user          registrationv1alpha.UserRequest
 	client        kubernetes.Interface
 	edgenetclient versioned.Interface
 	namespace     corev1.Namespace
@@ -38,7 +40,7 @@ func (g *TestGroup) Init() {
 	tenantObj := corev1alpha.Tenant{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Tenant",
-			APIVersion: "apps.edgenet.io/v1alpha",
+			APIVersion: "core.edgenet.io/v1alpha",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "edgenet",
@@ -53,31 +55,31 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.User{
+			Contact: corev1alpha.Contact{
 				Email:     "john.doe@edge-net.org",
 				FirstName: "John",
 				LastName:  "Doe",
 				Phone:     "+333333333",
 				Username:  "johndoe",
 			},
-			User: []corev1alpha.User{
-				corev1alpha.User{
-					Username:  "johndoe",
-					FirstName: "John",
-					LastName:  "Doe",
-					Email:     "john.doe@edge-net.org",
-					Role:      "Owner",
-				},
-			},
 			Enabled: false,
 		},
 	}
-	userObj := corev1alpha.User{
-		Username:  "johnsmith",
-		FirstName: "John",
-		LastName:  "Smith",
-		Email:     "john.smith@edge-net.org",
-		Role:      "Collaborator",
+	userObj := registrationv1alpha.UserRequest{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "UserRequest",
+			APIVersion: "registration.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "johnsmith",
+		},
+		Spec: registrationv1alpha.UserRequestSpec{
+			Tenant:    "edgenet",
+			FirstName: "John",
+			LastName:  "Smith",
+			Email:     "john.smith@edge-net.org",
+			Role:      "Collaborator",
+		},
 	}
 	g.tenant = tenantObj
 	g.user = userObj
@@ -110,32 +112,40 @@ func TestCreateClusterRoles(t *testing.T) {
 	}
 
 	tenant := g.tenant
+	ownerUser := registrationv1alpha.UserRequest{}
+	ownerUser.SetName(strings.ToLower(tenant.Spec.Contact.Username))
+	ownerUser.Spec.Email = tenant.Spec.Contact.Email
+	ownerUser.Spec.FirstName = tenant.Spec.Contact.FirstName
+	ownerUser.Spec.LastName = tenant.Spec.Contact.LastName
+	ownerUser.Spec.Role = "Owner"
+	ownerUser.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
 	user1 := g.user
 	user2 := g.user
-	user2.Username = "joepublic"
-	user2.FirstName = "Joe"
-	user2.LastName = "Public"
-	user2.Email = "joe.public@edge-net.org"
-	user2.Role = "Admin"
+	user2.SetName("joepublic")
+	user2.Spec.FirstName = "Joe"
+	user2.Spec.LastName = "Public"
+	user2.Spec.Email = "joe.public@edge-net.org"
+	user2.Spec.Role = "Admin"
+	user2.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
 
 	t.Run("role binding", func(t *testing.T) {
 		cases := map[string]struct {
 			tenant    string
 			namespace string
 			roleName  string
-			user      corev1alpha.User
+			user      registrationv1alpha.UserRequest
 			expected  string
 		}{
-			"owner":        {tenant.GetName(), tenant.GetName(), "edgenet:tenant-owner", tenant.Spec.User[0], fmt.Sprintf("edgenet:tenant-owner-%s", tenant.Spec.User[0].GetName())},
+			"owner":        {tenant.GetName(), tenant.GetName(), "edgenet:tenant-owner", ownerUser, fmt.Sprintf("edgenet:tenant-owner-%s", ownerUser.GetName())},
 			"collaborator": {tenant.GetName(), tenant.GetName(), "edgenet:tenant-collaborator", user1, fmt.Sprintf("edgenet:tenant-collaborator-%s", user1.GetName())},
 			"admin":        {tenant.GetName(), tenant.GetName(), "edgenet:tenant-admin", user2, fmt.Sprintf("edgenet:tenant-admin-%s", user2.GetName())},
 		}
 		for k, tc := range cases {
 			t.Run(k, func(t *testing.T) {
-				CreateObjectSpecificRoleBinding(tc.tenant, tc.namespace, tc.roleName, tc.user)
+				CreateObjectSpecificRoleBinding(tc.tenant, tc.namespace, tc.roleName, tc.user.DeepCopy())
 				_, err := g.client.RbacV1().RoleBindings(tenant.GetName()).Get(context.TODO(), tc.expected, metav1.GetOptions{})
 				util.OK(t, err)
-				err = CreateObjectSpecificRoleBinding(tc.tenant, tc.namespace, tc.roleName, tc.user)
+				err = CreateObjectSpecificRoleBinding(tc.tenant, tc.namespace, tc.roleName, tc.user.DeepCopy())
 				util.OK(t, err)
 			})
 		}
@@ -149,8 +159,22 @@ func TestCreateObjectSpecificClusterRole(t *testing.T) {
 	g.Init()
 
 	tenant1 := g.tenant
+	ownerUser := registrationv1alpha.UserRequest{}
+	ownerUser.SetName(strings.ToLower(tenant1.Spec.Contact.Username))
+	ownerUser.Spec.Email = tenant1.Spec.Contact.Email
+	ownerUser.Spec.FirstName = tenant1.Spec.Contact.FirstName
+	ownerUser.Spec.LastName = tenant1.Spec.Contact.LastName
+	ownerUser.Spec.Role = "Owner"
+	ownerUser.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
 	tenant2 := g.tenant
 	tenant2.SetName("lip6")
+	user := registrationv1alpha.UserRequest{}
+	user.SetName(g.user.GetName())
+	user.Spec.Email = g.user.Spec.Email
+	user.Spec.FirstName = g.user.Spec.FirstName
+	user.Spec.LastName = g.user.Spec.LastName
+	user.Spec.Role = g.user.Spec.Role
+	user.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
 
 	cases := map[string]struct {
 		tenant       corev1alpha.Tenant
@@ -163,9 +187,9 @@ func TestCreateObjectSpecificClusterRole(t *testing.T) {
 		"tenant":                    {tenant1, "core.edgenet.io", "tenants", tenant1.GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("edgenet:%s:tenants:%s-name", tenant1.GetName(), tenant1.GetName())},
 		"tenant resource quota":     {tenant1, "core.edgenet.io", "tenantresourcequotas", tenant1.GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("edgenet:%s:tenantresourcequotas:%s-name", tenant1.GetName(), tenant1.GetName())},
 		"node contribution":         {tenant2, "core.edgenet.io", "nodecontributions", "ple", []string{"get", "update", "patch", "delete"}, fmt.Sprintf("edgenet:%s:nodecontributions:%s-name", tenant2.GetName(), "ple")},
-		"user registration request": {tenant1, "registration.edgenet.io", "userrequests", g.user.GetName(), []string{"get", "update", "patch", "delete"}, fmt.Sprintf("edgenet:%s:userrequests:%s-name", tenant1.GetName(), g.user.GetName())},
+		"user registration request": {tenant1, "registration.edgenet.io", "userrequests", user.GetName(), []string{"get", "update", "patch", "delete"}, fmt.Sprintf("edgenet:%s:userrequests:%s-name", tenant1.GetName(), user.GetName())},
 		"email verification":        {tenant2, "registration.edgenet.io", "emailverifications", "abcdefghi", []string{"get", "update", "patch", "delete"}, fmt.Sprintf("edgenet:%s:emailverifications:%s-name", tenant2.GetName(), "abcdefghi")},
-		"acceptable use policy":     {tenant1, "core.edgenet.io", "acceptableusepolicies", tenant1.Spec.User[0].GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("edgenet:%s:acceptableusepolicies:%s-name", tenant1.GetName(), tenant1.Spec.User[0].GetName())},
+		"acceptable use policy":     {tenant1, "core.edgenet.io", "acceptableusepolicies", ownerUser.GetName(), []string{"get", "update", "patch"}, fmt.Sprintf("edgenet:%s:acceptableusepolicies:%s-name", tenant1.GetName(), ownerUser.GetName())},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
@@ -184,22 +208,25 @@ func TestCreateObjectSpecificClusterRole(t *testing.T) {
 		cases := map[string]struct {
 			tenant   string
 			roleName string
-			user     corev1alpha.User
+			user     registrationv1alpha.UserRequest
 			expected string
 		}{
-			"tenant":                    {tenant1.GetName(), fmt.Sprintf("%s-tenants-%s", tenant1.GetName(), tenant1.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-tenants-%s-%s", tenant1.GetName(), tenant1.GetName(), tenant1.Spec.User[0].GetName())},
-			"tenant resource quota":     {tenant1.GetName(), fmt.Sprintf("%s-tenantresourcequotas-%s", tenant1.GetName(), tenant1.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-tenantresourcequotas-%s-%s", tenant1.GetName(), tenant1.GetName(), tenant1.Spec.User[0].GetName())},
-			"node contribution":         {tenant1.GetName(), fmt.Sprintf("%s-nodecontributions-%s", tenant1.GetName(), "ple"), tenant1.Spec.User[0], fmt.Sprintf("%s-nodecontributions-%s-%s", tenant1.GetName(), "ple", tenant1.Spec.User[0].GetName())},
-			"user registration request": {tenant1.GetName(), fmt.Sprintf("%s-userrequests-%s", tenant1.GetName(), g.user.GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-userrequests-%s-%s", tenant1.GetName(), g.user.GetName(), tenant1.Spec.User[0].GetName())},
-			"email verification":        {tenant1.GetName(), fmt.Sprintf("%s-emailverifications-%s", tenant1.GetName(), "abcdefghi"), g.user, fmt.Sprintf("%s-emailverifications-%s-%s", tenant1.GetName(), "abcdefghi", g.user.GetName())},
-			"acceptable use policy":     {tenant1.GetName(), fmt.Sprintf("%s-acceptableusepolicies-%s", tenant1.GetName(), tenant1.Spec.User[0].GetName()), tenant1.Spec.User[0], fmt.Sprintf("%s-acceptableusepolicies-%s-%s", tenant1.GetName(), tenant1.Spec.User[0].GetName(), tenant1.Spec.User[0].GetName())},
+			"tenant":                    {tenant1.GetName(), fmt.Sprintf("%s-tenants-%s", tenant1.GetName(), tenant1.GetName()), ownerUser, fmt.Sprintf("%s-tenants-%s-%s", tenant1.GetName(), tenant1.GetName(), ownerUser.GetName())},
+			"tenant resource quota":     {tenant1.GetName(), fmt.Sprintf("%s-tenantresourcequotas-%s", tenant1.GetName(), tenant1.GetName()), ownerUser, fmt.Sprintf("%s-tenantresourcequotas-%s-%s", tenant1.GetName(), tenant1.GetName(), ownerUser.GetName())},
+			"node contribution":         {tenant1.GetName(), fmt.Sprintf("%s-nodecontributions-%s", tenant1.GetName(), "ple"), ownerUser, fmt.Sprintf("%s-nodecontributions-%s-%s", tenant1.GetName(), "ple", ownerUser.GetName())},
+			"user registration request": {tenant1.GetName(), fmt.Sprintf("%s-userrequests-%s", tenant1.GetName(), user.GetName()), ownerUser, fmt.Sprintf("%s-userrequests-%s-%s", tenant1.GetName(), user.GetName(), ownerUser.GetName())},
+			"email verification":        {tenant1.GetName(), fmt.Sprintf("%s-emailverifications-%s", tenant1.GetName(), "abcdefghi"), user, fmt.Sprintf("%s-emailverifications-%s-%s", tenant1.GetName(), "abcdefghi", user.GetName())},
+			"acceptable use policy":     {tenant1.GetName(), fmt.Sprintf("%s-acceptableusepolicies-%s", tenant1.GetName(), ownerUser.GetName()), ownerUser, fmt.Sprintf("%s-acceptableusepolicies-%s-%s", tenant1.GetName(), ownerUser.GetName(), ownerUser.GetName())},
 		}
 		for k, tc := range cases {
 			t.Run(k, func(t *testing.T) {
-				CreateObjectSpecificClusterRoleBinding(tc.tenant, tc.roleName, tc.user, []metav1.OwnerReference{})
+				userLabels := tc.user.GetLabels()
+				roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tc.tenant, "edge-net.io/identity": "true", "edge-net.io/username": tc.user.GetName(),
+					"edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"], "edge-net.io/firstname": tc.user.Spec.FirstName, "edge-net.io/lastname": tc.user.Spec.LastName, "edge-net.io/role": tc.user.Spec.Role}
+				CreateObjectSpecificClusterRoleBinding(tc.tenant, tc.roleName, tc.user.GetName(), tc.user.Spec.Email, roleBindLabels, []metav1.OwnerReference{})
 				_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), tc.expected, metav1.GetOptions{})
 				util.OK(t, err)
-				err = CreateObjectSpecificClusterRoleBinding(tc.tenant, tc.roleName, tc.user, []metav1.OwnerReference{})
+				err = CreateObjectSpecificClusterRoleBinding(tc.tenant, tc.roleName, tc.user.GetName(), tc.user.Spec.Email, roleBindLabels, []metav1.OwnerReference{})
 				util.OK(t, err)
 			})
 		}
@@ -211,14 +238,21 @@ func TestPermissionSystem(t *testing.T) {
 	g.Init()
 
 	tenant := g.tenant
-	user1 := tenant.Spec.User[0]
+	user1 := registrationv1alpha.UserRequest{}
+	user1.SetName(strings.ToLower(tenant.Spec.Contact.Username))
+	user1.Spec.Email = tenant.Spec.Contact.Email
+	user1.Spec.FirstName = tenant.Spec.Contact.FirstName
+	user1.Spec.LastName = tenant.Spec.Contact.LastName
+	user1.Spec.Role = "Owner"
+	user1.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
 	user2 := g.user
 	user3 := g.user
-	user3.Username = "joepublic"
-	user3.FirstName = "Joe"
-	user3.LastName = "Public"
-	user3.Email = "joe.public@edge-net.org"
-	user3.Role = "Admin"
+	user3.SetName("joepublic")
+	user3.Spec.FirstName = "Joe"
+	user3.Spec.LastName = "Public"
+	user3.Spec.Email = "joe.public@edge-net.org"
+	user3.Spec.Role = "Admin"
+	user3.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
 
 	err := CreateClusterRoles()
 	util.OK(t, err)
@@ -236,13 +270,13 @@ func TestPermissionSystem(t *testing.T) {
 		})
 	}
 	t.Run("bind cluster role for tenant owner", func(t *testing.T) {
-		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "edgenet:tenant-owner", user1)
+		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "edgenet:tenant-owner", user1.DeepCopy())
 	})
 	t.Run("bind cluster role for tenant collaborator", func(t *testing.T) {
-		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "edgenet:tenant-collaborator", user2)
+		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "edgenet:tenant-collaborator", user2.DeepCopy())
 	})
 	t.Run("bind cluster role for tenant admin", func(t *testing.T) {
-		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "edgenet:tenant-admin", user3)
+		CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), "edgenet:tenant-admin", user3.DeepCopy())
 	})
 
 	t.Run("create owner specific tenant role", func(t *testing.T) {
@@ -256,18 +290,26 @@ func TestPermissionSystem(t *testing.T) {
 		util.OK(t, err)
 	})
 	t.Run("create owner role binding", func(t *testing.T) {
-		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("edgenet:%s:tenants:%s-owner", tenant.GetName(), tenant.GetName()), user1, []metav1.OwnerReference{})
+		userLabels := user1.GetLabels()
+		roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/identity": "true", "edge-net.io/username": user1.GetName(),
+			"edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"], "edge-net.io/firstname": user1.Spec.FirstName, "edge-net.io/lastname": user1.Spec.LastName, "edge-net.io/role": user1.Spec.Role}
+
+		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("edgenet:%s:tenants:%s-owner", tenant.GetName(), tenant.GetName()), user1.GetName(), user1.Spec.Email, roleBindLabels, []metav1.OwnerReference{})
 		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner-%s", tenant.GetName(), tenant.GetName(), user1.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
 	t.Run("create admin role binding", func(t *testing.T) {
-		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("edgenet:%s:tenants:%s-admin", tenant.GetName(), tenant.GetName()), user3, []metav1.OwnerReference{})
+		userLabels := user1.GetLabels()
+		roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/identity": "true", "edge-net.io/username": user3.GetName(),
+			"edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"], "edge-net.io/firstname": user3.Spec.FirstName, "edge-net.io/lastname": user3.Spec.LastName, "edge-net.io/role": user3.Spec.Role}
+
+		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("edgenet:%s:tenants:%s-admin", tenant.GetName(), tenant.GetName()), user3.GetName(), user3.Spec.Email, roleBindLabels, []metav1.OwnerReference{})
 		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-admin-%s", tenant.GetName(), tenant.GetName(), user3.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
 
 	permissionCases := map[string]struct {
-		user         corev1alpha.User
+		user         registrationv1alpha.UserRequest
 		namespace    string
 		resource     string
 		resourceName string
@@ -287,7 +329,7 @@ func TestPermissionSystem(t *testing.T) {
 	}
 	for k, tc := range permissionCases {
 		t.Run(k, func(t *testing.T) {
-			authorized := CheckAuthorization(tc.namespace, tc.user.Email, tc.resource, tc.resourceName, tc.scope)
+			authorized := CheckAuthorization(tc.namespace, tc.user.Spec.Email, tc.resource, tc.resourceName, tc.scope)
 			util.Equals(t, tc.expected, authorized)
 		})
 	}

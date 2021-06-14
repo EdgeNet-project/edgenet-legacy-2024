@@ -19,13 +19,14 @@ package emailverification
 import (
 	"context"
 	"fmt"
+	"net/mail"
 	"strings"
 	"time"
 
-	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
+	"github.com/EdgeNet-project/edgenet/pkg/permission"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	log "github.com/sirupsen/logrus"
@@ -128,25 +129,6 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 			t.sendEmail("tenant-email-verification-malfunction", tenantRequest.GetName(), "", tenantRequest.Spec.Contact.Username,
 				fmt.Sprintf("%s %s", tenantRequest.Spec.Contact.FirstName, tenantRequest.Spec.Contact.LastName), tenantRequest.Spec.Contact.Email, "")
 		}
-	case corev1alpha.User:
-		user := obj.(corev1alpha.User)
-		code = "u-" + util.GenerateRandomString(16)
-		emailVerification := registrationv1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: ownerReferences}}
-		emailVerification.SetName(code)
-		emailVerification.Spec.Email = user.Email
-		// labels: tenant, user, code - attach to the email verification and tenant
-		labels := map[string]string{"edge-net.io/tenant": user.Tenant, "edge-net.io/user": user.GetName(), "edge-net.io/registration": "email"}
-		emailVerification.SetLabels(labels)
-
-		_, err := t.edgenetClientset.RegistrationV1alpha().EmailVerifications().Create(context.TODO(), emailVerification.DeepCopy(), metav1.CreateOptions{})
-		if err == nil {
-			created = true
-			t.sendEmail("user-email-verification-update", user.GetTenant(), "", user.GetName(),
-				fmt.Sprintf("%s %s", user.FirstName, user.LastName), user.Email, code)
-		} else {
-			t.sendEmail("user-email-verification-update-malfunction", user.GetTenant(), "", user.GetName(),
-				fmt.Sprintf("%s %s", user.FirstName, user.LastName), user.Email, "")
-		}
 	case *registrationv1alpha.UserRequest:
 		userRequest := obj.(*registrationv1alpha.UserRequest)
 		code = "ur-" + util.GenerateRandomString(16)
@@ -189,9 +171,23 @@ func (t *Handler) sendEmail(subject, tenant, namespace, username, fullname, emai
 	} else if subject == "user-email-verified-alert" {
 		// Put the email addresses of the tenant admins and authorized users in the email to be sent list
 		tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenant, metav1.GetOptions{})
-		for _, userRow := range tenant.Spec.User {
-			if strings.ToLower(userRow.Role) == "owner" || strings.ToLower(userRow.Role) == "admin" {
-				collective.CommonData.Email = append(collective.CommonData.Email, userRow.Email)
+
+		if clusterRoleBindingRaw, err := t.clientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
+			for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
+				labels := clusterRoleBindingRow.GetLabels()
+				if labels != nil && labels["edge-net.io/username"] != "" && labels["edge-net.io/firstname"] != "" && labels["edge-net.io/lastname"] != "" {
+					for _, subject := range clusterRoleBindingRow.Subjects {
+						if subject.Kind == "User" {
+							_, err := mail.ParseAddress(subject.Name)
+							if err == nil {
+								authorized := permission.CheckAuthorization("", subject.Name, "UserRequest", username, "cluster")
+								if authorized {
+									collective.CommonData.Email = append(collective.CommonData.Email, subject.Name)
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 		contentData = collective

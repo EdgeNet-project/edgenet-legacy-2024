@@ -45,7 +45,7 @@ type TenantRequestSpec struct {
 	ShortName string              `json:"shortname"`
 	URL       string              `json:"url"`
 	Address   corev1alpha.Address `json:"address"`
-	Contact   corev1alpha.User    `json:"contact"`
+	Contact   corev1alpha.Contact `json:"contact"`
 	Approved  bool                `json:"approved"`
 }
 
@@ -90,6 +90,7 @@ type UserRequestSpec struct {
 	FirstName string `json:"firstname"`
 	LastName  string `json:"lastname"`
 	Email     string `json:"email"`
+	Role      string `json:"role"`
 	Approved  bool   `json:"approved"`
 }
 

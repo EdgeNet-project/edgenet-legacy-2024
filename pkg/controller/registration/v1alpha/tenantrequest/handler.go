@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
@@ -27,6 +28,7 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/emailverification"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,7 +66,7 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 		defer func() {
 			if !reflect.DeepEqual(obj.(*registrationv1alpha.TenantRequest).Status, tenantRequest.Status) {
 				if _, err := t.edgenetClientset.RegistrationV1alpha().TenantRequests().UpdateStatus(context.TODO(), tenantRequest, metav1.UpdateOptions{}); err != nil {
-					// TO-DO: Provide more information on error
+					// TODO: Provide more information on error
 					log.Println(err)
 				}
 			}
@@ -76,6 +78,21 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 			if created {
 				tenantRequest.Status.State = approved
 				tenantRequest.Status.Message = []string{statusDict["tenant-approved"]}
+
+				if tenant, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantRequest.GetName(), metav1.GetOptions{}); err == nil {
+					user := registrationv1alpha.UserRequest{}
+					user.SetName(strings.ToLower(tenant.Spec.Contact.Username))
+					user.Spec.Tenant = tenant.GetName()
+					user.Spec.Email = tenant.Spec.Contact.Email
+					user.Spec.FirstName = tenant.Spec.Contact.FirstName
+					user.Spec.LastName = tenant.Spec.Contact.LastName
+					user.Spec.Role = "Owner"
+					user.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
+
+					// TODO: Check tenant creation
+					// tenantStatus := t.ConfigurePermissions(tenant, user.DeepCopy(), ownerReferences)
+					tenantHandler.ConfigurePermissions(tenant, user.DeepCopy(), []metav1.OwnerReference{})
+				}
 			} else {
 				t.sendEmail("tenant-creation-failure", tenantRequest)
 				tenantRequest.Status.State = failure
@@ -114,7 +131,7 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 					tenantRequest.Status.State = success
 					tenantRequest.Status.Message = []string{statusDict["email-ok"]}
 				} else {
-					// TO-DO: Define error message more precisely
+					// TODO: Define error message more precisely
 					tenantRequest.Status.State = issue
 					tenantRequest.Status.Message = []string{statusDict["email-fail"]}
 				}
@@ -185,7 +202,7 @@ infiniteLoop:
 		case <-time.After(time.Until(closestExpiry)):
 			tenantRequestRaw, err := t.edgenetClientset.RegistrationV1alpha().TenantRequests().List(context.TODO(), metav1.ListOptions{})
 			if err != nil {
-				// TO-DO: Provide more information on error
+				// TODO: Provide more information on error
 				log.Println(err)
 			}
 			for _, tenantRequestRow := range tenantRequestRaw.Items {

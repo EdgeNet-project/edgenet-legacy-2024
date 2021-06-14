@@ -64,6 +64,13 @@ spec:
                 email:
                   type: string
                   format: email
+                role:
+                  type: string
+                  enum:
+                    - Owner
+                    - Admin
+                    - Collaborator
+                  default: Collaborator
                 approved:
                   type: boolean
             status:

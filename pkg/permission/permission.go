@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"log"
 
-	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
+	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -208,14 +208,13 @@ func CreateObjectSpecificClusterRole(tenant, apiGroup, resource, resourceName, n
 }
 
 // CreateObjectSpecificClusterRoleBinding links the cluster role up with the user
-func CreateObjectSpecificClusterRoleBinding(tenant, roleName string, user corev1alpha.User, ownerReferences []metav1.OwnerReference) error {
-	objectName := fmt.Sprintf("%s-%s", roleName, user.GetName())
+func CreateObjectSpecificClusterRoleBinding(tenant, roleName, username, email string, roleBindLabels map[string]string, ownerReferences []metav1.OwnerReference) error {
+	objectName := fmt.Sprintf("%s-%s", roleName, username)
 	roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: roleName}
-	rbSubjects := []rbacv1.Subject{{Kind: "User", Name: user.Email, APIGroup: "rbac.authorization.k8s.io"}}
+	rbSubjects := []rbacv1.Subject{{Kind: "User", Name: email, APIGroup: "rbac.authorization.k8s.io"}}
 	roleBind := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName},
 		Subjects: rbSubjects, RoleRef: roleRef}
 	roleBind.ObjectMeta.OwnerReferences = ownerReferences
-	roleBindLabels := map[string]string{"edge-net.io/tenant": tenant}
 	for key, value := range labels {
 		roleBindLabels[key] = value
 	}
@@ -235,15 +234,16 @@ func CreateObjectSpecificClusterRoleBinding(tenant, roleName string, user corev1
 				}
 			}
 		}
+		return err
 	}
 	return err
 }
 
 // CreateObjectSpecificRoleBinding links the cluster role up with the user
-func CreateObjectSpecificRoleBinding(tenant, namespace, roleName string, user corev1alpha.User) error {
+func CreateObjectSpecificRoleBinding(tenant, namespace, roleName string, user *registrationv1alpha.UserRequest) error {
 	objectName := fmt.Sprintf("%s-%s", roleName, user.GetName())
 	roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: roleName}
-	rbSubjects := []rbacv1.Subject{{Kind: "User", Name: user.Email, APIGroup: "rbac.authorization.k8s.io"}}
+	rbSubjects := []rbacv1.Subject{{Kind: "User", Name: user.Spec.Email, APIGroup: "rbac.authorization.k8s.io"}}
 	roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName, Namespace: namespace},
 		Subjects: rbSubjects, RoleRef: roleRef}
 	roleBindLabels := map[string]string{"edge-net.io/tenant": tenant}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/mail"
 	"os"
 	"testing"
 	"time"
@@ -24,13 +25,12 @@ import (
 
 // The main structure of test group
 type TestGroup struct {
-	tenantObj           corev1alpha.Tenant
-	tenantRequestObj    registrationv1alpha.TenantRequest
-	userObj             corev1alpha.User
-	userRegistrationObj registrationv1alpha.UserRequest
-	client              kubernetes.Interface
-	edgenetClient       versioned.Interface
-	handler             Handler
+	tenantObj        corev1alpha.Tenant
+	tenantRequestObj registrationv1alpha.TenantRequest
+	userObj          registrationv1alpha.UserRequest
+	client           kubernetes.Interface
+	edgenetClient    versioned.Interface
+	handler          Handler
 }
 
 func TestMain(m *testing.M) {
@@ -63,22 +63,12 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.User{
+			Contact: corev1alpha.Contact{
 				Email:     "john.doe@edge-net.org",
 				FirstName: "John",
 				LastName:  "Doe",
 				Phone:     "+33NUMBER",
 				Username:  "johndoe",
-			},
-			User: []corev1alpha.User{
-				corev1alpha.User{
-					Email:     "john.doe@edge-net.org",
-					FirstName: "John",
-					LastName:  "Doe",
-					Phone:     "+33NUMBER",
-					Username:  "johndoe",
-					Role:      "Owner",
-				},
 			},
 			Enabled: true,
 		},
@@ -101,7 +91,7 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.User{
+			Contact: corev1alpha.Contact{
 				Email:     "tom.public@edge-net.org",
 				FirstName: "Tom",
 				LastName:  "Public",
@@ -113,12 +103,22 @@ func (g *TestGroup) Init() {
 			State: success,
 		},
 	}
-	userObj := corev1alpha.User{
-		Username:  "joepublic",
-		FirstName: "Joe",
-		LastName:  "Public",
-		Email:     "joe.public@edge-net.org",
-		Role:      "Admin",
+	userObj := registrationv1alpha.UserRequest{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "UserRequest",
+			APIVersion: "registration.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "johndoe",
+			Labels: map[string]string{"edge-net.io/user-template-hash": "1a2b3c"},
+		},
+		Spec: registrationv1alpha.UserRequestSpec{
+			Tenant:    "edgenet",
+			FirstName: "John",
+			LastName:  "Doe",
+			Email:     "john.doe@edge-net.org",
+			Role:      "Owner",
+		},
 	}
 	g.tenantObj = tenantObj
 	g.tenantRequestObj = tenantRequestObj
@@ -155,21 +155,23 @@ func TestCreate(t *testing.T) {
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
 	g.edgenetClient.CoreV1alpha().Tenants().Create(context.TODO(), g.tenantObj.DeepCopy(), metav1.CreateOptions{})
-	g.mockSigner(g.tenantObj.GetName(), g.tenantObj.Spec.User)
 	g.handler.ObjectCreatedOrUpdated(g.tenantObj.DeepCopy())
-
+	g.mockSigner(g.tenantObj.GetName())
+	g.handler.ConfigurePermissions(g.tenantObj.DeepCopy(), g.userObj.DeepCopy(), []metav1.OwnerReference{})
+	labels := g.userObj.GetLabels()
+	aupName := fmt.Sprintf("%s-%s", g.userObj.GetName(), labels["edge-net.io/user-template-hash"])
 	t.Run("user configuration", func(t *testing.T) {
 		tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
 		time.Sleep(500 * time.Millisecond)
-		aup, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), tenant.Spec.Contact.Username, metav1.GetOptions{})
+		aup, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), aupName, metav1.GetOptions{})
 		util.OK(t, err)
 		util.Equals(t, false, aup.Spec.Accepted)
 
 		aup.Spec.Accepted = true
 		g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), aup, metav1.UpdateOptions{})
-		g.mockSigner(tenant.GetName(), tenant.Spec.User)
 		g.handler.ObjectCreatedOrUpdated(tenant)
+		g.handler.ConfigurePermissions(g.tenantObj.DeepCopy(), g.userObj.DeepCopy(), []metav1.OwnerReference{})
 
 		t.Run("cluster role binding", func(t *testing.T) {
 			_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner-%s", g.tenantObj.GetName(), g.tenantObj.GetName(), g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
@@ -197,43 +199,36 @@ func TestUpdate(t *testing.T) {
 	// Create a tenant to update later
 	g.edgenetClient.CoreV1alpha().Tenants().Create(context.TODO(), g.tenantObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoke ObjectCreatedOrUpdated func to create a user
-	g.mockSigner(g.tenantObj.GetName(), g.tenantObj.Spec.User)
 	g.handler.ObjectCreatedOrUpdated(g.tenantObj.DeepCopy())
+	g.mockSigner(g.tenantObj.GetName())
+	g.handler.ConfigurePermissions(g.tenantObj.DeepCopy(), g.userObj.DeepCopy(), []metav1.OwnerReference{})
+	labels := g.userObj.GetLabels()
+	aupName := fmt.Sprintf("%s-%s", g.userObj.GetName(), labels["edge-net.io/user-template-hash"])
 	tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	util.Equals(t, tenant.Spec.Contact.Username, tenant.Spec.User[0].Username)
-	tenant.Spec.User = append(tenant.Spec.User, g.userObj)
-	g.mockSigner(tenant.GetName(), tenant.Spec.User)
+	// util.Equals(t, tenant.Spec.Contact.Username, tenant.Spec.User[0].Username)
+	g.mockSigner(tenant.GetName())
 	g.handler.ObjectCreatedOrUpdated(tenant)
 	time.Sleep(500 * time.Millisecond)
-	aup, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), tenant.Spec.Contact.Username, metav1.GetOptions{})
+
+	aup, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), aupName, metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, false, aup.Spec.Accepted)
 	aup.Spec.Accepted = true
 	g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), aup, metav1.UpdateOptions{})
-	aup, err = g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), g.userObj.Username, metav1.GetOptions{})
-	util.OK(t, err)
-	util.Equals(t, false, aup.Spec.Accepted)
-	aup.Spec.Accepted = true
-	g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), aup, metav1.UpdateOptions{})
-	g.mockSigner(tenant.GetName(), tenant.Spec.User)
 	g.handler.ObjectCreatedOrUpdated(tenant)
+	g.handler.ConfigurePermissions(g.tenantObj.DeepCopy(), g.userObj.DeepCopy(), []metav1.OwnerReference{})
 
 	_, err = g.client.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
 	util.OK(t, err)
-	_, err = g.client.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-admin-%s", g.userObj.Username), metav1.GetOptions{})
-	util.OK(t, err)
 	tenant.Spec.Enabled = false
-	g.mockSigner(tenant.GetName(), tenant.Spec.User)
 	g.handler.ObjectCreatedOrUpdated(tenant)
 
 	_, err = g.client.RbacV1().Roles(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
 	util.Equals(t, "roles.rbac.authorization.k8s.io \"edgenet:tenant-owner-johndoe\" not found", err.Error())
-	_, err = g.client.RbacV1().Roles(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-admin-%s", g.userObj.Username), metav1.GetOptions{})
-	util.Equals(t, "roles.rbac.authorization.k8s.io \"edgenet:tenant-admin-joepublic\" not found", err.Error())
 }
 
-func (g *TestGroup) mockSigner(tenant string, userRaw []corev1alpha.User) {
+func (g *TestGroup) mockSigner(tenant string) {
 	// Mock the signer
 	go func() {
 		timeout := time.After(10 * time.Second)
@@ -245,23 +240,38 @@ func (g *TestGroup) mockSigner(tenant string, userRaw []corev1alpha.User) {
 				break check
 			case <-ticker:
 				allDone := true
-			users:
-				for _, userRow := range userRaw {
-					_, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), userRow.GetName(), metav1.GetOptions{})
-					if err == nil {
-						continue
+				if clusterRoleBindingRaw, err := g.client.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant)}); err == nil {
+				users:
+					for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
+						labels := clusterRoleBindingRow.GetLabels()
+						if labels != nil && labels["edge-net.io/username"] != "" && labels["edge-net.io/user-template-hash"] != "" {
+							for _, subject := range clusterRoleBindingRow.Subjects {
+								if subject.Kind == "User" {
+									_, err := mail.ParseAddress(subject.Name)
+									if err == nil {
+										_, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", labels["edge-net.io/username"], labels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
+										if err != nil {
+											continue
+										}
+										csrObj, err := g.client.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant, labels["edge-net.io/username"]), metav1.GetOptions{})
+										if err != nil {
+											allDone = false
+											break users
+										}
+										csrObj.Status.Certificate = csrObj.Spec.Request
+										if _, err := g.client.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), csrObj, metav1.UpdateOptions{}); err != nil {
+											allDone = false
+											break users
+										}
+									}
+								}
+							}
+						}
 					}
-					csrObj, err := g.client.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant, userRow.GetName()), metav1.GetOptions{})
-					if err != nil {
-						allDone = false
-						break users
-					}
-					csrObj.Status.Certificate = csrObj.Spec.Request
-					if _, err := g.client.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), csrObj, metav1.UpdateOptions{}); err != nil {
-						allDone = false
-						break users
-					}
+				} else {
+					log.Println(err)
 				}
+
 				if allDone {
 					break check
 				}

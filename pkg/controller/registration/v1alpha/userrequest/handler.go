@@ -19,12 +19,13 @@ package userrequest
 import (
 	"context"
 	"fmt"
+	"net/mail"
 	"reflect"
 	"strings"
 	"time"
 
-	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
+	tenantpkg "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenant"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/emailverification"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
@@ -73,99 +74,101 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 				}
 			}
 		}()
-		// Check if the email address is already taken
-		exists, message := t.checkDuplicateObject(userRequest, strings.ToLower(userRequest.Spec.Tenant))
-		if exists {
-			userRequest.Status.State = failure
-			userRequest.Status.Message = message
-			// Set the approval timeout which is 72 hours
-			userRequest.Status.Expiry = &metav1.Time{
-				Time: time.Now().Add(72 * time.Hour),
-			}
-		} else {
-			tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), strings.ToLower(userRequest.Spec.Tenant), metav1.GetOptions{})
-			// Check if the tenant is active
-			if tenant.Spec.Enabled {
-				if userRequest.Spec.Approved {
-					user := corev1alpha.User{}
-					user.Username = userRequest.GetName()
-					user.FirstName = userRequest.Spec.FirstName
-					user.LastName = userRequest.Spec.LastName
-					user.Email = userRequest.Spec.Email
-					user.Role = "Collaborator"
-					tenant.Spec.User = append(tenant.Spec.User, user)
-					if _, err := t.edgenetClientset.CoreV1alpha().Tenants().Update(context.TODO(), tenant, metav1.UpdateOptions{}); err != nil {
-						log.Println(err)
-						t.sendEmail(userRequest, tenant.GetName(), "user-creation-failure")
-						userRequest.Status.State = failure
-						userRequest.Status.Message = []string{statusDict["user-failed"]}
-					} else {
-						userRequest.Status.State = approved
-						userRequest.Status.Message = []string{statusDict["user-approved"]}
-					}
+
+		tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), strings.ToLower(userRequest.Spec.Tenant), metav1.GetOptions{})
+		// Check if the tenant is active
+		if tenant.Spec.Enabled {
+			if userRequest.Spec.Approved {
+				tenantHandler := tenantpkg.Handler{}
+				tenantHandler.Init(t.clientset, t.edgenetClientset)
+				// TODO: Check tenant creation
+				tenantStatus := tenantHandler.ConfigurePermissions(tenant, userRequest, []metav1.OwnerReference{})
+				if tenantStatus.State != failure {
+					userRequest.Status.State = approved
+					userRequest.Status.Message = []string{statusDict["user-approved"]}
 				} else {
-					if userRequest.Status.Expiry == nil {
-						// Set the approval timeout which is 72 hours
-						userRequest.Status.Expiry = &metav1.Time{
-							Time: time.Now().Add(72 * time.Hour),
-						}
+					t.sendEmail(userRequest, tenant.GetName(), "user-creation-failure")
+					userRequest.Status.State = failure
+					userRequest.Status.Message = []string{statusDict["user-failed"]}
+				}
+			} else {
+				if userRequest.Status.Expiry == nil {
+					// Set the approval timeout which is 72 hours
+					userRequest.Status.Expiry = &metav1.Time{
+						Time: time.Now().Add(72 * time.Hour),
 					}
-					isCreated := false
-					labels := userRequest.GetLabels()
-					if labels != nil && labels["edge-net.io/emailverification"] != "" {
-						if _, err := t.edgenetClientset.RegistrationV1alpha().EmailVerifications().Get(context.TODO(), labels["edge-net.io/emailverification"], metav1.GetOptions{}); err == nil {
-							isCreated = true
-						}
+				}
+				isCreated := false
+				labels := userRequest.GetLabels()
+				if labels != nil && labels["edge-net.io/emailverification"] != "" {
+					if _, err := t.edgenetClientset.RegistrationV1alpha().EmailVerifications().Get(context.TODO(), labels["edge-net.io/emailverification"], metav1.GetOptions{}); err == nil {
+						isCreated = true
 					}
-					if !isCreated {
-						emailVerificationHandler := emailverification.Handler{}
-						emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-						code, created := emailVerificationHandler.Create(userRequest, SetAsOwnerReference(userRequest))
-						if created {
-							if labels == nil {
-								labels = map[string]string{"edge-net.io/emailverification": code}
-							} else if labels["edge-net.io/emailverification"] == "" {
-								labels["edge-net.io/emailverification"] = code
-							}
-							userRequest.SetLabels(labels)
-							userRequestUpdated, err := t.edgenetClientset.RegistrationV1alpha().UserRequests().Update(context.TODO(), userRequest, metav1.UpdateOptions{})
-							if err == nil {
-								userRequest = userRequestUpdated
-							}
-							// Update the status as successful
-							userRequest.Status.State = success
-							userRequest.Status.Message = []string{statusDict["email-ok"]}
-						} else {
-							userRequest.Status.State = issue
-							userRequest.Status.Message = []string{statusDict["email-fail"]}
+				}
+				if !isCreated {
+					emailVerificationHandler := emailverification.Handler{}
+					emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
+					code, created := emailVerificationHandler.Create(userRequest, SetAsOwnerReference(userRequest))
+					if created {
+						if labels == nil {
+							labels = map[string]string{"edge-net.io/emailverification": code}
+						} else if labels["edge-net.io/emailverification"] == "" {
+							labels["edge-net.io/emailverification"] = code
 						}
-					} else if isCreated && userRequest.Status.State == failure {
+						userRequest.SetLabels(labels)
+						userRequestUpdated, err := t.edgenetClientset.RegistrationV1alpha().UserRequests().Update(context.TODO(), userRequest, metav1.UpdateOptions{})
+						if err == nil {
+							userRequest = userRequestUpdated
+						}
 						// Update the status as successful
 						userRequest.Status.State = success
 						userRequest.Status.Message = []string{statusDict["email-ok"]}
+					} else {
+						userRequest.Status.State = issue
+						userRequest.Status.Message = []string{statusDict["email-fail"]}
 					}
+				} else if isCreated && userRequest.Status.State == failure {
+					// Update the status as successful
+					userRequest.Status.State = success
+					userRequest.Status.Message = []string{statusDict["email-ok"]}
+				}
 
-					ownerReferences := SetAsOwnerReference(userRequest)
-					if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "registration.edgenet.io", "userrequests", userRequest.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
-						log.Infof("Couldn't create user request cluster role %s, %s: %s", tenant.GetName(), userRequest.GetName(), err)
-						// TODO: Provide err information at the status
-					}
+				ownerReferences := SetAsOwnerReference(userRequest)
+				if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "registration.edgenet.io", "userrequests", userRequest.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
+					log.Infof("Couldn't create user request cluster role %s, %s: %s", tenant.GetName(), userRequest.GetName(), err)
+					// TODO: Provide err information at the status
+				}
 
-					for _, user := range tenant.Spec.User {
-						if user.Role == "Owner" || user.Role == "Admin" {
-							clusterRoleName := fmt.Sprintf("edgenet:%s:userrequests:%s-%s", tenant.GetName(), userRequest.GetName(), "owner")
-							if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, user, ownerReferences); err != nil {
-								// TODO: Define the error precisely
-								userRequest.Status.State = failure
-								userRequest.Status.Message = []string{statusDict["role-failed"]}
+				if clusterRoleBindingRaw, err := t.clientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
+					for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
+						labels := clusterRoleBindingRow.GetLabels()
+						if labels != nil && labels["edge-net.io/username"] != "" && labels["edge-net.io/role"] != "" {
+							for _, subject := range clusterRoleBindingRow.Subjects {
+								if subject.Kind == "User" {
+									_, err := mail.ParseAddress(subject.Name)
+									if err == nil {
+										if labels["edge-net.io/role"] == "Owner" || labels["edge-net.io/role"] == "Admin" {
+											clusterRoleName := fmt.Sprintf("edgenet:%s:userrequests:%s-%s", tenant.GetName(), userRequest.GetName(), "owner")
+											roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/identity": "true", "edge-net.io/username": labels["edge-net.io/username"],
+												"edge-net.io/user-template-hash": labels["edge-net.io/user-template-hash"], "edge-net.io/firstname": labels["edge-net.io/firstname"], "edge-net.io/lastname": labels["edge-net.io/lastname"], "edge-net.io/role": labels["edge-net.io/role"]}
+
+											if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, labels["edge-net.io/username"], subject.Name, roleBindLabels, ownerReferences); err != nil {
+												// TODO: Define the error precisely
+												userRequest.Status.State = failure
+												userRequest.Status.Message = []string{statusDict["role-failed"]}
+											}
+										}
+									}
+								}
 							}
 						}
 					}
 				}
-			} else {
-				t.edgenetClientset.RegistrationV1alpha().UserRequests().Delete(context.TODO(), userRequest.GetName(), metav1.DeleteOptions{})
 			}
+		} else {
+			t.edgenetClientset.RegistrationV1alpha().UserRequests().Delete(context.TODO(), userRequest.GetName(), metav1.DeleteOptions{})
 		}
+
 	}
 }
 
@@ -240,46 +243,6 @@ infiniteLoop:
 			break infiniteLoop
 		}
 	}
-}
-
-// checkDuplicateObject checks whether a user exists with the same username or email address
-func (t *Handler) checkDuplicateObject(userRequest *registrationv1alpha.UserRequest, tenantName string) (bool, []string) {
-	exists := false
-	message := []string{}
-
-	// To check email address among users
-	tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
-	for _, userRow := range tenant.Spec.User {
-		if tenant.GetName() == strings.ToLower(userRequest.Spec.Tenant) && userRow.GetName() == userRequest.GetName() {
-			exists = true
-			message = append(message, fmt.Sprintf(statusDict["username-exist"], userRequest.GetName()))
-			if exists && !reflect.DeepEqual(userRequest.Status.Message, message) {
-				t.sendEmail(userRequest, tenantName, "user-validation-failure-name")
-			}
-			break
-		}
-		if tenant.Spec.Contact.Email == userRequest.Spec.Email || userRow.Email == userRequest.Spec.Email {
-			exists = true
-			message = append(message, fmt.Sprintf(statusDict["email-exist"], userRequest.Spec.Email))
-			break
-		}
-	}
-
-	if !exists {
-		// To check email address
-		userRequestRaw, _ := t.edgenetClientset.RegistrationV1alpha().UserRequests().List(context.TODO(), metav1.ListOptions{})
-		for _, userRequestRow := range userRequestRaw.Items {
-			if strings.ToLower(userRequestRow.Spec.Tenant) == tenantName && userRequestRow.Spec.Email == userRequest.Spec.Email && userRequestRow.GetUID() != userRequest.GetUID() {
-				exists = true
-				message = append(message, fmt.Sprintf(statusDict["email-existregist"], userRequest.Spec.Email))
-			}
-		}
-
-		if exists && !reflect.DeepEqual(userRequest.Status.Message, message) {
-			t.sendEmail(userRequest, tenantName, "user-validation-failure-email")
-		}
-	}
-	return exists, message
 }
 
 // SetAsOwnerReference put the userrequest as owner

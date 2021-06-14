@@ -32,7 +32,7 @@ import (
 	"regexp"
 	"time"
 
-	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
+	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 
 	yaml "gopkg.in/yaml.v2"
 	certv1 "k8s.io/api/certificates/v1"
@@ -247,11 +247,11 @@ func MakeConfig(tenant, username, email string, clientCert, clientKey []byte) er
 }
 
 // CreateServiceAccount makes a service account to serve for permanent jobs.
-func CreateServiceAccount(userCopy corev1alpha.User, accountType string, ownerReferences []metav1.OwnerReference) (*corev1.ServiceAccount, error) {
+func CreateServiceAccount(user registrationv1alpha.UserRequest, accountType string, ownerReferences []metav1.OwnerReference) (*corev1.ServiceAccount, error) {
 	// Set the name of service account according to the type
-	name := userCopy.GetName()
+	name := user.GetName()
 	serviceAccount := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: name, OwnerReferences: ownerReferences}}
-	serviceAccountCreated, err := Clientset.CoreV1().ServiceAccounts(userCopy.Tenant).Create(context.TODO(), serviceAccount, metav1.CreateOptions{})
+	serviceAccountCreated, err := Clientset.CoreV1().ServiceAccounts(user.Spec.Tenant).Create(context.TODO(), serviceAccount, metav1.CreateOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err

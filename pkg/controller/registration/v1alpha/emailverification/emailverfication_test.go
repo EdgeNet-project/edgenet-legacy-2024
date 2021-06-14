@@ -27,7 +27,6 @@ type TestGroup struct {
 	tenant            corev1alpha.Tenant
 	tenantRequest     registrationv1alpha.TenantRequest
 	userRequest       registrationv1alpha.UserRequest
-	user              corev1alpha.User
 	emailVerification registrationv1alpha.EmailVerification
 	client            kubernetes.Interface
 	edgenetClient     versioned.Interface
@@ -64,7 +63,7 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.User{
+			Contact: corev1alpha.Contact{
 				Email:     "john.doe@edge-net.org",
 				FirstName: "John",
 				LastName:  "Doe",
@@ -92,7 +91,7 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.User{
+			Contact: corev1alpha.Contact{
 				Email:     "tom.public@edge-net.org",
 				FirstName: "Tom",
 				LastName:  "Public",
@@ -100,11 +99,6 @@ func (g *TestGroup) Init() {
 				Username:  "tompublic",
 			},
 		},
-	}
-	user := corev1alpha.User{
-		FirstName: "John",
-		LastName:  "Doe",
-		Email:     "john.doe@edge-net.org",
 	}
 	userRequest := registrationv1alpha.UserRequest{
 		TypeMeta: metav1.TypeMeta{
@@ -136,7 +130,6 @@ func (g *TestGroup) Init() {
 	}
 	g.tenant = tenant
 	g.tenantRequest = tenantRequestObj
-	g.user = user
 	g.userRequest = userRequest
 	g.emailVerification = emailVerification
 	g.client = testclient.NewSimpleClientset()
@@ -305,8 +298,6 @@ func TestCreateEmailVerification(t *testing.T) {
 	}{
 		"tenant request":            {g.tenantRequest.DeepCopy(), true},
 		"user registration request": {g.userRequest.DeepCopy(), true},
-		"user":                      {g.user.DeepCopy(), false},
-		"user no pointer":           {g.user, true},
 		"user wrong obj":            {g.tenant, false},
 	}
 	for k, tc := range cases {
