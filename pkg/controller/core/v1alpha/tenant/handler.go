@@ -145,9 +145,6 @@ func (t *Handler) Create(obj interface{}) bool {
 
 		if _, err := t.edgenetClientset.CoreV1alpha().Tenants().Create(context.TODO(), tenant.DeepCopy(), metav1.CreateOptions{}); err == nil {
 			created = true
-			tenantRequest.Status.State = approved
-			tenantRequest.Status.Message = []string{statusDict["request-approved"]}
-			t.edgenetClientset.RegistrationV1alpha().TenantRequests().UpdateStatus(context.TODO(), tenantRequest, metav1.UpdateOptions{})
 		} else {
 			log.Infof("Couldn't create tenant %s: %s", tenant.GetName(), err)
 		}
@@ -215,14 +212,14 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 			tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
 		}
 
-		var acceptableUsePolicyAccess = func(user *registrationv1alpha.UserRequest, acceptableUsePolicy string) {
+		var acceptableUsePolicyAccess = func(acceptableUsePolicy string) {
 			if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "core.edgenet.io", "acceptableusepolicies", acceptableUsePolicy, "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
 				log.Infof("Couldn't create aup cluster role %s, %s: %s", tenant.GetName(), acceptableUsePolicy, err)
 				// TODO: Provide err information at the status
 			}
 			clusterRoleName := fmt.Sprintf("edgenet:%s:acceptableusepolicies:%s-%s", tenant.GetName(), acceptableUsePolicy, "owner")
 			// ClusterRoleBinding carries the user information on as labels
-			roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/identity": "true", "edge-net.io/username": user.GetName(),
+			roleBindLabels := map[string]string{"edge-net.io/tenant": tenant.GetName(), "edge-net.io/identity": "true", "edge-net.io/username": user.GetName(),
 				"edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"], "edge-net.io/firstname": user.Spec.FirstName, "edge-net.io/lastname": user.Spec.LastName, "edge-net.io/role": user.Spec.Role}
 
 			exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["aup-rolebinding-failure"], user.Spec.Email))
@@ -242,7 +239,7 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 		acceptableUsePolicy, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), aupName, metav1.GetOptions{})
 		if err == nil {
 			policyStatus = acceptableUsePolicy.Spec.Accepted
-			acceptableUsePolicyAccess(user, acceptableUsePolicy.GetName())
+			acceptableUsePolicyAccess(acceptableUsePolicy.GetName())
 		} else if errors.IsNotFound(err) {
 			// Generate an acceptable use policy object attached to user
 			aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/username": user.GetName(), "edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"]}
@@ -252,7 +249,7 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 			if _, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), userAcceptableUsePolicy, metav1.CreateOptions{}); err != nil {
 				// TODO: Define the error precisely
 			}
-			acceptableUsePolicyAccess(user, userAcceptableUsePolicy.GetName())
+			acceptableUsePolicyAccess(userAcceptableUsePolicy.GetName())
 
 			// Create the client certs for permanent use
 			crt, key, err := registration.MakeUser(tenant.GetName(), user.GetName(), user.Spec.Email)

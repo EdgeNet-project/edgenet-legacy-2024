@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
@@ -80,11 +79,11 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 				tenantRequest.Status.Message = []string{statusDict["tenant-approved"]}
 				if tenant, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantRequest.GetName(), metav1.GetOptions{}); err == nil {
 					user := registrationv1alpha.UserRequest{}
-					user.SetName(strings.ToLower(tenant.Spec.Contact.Username))
-					user.Spec.Tenant = tenant.GetName()
-					user.Spec.Email = tenant.Spec.Contact.Email
-					user.Spec.FirstName = tenant.Spec.Contact.FirstName
-					user.Spec.LastName = tenant.Spec.Contact.LastName
+					user.SetName(tenantRequest.Spec.Contact.Username)
+					user.Spec.Tenant = tenantRequest.GetName()
+					user.Spec.Email = tenantRequest.Spec.Contact.Email
+					user.Spec.FirstName = tenantRequest.Spec.Contact.FirstName
+					user.Spec.LastName = tenantRequest.Spec.Contact.LastName
 					user.Spec.Role = "Owner"
 					user.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
 					tenantHandler.ConfigurePermissions(tenant, user.DeepCopy(), tenantv1alpha.SetAsOwnerReference(tenant))
