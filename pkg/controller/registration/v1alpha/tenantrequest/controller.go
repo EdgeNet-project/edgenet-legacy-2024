@@ -58,6 +58,7 @@ const failure = "Failure"
 const issue = "Malfunction"
 const success = "Successful"
 const approved = "Approved"
+const established = "Established"
 
 // Dictionary of status messages
 var statusDict = map[string]string{

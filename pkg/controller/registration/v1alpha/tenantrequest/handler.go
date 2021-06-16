@@ -77,17 +77,30 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 			if created {
 				tenantRequest.Status.State = approved
 				tenantRequest.Status.Message = []string{statusDict["tenant-approved"]}
-				if tenant, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantRequest.GetName(), metav1.GetOptions{}); err == nil {
-					user := registrationv1alpha.UserRequest{}
-					user.SetName(tenantRequest.Spec.Contact.Username)
-					user.Spec.Tenant = tenantRequest.GetName()
-					user.Spec.Email = tenantRequest.Spec.Contact.Email
-					user.Spec.FirstName = tenantRequest.Spec.Contact.FirstName
-					user.Spec.LastName = tenantRequest.Spec.Contact.LastName
-					user.Spec.Role = "Owner"
-					user.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
-					tenantHandler.ConfigurePermissions(tenant, user.DeepCopy(), tenantv1alpha.SetAsOwnerReference(tenant))
-				}
+				go func() {
+					timeout := time.After(60 * time.Second)
+					ticker := time.Tick(1 * time.Second)
+				check:
+					for {
+						select {
+						case <-timeout:
+							break check
+						case <-ticker:
+							if tenant, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantRequest.GetName(), metav1.GetOptions{}); err == nil && tenant.Status.State == established {
+								user := registrationv1alpha.UserRequest{}
+								user.SetName(tenantRequest.Spec.Contact.Username)
+								user.Spec.Tenant = tenantRequest.GetName()
+								user.Spec.Email = tenantRequest.Spec.Contact.Email
+								user.Spec.FirstName = tenantRequest.Spec.Contact.FirstName
+								user.Spec.LastName = tenantRequest.Spec.Contact.LastName
+								user.Spec.Role = "Owner"
+								user.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
+								tenantHandler.ConfigurePermissions(tenant, user.DeepCopy(), tenantv1alpha.SetAsOwnerReference(tenant))
+								break check
+							}
+						}
+					}
+				}()
 			} else {
 				t.sendEmail("tenant-creation-failure", tenantRequest)
 				tenantRequest.Status.State = failure

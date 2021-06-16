@@ -43,6 +43,7 @@ services:
       - ~/.kube/:/root/.kube/
       - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
+      - ../assets/certs/:/root/assets/certs/
   userregistrationrequest:
     container_name: userregistrationrequest
     restart: always
@@ -54,6 +55,7 @@ services:
       - ~/.kube/:/root/.kube/
       - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
+      - ../assets/certs/:/root/assets/certs/
   acceptableusepolicy:
     container_name: acceptableusepolicy
     restart: always
