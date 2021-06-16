@@ -80,6 +80,8 @@ spec:
                   type: boolean
                 expiry:
                   type: string
+                  format: dateTime
+                  nullable: true
                 state:
                   type: string
                 message:

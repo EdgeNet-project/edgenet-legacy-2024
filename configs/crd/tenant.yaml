@@ -60,7 +60,6 @@ spec:
                 - url
                 - address
                 - contact
-                - user
                 - enabled
               properties:
                 fullname:

@@ -55,6 +55,8 @@ spec:
               properties:
                 expiry:
                   type: string
+                  format: dateTime
+                  nullable: true
                 state:
                   type: string
                 message:
