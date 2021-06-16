@@ -286,7 +286,17 @@ infiniteLoop:
 							}
 						}
 					}
+				} else if subNamespaceRow.Spec.Expiry != nil && subNamespaceRow.Spec.Expiry.Time.Sub(time.Now()) > 0 {
+					if closestExpiry.Sub(time.Now()) <= 0 || closestExpiry.Sub(subNamespaceRow.Spec.Expiry.Time) > 0 {
+						closestExpiry = subNamespaceRow.Spec.Expiry.Time
+						log.Printf("ExpiryController: Closest expiry date is %v after the expiration of a subsidiary namespace", closestExpiry)
+					}
 				}
+			}
+
+			if closestExpiry.Sub(time.Now()) <= 0 {
+				closestExpiry = time.Now().AddDate(1, 0, 0)
+				log.Printf("ExpiryController: Closest expiry date is %v after the expiration of a subsidiary namespace", closestExpiry)
 			}
 		case <-terminated:
 			watchSubNamespace.Stop()

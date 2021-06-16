@@ -99,7 +99,7 @@ func (t *SDHandler) getByNode(nodeName string) ([][]string, bool) {
 								for _, owner := range ownerReferences {
 									if owner.Kind == "SelectiveDeployment" {
 										ownerDet := []string{namespace, owner.Name}
-										if !util.SliceContains(ownerList, ownerDet) {
+										if exists, _ := util.SliceContains(ownerList, ownerDet); !exists {
 											ownerList = append(ownerList, ownerDet)
 										}
 										status = true
@@ -474,7 +474,7 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 						}
 
 						if !conditionBlock && !taintBlock {
-							if util.Contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
+							if exists, _ := util.Contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]); exists {
 								continue
 							}
 							if selectorValue == nodeRow.Labels[labelKey] && selectorRow.Operator == "In" {
@@ -549,7 +549,7 @@ func (t *SDHandler) setFilter(sdCopy *apps_v1alpha.SelectiveDeployment, event st
 						}
 						if !conditionBlock && !taintBlock {
 							if nodeRow.Labels["edge-net.io/lon"] != "" && nodeRow.Labels["edge-net.io/lat"] != "" {
-								if util.Contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]) {
+								if exists, _ := util.Contains(matchExpression.Values, nodeRow.Labels["kubernetes.io/hostname"]); exists {
 									continue
 								}
 								// Because of alphanumeric limitations of Kubernetes on the labels we use "w", "e", "n", and "s" prefixes

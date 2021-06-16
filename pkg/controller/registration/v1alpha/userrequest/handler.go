@@ -30,6 +30,7 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 	"github.com/EdgeNet-project/edgenet/pkg/permission"
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -81,16 +82,21 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 			if userRequest.Spec.Approved {
 				tenantHandler := tenantpkg.Handler{}
 				tenantHandler.Init(t.clientset, t.edgenetClientset)
-				// TODO: Check tenant creation
-				tenantStatus := tenantHandler.ConfigurePermissions(tenant, userRequest, []metav1.OwnerReference{})
-				if tenantStatus.State != failure {
-					userRequest.Status.State = approved
-					userRequest.Status.Message = []string{statusDict["user-approved"]}
-				} else {
-					t.sendEmail(userRequest, tenant.GetName(), "user-creation-failure")
-					userRequest.Status.State = failure
-					userRequest.Status.Message = []string{statusDict["user-failed"]}
+				ownerReferences := tenantpkg.SetAsOwnerReference(tenant)
+				tenantHandler.ConfigurePermissions(tenant, userRequest, ownerReferences)
+
+				if aupFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["aup-rolebinding-failure"], userRequest.Spec.Email)); !aupFailure {
+					if certFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], userRequest.Spec.Email)); !certFailure {
+						if kubeconfigFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["kubeconfig-failure"], userRequest.Spec.Email)); !kubeconfigFailure {
+							userRequest.Status.State = approved
+							userRequest.Status.Message = []string{statusDict["user-approved"]}
+							return
+						}
+					}
 				}
+				t.sendEmail(userRequest, tenant.GetName(), "user-creation-failure")
+				userRequest.Status.State = failure
+				userRequest.Status.Message = []string{statusDict["user-failed"]}
 			} else {
 				if userRequest.Status.Expiry == nil {
 					// Set the approval timeout which is 72 hours
@@ -236,7 +242,17 @@ infiniteLoop:
 			for _, userRequestRow := range userRequestRaw.Items {
 				if userRequestRow.Status.Expiry != nil && userRequestRow.Status.Expiry.Time.Sub(time.Now()) <= 0 {
 					t.edgenetClientset.RegistrationV1alpha().UserRequests().Delete(context.TODO(), userRequestRow.GetName(), metav1.DeleteOptions{})
+				} else if userRequestRow.Status.Expiry != nil && userRequestRow.Status.Expiry.Time.Sub(time.Now()) > 0 {
+					if closestExpiry.Sub(time.Now()) <= 0 || closestExpiry.Sub(userRequestRow.Status.Expiry.Time) > 0 {
+						closestExpiry = userRequestRow.Status.Expiry.Time
+						log.Printf("ExpiryController: Closest expiry date is %v after the expiration of a user request", closestExpiry)
+					}
 				}
+			}
+
+			if closestExpiry.Sub(time.Now()) <= 0 {
+				closestExpiry = time.Now().AddDate(1, 0, 0)
+				log.Printf("ExpiryController: Closest expiry date is %v after the expiration of a user request", closestExpiry)
 			}
 		case <-terminated:
 			watchUserRequest.Stop()

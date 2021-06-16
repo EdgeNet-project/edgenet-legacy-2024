@@ -67,22 +67,12 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.User{
+			Contact: corev1alpha.Contact{
 				Email:     "john.doe@edge-net.org",
 				FirstName: "John",
 				LastName:  "Doe",
 				Phone:     "+33NUMBER",
 				Username:  "johndoe",
-			},
-			User: []corev1alpha.User{
-				corev1alpha.User{
-					Email:     "john.doe@edge-net.org",
-					FirstName: "John",
-					LastName:  "Doe",
-					Phone:     "+33NUMBER",
-					Username:  "johndoe",
-					Role:      "Owner",
-				},
 			},
 			Enabled: true,
 		},
@@ -187,7 +177,6 @@ func TestCreate(t *testing.T) {
 	subnamespace4.SetName("expiry")
 
 	t.Run("inherit all without expiry date", func(t *testing.T) {
-		defer time.Sleep(100 * time.Millisecond)
 		defer g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Delete(context.TODO(), subnamespace1.GetName(), metav1.DeleteOptions{})
 
 		_, err := g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Create(context.TODO(), subnamespace1, metav1.CreateOptions{})
@@ -222,8 +211,8 @@ func TestCreate(t *testing.T) {
 			}
 		}
 	})
+	time.Sleep(250 * time.Millisecond)
 	t.Run("inherit rbac without expiry date", func(t *testing.T) {
-		defer time.Sleep(100 * time.Millisecond)
 		defer g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Delete(context.TODO(), subnamespace2.GetName(), metav1.DeleteOptions{})
 
 		_, err := g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Create(context.TODO(), subnamespace2, metav1.CreateOptions{})
@@ -253,8 +242,8 @@ func TestCreate(t *testing.T) {
 			}
 		}
 	})
+	time.Sleep(250 * time.Millisecond)
 	t.Run("inherit networkpolicy without expiry date", func(t *testing.T) {
-		defer time.Sleep(100 * time.Millisecond)
 		defer g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Delete(context.TODO(), subnamespace3.GetName(), metav1.DeleteOptions{})
 
 		_, err := g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Create(context.TODO(), subnamespace3, metav1.CreateOptions{})
@@ -285,6 +274,7 @@ func TestCreate(t *testing.T) {
 			}
 		}
 	})
+	time.Sleep(250 * time.Millisecond)
 	t.Run("inherit all with expiry date", func(t *testing.T) {
 		subnamespace4.Spec.Expiry = &metav1.Time{
 			Time: time.Now().Add(200 * time.Millisecond),

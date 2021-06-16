@@ -38,8 +38,8 @@ type TestGroup struct {
 }
 
 func TestMain(m *testing.M) {
-	flag.String("dir", "../../../..", "Override the directory.")
-	flag.String("smtp-path", "../../../../configs/smtp_test.yaml", "Set SMTP path.")
+	flag.String("dir", "../../../../..", "Override the directory.")
+	flag.String("smtp-path", "../../../../../configs/smtp_test.yaml", "Set SMTP path.")
 	flag.Parse()
 
 	log.SetOutput(ioutil.Discard)
@@ -87,7 +87,7 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.User{
+			Contact: corev1alpha.Contact{
 				Email:     "john.doe@edge-net.org",
 				FirstName: "John",
 				LastName:  "Doe",

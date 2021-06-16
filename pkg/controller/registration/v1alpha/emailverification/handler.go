@@ -31,6 +31,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -39,6 +40,7 @@ type HandlerInterface interface {
 	Init(kubernetes kubernetes.Interface, edgenet versioned.Interface)
 	ObjectCreatedOrUpdated(obj interface{})
 	ObjectDeleted(obj interface{})
+	RunExpiryController()
 }
 
 // Handler implementation
@@ -83,8 +85,6 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 				}
 				t.edgenetClientset.RegistrationV1alpha().EmailVerifications().UpdateStatus(context.TODO(), emailVerification, metav1.UpdateOptions{})
 			}
-			// Run timeout goroutine
-			go t.runVerificationTimeout(emailVerification)
 		}
 	}
 }
@@ -230,49 +230,68 @@ func (t *Handler) statusUpdate(labels map[string]string) {
 	}
 }
 
-// runVerificationTimeout puts a procedure in place to remove requests by verification or timeout
-func (t *Handler) runVerificationTimeout(emailVerification *registrationv1alpha.EmailVerification) {
-	terminated := make(chan bool, 1)
-	var timeout <-chan time.Time
-	if emailVerification.Status.Expiry != nil {
-		timeout = time.After(time.Until(emailVerification.Status.Expiry.Time))
-	}
-	closeChannels := func() {
-		close(terminated)
-	}
+// RunExpiryController puts a procedure in place to remove requests by verification or timeout
+func (t *Handler) RunExpiryController() {
+	var closestExpiry time.Time
+	terminated := make(chan bool)
+	newExpiry := make(chan time.Time)
+	defer close(terminated)
+	defer close(newExpiry)
 
-	// Watch the events of email verification object
-	watchEmailVerifiation, err := t.edgenetClientset.RegistrationV1alpha().EmailVerifications().Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", emailVerification.GetName())})
+	watchEmailVerifiation, err := t.edgenetClientset.RegistrationV1alpha().EmailVerifications().Watch(context.TODO(), metav1.ListOptions{})
 	if err == nil {
-		go func() {
+		watchEvents := func(watchEmailVerifiation watch.Interface, newExpiry *chan time.Time) {
+			// Watch the events of user request object
 			// Get events from watch interface
 			for emailVerificationEvent := range watchEmailVerifiation.ResultChan() {
-				// Get updated email verification object
+				// Get updated user request object
 				updatedEmailVerification, status := emailVerificationEvent.Object.(*registrationv1alpha.EmailVerification)
-				if emailVerification.GetUID() == updatedEmailVerification.GetUID() {
-					if status {
-						if emailVerificationEvent.Type == "DELETED" || updatedEmailVerification.Spec.Verified {
-							terminated <- true
-							continue
-						}
+				if status {
+					if updatedEmailVerification.Status.Expiry != nil {
+						*newExpiry <- updatedEmailVerification.Status.Expiry.Time
 					}
 				}
 			}
-		}()
+		}
+		go watchEvents(watchEmailVerifiation, &newExpiry)
 	} else {
-		// In case of any malfunction of watching emailverification resources,
-		// there is a timeout at 3 hours
-		timeout = time.After(3 * time.Hour)
+		go t.RunExpiryController()
+		terminated <- true
 	}
 
-	// Wait on multiple channel operations
-	select {
-	case <-timeout:
-		watchEmailVerifiation.Stop()
-		t.edgenetClientset.RegistrationV1alpha().EmailVerifications().Delete(context.TODO(), emailVerification.GetName(), metav1.DeleteOptions{})
-		closeChannels()
-	case <-terminated:
-		watchEmailVerifiation.Stop()
-		closeChannels()
+infiniteLoop:
+	for {
+		// Wait on multiple channel operations
+		select {
+		case timeout := <-newExpiry:
+			if closestExpiry.Sub(timeout) > 0 {
+				closestExpiry = timeout
+				log.Printf("ExpiryController: Closest expiry date is %v", closestExpiry)
+			}
+		case <-time.After(time.Until(closestExpiry)):
+			emailVerificationRaw, err := t.edgenetClientset.RegistrationV1alpha().EmailVerifications().List(context.TODO(), metav1.ListOptions{})
+			if err != nil {
+				// TO-DO: Provide more information on error
+				log.Println(err)
+			}
+			for _, emailVerificationRow := range emailVerificationRaw.Items {
+				if emailVerificationRow.Status.Expiry != nil && emailVerificationRow.Status.Expiry.Time.Sub(time.Now()) <= 0 {
+					t.edgenetClientset.RegistrationV1alpha().EmailVerifications().Delete(context.TODO(), emailVerificationRow.GetName(), metav1.DeleteOptions{})
+				} else if emailVerificationRow.Status.Expiry != nil && emailVerificationRow.Status.Expiry.Time.Sub(time.Now()) > 0 {
+					if closestExpiry.Sub(time.Now()) <= 0 || closestExpiry.Sub(emailVerificationRow.Status.Expiry.Time) > 0 {
+						closestExpiry = emailVerificationRow.Status.Expiry.Time
+						log.Printf("ExpiryController: Closest expiry date is %v after the expiration of a user request", closestExpiry)
+					}
+				}
+			}
+
+			if closestExpiry.Sub(time.Now()) <= 0 {
+				closestExpiry = time.Now().AddDate(1, 0, 0)
+				log.Printf("ExpiryController: Closest expiry date is %v after the expiration of a user request", closestExpiry)
+			}
+		case <-terminated:
+			watchEmailVerifiation.Stop()
+			break infiniteLoop
+		}
 	}
 }

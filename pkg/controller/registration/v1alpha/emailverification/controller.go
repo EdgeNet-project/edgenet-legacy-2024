@@ -131,6 +131,7 @@ func (c *controller) run(stopCh <-chan struct{}, clientset kubernetes.Interface,
 	defer c.queue.ShutDown()
 	c.logger.Info("run: initiating")
 	c.handler.Init(clientset, edgenetClientset)
+	go c.handler.RunExpiryController()
 	// Run the informer to list and watch resources
 	go c.informer.Run(stopCh)
 

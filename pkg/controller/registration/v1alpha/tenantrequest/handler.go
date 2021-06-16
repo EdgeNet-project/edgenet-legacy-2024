@@ -208,7 +208,17 @@ infiniteLoop:
 			for _, tenantRequestRow := range tenantRequestRaw.Items {
 				if tenantRequestRow.Status.Expiry != nil && tenantRequestRow.Status.Expiry.Time.Sub(time.Now()) <= 0 {
 					t.edgenetClientset.RegistrationV1alpha().TenantRequests().Delete(context.TODO(), tenantRequestRow.GetName(), metav1.DeleteOptions{})
+				} else if tenantRequestRow.Status.Expiry != nil && tenantRequestRow.Status.Expiry.Time.Sub(time.Now()) > 0 {
+					if closestExpiry.Sub(time.Now()) <= 0 || closestExpiry.Sub(tenantRequestRow.Status.Expiry.Time) > 0 {
+						closestExpiry = tenantRequestRow.Status.Expiry.Time
+						log.Printf("ExpiryController: Closest expiry date is %v after the expiration of a tenant request", closestExpiry)
+					}
 				}
+			}
+
+			if closestExpiry.Sub(time.Now()) <= 0 {
+				closestExpiry = time.Now().AddDate(1, 0, 0)
+				log.Printf("ExpiryController: Closest expiry date is %v after the expiration of a tenant request", closestExpiry)
 			}
 		case <-terminated:
 			watchTenantRequest.Stop()

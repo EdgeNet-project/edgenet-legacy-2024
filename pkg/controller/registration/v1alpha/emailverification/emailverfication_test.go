@@ -34,8 +34,8 @@ type TestGroup struct {
 }
 
 func TestMain(m *testing.M) {
-	flag.String("dir", "../../../..", "Override the directory.")
-	flag.String("smtp-path", "../../../../configs/smtp_test.yaml", "Set SMTP path.")
+	flag.String("dir", "../../../../..", "Override the directory.")
+	flag.String("smtp-path", "../../../../../configs/smtp_test.yaml", "Set SMTP path.")
 	flag.Parse()
 
 	log.SetOutput(ioutil.Discard)
@@ -179,7 +179,7 @@ func TestCreate(t *testing.T) {
 	})
 	t.Run("timeout", func(t *testing.T) {
 		emailVerificationCopy, _ := g.edgenetClient.RegistrationV1alpha().EmailVerifications().Get(context.TODO(), reference.GetName(), metav1.GetOptions{})
-		go g.handler.runVerificationTimeout(emailVerificationCopy)
+		go g.handler.RunExpiryController()
 		emailVerificationCopy.Status.Expiry = &metav1.Time{
 			Time: time.Now().Add(10 * time.Millisecond),
 		}
