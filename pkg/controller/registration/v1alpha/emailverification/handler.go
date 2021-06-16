@@ -62,16 +62,6 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 	// Make a copy of the email verification object to make changes on it
 	emailVerification := obj.(*registrationv1alpha.EmailVerification).DeepCopy()
 	if emailVerification.Status.State != verified {
-		/*emailVerificationLabels := emailVerification.GetLabels()
-		tenant := emailVerificationLabels["edge-net.io/tenant"]
-
-		kind := emailVerificationLabels["edge-net.io/kind"]
-		if kind == "tenant" {
-
-		} else if kind == "user" {
-
-		}*/
-
 		if emailVerification.Spec.Verified {
 			emailVerification.Status.State = verified
 			t.edgenetClientset.RegistrationV1alpha().EmailVerifications().UpdateStatus(context.TODO(), emailVerification, metav1.UpdateOptions{})
@@ -88,10 +78,6 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 		}
 	}
 }
-
-// t.edgenetClientset.RegistrationV1alpha().EmailVerifications(emailVerification.GetNamespace()).Delete(context.TODO(), emailVerification.GetName(), metav1.DeleteOptions{})
-// t.sendEmail("tenant-email-verification-dubious", emailVerification.Spec.Identifier, emailVerification.GetNamespace(), "", "", "", "")
-// t.sendEmail("user-email-verification-dubious", EVOwnerNamespace.Labels["tenant-name"], emailVerification.GetNamespace(), emailVerification.Spec.Identifier, "", "", "")
 
 // ObjectDeleted is called when an object is deleted
 func (t *Handler) ObjectDeleted(obj interface{}) {

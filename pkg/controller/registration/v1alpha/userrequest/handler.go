@@ -25,7 +25,7 @@ import (
 	"time"
 
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
-	tenantpkg "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenant"
+	tenantv1alpha "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenant"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/emailverification"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
@@ -80,10 +80,9 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 		// Check if the tenant is active
 		if tenant.Spec.Enabled {
 			if userRequest.Spec.Approved {
-				tenantHandler := tenantpkg.Handler{}
+				tenantHandler := tenantv1alpha.Handler{}
 				tenantHandler.Init(t.clientset, t.edgenetClientset)
-				ownerReferences := tenantpkg.SetAsOwnerReference(tenant)
-				tenantHandler.ConfigurePermissions(tenant, userRequest, ownerReferences)
+				tenantHandler.ConfigurePermissions(tenant, userRequest, tenantv1alpha.SetAsOwnerReference(tenant))
 
 				if aupFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["aup-rolebinding-failure"], userRequest.Spec.Email)); !aupFailure {
 					if certFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], userRequest.Spec.Email)); !certFailure {
@@ -117,7 +116,7 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 					code, created := emailVerificationHandler.Create(userRequest, SetAsOwnerReference(userRequest))
 					if created {
 						if labels == nil {
-							labels = map[string]string{"edge-net.io/emailverification": code}
+							labels = map[string]string{"edge-net.io/emailverification": code, "edge-net.io/user-template-hash": util.GenerateRandomString(6)}
 						} else if labels["edge-net.io/emailverification"] == "" {
 							labels["edge-net.io/emailverification"] = code
 						}

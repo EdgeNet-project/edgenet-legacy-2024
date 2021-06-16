@@ -24,7 +24,7 @@ import (
 	"time"
 
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenant"
+	tenantv1alpha "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenant"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/emailverification"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
@@ -72,13 +72,12 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 			}
 		}()
 		if tenantRequest.Spec.Approved {
-			tenantHandler := tenant.Handler{}
+			tenantHandler := tenantv1alpha.Handler{}
 			tenantHandler.Init(t.clientset, t.edgenetClientset)
 			created := tenantHandler.Create(tenantRequest)
 			if created {
 				tenantRequest.Status.State = approved
 				tenantRequest.Status.Message = []string{statusDict["tenant-approved"]}
-
 				if tenant, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantRequest.GetName(), metav1.GetOptions{}); err == nil {
 					user := registrationv1alpha.UserRequest{}
 					user.SetName(strings.ToLower(tenant.Spec.Contact.Username))
@@ -88,10 +87,7 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 					user.Spec.LastName = tenant.Spec.Contact.LastName
 					user.Spec.Role = "Owner"
 					user.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
-
-					// TODO: Check tenant creation
-					// tenantStatus := t.ConfigurePermissions(tenant, user.DeepCopy(), ownerReferences)
-					tenantHandler.ConfigurePermissions(tenant, user.DeepCopy(), []metav1.OwnerReference{})
+					tenantHandler.ConfigurePermissions(tenant, user.DeepCopy(), tenantv1alpha.SetAsOwnerReference(tenant))
 				}
 			} else {
 				t.sendEmail("tenant-creation-failure", tenantRequest)
