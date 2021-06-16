@@ -64,22 +64,12 @@ func (g *TestGroup) Init() {
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.User{
+			Contact: corev1alpha.Contact{
 				Email:     "joe.public@edge-net.org",
 				FirstName: "Joe",
 				LastName:  "Public",
 				Phone:     "+33NUMBER",
 				Username:  "joepublic",
-			},
-			User: []corev1alpha.User{
-				corev1alpha.User{
-					Email:     "joe.public@edge-net.org",
-					FirstName: "Joe",
-					LastName:  "Public",
-					Phone:     "+33NUMBER",
-					Username:  "joepublic",
-					Role:      "Owner",
-				},
 			},
 			Enabled: true,
 		},
@@ -94,7 +84,7 @@ func (g *TestGroup) Init() {
 			Labels: map[string]string{
 				"edge-net.io/generated": "true",
 				"edge-net.io/tenant":    "edgenet",
-				"edge-net.io/user":      "joepublic",
+				"edge-net.io/username":  "joepublic",
 			},
 		},
 		Spec: corev1alpha.AcceptableUsePolicySpec{

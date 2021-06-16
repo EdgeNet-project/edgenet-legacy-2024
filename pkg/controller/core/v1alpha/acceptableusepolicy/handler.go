@@ -19,6 +19,8 @@ package acceptableusepolicy
 import (
 	"context"
 	"fmt"
+	"net/mail"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -58,9 +60,17 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 	log.Info("AUPHandler.ObjectCreatedOrUpdated")
 	// Make a copy of the acceptable use policy object to make changes on it
 	acceptableUsePolicy := obj.(*corev1alpha.AcceptableUsePolicy).DeepCopy()
+	defer func() {
+		if !reflect.DeepEqual(obj.(*corev1alpha.AcceptableUsePolicy).Status, acceptableUsePolicy.Status) {
+			if _, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().UpdateStatus(context.TODO(), acceptableUsePolicy, metav1.UpdateOptions{}); err != nil {
+				// TODO: Provide more information on error
+				log.Println(err)
+			}
+		}
+	}()
+
 	aupLabels := acceptableUsePolicy.GetLabels()
-	tenantName := aupLabels["edge-net.io/tenant"]
-	tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
+	tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), aupLabels["edge-net.io/tenant"], metav1.GetOptions{})
 	// Check if the tenant is active
 	if tenant.Spec.Enabled && acceptableUsePolicy.Spec.Accepted {
 		if acceptableUsePolicy.Status.Expiry == nil {
@@ -71,19 +81,25 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 
 			acceptableUsePolicy.Status.State = success
 			acceptableUsePolicy.Status.Message = []string{statusDict["aup-ok"]}
-			if _, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().UpdateStatus(context.TODO(), acceptableUsePolicy, metav1.UpdateOptions{}); err != nil {
-				// TODO: Provide more detailed information about the issue
-				log.Println(statusDict["aup-set-fail"])
-			}
 			// Get the user who owns this acceptable use policy object
-			for _, user := range tenant.Spec.User {
-				if user.Username == aupLabels["edge-net.io/user"] {
-					contentData := mailer.CommonContentData{}
-					contentData.CommonData.Tenant = tenantName
-					contentData.CommonData.Username = acceptableUsePolicy.GetName()
-					contentData.CommonData.Name = fmt.Sprintf("%s %s", user.FirstName, user.LastName)
-					contentData.CommonData.Email = []string{user.Email}
-					mailer.Send("acceptable-use-policy-accepted", contentData)
+			if clusterRoleBindingRaw, err := t.clientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true,edge-net.io/username=%s,edge-net.io/user-template-hash=%s", aupLabels["edge-net.io/user-template-hash"], aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"])}); err == nil {
+				for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
+					roleBindingLabels := clusterRoleBindingRow.GetLabels()
+					if roleBindingLabels != nil && roleBindingLabels["edge-net.io/firstname"] != "" && roleBindingLabels["edge-net.io/lastname"] != "" {
+						for _, bindingSubject := range clusterRoleBindingRow.Subjects {
+							if bindingSubject.Kind == "User" {
+								_, err := mail.ParseAddress(bindingSubject.Name)
+								if err == nil {
+									contentData := mailer.CommonContentData{}
+									contentData.CommonData.Tenant = aupLabels["edge-net.io/tenant"]
+									contentData.CommonData.Username = aupLabels["edge-net.io/username"]
+									contentData.CommonData.Name = fmt.Sprintf("%s %s", roleBindingLabels["edge-net.io/firstname"], roleBindingLabels["edge-net.io/lastname"])
+									contentData.CommonData.Email = []string{bindingSubject.Name}
+									mailer.Send("acceptable-use-policy-accepted", contentData)
+								}
+							}
+						}
+					}
 				}
 			}
 		}
@@ -96,11 +112,9 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 			acceptableUsePolicy.Status.State = failure
 			acceptableUsePolicy.Status.Message = []string{statusDict["aup-expired"]}
 		}
-		t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().UpdateStatus(context.TODO(), acceptableUsePolicy, metav1.UpdateOptions{})
 	} else {
 		acceptableUsePolicy.Status.State = failure
 		acceptableUsePolicy.Status.Message = []string{statusDict["tenant-disabled"]}
-		t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().UpdateStatus(context.TODO(), acceptableUsePolicy, metav1.UpdateOptions{})
 	}
 
 	tenantLabels := tenant.GetLabels()
@@ -124,70 +138,6 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 	// TODO: Update the tenant labels accordingly
 }
 
-// runApprovalTimeout puts a procedure in place to remove requests by approval or timeout
-/*func (t *Handler) runApprovalTimeout(acceptableUsePolicy *corev1alpha.AcceptableUsePolicy) {
-	terminated := make(chan bool, 1)
-	var timeout <-chan time.Time
-	if acceptableUsePolicy.Status.Expiry != nil {
-		timeout = time.After(time.Until(acceptableUsePolicy.Status.Expiry.Time))
-	}
-	closeChannels := func() {
-		close(terminated)
-	}
-
-	// Watch the events of acceptable use policy object
-	watchAcceptableUsePolicy, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", acceptableUsePolicy.GetName())})
-	if err == nil {
-		go func() {
-			// Get events from watch interface
-			for acceptableUsePolicyEvent := range watchAcceptableUsePolicy.ResultChan() {
-				// Get updated acceptable use policy object
-				updatedAcceptableUsePolicy, status := acceptableUsePolicyEvent.Object.(*corev1alpha.AcceptableUsePolicy)
-				if acceptableUsePolicy.GetUID() == updatedAcceptableUsePolicy.GetUID() {
-					if status {
-						if acceptableUsePolicyEvent.Type == "DELETED" || !updatedAcceptableUsePolicy.Spec.Accepted {
-							terminated <- true
-							continue
-						}
-					}
-				}
-			}
-		}()
-	} else {
-		// In case of any malfunction of watching acceptableusepolicy resources,
-		// there is a timeout at 72 hours
-		timeout = time.After(72 * time.Hour)
-	}
-
-	// Wait on multiple channel operations
-	select {
-	case <-timeout:
-		watchAcceptableUsePolicy.Stop()
-
-		aupLabels := acceptableUsePolicy.GetLabels()
-		tenantName := aupLabels["edge-net.io/tenant"]
-		tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
-
-		for _, user := range tenant.Spec.User {
-			if user.Username == aupLabels["edge-net.io/user"] {
-				contentData := mailer.CommonContentData{}
-				contentData.CommonData.Tenant = tenantName
-				contentData.CommonData.Username = acceptableUsePolicy.GetName()
-				contentData.CommonData.Name = fmt.Sprintf("%s %s", user.FirstName, user.LastName)
-				contentData.CommonData.Email = []string{user.Email}
-				mailer.Send("acceptable-use-policy-expired", contentData)
-			}
-		}
-
-		acceptableUsePolicy.Spec.Accepted = false
-		t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), acceptableUsePolicy, metav1.UpdateOptions{})
-		closeChannels()
-	case <-terminated:
-		watchAcceptableUsePolicy.Stop()
-		closeChannels()
-	}
-}*/
-
 // RunExpiryController puts a procedure in place to turn accepted policies into not accepted
 func (t *Handler) RunExpiryController() {
 	var closestExpiry time.Time
@@ -206,7 +156,6 @@ func (t *Handler) RunExpiryController() {
 				updatedAcceptableUsePolicy, status := acceptableUsePolicyEvent.Object.(*corev1alpha.AcceptableUsePolicy)
 				if status {
 					if updatedAcceptableUsePolicy.Status.Expiry != nil {
-						log.Println(updatedAcceptableUsePolicy.Status.Expiry)
 						*newExpiry <- updatedAcceptableUsePolicy.Status.Expiry.Time
 					}
 				}
@@ -234,25 +183,42 @@ infiniteLoop:
 				log.Println(err)
 			}
 			for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-				if acceptableUsePolicyRow.Status.Expiry != nil && acceptableUsePolicyRow.Status.Expiry.Time.Sub(time.Now()) <= 0 {
+				if acceptableUsePolicyRow.Status.Expiry != nil && acceptableUsePolicyRow.Status.Expiry.Time.Sub(time.Now()) <= 0 && acceptableUsePolicyRow.Spec.Accepted {
 					acceptableUsePolicy := acceptableUsePolicyRow.DeepCopy()
 					aupLabels := acceptableUsePolicy.GetLabels()
-					tenantName := aupLabels["edge-net.io/tenant"]
-					tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
-					for _, user := range tenant.Spec.User {
-						if user.Username == aupLabels["edge-net.io/user"] {
-							contentData := mailer.CommonContentData{}
-							contentData.CommonData.Tenant = tenantName
-							contentData.CommonData.Username = acceptableUsePolicy.GetName()
-							contentData.CommonData.Name = fmt.Sprintf("%s %s", user.FirstName, user.LastName)
-							contentData.CommonData.Email = []string{user.Email}
-							mailer.Send("acceptable-use-policy-expired", contentData)
+					if clusterRoleBindingRaw, err := t.clientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true,edge-net.io/username=%s,edge-net.io/user-template-hash=%s", aupLabels["edge-net.io/user-template-hash"], aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"])}); err == nil {
+						for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
+							roleBindingLabels := clusterRoleBindingRow.GetLabels()
+							if roleBindingLabels != nil && roleBindingLabels["edge-net.io/firstname"] != "" && roleBindingLabels["edge-net.io/lastname"] != "" {
+								for _, bindingSubject := range clusterRoleBindingRow.Subjects {
+									if bindingSubject.Kind == "User" {
+										_, err := mail.ParseAddress(bindingSubject.Name)
+										if err == nil {
+											contentData := mailer.CommonContentData{}
+											contentData.CommonData.Tenant = aupLabels["edge-net.io/tenant"]
+											contentData.CommonData.Username = aupLabels["edge-net.io/username"]
+											contentData.CommonData.Name = fmt.Sprintf("%s %s", roleBindingLabels["edge-net.io/firstname"], roleBindingLabels["edge-net.io/lastname"])
+											contentData.CommonData.Email = []string{bindingSubject.Name}
+											mailer.Send("acceptable-use-policy-expired", contentData)
+										}
+									}
+								}
+							}
 						}
 					}
-
 					acceptableUsePolicy.Spec.Accepted = false
 					go t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), acceptableUsePolicy, metav1.UpdateOptions{})
+				} else if acceptableUsePolicyRow.Status.Expiry != nil && acceptableUsePolicyRow.Status.Expiry.Time.Sub(time.Now()) > 0 {
+					if closestExpiry.Sub(time.Now()) <= 0 || closestExpiry.Sub(acceptableUsePolicyRow.Status.Expiry.Time) > 0 {
+						closestExpiry = acceptableUsePolicyRow.Status.Expiry.Time
+						log.Printf("ExpiryController: Closest expiry date is %v after the expiration of an acceptable use policy", closestExpiry)
+					}
 				}
+			}
+
+			if closestExpiry.Sub(time.Now()) <= 0 {
+				closestExpiry = time.Now().AddDate(1, 0, 0)
+				log.Printf("ExpiryController: Closest expiry date is %v after the expiration of an acceptable use policy", closestExpiry)
 			}
 		case <-terminated:
 			watchAcceptableUsePolicy.Stop()

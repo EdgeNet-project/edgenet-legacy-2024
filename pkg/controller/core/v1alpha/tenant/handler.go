@@ -215,8 +215,6 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 			tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
 		}
 
-		roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/identity": "true", "edge-net.io/username": user.GetName(),
-			"edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"], "edge-net.io/firstname": user.Spec.FirstName, "edge-net.io/lastname": user.Spec.LastName, "edge-net.io/role": user.Spec.Role}
 		var acceptableUsePolicyAccess = func(user *registrationv1alpha.UserRequest, acceptableUsePolicy string) {
 			if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "core.edgenet.io", "acceptableusepolicies", acceptableUsePolicy, "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
 				log.Infof("Couldn't create aup cluster role %s, %s: %s", tenant.GetName(), acceptableUsePolicy, err)
@@ -224,6 +222,9 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 			}
 			clusterRoleName := fmt.Sprintf("edgenet:%s:acceptableusepolicies:%s-%s", tenant.GetName(), acceptableUsePolicy, "owner")
 			// ClusterRoleBinding carries the user information on as labels
+			roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/identity": "true", "edge-net.io/username": user.GetName(),
+				"edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"], "edge-net.io/firstname": user.Spec.FirstName, "edge-net.io/lastname": user.Spec.LastName, "edge-net.io/role": user.Spec.Role}
+
 			exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["aup-rolebinding-failure"], user.Spec.Email))
 			if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, user.GetName(), user.Spec.Email, roleBindLabels, ownerReferences); err != nil {
 				log.Infof("Couldn't create aup cluster role binding %s, %s: %s", tenant.GetName(), acceptableUsePolicy, err)
@@ -244,7 +245,7 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 			acceptableUsePolicyAccess(user, acceptableUsePolicy.GetName())
 		} else if errors.IsNotFound(err) {
 			// Generate an acceptable use policy object attached to user
-			aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/user": user.GetName()}
+			aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/username": user.GetName(), "edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"]}
 			userAcceptableUsePolicy := &corev1alpha.AcceptableUsePolicy{TypeMeta: metav1.TypeMeta{Kind: "AcceptableUsePolicy", APIVersion: "apps.edgenet.io/v1alpha"},
 				ObjectMeta: metav1.ObjectMeta{Name: aupName, OwnerReferences: ownerReferences}, Spec: corev1alpha.AcceptableUsePolicySpec{Accepted: false}}
 			userAcceptableUsePolicy.SetLabels(aupLabels)
@@ -305,6 +306,7 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 
 			if strings.ToLower(user.Spec.Role) != "collaborator" {
 				// Create the cluster role binding related to the tenant object
+				roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName()}
 				exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["administrator-rolebinding-failure"], user.Spec.Email))
 				clusterRoleName := fmt.Sprintf("edgenet:%s:tenants:%s-%s", tenant.GetName(), tenant.GetName(), strings.ToLower(user.Spec.Role))
 				if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, user.GetName(), user.Spec.Email, roleBindLabels, ownerReferences); err != nil {
