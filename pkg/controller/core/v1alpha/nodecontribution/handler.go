@@ -61,7 +61,7 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 	t.edgenetClientset = edgenet
 
 	// Get the SSH Public Key of the headnode
-	key, err := ioutil.ReadFile("../../.ssh/id_rsa")
+	key, err := ioutil.ReadFile("../../.ssh/id_edgenet_2021")
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
