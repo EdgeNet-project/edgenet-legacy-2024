@@ -57,18 +57,21 @@ const create = "create"
 const update = "update"
 const delete = "delete"
 const failure = "Failure"
-const success = "Successful"
+const approved = "Approved"
 const established = "Established"
 
 // Dictionary of status messages
 var statusDict = map[string]string{
-	"request-approved":  "Tenant request has been approved",
-	"tenant-ok":         "Tenant successfully established",
-	"namespace-failure": "Tenant core namespace cannot be created",
-	"user-failed":       "User creation failed",
-	"email-exist":       "Email address, %s, already exists for another user account",
-	"cert-fail":         "Client cert generation failed for user %s",
-	"kubeconfig-fail":   "Kubeconfig file creation failed for user %s",
+	"request-approved":                  "Tenant request has been approved",
+	"tenant-established":                "Tenant successfully established",
+	"namespace-failure":                 "Tenant core namespace cannot be created",
+	"resource-quota-failure":            "Assigning tenant resource quota failed, user: %s",
+	"aup-rolebinding-failure":           "AUP role binding creation failed, user: %s",
+	"permission-rolebinding-failure":    "Permission role binding creation failed, user: %s",
+	"administrator-rolebinding-failure": "Administrator role binding creation failed, user: %s",
+	"user-failure":                      "User creation failed due to lack of labels, user: %s",
+	"cert-failure":                      "Client cert generation failed, user: %s",
+	"kubeconfig-failure":                "Kubeconfig file creation failed, user: %s",
 }
 
 // Start function is entry point of the controller

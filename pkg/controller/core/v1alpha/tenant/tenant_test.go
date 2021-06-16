@@ -100,7 +100,7 @@ func (g *TestGroup) Init() {
 			},
 		},
 		Status: registrationv1alpha.TenantRequestStatus{
-			State: success,
+			State: established,
 		},
 	}
 	userObj := registrationv1alpha.UserRequest{
@@ -226,6 +226,18 @@ func TestUpdate(t *testing.T) {
 
 	_, err = g.client.RbacV1().Roles(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
 	util.Equals(t, "roles.rbac.authorization.k8s.io \"edgenet:tenant-owner-johndoe\" not found", err.Error())
+
+	t.Run("tenant status update", func(t *testing.T) {
+		tenantStatusTest := g.tenantObj
+		tenantStatusTest.SetName("status-test")
+		tenantStatusTest.Status.State = failure
+		tenantStatusTest.Status.Message = append(tenantStatusTest.Status.Message, statusDict["namespace-failure"])
+		g.edgenetClient.CoreV1alpha().Tenants().Create(context.TODO(), tenantStatusTest.DeepCopy(), metav1.CreateOptions{})
+		g.handler.ObjectCreatedOrUpdated(tenantStatusTest.DeepCopy())
+		tenant, err := g.edgenetClient.CoreV1alpha().Tenants().Get(context.TODO(), tenantStatusTest.GetName(), metav1.GetOptions{})
+		util.OK(t, err)
+		util.Equals(t, statusDict["tenant-established"], tenant.Status.Message[0])
+	})
 }
 
 func (g *TestGroup) mockSigner(tenant string) {
@@ -268,10 +280,7 @@ func (g *TestGroup) mockSigner(tenant string) {
 							}
 						}
 					}
-				} else {
-					log.Println(err)
 				}
-
 				if allDone {
 					break check
 				}

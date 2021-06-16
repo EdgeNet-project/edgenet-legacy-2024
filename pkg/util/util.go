@@ -200,24 +200,24 @@ func GenerateRandomString(n int) string {
 	return string(b)
 }
 
-// Contains returns whether slice contains value
-func Contains(slice []string, value string) bool {
-	for _, ele := range slice {
+// Contains returns whether slice contains the value
+func Contains(slice []string, value string) (bool, int) {
+	for i, ele := range slice {
 		if value == ele {
-			return true
+			return true, i
 		}
 	}
-	return false
+	return false, 0
 }
 
-// SliceContains returns whether slice contains value
-func SliceContains(slice [][]string, value []string) bool {
-	for _, ele := range slice {
+// SliceContains returns whether slice contains the slice
+func SliceContains(slice [][]string, value []string) (bool, int) {
+	for i, ele := range slice {
 		if reflect.DeepEqual(value, ele) {
-			return true
+			return true, i
 		}
 	}
-	return false
+	return false, 0
 }
 
 // Assert fails the test if the condition is false.
