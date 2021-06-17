@@ -210,7 +210,7 @@ func (g *TestGroup) mockSigner(tenant string) {
 								if err != nil {
 									continue
 								}
-								csrObj, err := g.client.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant, aupLabels["edge-net.io/username"]), metav1.GetOptions{})
+								csrObj, err := g.client.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s-%s", tenant, aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
 								if err != nil {
 									allDone = false
 									break users

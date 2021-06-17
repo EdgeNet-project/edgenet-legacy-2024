@@ -240,10 +240,10 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 				for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
 					aupLabels := acceptableUsePolicyRow.GetLabels()
 					if aupLabels != nil && aupLabels["edge-net.io/username"] != "" && aupLabels["edge-net.io/role"] != "" {
-						if aupLabels["edge-net.io/role"] == "Owner" || aupLabels["edge-net.io/role"] == "Admin" {
+						if user.GetName() != aupLabels["edge-net.io/username"] && (aupLabels["edge-net.io/role"] == "Owner" || aupLabels["edge-net.io/role"] == "Admin") {
 							roleBindLabels := map[string]string{"edge-net.io/tenant": tenant.GetName(), "edge-net.io/username": aupLabels["edge-net.io/username"], "edge-net.io/user-template-hash": aupLabels["edge-net.io/user-template-hash"]}
-							if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, fmt.Sprintf("%s-%s", aupLabels["edge-net.io/username"], aupLabels["edge-net.io/username-template-hash"]), acceptableUsePolicyRow.Spec.Email, roleBindLabels, ownerReferences); err != nil {
-								log.Infof("Couldn't create aup cluster role binding %s, %s for %s: %s", tenant.GetName(), acceptableUsePolicy, fmt.Sprintf(aupLabels["edge-net.io/username"], aupLabels["edge-net.io/username-template-hash"]), err)
+							if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, fmt.Sprintf("%s-%s", aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"]), acceptableUsePolicyRow.Spec.Email, roleBindLabels, ownerReferences); err != nil {
+								log.Infof("Couldn't create aup cluster role binding %s, %s for %s: %s", tenant.GetName(), acceptableUsePolicy, fmt.Sprintf(aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"]), err)
 							}
 						}
 					}
@@ -251,8 +251,8 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 			}
 		}
 		// A hash code attached as suffix to allow people to roll in with the same username
-		aupName := fmt.Sprintf("%s-%s", user.GetName(), userLabels["edge-net.io/user-template-hash"])
-		acceptableUsePolicy, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), aupName, metav1.GetOptions{})
+		usernameHash := fmt.Sprintf("%s-%s", user.GetName(), userLabels["edge-net.io/user-template-hash"])
+		acceptableUsePolicy, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), usernameHash, metav1.GetOptions{})
 		if err == nil {
 			policyStatus = acceptableUsePolicy.Spec.Accepted
 			acceptableUsePolicyAccess(acceptableUsePolicy.GetName())
@@ -261,7 +261,7 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 			aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/identity": "true", "edge-net.io/username": user.GetName(),
 				"edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"], "edge-net.io/firstname": user.Spec.FirstName, "edge-net.io/lastname": user.Spec.LastName, "edge-net.io/role": user.Spec.Role}
 			userAcceptableUsePolicy := &corev1alpha.AcceptableUsePolicy{TypeMeta: metav1.TypeMeta{Kind: "AcceptableUsePolicy", APIVersion: "apps.edgenet.io/v1alpha"},
-				ObjectMeta: metav1.ObjectMeta{Name: aupName, OwnerReferences: ownerReferences}, Spec: corev1alpha.AcceptableUsePolicySpec{Accepted: false}}
+				ObjectMeta: metav1.ObjectMeta{Name: usernameHash, OwnerReferences: ownerReferences}, Spec: corev1alpha.AcceptableUsePolicySpec{Email: user.Spec.Email, Accepted: false}}
 			userAcceptableUsePolicy.SetLabels(aupLabels)
 			if _, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), userAcceptableUsePolicy, metav1.CreateOptions{}); err != nil {
 				// TODO: Define the error precisely
@@ -269,11 +269,11 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 			acceptableUsePolicyAccess(userAcceptableUsePolicy.GetName())
 
 			// Create the client certs for permanent use
-			crt, key, err := registration.MakeUser(tenant.GetName(), user.GetName(), user.Spec.Email)
+			crt, key, err := registration.MakeUser(tenant.GetName(), usernameHash, user.Spec.Email)
 			exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], user.Spec.Email))
 			if err != nil {
 				log.Infof("Couldn't generate client cert %s, %s: %s", tenant.GetName(), user.Spec.Email, err)
-				t.sendEmail(nil, user, "user-cert-failure")
+				t.sendEmail(tenant, user, "user-cert-failure")
 				if !exists {
 					tenant.Status.State = failure
 					tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], user.Spec.Email))
@@ -281,11 +281,11 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 			} else if err == nil && exists {
 				tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
 			}
-			err = registration.MakeConfig(tenant.GetName(), user.GetName(), user.Spec.Email, crt, key)
+			err = registration.MakeConfig(tenant.GetName(), usernameHash, user.Spec.Email, crt, key)
 			exists, index = util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["kubeconfig-failure"], user.Spec.Email))
 			if err != nil {
 				log.Infof("Couldn't make kubeconfig file %s, %s: %s", tenant.GetName(), user.Spec.Email, err)
-				t.sendEmail(nil, user, "user-kubeconfig-failure")
+				t.sendEmail(tenant, user, "user-kubeconfig-failure")
 				if !exists {
 					tenant.Status.State = failure
 					tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["kubeconfig-failure"], user.Spec.Email))
@@ -346,34 +346,32 @@ func (t *Handler) sendEmail(tenant *corev1alpha.Tenant, user *registrationv1alph
 	// Set the HTML template variables
 	contentData := mailer.CommonContentData{}
 	if tenant == nil {
+		userLabels := user.GetLabels()
+		usernameHash := fmt.Sprintf("%s-%s", user.GetName(), userLabels["edge-net.io/user-template-hash"])
 		contentData.CommonData.Tenant = user.Spec.Tenant
-		contentData.CommonData.Username = user.GetName()
+		contentData.CommonData.Username = usernameHash
 		contentData.CommonData.Name = fmt.Sprintf("%s %s", user.Spec.FirstName, user.Spec.LastName)
 		contentData.CommonData.Email = []string{user.Spec.Email}
 	} else {
 		contentData.CommonData.Tenant = tenant.GetName()
 		if user == nil {
-			if acceptableUsePolicyRaw, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true,edge-net.io/role=owner", tenant.GetName())}); err == nil {
-				for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-					aupLabels := acceptableUsePolicyRow.GetLabels()
-					if aupLabels != nil && aupLabels["edge-net.io/username"] != "" {
-						contentData.CommonData.Username = aupLabels["edge-net.io/username"]
-					}
-				}
+			if tenantRequest, err := t.edgenetClientset.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tenant.GetName(), metav1.GetOptions{}); err == nil {
+				contentData.CommonData.Username = tenantRequest.Spec.Contact.Username
 			}
 			contentData.CommonData.Name = fmt.Sprintf("%s %s", tenant.Spec.Contact.FirstName, tenant.Spec.Contact.LastName)
 			contentData.CommonData.Email = []string{tenant.Spec.Contact.Email}
 		} else {
 			userLabels := user.GetLabels()
-			if acceptableUsePolicyRaw, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true,edge-net.io/username=%s,edge-net.io/user-template-hash=%s", tenant.GetName(), user.GetName(), userLabels["edge-net.io/user-template-hash"])}); err == nil {
+			usernameHash := fmt.Sprintf("%s-%s", user.GetName(), userLabels["edge-net.io/user-template-hash"])
+			contentData.CommonData.Username = usernameHash
+			contentData.CommonData.Name = fmt.Sprintf("%s %s", user.Spec.FirstName, user.Spec.LastName)
+			if acceptableUsePolicyRaw, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
 				for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
 					aupLabels := acceptableUsePolicyRow.GetLabels()
 					if aupLabels != nil && aupLabels["edge-net.io/username"] != "" && aupLabels["edge-net.io/user-template-hash"] != "" {
 						authorized := permission.CheckAuthorization("", acceptableUsePolicyRow.Spec.Email, "UserRequest", user.GetName(), "cluster")
 						if authorized {
-							contentData.CommonData.Username = aupLabels["edge-net.io/username"]
-							contentData.CommonData.Name = fmt.Sprintf("%s %s", aupLabels["edge-net.io/firstname"], aupLabels["edge-net.io/lastname"])
-							contentData.CommonData.Email = []string{acceptableUsePolicyRow.Spec.Email}
+							contentData.CommonData.Email = append(contentData.CommonData.Email, acceptableUsePolicyRow.Spec.Email)
 						}
 					}
 				}
