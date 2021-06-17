@@ -19,7 +19,6 @@ package acceptableusepolicy
 import (
 	"context"
 	"fmt"
-	"net/mail"
 	"reflect"
 	"strconv"
 	"time"
@@ -82,25 +81,13 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 			acceptableUsePolicy.Status.State = success
 			acceptableUsePolicy.Status.Message = []string{statusDict["aup-ok"]}
 			// Get the user who owns this acceptable use policy object
-			if clusterRoleBindingRaw, err := t.clientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true,edge-net.io/username=%s,edge-net.io/user-template-hash=%s", aupLabels["edge-net.io/user-template-hash"], aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"])}); err == nil {
-				for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
-					roleBindingLabels := clusterRoleBindingRow.GetLabels()
-					if roleBindingLabels != nil && roleBindingLabels["edge-net.io/firstname"] != "" && roleBindingLabels["edge-net.io/lastname"] != "" {
-						for _, bindingSubject := range clusterRoleBindingRow.Subjects {
-							if bindingSubject.Kind == "User" {
-								_, err := mail.ParseAddress(bindingSubject.Name)
-								if err == nil {
-									contentData := mailer.CommonContentData{}
-									contentData.CommonData.Tenant = aupLabels["edge-net.io/tenant"]
-									contentData.CommonData.Username = aupLabels["edge-net.io/username"]
-									contentData.CommonData.Name = fmt.Sprintf("%s %s", roleBindingLabels["edge-net.io/firstname"], roleBindingLabels["edge-net.io/lastname"])
-									contentData.CommonData.Email = []string{bindingSubject.Name}
-									mailer.Send("acceptable-use-policy-accepted", contentData)
-								}
-							}
-						}
-					}
-				}
+			if aupLabels != nil && aupLabels["edge-net.io/firstname"] != "" && aupLabels["edge-net.io/lastname"] != "" {
+				contentData := mailer.CommonContentData{}
+				contentData.CommonData.Tenant = aupLabels["edge-net.io/tenant"]
+				contentData.CommonData.Username = aupLabels["edge-net.io/username"]
+				contentData.CommonData.Name = fmt.Sprintf("%s %s", aupLabels["edge-net.io/firstname"], aupLabels["edge-net.io/lastname"])
+				contentData.CommonData.Email = []string{acceptableUsePolicy.Spec.Email}
+				mailer.Send("acceptable-use-policy-accepted", contentData)
 			}
 		}
 	} else if tenant.Spec.Enabled && !acceptableUsePolicy.Spec.Accepted {
@@ -186,26 +173,14 @@ infiniteLoop:
 				if acceptableUsePolicyRow.Status.Expiry != nil && acceptableUsePolicyRow.Status.Expiry.Time.Sub(time.Now()) <= 0 && acceptableUsePolicyRow.Spec.Accepted {
 					acceptableUsePolicy := acceptableUsePolicyRow.DeepCopy()
 					aupLabels := acceptableUsePolicy.GetLabels()
-					if clusterRoleBindingRaw, err := t.clientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true,edge-net.io/username=%s,edge-net.io/user-template-hash=%s", aupLabels["edge-net.io/user-template-hash"], aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"])}); err == nil {
-						for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
-							roleBindingLabels := clusterRoleBindingRow.GetLabels()
-							if roleBindingLabels != nil && roleBindingLabels["edge-net.io/firstname"] != "" && roleBindingLabels["edge-net.io/lastname"] != "" {
-								for _, bindingSubject := range clusterRoleBindingRow.Subjects {
-									if bindingSubject.Kind == "User" {
-										_, err := mail.ParseAddress(bindingSubject.Name)
-										if err == nil {
-											contentData := mailer.CommonContentData{}
-											contentData.CommonData.Tenant = aupLabels["edge-net.io/tenant"]
-											contentData.CommonData.Username = aupLabels["edge-net.io/username"]
-											contentData.CommonData.Name = fmt.Sprintf("%s %s", roleBindingLabels["edge-net.io/firstname"], roleBindingLabels["edge-net.io/lastname"])
-											contentData.CommonData.Email = []string{bindingSubject.Name}
-											mailer.Send("acceptable-use-policy-expired", contentData)
-										}
-									}
-								}
-							}
-						}
-					}
+
+					contentData := mailer.CommonContentData{}
+					contentData.CommonData.Tenant = aupLabels["edge-net.io/tenant"]
+					contentData.CommonData.Username = aupLabels["edge-net.io/username"]
+					contentData.CommonData.Name = fmt.Sprintf("%s %s", aupLabels["edge-net.io/firstname"], aupLabels["edge-net.io/lastname"])
+					contentData.CommonData.Email = []string{acceptableUsePolicy.Spec.Email}
+					mailer.Send("acceptable-use-policy-expired", contentData)
+
 					acceptableUsePolicy.Spec.Accepted = false
 					go t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), acceptableUsePolicy, metav1.UpdateOptions{})
 				} else if acceptableUsePolicyRow.Status.Expiry != nil && acceptableUsePolicyRow.Status.Expiry.Time.Sub(time.Now()) > 0 {

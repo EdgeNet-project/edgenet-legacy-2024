@@ -246,7 +246,9 @@ func CreateObjectSpecificRoleBinding(tenant, namespace, roleName string, user *r
 	rbSubjects := []rbacv1.Subject{{Kind: "User", Name: user.Spec.Email, APIGroup: "rbac.authorization.k8s.io"}}
 	roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName, Namespace: namespace},
 		Subjects: rbSubjects, RoleRef: roleRef}
-	roleBindLabels := map[string]string{"edge-net.io/tenant": tenant}
+
+	userLabels := user.GetLabels()
+	roleBindLabels := map[string]string{"edge-net.io/tenant": tenant, "edge-net.io/username": user.GetName(), "edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"]}
 	for key, value := range labels {
 		roleBindLabels[key] = value
 	}

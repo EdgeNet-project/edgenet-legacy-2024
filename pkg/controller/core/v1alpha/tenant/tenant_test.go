@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"net/mail"
 	"os"
 	"testing"
 	"time"
@@ -252,35 +251,33 @@ func (g *TestGroup) mockSigner(tenant string) {
 				break check
 			case <-ticker:
 				allDone := true
-				if clusterRoleBindingRaw, err := g.client.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant)}); err == nil {
+				if acceptableUsePolicyRaw, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant)}); err == nil {
 				users:
-					for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
-						labels := clusterRoleBindingRow.GetLabels()
+					for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
+						labels := acceptableUsePolicyRow.GetLabels()
 						if labels != nil && labels["edge-net.io/username"] != "" && labels["edge-net.io/user-template-hash"] != "" {
-							for _, subject := range clusterRoleBindingRow.Subjects {
-								if subject.Kind == "User" {
-									_, err := mail.ParseAddress(subject.Name)
-									if err == nil {
-										_, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", labels["edge-net.io/username"], labels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
-										if err != nil {
-											continue
-										}
-										csrObj, err := g.client.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant, labels["edge-net.io/username"]), metav1.GetOptions{})
-										if err != nil {
-											allDone = false
-											break users
-										}
-										csrObj.Status.Certificate = csrObj.Spec.Request
-										if _, err := g.client.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), csrObj, metav1.UpdateOptions{}); err != nil {
-											allDone = false
-											break users
-										}
-									}
+							if labels["edge-net.io/role"] == "Owner" || labels["edge-net.io/role"] == "Admin" {
+								_, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", labels["edge-net.io/username"], labels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
+								if err != nil {
+									continue
+								}
+								csrObj, err := g.client.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant, labels["edge-net.io/username"]), metav1.GetOptions{})
+								if err != nil {
+									allDone = false
+									break users
+								}
+								csrObj.Status.Certificate = csrObj.Spec.Request
+								if _, err := g.client.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), csrObj, metav1.UpdateOptions{}); err != nil {
+									allDone = false
+									break users
 								}
 							}
 						}
 					}
+				} else {
+					log.Println(err)
 				}
+
 				if allDone {
 					break check
 				}

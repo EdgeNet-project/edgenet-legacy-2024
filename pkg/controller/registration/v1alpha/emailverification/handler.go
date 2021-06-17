@@ -19,7 +19,6 @@ package emailverification
 import (
 	"context"
 	"fmt"
-	"net/mail"
 	"strings"
 	"time"
 
@@ -158,20 +157,13 @@ func (t *Handler) sendEmail(subject, tenant, namespace, username, fullname, emai
 		// Put the email addresses of the tenant admins and authorized users in the email to be sent list
 		tenant, _ := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenant, metav1.GetOptions{})
 
-		if clusterRoleBindingRaw, err := t.clientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
-			for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
-				labels := clusterRoleBindingRow.GetLabels()
+		if acceptableUsePolicyRaw, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
+			for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
+				labels := acceptableUsePolicyRow.GetLabels()
 				if labels != nil && labels["edge-net.io/username"] != "" && labels["edge-net.io/firstname"] != "" && labels["edge-net.io/lastname"] != "" {
-					for _, subject := range clusterRoleBindingRow.Subjects {
-						if subject.Kind == "User" {
-							_, err := mail.ParseAddress(subject.Name)
-							if err == nil {
-								authorized := permission.CheckAuthorization("", subject.Name, "UserRequest", username, "cluster")
-								if authorized {
-									collective.CommonData.Email = append(collective.CommonData.Email, subject.Name)
-								}
-							}
-						}
+					authorized := permission.CheckAuthorization("", acceptableUsePolicyRow.Spec.Email, "UserRequest", username, "cluster")
+					if authorized {
+						collective.CommonData.Email = append(collective.CommonData.Email, acceptableUsePolicyRow.Spec.Email)
 					}
 				}
 			}

@@ -19,7 +19,6 @@ package userrequest
 import (
 	"context"
 	"fmt"
-	"net/mail"
 	"reflect"
 	"strings"
 	"time"
@@ -144,26 +143,17 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 					// TODO: Provide err information at the status
 				}
 
-				if clusterRoleBindingRaw, err := t.clientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
-					for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
-						labels := clusterRoleBindingRow.GetLabels()
+				if acceptableUsePolicyRaw, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
+					for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
+						labels := acceptableUsePolicyRow.GetLabels()
 						if labels != nil && labels["edge-net.io/username"] != "" && labels["edge-net.io/role"] != "" {
-							for _, subject := range clusterRoleBindingRow.Subjects {
-								if subject.Kind == "User" {
-									_, err := mail.ParseAddress(subject.Name)
-									if err == nil {
-										if labels["edge-net.io/role"] == "Owner" || labels["edge-net.io/role"] == "Admin" {
-											clusterRoleName := fmt.Sprintf("edgenet:%s:userrequests:%s-%s", tenant.GetName(), userRequest.GetName(), "owner")
-											roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/identity": "true", "edge-net.io/username": labels["edge-net.io/username"],
-												"edge-net.io/user-template-hash": labels["edge-net.io/user-template-hash"], "edge-net.io/firstname": labels["edge-net.io/firstname"], "edge-net.io/lastname": labels["edge-net.io/lastname"], "edge-net.io/role": labels["edge-net.io/role"]}
-
-											if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, labels["edge-net.io/username"], subject.Name, roleBindLabels, ownerReferences); err != nil {
-												// TODO: Define the error precisely
-												userRequest.Status.State = failure
-												userRequest.Status.Message = []string{statusDict["role-failed"]}
-											}
-										}
-									}
+							if labels["edge-net.io/role"] == "Owner" || labels["edge-net.io/role"] == "Admin" {
+								clusterRoleName := fmt.Sprintf("edgenet:%s:userrequests:%s-%s", tenant.GetName(), userRequest.GetName(), "owner")
+								roleBindLabels := map[string]string{"edge-net.io/tenant": tenant.GetName(), "edge-net.io/username": labels["edge-net.io/username"], "edge-net.io/user-template-hash": labels["edge-net.io/user-template-hash"]}
+								if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, labels["edge-net.io/username"], acceptableUsePolicyRow.Spec.Email, roleBindLabels, ownerReferences); err != nil {
+									// TODO: Define the error precisely
+									userRequest.Status.State = failure
+									userRequest.Status.Message = []string{statusDict["role-failed"]}
 								}
 							}
 						}

@@ -147,7 +147,8 @@ type AcceptableUsePolicy struct {
 
 // AcceptableUsePolicySpec is the spec for a AcceptableUsePolicy resource
 type AcceptableUsePolicySpec struct {
-	Accepted bool `json:"accepted"`
+	Email    string `json:"email"`
+	Accepted bool   `json:"accepted"`
 }
 
 // AcceptableUsePolicyStatus is the status for a AcceptableUsePolicy resource
