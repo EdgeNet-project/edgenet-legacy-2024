@@ -241,13 +241,13 @@ func CreateObjectSpecificClusterRoleBinding(tenant, roleName, username, email st
 
 // CreateObjectSpecificRoleBinding links the cluster role up with the user
 func CreateObjectSpecificRoleBinding(tenant, namespace, roleName string, user *registrationv1alpha.UserRequest) error {
-	objectName := fmt.Sprintf("%s-%s", roleName, user.GetName())
+	userLabels := user.GetLabels()
+	objectName := fmt.Sprintf("%s-%s", roleName, fmt.Sprintf("%s-%s", user.GetName(), userLabels["edge-net.io/user-template-hash"]))
 	roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: roleName}
 	rbSubjects := []rbacv1.Subject{{Kind: "User", Name: user.Spec.Email, APIGroup: "rbac.authorization.k8s.io"}}
 	roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName, Namespace: namespace},
 		Subjects: rbSubjects, RoleRef: roleRef}
 
-	userLabels := user.GetLabels()
 	roleBindLabels := map[string]string{"edge-net.io/tenant": tenant, "edge-net.io/username": user.GetName(), "edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"]}
 	for key, value := range labels {
 		roleBindLabels[key] = value

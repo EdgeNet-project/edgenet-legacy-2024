@@ -85,19 +85,18 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // Create to provide one-time code for verification
-func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReference) (string, bool) {
+func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReference) bool {
 	// The section below is a part of the method which provides email verification
 	// Email verification code is a security point for email verification. The user
 	// registration object creates an email verification object with a name which is
 	// this email verification code. Only who knows the email verification
 	// code can manipulate that object by using a public token.
 	created := false
-	code := ""
 	switch obj.(type) {
 	case *registrationv1alpha.TenantRequest:
 		tenantRequest := obj.(*registrationv1alpha.TenantRequest)
 
-		code = "tr-" + util.GenerateRandomString(16)
+		code := "tr-" + util.GenerateRandomString(16)
 		emailVerification := registrationv1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: ownerReferences}}
 		emailVerification.SetName(code)
 		emailVerification.Spec.Email = tenantRequest.Spec.Contact.Email
@@ -116,7 +115,7 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 		}
 	case *registrationv1alpha.UserRequest:
 		userRequest := obj.(*registrationv1alpha.UserRequest)
-		code = "ur-" + util.GenerateRandomString(16)
+		code := "ur-" + util.GenerateRandomString(16)
 		emailVerification := registrationv1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: ownerReferences}}
 		emailVerification.SetName(code)
 		emailVerification.Spec.Email = userRequest.Spec.Email
@@ -133,7 +132,7 @@ func (t *Handler) Create(obj interface{}, ownerReferences []metav1.OwnerReferenc
 				fmt.Sprintf("%s %s", userRequest.Spec.FirstName, userRequest.Spec.LastName), userRequest.Spec.Email, "")
 		}
 	}
-	return code, created
+	return created
 }
 
 // sendEmail to send notification to tenant admins and authorized users about email verification
@@ -159,8 +158,8 @@ func (t *Handler) sendEmail(subject, tenant, namespace, username, fullname, emai
 
 		if acceptableUsePolicyRaw, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
 			for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-				labels := acceptableUsePolicyRow.GetLabels()
-				if labels != nil && labels["edge-net.io/username"] != "" && labels["edge-net.io/firstname"] != "" && labels["edge-net.io/lastname"] != "" {
+				aupLabels := acceptableUsePolicyRow.GetLabels()
+				if aupLabels != nil && aupLabels["edge-net.io/username"] != "" && aupLabels["edge-net.io/firstname"] != "" && aupLabels["edge-net.io/lastname"] != "" {
 					authorized := permission.CheckAuthorization("", acceptableUsePolicyRow.Spec.Email, "UserRequest", username, "cluster")
 					if authorized {
 						collective.CommonData.Email = append(collective.CommonData.Email, acceptableUsePolicyRow.Spec.Email)

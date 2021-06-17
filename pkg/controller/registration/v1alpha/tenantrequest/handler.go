@@ -113,28 +113,12 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 					Time: time.Now().Add(72 * time.Hour),
 				}
 			}
-			isCreated := false
-			labels := tenantRequest.GetLabels()
-			if labels != nil && labels[fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username)] != "" {
-				if _, err := t.edgenetClientset.RegistrationV1alpha().EmailVerifications().Get(context.TODO(), labels[fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username)], metav1.GetOptions{}); err == nil {
-					isCreated = true
-				}
-			}
-			if !isCreated {
+			exists, _ := util.Contains(tenantRequest.Status.Message, statusDict["email-ok"])
+			if !exists {
 				emailVerificationHandler := emailverification.Handler{}
 				emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-				code, created := emailVerificationHandler.Create(tenantRequest, SetAsOwnerReference(tenantRequest))
+				created := emailVerificationHandler.Create(tenantRequest, SetAsOwnerReference(tenantRequest))
 				if created {
-					if labels == nil {
-						labels = map[string]string{fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username): code}
-					} else if labels[fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username)] == "" {
-						labels[fmt.Sprintf("edge-net.io/emailverification-%s", tenantRequest.Spec.Contact.Username)] = code
-					}
-					tenantRequest.SetLabels(labels)
-					tenantRequestUpdated, err := t.edgenetClientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
-					if err == nil {
-						tenantRequest = tenantRequestUpdated
-					}
 					// Update the status as successful
 					tenantRequest.Status.State = success
 					tenantRequest.Status.Message = []string{statusDict["email-ok"]}
@@ -143,10 +127,6 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 					tenantRequest.Status.State = issue
 					tenantRequest.Status.Message = []string{statusDict["email-fail"]}
 				}
-			} else if isCreated && tenantRequest.Status.State == failure {
-				// Update the status as successful
-				tenantRequest.Status.State = success
-				tenantRequest.Status.Message = []string{statusDict["email-ok"]}
 			}
 		}
 	}

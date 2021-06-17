@@ -102,28 +102,12 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 						Time: time.Now().Add(72 * time.Hour),
 					}
 				}
-				isCreated := false
-				labels := userRequest.GetLabels()
-				if labels != nil && labels["edge-net.io/emailverification"] != "" {
-					if _, err := t.edgenetClientset.RegistrationV1alpha().EmailVerifications().Get(context.TODO(), labels["edge-net.io/emailverification"], metav1.GetOptions{}); err == nil {
-						isCreated = true
-					}
-				}
-				if !isCreated {
+				exists, _ := util.Contains(userRequest.Status.Message, statusDict["email-ok"])
+				if !exists {
 					emailVerificationHandler := emailverification.Handler{}
 					emailVerificationHandler.Init(t.clientset, t.edgenetClientset)
-					code, created := emailVerificationHandler.Create(userRequest, SetAsOwnerReference(userRequest))
+					created := emailVerificationHandler.Create(userRequest, SetAsOwnerReference(userRequest))
 					if created {
-						if labels == nil {
-							labels = map[string]string{"edge-net.io/emailverification": code, "edge-net.io/user-template-hash": util.GenerateRandomString(6)}
-						} else if labels["edge-net.io/emailverification"] == "" {
-							labels["edge-net.io/emailverification"] = code
-						}
-						userRequest.SetLabels(labels)
-						userRequestUpdated, err := t.edgenetClientset.RegistrationV1alpha().UserRequests().Update(context.TODO(), userRequest, metav1.UpdateOptions{})
-						if err == nil {
-							userRequest = userRequestUpdated
-						}
 						// Update the status as successful
 						userRequest.Status.State = success
 						userRequest.Status.Message = []string{statusDict["email-ok"]}
@@ -131,26 +115,22 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 						userRequest.Status.State = issue
 						userRequest.Status.Message = []string{statusDict["email-fail"]}
 					}
-				} else if isCreated && userRequest.Status.State == failure {
-					// Update the status as successful
-					userRequest.Status.State = success
-					userRequest.Status.Message = []string{statusDict["email-ok"]}
 				}
-
+				labels := userRequest.GetLabels()
 				ownerReferences := SetAsOwnerReference(userRequest)
-				if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "registration.edgenet.io", "userrequests", userRequest.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
+				if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "registration.edgenet.io", "userrequests", fmt.Sprintf("%s-%s", userRequest.GetName(), labels["edge-net.io/user-template-hash"]), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
 					log.Infof("Couldn't create user request cluster role %s, %s: %s", tenant.GetName(), userRequest.GetName(), err)
 					// TODO: Provide err information at the status
 				}
 
 				if acceptableUsePolicyRaw, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
 					for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-						labels := acceptableUsePolicyRow.GetLabels()
-						if labels != nil && labels["edge-net.io/username"] != "" && labels["edge-net.io/role"] != "" {
-							if labels["edge-net.io/role"] == "Owner" || labels["edge-net.io/role"] == "Admin" {
+						aupLabels := acceptableUsePolicyRow.GetLabels()
+						if aupLabels != nil && aupLabels["edge-net.io/username"] != "" && aupLabels["edge-net.io/role"] != "" {
+							if aupLabels["edge-net.io/role"] == "Owner" || aupLabels["edge-net.io/role"] == "Admin" {
 								clusterRoleName := fmt.Sprintf("edgenet:%s:userrequests:%s-%s", tenant.GetName(), userRequest.GetName(), "owner")
-								roleBindLabels := map[string]string{"edge-net.io/tenant": tenant.GetName(), "edge-net.io/username": labels["edge-net.io/username"], "edge-net.io/user-template-hash": labels["edge-net.io/user-template-hash"]}
-								if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, labels["edge-net.io/username"], acceptableUsePolicyRow.Spec.Email, roleBindLabels, ownerReferences); err != nil {
+								roleBindLabels := map[string]string{"edge-net.io/tenant": tenant.GetName(), "edge-net.io/username": aupLabels["edge-net.io/username"], "edge-net.io/user-template-hash": aupLabels["edge-net.io/user-template-hash"]}
+								if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, fmt.Sprintf("%s-%s", aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"]), acceptableUsePolicyRow.Spec.Email, roleBindLabels, ownerReferences); err != nil {
 									// TODO: Define the error precisely
 									userRequest.Status.State = failure
 									userRequest.Status.Message = []string{statusDict["role-failed"]}

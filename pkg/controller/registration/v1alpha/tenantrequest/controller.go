@@ -65,7 +65,7 @@ var statusDict = map[string]string{
 	"tenant-approved": "Tenant request has been approved",
 	"tenant-failed":   "Tenant successfully failed",
 	"tenant-taken":    "Tenant name, %s, is already taken",
-	"email-ok":        "Everything is OK, verification email sent",
+	"email-ok":        "Verification email sent",
 	"email-fail":      "Couldn't send verification email",
 	"email-exist":     "Email address, %s, already exists for another user account",
 	"email-used-reg":  "Email address, %s, has already been used in a user registration request",

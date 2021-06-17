@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -41,6 +42,7 @@ type HandlerInterface interface {
 	ObjectCreated(obj interface{})
 	ObjectUpdated(obj, updated interface{})
 	ObjectDeleted(obj interface{})
+	RunExpiryController()
 }
 
 // Handler implementation
@@ -85,11 +87,6 @@ func (t *Handler) ObjectCreated(obj interface{}) {
 			if quotaExceeded {
 				t.balanceResourceConsumption(tenantResourceQuota.GetName(), cpuDecline, memoryDecline)
 			}
-			// Run timeout function if there is a claim or drop with an expiry date
-			exists := CheckExpiryDate(tenantResourceQuota)
-			if exists {
-				go t.runTimeout(tenantResourceQuota)
-			}
 		} else {
 			// Block the tenant to prevent using the cluster resources
 			t.prohibitResourceConsumption(tenantResourceQuota, tenant)
@@ -115,12 +112,6 @@ func (t *Handler) ObjectUpdated(obj, updated interface{}) {
 				tenantResourceQuota, quotaExceeded, cpuDecline, memoryDecline := t.ResourceConsumptionControl(tenantResourceQuota, 0, 0)
 				if quotaExceeded {
 					t.balanceResourceConsumption(tenantResourceQuota.GetName(), cpuDecline, memoryDecline)
-				}
-				if fieldUpdated.expiry {
-					exists := CheckExpiryDate(tenantResourceQuota)
-					if exists {
-						go t.runTimeout(tenantResourceQuota)
-					}
 				}
 			}
 		} else {
@@ -365,92 +356,91 @@ func (t *Handler) balanceResourceConsumption(tenant string, cpuDecline, memoryDe
 	}
 }
 
-// runTimeout puts a procedure in place to remove claims and drops after the timeout
-func (t *Handler) runTimeout(tenantResourceQuota *corev1alpha.TenantResourceQuota) {
-	timeoutRenewed := make(chan bool, 1)
-	terminated := make(chan bool, 1)
-	var timeout <-chan time.Time
-	timeout = time.After(time.Until(getClosestExpiryDate(tenantResourceQuota)))
-	closeChannels := func() {
-		close(timeoutRenewed)
-		close(terminated)
-	}
+// RunExpiryController puts a procedure in place to remove claims and drops after the timeout
+func (t *Handler) RunExpiryController() {
+	var closestExpiry time.Time
+	terminated := make(chan bool)
+	newExpiry := make(chan time.Time)
+	defer close(terminated)
+	defer close(newExpiry)
 
-	// Watch the events of tenant resource quota object
-	watchTenantResourceQuota, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", tenantResourceQuota.GetName())})
+	watchTenantResourceQuota, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Watch(context.TODO(), metav1.ListOptions{})
 	if err == nil {
-		go func() {
+		watchEvents := func(watchTenantResourceQuota watch.Interface, newExpiry *chan time.Time) {
+			// Watch the events of tenant request object
 			// Get events from watch interface
 			for tenantResourceQuotaEvent := range watchTenantResourceQuota.ResultChan() {
-				// Get updated slice object
+				// Get updated tenant request object
 				updatedTenantResourceQuota, status := tenantResourceQuotaEvent.Object.(*corev1alpha.TenantResourceQuota)
-				if tenantResourceQuota.GetUID() == updatedTenantResourceQuota.GetUID() {
-					if status {
-						if tenantResourceQuotaEvent.Type == "DELETED" {
-							terminated <- true
-							continue
-						}
-						tenantResourceQuota = updatedTenantResourceQuota
-						exists := CheckExpiryDate(tenantResourceQuota)
-						if exists {
-							timeout = time.After(time.Until(getClosestExpiryDate(tenantResourceQuota)))
-							timeoutRenewed <- true
-						} else {
-							select {
-							case <-terminated:
-								watchTenantResourceQuota.Stop()
-							default:
-								terminated <- true
-							}
-						}
+				if status {
+					expiry, exists := getClosestExpiryDate(*updatedTenantResourceQuota)
+					if exists {
+						*newExpiry <- expiry
 					}
 				}
 			}
-		}()
+		}
+		go watchEvents(watchTenantResourceQuota, &newExpiry)
 	} else {
-		// In case of any malfunction of watching tenant resource quota objects,
-		// there is a timeout at 72 hours
-		timeout = time.After(72 * time.Hour)
+		go t.RunExpiryController()
+		terminated <- true
 	}
 
-	// Infinite loop
-timeoutLoop:
+infiniteLoop:
 	for {
 		// Wait on multiple channel operations
-	timeoutOptions:
 		select {
-		case <-timeoutRenewed:
-			break timeoutOptions
-		case <-timeout:
-			tenantResourceQuota, quotaExceeded, cpuDecline, memoryDecline := t.ResourceConsumptionControl(tenantResourceQuota, 0, 0)
-			if quotaExceeded {
-				t.balanceResourceConsumption(tenantResourceQuota.GetName(), cpuDecline, memoryDecline)
+		case timeout := <-newExpiry:
+			if closestExpiry.Sub(timeout) > 0 {
+				closestExpiry = timeout
+				log.Printf("ExpiryController: Closest expiry date is %v", closestExpiry)
 			}
-			exists := CheckExpiryDate(tenantResourceQuota)
-			if !exists {
-				terminated <- true
+		case <-time.After(time.Until(closestExpiry)):
+			tenantResourceQuotaRaw, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().List(context.TODO(), metav1.ListOptions{})
+			if err != nil {
+				// TODO: Provide more information on error
+				log.Println(err)
 			}
-			break timeoutOptions
+			for _, tenantResourceQuotaRow := range tenantResourceQuotaRaw.Items {
+				if expiry, exists := getClosestExpiryDate(tenantResourceQuotaRow); exists && expiry.Sub(time.Now()) <= 0 {
+					tenantResourceQuota, quotaExceeded, cpuDecline, memoryDecline := t.ResourceConsumptionControl(tenantResourceQuotaRow.DeepCopy(), 0, 0)
+					if quotaExceeded {
+						t.balanceResourceConsumption(tenantResourceQuota.GetName(), cpuDecline, memoryDecline)
+					}
+				} else if expiry, exists := getClosestExpiryDate(tenantResourceQuotaRow); exists && expiry.Sub(time.Now()) > 0 {
+					if closestExpiry.Sub(time.Now()) <= 0 || closestExpiry.Sub(expiry) > 0 {
+						closestExpiry = expiry
+						log.Printf("ExpiryController: Closest expiry date is %v after the expiration of a tenant request", closestExpiry)
+					}
+				}
+			}
+
+			if closestExpiry.Sub(time.Now()) <= 0 {
+				closestExpiry = time.Now().AddDate(1, 0, 0)
+				log.Printf("ExpiryController: Closest expiry date is %v after the expiration of a tenant request", closestExpiry)
+			}
 		case <-terminated:
 			watchTenantResourceQuota.Stop()
-			closeChannels()
-			break timeoutLoop
+			break infiniteLoop
 		}
 	}
 }
 
 // getClosestExpiryDate determines the item, a claim or a drop, having the closest expiry date
-func getClosestExpiryDate(tenantResourceQuota *corev1alpha.TenantResourceQuota) time.Time {
-	var closestDate *metav1.Time
+func getClosestExpiryDate(tenantResourceQuota corev1alpha.TenantResourceQuota) (time.Time, bool) {
+	var closestDate metav1.Time
+	exists := false
 	for i, claim := range tenantResourceQuota.Spec.Claim {
 		if i == 0 {
 			if claim.Expiry != nil {
-				closestDate = claim.Expiry
+				closestDate = *claim.Expiry
+				exists = true
 			}
 		} else if i != 0 {
 			if claim.Expiry != nil {
 				if closestDate.Sub(claim.Expiry.Time) >= 0 {
-					closestDate = claim.Expiry
+					closestDate = *claim.Expiry
+					exists = true
 				}
 			}
 		}
@@ -458,17 +448,19 @@ func getClosestExpiryDate(tenantResourceQuota *corev1alpha.TenantResourceQuota) 
 	for j, drop := range tenantResourceQuota.Spec.Drop {
 		if j == 0 {
 			if drop.Expiry != nil {
-				closestDate = drop.Expiry
+				closestDate = *drop.Expiry
+				exists = true
 			}
 		} else if j != 0 {
 			if drop.Expiry != nil {
 				if closestDate.Sub(drop.Expiry.Time) >= 0 {
-					closestDate = drop.Expiry
+					closestDate = *drop.Expiry
+					exists = true
 				}
 			}
 		}
 	}
-	return closestDate.Time
+	return closestDate.Time, exists
 }
 
 // percentage to give a overview of resource consumption

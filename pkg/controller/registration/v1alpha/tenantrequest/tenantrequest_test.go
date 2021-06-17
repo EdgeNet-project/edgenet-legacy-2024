@@ -203,14 +203,14 @@ func (g *TestGroup) mockSigner(tenant string) {
 				if acceptableUsePolicyRaw, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant)}); err == nil {
 				users:
 					for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-						labels := acceptableUsePolicyRow.GetLabels()
-						if labels != nil && labels["edge-net.io/username"] != "" && labels["edge-net.io/user-template-hash"] != "" {
-							if labels["edge-net.io/role"] == "Owner" || labels["edge-net.io/role"] == "Admin" {
-								_, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", labels["edge-net.io/username"], labels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
+						aupLabels := acceptableUsePolicyRow.GetLabels()
+						if aupLabels != nil && aupLabels["edge-net.io/username"] != "" && aupLabels["edge-net.io/user-template-hash"] != "" {
+							if aupLabels["edge-net.io/role"] == "Owner" || aupLabels["edge-net.io/role"] == "Admin" {
+								_, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), fmt.Sprintf("%s-%s", aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
 								if err != nil {
 									continue
 								}
-								csrObj, err := g.client.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant, labels["edge-net.io/username"]), metav1.GetOptions{})
+								csrObj, err := g.client.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", tenant, aupLabels["edge-net.io/username"]), metav1.GetOptions{})
 								if err != nil {
 									allDone = false
 									break users

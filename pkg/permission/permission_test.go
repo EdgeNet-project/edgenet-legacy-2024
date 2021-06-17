@@ -120,6 +120,7 @@ func TestCreateClusterRoles(t *testing.T) {
 	ownerUser.Spec.Role = "Owner"
 	ownerUser.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
 	user1 := g.user
+	user1.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
 	user2 := g.user
 	user2.SetName("joepublic")
 	user2.Spec.FirstName = "Joe"
@@ -142,8 +143,9 @@ func TestCreateClusterRoles(t *testing.T) {
 		}
 		for k, tc := range cases {
 			t.Run(k, func(t *testing.T) {
+				userLabels := tc.user.GetLabels()
 				CreateObjectSpecificRoleBinding(tc.tenant, tc.namespace, tc.roleName, tc.user.DeepCopy())
-				_, err := g.client.RbacV1().RoleBindings(tenant.GetName()).Get(context.TODO(), tc.expected, metav1.GetOptions{})
+				_, err := g.client.RbacV1().RoleBindings(tenant.GetName()).Get(context.TODO(), fmt.Sprintf("%s-%s", tc.expected, userLabels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
 				util.OK(t, err)
 				err = CreateObjectSpecificRoleBinding(tc.tenant, tc.namespace, tc.roleName, tc.user.DeepCopy())
 				util.OK(t, err)
@@ -223,10 +225,10 @@ func TestCreateObjectSpecificClusterRole(t *testing.T) {
 				userLabels := tc.user.GetLabels()
 				roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tc.tenant, "edge-net.io/identity": "true", "edge-net.io/username": tc.user.GetName(),
 					"edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"], "edge-net.io/firstname": tc.user.Spec.FirstName, "edge-net.io/lastname": tc.user.Spec.LastName, "edge-net.io/role": tc.user.Spec.Role}
-				CreateObjectSpecificClusterRoleBinding(tc.tenant, tc.roleName, tc.user.GetName(), tc.user.Spec.Email, roleBindLabels, []metav1.OwnerReference{})
-				_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), tc.expected, metav1.GetOptions{})
+				CreateObjectSpecificClusterRoleBinding(tc.tenant, tc.roleName, fmt.Sprintf("%s-%s", tc.user.GetName(), userLabels["edge-net.io/user-template-hash"]), tc.user.Spec.Email, roleBindLabels, []metav1.OwnerReference{})
+				_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("%s-%s", tc.expected, userLabels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
 				util.OK(t, err)
-				err = CreateObjectSpecificClusterRoleBinding(tc.tenant, tc.roleName, tc.user.GetName(), tc.user.Spec.Email, roleBindLabels, []metav1.OwnerReference{})
+				err = CreateObjectSpecificClusterRoleBinding(tc.tenant, tc.roleName, fmt.Sprintf("%s-%s", tc.user.GetName(), userLabels["edge-net.io/user-template-hash"]), tc.user.Spec.Email, roleBindLabels, []metav1.OwnerReference{})
 				util.OK(t, err)
 			})
 		}
@@ -294,8 +296,8 @@ func TestPermissionSystem(t *testing.T) {
 		roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/identity": "true", "edge-net.io/username": user1.GetName(),
 			"edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"], "edge-net.io/firstname": user1.Spec.FirstName, "edge-net.io/lastname": user1.Spec.LastName, "edge-net.io/role": user1.Spec.Role}
 
-		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("edgenet:%s:tenants:%s-owner", tenant.GetName(), tenant.GetName()), user1.GetName(), user1.Spec.Email, roleBindLabels, []metav1.OwnerReference{})
-		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner-%s", tenant.GetName(), tenant.GetName(), user1.GetName()), metav1.GetOptions{})
+		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("edgenet:%s:tenants:%s-owner", tenant.GetName(), tenant.GetName()), fmt.Sprintf("%s-%s", user1.GetName(), userLabels["edge-net.io/user-template-hash"]), user1.Spec.Email, roleBindLabels, []metav1.OwnerReference{})
+		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner-%s-%s", tenant.GetName(), tenant.GetName(), user1.GetName(), userLabels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
 		util.OK(t, err)
 	})
 	t.Run("create admin role binding", func(t *testing.T) {
@@ -303,8 +305,8 @@ func TestPermissionSystem(t *testing.T) {
 		roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/identity": "true", "edge-net.io/username": user3.GetName(),
 			"edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"], "edge-net.io/firstname": user3.Spec.FirstName, "edge-net.io/lastname": user3.Spec.LastName, "edge-net.io/role": user3.Spec.Role}
 
-		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("edgenet:%s:tenants:%s-admin", tenant.GetName(), tenant.GetName()), user3.GetName(), user3.Spec.Email, roleBindLabels, []metav1.OwnerReference{})
-		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-admin-%s", tenant.GetName(), tenant.GetName(), user3.GetName()), metav1.GetOptions{})
+		CreateObjectSpecificClusterRoleBinding(tenant.GetName(), fmt.Sprintf("edgenet:%s:tenants:%s-admin", tenant.GetName(), tenant.GetName()), fmt.Sprintf("%s-%s", user3.GetName(), userLabels["edge-net.io/user-template-hash"]), user3.Spec.Email, roleBindLabels, []metav1.OwnerReference{})
+		_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-admin-%s-%s", tenant.GetName(), tenant.GetName(), user3.GetName(), userLabels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
 		util.OK(t, err)
 	})
 

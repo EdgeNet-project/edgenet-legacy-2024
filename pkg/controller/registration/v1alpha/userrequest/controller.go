@@ -63,7 +63,7 @@ const approved = "Approved"
 var statusDict = map[string]string{
 	"user-approved":     "User request has been approved",
 	"user-failed":       "User creation failed",
-	"email-ok":          "Everything is OK, verification email sent",
+	"email-ok":          "Verification email sent",
 	"email-fail":        "Couldn't send verification email",
 	"email-exist":       "Email address, %s, already exists for another user account",
 	"email-existregist": "Email address, %s, already exists for another user registration request",

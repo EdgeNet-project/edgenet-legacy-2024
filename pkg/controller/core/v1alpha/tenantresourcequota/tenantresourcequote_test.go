@@ -162,6 +162,7 @@ func TestCreate(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
+	go g.handler.RunExpiryController()
 
 	cases := map[string]struct {
 		input    []time.Duration
@@ -251,6 +252,7 @@ func TestUpdate(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 	g.handler.Init(g.client, g.edgenetClient)
+	go g.handler.RunExpiryController()
 	tenantResourceQuota := g.tenantResourceQuotaObj
 	_, err := g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{})
 	util.OK(t, err)
