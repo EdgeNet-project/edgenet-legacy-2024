@@ -167,14 +167,22 @@ func TestCreate(t *testing.T) {
 
 	subnamespace1 := g.subNamespaceObj.DeepCopy()
 	subnamespace1.SetName("all")
+	subnamespace1.Spec.Resources.CPU = "1000m"
+	subnamespace1.Spec.Resources.Memory = "1Gi"
 	subnamespace2 := g.subNamespaceObj.DeepCopy()
 	subnamespace2.SetName("rbac")
 	subnamespace2.Spec.Inheritance.NetworkPolicy = false
+	subnamespace2.Spec.Resources.CPU = "1000m"
+	subnamespace2.Spec.Resources.Memory = "1Gi"
 	subnamespace3 := g.subNamespaceObj.DeepCopy()
 	subnamespace3.SetName("networkpolicy")
 	subnamespace3.Spec.Inheritance.RBAC = false
+	subnamespace3.Spec.Resources.CPU = "1000m"
+	subnamespace3.Spec.Resources.Memory = "1Gi"
 	subnamespace4 := g.subNamespaceObj.DeepCopy()
 	subnamespace4.SetName("expiry")
+	subnamespace4.Spec.Resources.CPU = "1000m"
+	subnamespace4.Spec.Resources.Memory = "1Gi"
 
 	t.Run("inherit all without expiry date", func(t *testing.T) {
 		defer g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Delete(context.TODO(), subnamespace1.GetName(), metav1.DeleteOptions{})
@@ -186,8 +194,8 @@ func TestCreate(t *testing.T) {
 		util.OK(t, err)
 
 		coreResourceQuota, _ := g.client.CoreV1().ResourceQuotas(g.tenantObj.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
-		util.Equals(t, int64(2), coreResourceQuota.Spec.Hard.Cpu().Value())
-		util.Equals(t, int64(2147483648), coreResourceQuota.Spec.Hard.Memory().Value())
+		util.Equals(t, int64(7), coreResourceQuota.Spec.Hard.Cpu().Value())
+		util.Equals(t, int64(7516192768), coreResourceQuota.Spec.Hard.Memory().Value())
 
 		if roleRaw, err := g.client.RbacV1().Roles(subnamespace1.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 			// TODO: Provide err information at the status
@@ -211,7 +219,6 @@ func TestCreate(t *testing.T) {
 			}
 		}
 	})
-	time.Sleep(500 * time.Millisecond)
 	t.Run("inherit rbac without expiry date", func(t *testing.T) {
 		defer g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Delete(context.TODO(), subnamespace2.GetName(), metav1.DeleteOptions{})
 
@@ -242,7 +249,6 @@ func TestCreate(t *testing.T) {
 			}
 		}
 	})
-	time.Sleep(500 * time.Millisecond)
 	t.Run("inherit networkpolicy without expiry date", func(t *testing.T) {
 		defer g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Delete(context.TODO(), subnamespace3.GetName(), metav1.DeleteOptions{})
 
@@ -274,7 +280,6 @@ func TestCreate(t *testing.T) {
 			}
 		}
 	})
-	time.Sleep(500 * time.Millisecond)
 	t.Run("inherit all with expiry date", func(t *testing.T) {
 		subnamespace4.Spec.Expiry = &metav1.Time{
 			Time: time.Now().Add(200 * time.Millisecond),

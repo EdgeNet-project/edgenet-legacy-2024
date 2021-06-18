@@ -205,7 +205,7 @@ func TestCreate(t *testing.T) {
 		g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), recreationExpired.DeepCopy(), metav1.CreateOptions{})
 		defer g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Delete(context.TODO(), recreationExpired.GetName(), metav1.DeleteOptions{})
 		g.handler.ObjectCreatedOrUpdated(recreationExpired.DeepCopy())
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 500)
 		acceptableUsePolicy, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), recreationExpired.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
 		g.handler.ObjectCreatedOrUpdated(acceptableUsePolicy)
@@ -269,7 +269,7 @@ func TestAccept(t *testing.T) {
 		}
 		_, err := g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), acceptableUsePolicy.DeepCopy(), metav1.UpdateOptions{})
 		util.OK(t, err)
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(time.Millisecond * 500)
 		t.Run("expired", func(t *testing.T) {
 			acceptableUsePolicy, err = g.edgenetClient.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), acceptableUsePolicy.GetName(), metav1.GetOptions{})
 			util.OK(t, err)
