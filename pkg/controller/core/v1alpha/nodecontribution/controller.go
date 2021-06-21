@@ -60,11 +60,9 @@ type informerevent struct {
 // Constant variables for events
 const inqueue = "In Queue"
 const inprogress = "In Progress"
-const recover = "Recovering"
 const failure = "Failure"
 const incomplete = "Halting"
 const success = "Successful"
-const noSchedule = "NoSchedule"
 const create = "create"
 const update = "update"
 const delete = "delete"
@@ -74,9 +72,16 @@ const unknownStr = "Unknown"
 
 // Dictionary of status messages
 var statusDict = map[string]string{
-	"invalid-host":    "Host field must be an IP Address",
-	"node-ok":         "Node is up and running",
-	"tenant-disabled": "Tenant disabled",
+	"successful":              "Node is up and running",
+	"failure":                 "Node is unready",
+	"in-progress":             "Node setup in progress",
+	"invalid-host":            "Error: Host field must be an IP Address",
+	"ssh-failure":             "Error: SSH handshake failed",
+	"join-failure":            "Error: Node cannot join the cluster",
+	"configuration-failure":   "Error: Scheduling configuration failed",
+	"owner-reference-failure": "Error: Setting owner reference failed",
+	"reboot-failure":          "Error: Node cannot get rebooted",
+	"timeout":                 "Error: Node contribution failed due to timeout",
 }
 
 // Start function is entry point of the controller
@@ -135,10 +140,8 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 			}
 		},
 	})
-	// The selectivedeployment resources are reconfigured according to node events in this section
 	nodeInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			// The main purpose of listing is to attach geo labels to whole nodes at the beginning
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				return clientset.CoreV1().Nodes().List(context.TODO(), options)
 			},
@@ -152,27 +155,6 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		cache.Indexers{},
 	)
 	nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			nodeObj := obj.(*corev1.Node)
-			for key := range nodeObj.Labels {
-				if key == "node-role.kubernetes.io/master" {
-					return
-				}
-			}
-			for _, owner := range nodeObj.GetOwnerReferences() {
-				if owner.Kind == "NodeContribution" {
-					nodeContribution, err := edgenetClientset.CoreV1alpha().NodeContributions().Get(context.TODO(), owner.Name, metav1.GetOptions{})
-					if err == nil {
-						nodeName := fmt.Sprintf("%s.edge-net.io", nodeContribution.GetName())
-						if nodeObj.GetName() == nodeName {
-							nodeContribution.Status.State = success
-							nodeContribution.Status.Message = append(nodeContribution.Status.Message, "Node is ready")
-							edgenetClientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodeContribution, metav1.UpdateOptions{})
-						}
-					}
-				}
-			}
-		},
 		UpdateFunc: func(old, new interface{}) {
 			oldObj := old.(*corev1.Node)
 			newObj := new.(*corev1.Node)
@@ -188,22 +170,17 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 								(oldReady == unknownStr && newReady == trueStr) {
 								if nodeContribution.Status.State != success {
 									nodeContribution.Status.State = success
-									if nodeContribution.Status.State == recover {
-										nodeContribution.Status.Message = append(nodeContribution.Status.Message, "Node recovered successfully")
-									} else {
-										nodeContribution.Status.Message = append(nodeContribution.Status.Message, "Node is ready")
-									}
+									nodeContribution.Status.Message = append(nodeContribution.Status.Message, statusDict["successful"])
 									edgenetClientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodeContribution, metav1.UpdateOptions{})
 								}
 							} else if (oldReady == trueStr && newReady == falseStr) ||
 								(oldReady == trueStr && newReady == unknownStr) {
 								if nodeContribution.Status.State != failure {
 									nodeContribution.Status.State = failure
-									nodeContribution.Status.Message = append(nodeContribution.Status.Message, "Node is not ready")
+									nodeContribution.Status.Message = append(nodeContribution.Status.Message, statusDict["failure"])
 									edgenetClientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodeContribution, metav1.UpdateOptions{})
 								}
 							}
-
 							if (oldObj.Spec.Unschedulable == true && newObj.Spec.Unschedulable == false) ||
 								(oldObj.Spec.Unschedulable == false && newObj.Spec.Unschedulable == true) {
 								if nodeContribution.Spec.Enabled == newObj.Spec.Unschedulable {
@@ -211,7 +188,6 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 								}
 							}
 						}
-
 					}
 				}
 			}
