@@ -145,7 +145,6 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	// The tenant resource quota objects are reconfigured according to node events in this section
 	nodeInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			// The main purpose of listing is to attach geo labels to whole nodes at the beginning
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				return clientset.CoreV1().Nodes().List(context.TODO(), options)
 			},

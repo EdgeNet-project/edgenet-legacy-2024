@@ -268,7 +268,7 @@ func TestUpdate(t *testing.T) {
 		"expiries soon":       {[]time.Duration{30}, 300, 0},
 		"expired":             {[]time.Duration{-100}, 0, 0},
 		"mix/1":               {[]time.Duration{30, 500, -100}, 0, 4},
-		"mix/2":               {[]time.Duration{30, 500, -100}, 300, 2},
+		"mix/2":               {[]time.Duration{30, 500, -100}, 100, 2},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
@@ -306,7 +306,6 @@ func TestUpdate(t *testing.T) {
 			util.OK(t, err)
 			util.Equals(t, tc.expected, (len(tenantResourceQuotaCopy.Spec.Claim) + len(tenantResourceQuotaCopy.Spec.Drop)))
 		})
-		time.Sleep(500 * time.Millisecond)
 	}
 	t.Run("total quota", func(t *testing.T) {
 		/*g.edgenetClient.AppsV1alpha().Teams(g.teamObj.GetNamespace()).Create(context.TODO(), g.teamObj.DeepCopy(), metav1.CreateOptions{})
