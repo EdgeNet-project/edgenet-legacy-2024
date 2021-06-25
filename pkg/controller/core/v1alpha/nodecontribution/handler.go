@@ -59,7 +59,7 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 	t.clientset = kubernetes
 	t.edgenetClientset = edgenet
 
-	// Get the SSH Public Key of the headnode
+	// Get the SSH Private Key of the headnode
 	key, err := ioutil.ReadFile("../../.ssh/id_edgenet_2021")
 	if err != nil {
 		log.Println(err.Error())
@@ -273,7 +273,11 @@ nodeSetupLoop:
 			log.Printf("Create a token and run kubadm join: %s", nodeName)
 			// To prevent hanging forever during establishing a connection
 			go func() {
-				defer conn.Close()
+				defer func() {
+					if conn != nil {
+						conn.Close()
+					}
+				}()
 				err = t.join(conn, nodeName, nodeContribution)
 				if err != nil {
 					nodeContribution.Status.State = failure
@@ -294,13 +298,12 @@ nodeSetupLoop:
 		case <-nodePatch:
 			log.Printf("Patch scheduling option: %s", nodeName)
 			// Set the node as schedulable or unschedulable according to the node contribution
-			patchStatus := true
 			err := node.SetNodeScheduling(nodeName, !nodeContribution.Spec.Enabled)
 			if err != nil {
 				nodeContribution.Status.State = incomplete
 				nodeContribution.Status.Message = append(nodeContribution.Status.Message, statusDict["configuration-failure"])
 				t.edgenetClientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodeContribution, metav1.UpdateOptions{})
-				patchStatus = false
+				endProcedure <- true
 			}
 			ncTenant, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
 			if err == nil {
@@ -310,11 +313,8 @@ nodeSetupLoop:
 					nodeContribution.Status.State = incomplete
 					nodeContribution.Status.Message = append(nodeContribution.Status.Message, statusDict["owner-reference-failure"])
 					t.edgenetClientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodeContribution, metav1.UpdateOptions{})
-					patchStatus = false
+					endProcedure <- true
 				}
-			}
-			if patchStatus {
-				break nodeSetupLoop
 			}
 			nodeContribution.Status.State = success
 			nodeContribution.Status.Message = append(nodeContribution.Status.Message, statusDict["successful"])
@@ -337,7 +337,7 @@ nodeSetupLoop:
 			conn.Close()
 			time.Sleep(3 * time.Minute)
 			establishConnection <- true
-		case endProcedure <- true:
+		case <-endProcedure:
 			log.Printf("Procedure completed: %s", nodeName)
 			break nodeSetupLoop
 		case <-time.After(5 * time.Minute):
