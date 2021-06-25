@@ -15,6 +15,7 @@
 # config files
 configs/**
 !configs/id_rsa.pub
+!configs/id_edgenet_2021.pub
 !configs/*_template.yaml
 !configs/user-files
 !configs/user-files/**
@@ -44,3 +45,6 @@ hack
 
 # Ignore OS X metadata files
 ._*
+
+# IDEA
+.idea/
