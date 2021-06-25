@@ -220,6 +220,7 @@ nodeSetupLoop:
 	for {
 		select {
 		case <-dnsConfiguration:
+			log.Printf("DNS configuration started: %s", nodeName)
 			// Use Namecheap API for registration
 			hostRecord := namecheap.DomainDNSHost{
 				Name:    strings.TrimSuffix(nodeName, ".edge-net.io"),
@@ -246,6 +247,7 @@ nodeSetupLoop:
 			}
 			establishConnection <- true
 		case <-establishConnection:
+			log.Printf("Establish SSH connection: %s", nodeName)
 			go func() {
 				conn, err = ssh.Dial("tcp", addr, config)
 				if err != nil && connCounter < 3 {
@@ -268,6 +270,7 @@ nodeSetupLoop:
 				setup <- true
 			}()
 		case <-setup:
+			log.Printf("Create a token and run kubadm join: %s", nodeName)
 			// To prevent hanging forever during establishing a connection
 			go func() {
 				defer conn.Close()
@@ -289,6 +292,7 @@ nodeSetupLoop:
 				}
 			}()
 		case <-nodePatch:
+			log.Printf("Patch scheduling option: %s", nodeName)
 			// Set the node as schedulable or unschedulable according to the node contribution
 			patchStatus := true
 			err := node.SetNodeScheduling(nodeName, !nodeContribution.Spec.Enabled)
@@ -319,6 +323,7 @@ nodeSetupLoop:
 				endProcedure <- true
 			}
 		case <-reboot:
+			log.Printf("Reboot the node: %s", nodeName)
 			// Reboot the node in a minute
 			err = rebootNode(conn)
 			if err != nil {
@@ -333,9 +338,11 @@ nodeSetupLoop:
 			time.Sleep(3 * time.Minute)
 			establishConnection <- true
 		case endProcedure <- true:
+			log.Printf("Procedure completed: %s", nodeName)
 			break nodeSetupLoop
-		case <-time.After(25 * time.Minute):
-			// Terminate the procedure after 25 minutes
+		case <-time.After(5 * time.Minute):
+			log.Printf("Timeout: %s", nodeName)
+			// Terminate the procedure after 5 minutes
 			nodeContribution.Status.State = failure
 			nodeContribution.Status.Message = append(nodeContribution.Status.Message, statusDict["timeout"])
 			nodeContributionUpdated, err := t.edgenetClientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodeContribution, metav1.UpdateOptions{})
