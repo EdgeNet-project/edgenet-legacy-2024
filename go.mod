@@ -14,5 +14,6 @@ require (
 	k8s.io/client-go v0.19.2
 	k8s.io/cluster-bootstrap v0.19.2
 	k8s.io/code-generator v0.19.2
+	k8s.io/klog v1.0.0
 	sigs.k8s.io/cluster-api v0.3.10
 )
