@@ -27,9 +27,7 @@ import (
 )
 
 func main() {
-	// Set kubeconfig to be used to create clientsets
-	bootstrap.SetKubeConfig()
-	clientset, err := bootstrap.CreateClientSet()
+	kubeclientset, err := bootstrap.CreateClientset("serviceaccount")
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

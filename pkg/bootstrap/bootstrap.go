@@ -25,11 +25,12 @@ import (
 	"os"
 	"path/filepath"
 
-	edgenetclientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	namecheap "github.com/billputer/go-namecheap"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -52,40 +53,69 @@ func SetKubeConfig() {
 	flag.Parse()
 }
 
-// CreateEdgeNetClientSet generates the clientset to interact with custom resources of selective deployment, tenant, user, and slice
-func CreateEdgeNetClientSet() (*edgenetclientset.Clientset, error) {
-	// Use the current context in kubeconfig
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
+// CreateEdgeNetClientset generates the clientset to interact with the custom resources
+func CreateEdgeNetClientset(by string) (*clientset.Clientset, error) {
+	var edgenetclientset *clientset.Clientset
+	var generateClientset = func(config *rest.Config) *clientset.Clientset {
+		// Create the clientset
+		edgenetclientset, err := clientset.NewForConfig(config)
+		if err != nil {
+			// TODO: Error handling
+			panic(err.Error())
+		}
+		return edgenetclientset
 	}
 
-	// Create the clientset
-	clientset, err := edgenetclientset.NewForConfig(config)
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
+	if by == "kubeconfig" {
+		// Use the current context in kubeconfig
+		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			log.Println(err.Error())
+			panic(err.Error())
+		}
+		edgenetclientset = generateClientset(config)
+	} else if by == "serviceaccount" {
+		// Creates the in-cluster config
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			panic(err.Error())
+		}
+		edgenetclientset = generateClientset(config)
 	}
-	return clientset, err
+	return edgenetclientset, nil
 }
 
-// CreateClientSet generates the clientset to interact with Kubernetes
-func CreateClientSet() (*kubernetes.Clientset, error) {
-	// Use the current context in kubeconfig
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
+// CreateClientset generates the clientset to interact with the Kubernetes resources
+func CreateClientset(by string) (*kubernetes.Clientset, error) {
+	var kubeclientset *kubernetes.Clientset
+	var generateClientset = func(config *rest.Config) *kubernetes.Clientset {
+		// Create the clientset
+		kubeclientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			// TODO: Error handling
+			panic(err.Error())
+		}
+		return kubeclientset
 	}
 
-	// Create the clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
+	if by == "kubeconfig" {
+		// Use the current context in kubeconfig
+		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			// TODO: Error handling
+			panic(err.Error())
+		}
+		kubeclientset = generateClientset(config)
+	} else if by == "serviceaccount" {
+		// Creates the in-cluster config
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			// TODO: Error handling
+			panic(err.Error())
+		}
+		kubeclientset = generateClientset(config)
 	}
-	return clientset, err
+	return kubeclientset, nil
 }
 
 // CreateNamecheapClient generates the client to interact with Namecheap API

@@ -23,11 +23,11 @@ func TestClientSetCreation(t *testing.T) {
 		util.Equals(t, filepath.Join(homeDir(), ".kube", "config"), kubeconfig)
 	})
 	t.Run("create edgenet clientset", func(t *testing.T) {
-		_, err := CreateEdgeNetClientSet()
+		_, err := CreateEdgeNetClientset("kubeconfig")
 		util.OK(t, err)
 	})
 	t.Run("create kubernetes clientset", func(t *testing.T) {
-		_, err := CreateClientSet()
+		_, err := CreateClientset("kubeconfig")
 		util.OK(t, err)
 	})
 }
