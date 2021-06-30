@@ -141,9 +141,7 @@ func NewController(
 	jobInformer batchinformers.JobInformer,
 	cronjobInformer batchv1beta1informers.CronJobInformer,
 	selectivedeploymentInformer informers.SelectiveDeploymentInformer) *Controller {
-	// Create event broadcaster
-	// Add selective deployment types to the default Kubernetes Scheme so Events can be
-	// logged for selective deployment types.
+
 	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
 	klog.V(4).Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
@@ -356,19 +354,10 @@ func (c *Controller) syncHandler(key string) error {
 	}
 
 	c.applyCriteria(selectivedeployment)
-
 	c.recorder.Event(selectivedeployment, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	return nil
 }
 
-/*
-func (c *Controller) updateSelectiveDeploymentStatus(foo *appsv1alpha.SelectiveDeployment, deployment *appsv1.Deployment) error {
-	fooCopy := foo.DeepCopy()
-	fooCopy.Status.AvailableReplicas = deployment.Status.AvailableReplicas
-	_, err := c.edgenetclientset.SamplecontrollerV1alpha1().Foos(foo.Namespace).Update(context.TODO(), fooCopy, metav1.UpdateOptions{})
-	return err
-}
-*/
 // enqueueSelectiveDeployment takes a SelectiveDeployment resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
 // passed resources of any type other than SelectiveDeployment.
@@ -422,9 +411,22 @@ func (c *Controller) handleObject(obj interface{}) {
 
 func (c *Controller) recoverSelectiveDeployments(obj interface{}) {
 	nodeCopy := obj.(*corev1.Node).DeepCopy()
-
-	if node.GetConditionReadyStatus(nodeCopy) == trueStr {
-		selectivedeploymentRaw, _ := c.selectivedeploymentsLister.SelectiveDeployments("").List(labels.Nothing())
+	if nodeCopy.GetDeletionTimestamp() != nil || node.GetConditionReadyStatus(nodeCopy) != trueStr || nodeCopy.Spec.Unschedulable == true {
+		ownerRaw, status := c.getByNode(nodeCopy.GetName())
+		if status {
+			for _, ownerRow := range ownerRaw {
+				selectivedeployment, err := c.selectivedeploymentsLister.SelectiveDeployments(ownerRow[0]).Get(ownerRow[1])
+				if err != nil {
+					klog.V(4).Infoln(err.Error())
+					continue
+				}
+				if selectivedeployment.Spec.Recovery {
+					c.enqueueSelectiveDeployment(selectivedeployment)
+				}
+			}
+		}
+	} else if node.GetConditionReadyStatus(nodeCopy) == trueStr {
+		selectivedeploymentRaw, _ := c.selectivedeploymentsLister.SelectiveDeployments("").List(labels.Everything())
 		for _, selectivedeploymentRow := range selectivedeploymentRaw {
 			if selectivedeploymentRow.Spec.Recovery {
 				if selectivedeploymentRow.Status.State == partial || selectivedeploymentRow.Status.State == failure {
@@ -441,20 +443,6 @@ func (c *Controller) recoverSelectiveDeployments(obj interface{}) {
 							break selectorLoop
 						}
 					}
-				}
-			}
-		}
-	} else if nodeCopy.GetDeletionTimestamp() == nil || node.GetConditionReadyStatus(nodeCopy) != trueStr || nodeCopy.Spec.Unschedulable == true {
-		ownerRaw, status := c.getByNode(nodeCopy.GetName())
-		if status {
-			for _, ownerRow := range ownerRaw {
-				selectivedeployment, err := c.selectivedeploymentsLister.SelectiveDeployments(ownerRow[0]).Get(ownerRow[1])
-				if err != nil {
-					klog.V(4).Infoln(err.Error())
-					continue
-				}
-				if selectivedeployment.Spec.Recovery {
-					c.enqueueSelectiveDeployment(selectivedeployment)
 				}
 			}
 		}
@@ -493,7 +481,7 @@ func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 			}
 		}
 	}
-	deploymentRaw, err := c.deploymentsLister.Deployments("").List(labels.Nothing())
+	deploymentRaw, err := c.deploymentsLister.Deployments("").List(labels.Everything())
 	if err != nil {
 		klog.V(4).Infoln(err.Error())
 		panic(err.Error())
@@ -501,7 +489,7 @@ func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 	for _, deploymentRow := range deploymentRaw {
 		setList(deploymentRow.Spec.Template.Spec, deploymentRow.GetOwnerReferences(), deploymentRow.GetNamespace())
 	}
-	daemonsetRaw, err := c.daemonsetsLister.DaemonSets("").List(labels.Nothing())
+	daemonsetRaw, err := c.daemonsetsLister.DaemonSets("").List(labels.Everything())
 	if err != nil {
 		klog.V(4).Infoln(err.Error())
 		panic(err.Error())
@@ -509,7 +497,7 @@ func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 	for _, daemonsetRow := range daemonsetRaw {
 		setList(daemonsetRow.Spec.Template.Spec, daemonsetRow.GetOwnerReferences(), daemonsetRow.GetNamespace())
 	}
-	statefulsetRaw, err := c.statefulsetsLister.StatefulSets("").List(labels.Nothing())
+	statefulsetRaw, err := c.statefulsetsLister.StatefulSets("").List(labels.Everything())
 	if err != nil {
 		klog.V(4).Infoln(err.Error())
 		panic(err.Error())
@@ -517,7 +505,7 @@ func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 	for _, statefulsetRow := range statefulsetRaw {
 		setList(statefulsetRow.Spec.Template.Spec, statefulsetRow.GetOwnerReferences(), statefulsetRow.GetNamespace())
 	}
-	jobRaw, err := c.jobsLister.Jobs("").List(labels.Nothing())
+	jobRaw, err := c.jobsLister.Jobs("").List(labels.Everything())
 	if err != nil {
 		klog.V(4).Infoln(err.Error())
 		panic(err.Error())
@@ -525,7 +513,7 @@ func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 	for _, jobRow := range jobRaw {
 		setList(jobRow.Spec.Template.Spec, jobRow.GetOwnerReferences(), jobRow.GetNamespace())
 	}
-	cronjobRaw, err := c.cronjobsLister.CronJobs("").List(labels.Nothing())
+	cronjobRaw, err := c.cronjobsLister.CronJobs("").List(labels.Everything())
 	if err != nil {
 		klog.V(4).Infoln(err.Error())
 		panic(err.Error())
@@ -894,7 +882,6 @@ func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha.SelectiveDep
 				selector := labels.NewSelector()
 				selector = selector.Add(*scheduleReq)
 				nodesRaw, err := c.nodesLister.List(selector)
-				c.nodesLister.List(selector)
 				if err != nil {
 					klog.V(4).Infoln(err.Error())
 					panic(err.Error())
@@ -989,14 +976,14 @@ func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha.SelectiveDep
 	return nodeSelectorTermList, failureCounter
 }
 
-// SetAsOwnerReference returns the tenant as owner
+// SetAsOwnerReference returns the selectivedeployment as owner
 func SetAsOwnerReference(selectivedeploymentCopy *appsv1alpha.SelectiveDeployment) []metav1.OwnerReference {
-	// The following section makes tenant become the owner
+	// The following section makes selectivedeployment become the owner
 	ownerReferences := []metav1.OwnerReference{}
-	newSDRef := *metav1.NewControllerRef(selectivedeploymentCopy, appsv1alpha.SchemeGroupVersion.WithKind("SelectiveDeployment"))
-	takeControl := false
-	newSDRef.Controller = &takeControl
-	ownerReferences = append(ownerReferences, newSDRef)
+	newRef := *metav1.NewControllerRef(selectivedeploymentCopy, appsv1alpha.SchemeGroupVersion.WithKind("SelectiveDeployment"))
+	takeControl := true
+	newRef.Controller = &takeControl
+	ownerReferences = append(ownerReferences, newRef)
 	return ownerReferences
 }
 

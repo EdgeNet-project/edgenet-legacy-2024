@@ -18,12 +18,19 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/apps/v1alpha/selectivedeployment"
+	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
+	"github.com/EdgeNet-project/edgenet/pkg/signals"
+
+	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/klog"
 )
 
 func main() {
+	stopCh := signals.SetupSignalHandler()
 	kubeclientset, err := bootstrap.CreateClientset("serviceaccount")
 	if err != nil {
 		log.Println(err.Error())
@@ -35,5 +42,23 @@ func main() {
 		panic(err.Error())
 	}
 	// Start the controller to provide the functionalities of selectivedeployment resource
-	selectivedeployment.Start(clientset, edgenetClientset)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
+
+	controller := selectivedeployment.NewController(kubeclientset,
+		edgenetclientset,
+		kubeInformerFactory.Core().V1().Nodes(),
+		kubeInformerFactory.Apps().V1().Deployments(),
+		kubeInformerFactory.Apps().V1().DaemonSets(),
+		kubeInformerFactory.Apps().V1().StatefulSets(),
+		kubeInformerFactory.Batch().V1().Jobs(),
+		kubeInformerFactory.Batch().V1beta1().CronJobs(),
+		edgenetInformerFactory.Apps().V1alpha().SelectiveDeployments())
+
+	kubeInformerFactory.Start(stopCh)
+	edgenetInformerFactory.Start(stopCh)
+
+	if err = controller.Run(2, stopCh); err != nil {
+		klog.Fatalf("Error running controller: %s", err.Error())
+	}
 }
