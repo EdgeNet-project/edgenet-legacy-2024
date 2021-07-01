@@ -188,7 +188,7 @@ type NodeContribution struct {
 
 // NodeContributionSpec is the spec for a NodeContribution resource
 type NodeContributionSpec struct {
-	Tenant      string        `json:"tenant"`
+	Tenant      *string       `json:"tenant"`
 	Host        string        `json:"host"`
 	Port        int           `json:"port"`
 	User        string        `json:"user"`

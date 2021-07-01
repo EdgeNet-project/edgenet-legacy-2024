@@ -384,7 +384,7 @@ check:
 }
 
 // setup registers DNS record and makes the node join into the cluster
-func (c *Controller) setup(tenantName, addr, nodeName, recordType, procedure string, config *ssh.ClientConfig, nodecontribution *corev1alpha.NodeContribution) error {
+func (c *Controller) setup(tenantName *string, addr, nodeName, recordType, procedure string, config *ssh.ClientConfig, nodecontribution *corev1alpha.NodeContribution) error {
 	// Steps in the procedure
 	endProcedure := make(chan bool, 1)
 	dnsConfiguration := make(chan bool, 1)
@@ -543,9 +543,11 @@ nodeSetupLoop:
 				endProcedure <- true
 			}
 			ownerReferences := SetAsOwnerReference(nodecontribution)
-			contributorTenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantName, metav1.GetOptions{})
-			if err == nil {
-				ownerReferences = append(ownerReferences, tenant.SetAsOwnerReference(contributorTenant)...)
+			if tenantName != nil {
+				contributorTenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), *tenantName, metav1.GetOptions{})
+				if err == nil {
+					ownerReferences = append(ownerReferences, tenant.SetAsOwnerReference(contributorTenant)...)
+				}
 			}
 			err = node.SetOwnerReferences(nodeName, ownerReferences)
 			if err != nil {

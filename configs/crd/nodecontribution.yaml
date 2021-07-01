@@ -52,6 +52,7 @@ spec:
               properties:
                 tenant:
                   type: string
+                  nullable: true
                   pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                 host:
                   type: string
