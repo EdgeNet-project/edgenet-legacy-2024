@@ -79,6 +79,7 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 		// Check if the tenant is active
 		if tenant.Spec.Enabled {
 			if userRequest.Spec.Approved {
+				userRequest.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
 				tenantHandler := tenantv1alpha.Handler{}
 				tenantHandler.Init(t.clientset, t.edgenetClientset)
 				tenantHandler.ConfigurePermissions(tenant, userRequest, tenantv1alpha.SetAsOwnerReference(tenant))
