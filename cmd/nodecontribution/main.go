@@ -15,19 +15,20 @@ import (
 
 func main() {
 	stopCh := signals.SetupSignalHandler()
-	kubeclientset, err := bootstrap.CreateClientset("serviceaccount")
+	bootstrap.SetKubeConfig()
+	kubeclientset, err := bootstrap.CreateClientset("kubeconfig")
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	edgenetclientset, err := bootstrap.CreateEdgeNetClientset("serviceaccount")
+	edgenetclientset, err := bootstrap.CreateEdgeNetClientset("kubeconfig")
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
 	// Start the controller to provide the functionalities of nodecontribution resource
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
-	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
 
 	controller := nodecontribution.NewController(kubeclientset,
 		edgenetclientset,

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -77,11 +78,12 @@ var statusDict = map[string]string{
 	"successful":              "Node is up and running",
 	"failure":                 "Node is unready",
 	"in-progress":             "Node setup in progress",
+	"configuration-failure":   "Warning: Scheduling configuration failed",
+	"owner-reference-failure": "Warning: Setting owner reference failed",
+	"status-update":           "Error: Object update failure",
 	"invalid-host":            "Error: Host field must be an IP Address",
 	"ssh-failure":             "Error: SSH handshake failed",
 	"join-failure":            "Error: Node cannot join the cluster",
-	"configuration-failure":   "Error: Scheduling configuration failed",
-	"owner-reference-failure": "Error: Setting owner reference failed",
 	"reboot-failure":          "Error: Node cannot get rebooted",
 	"timeout":                 "Error: Node contribution failed due to timeout",
 }
@@ -155,6 +157,11 @@ func NewController(
 	nodecontributionInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueNodeContribution,
 		UpdateFunc: func(old, new interface{}) {
+			newNodeContribution := new.(*corev1alpha.NodeContribution)
+			oldNodeContribution := old.(*corev1alpha.NodeContribution)
+			if reflect.DeepEqual(newNodeContribution.Spec, oldNodeContribution.Spec) {
+				return
+			}
 			controller.enqueueNodeContribution(new)
 		},
 	})
@@ -268,43 +275,44 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	// Make a copy of the node contribution object to make changes on it
-	nodecontribution.Status.Message = []string{}
+	nodecontributionCopy := nodecontribution.DeepCopy()
+	nodecontributionCopy.Status.Message = []string{}
 
-	nodeName := fmt.Sprintf("%s.edge-net.io", nodecontribution.GetName())
+	nodeName := fmt.Sprintf("%s.edge-net.io", nodecontributionCopy.GetName())
 
-	recordType := remoteip.GetRecordType(nodecontribution.Spec.Host)
+	recordType := remoteip.GetRecordType(nodecontributionCopy.Spec.Host)
 	if recordType == "" {
-		nodecontribution.Status.State = failure
-		nodecontribution.Status.Message = append(nodecontribution.Status.Message, statusDict["invalid-host"])
-		c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
+		nodecontributionCopy.Status.State = failure
+		nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["invalid-host"])
+		c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
 		return nil
 	}
 	// Set the client config according to the node contribution,
 	// with the maximum time of 15 seconds to establist the connection.
 	config := &ssh.ClientConfig{
-		User:            nodecontribution.Spec.User,
+		User:            nodecontributionCopy.Spec.User,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(c.publicKey)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         15 * time.Second,
 	}
-	addr := fmt.Sprintf("%s:%d", nodecontribution.Spec.Host, nodecontribution.Spec.Port)
+	addr := fmt.Sprintf("%s:%d", nodecontributionCopy.Spec.Host, nodecontributionCopy.Spec.Port)
 	contributedNode, err := c.nodesLister.Get(nodeName)
+
 	if err == nil {
-		if contributedNode.Spec.Unschedulable != !nodecontribution.Spec.Enabled {
-			node.SetNodeScheduling(nodeName, !nodecontribution.Spec.Enabled)
+		if contributedNode.Spec.Unschedulable != !nodecontributionCopy.Spec.Enabled {
+			node.SetNodeScheduling(nodeName, !nodecontributionCopy.Spec.Enabled)
 		}
 		if node.GetConditionReadyStatus(contributedNode.DeepCopy()) != trueStr {
 			c.balanceMultiThreading(5)
-			go c.setup(nodecontribution.Spec.Tenant, addr, nodeName, recordType, "recovery", config, nodecontribution)
+			go c.setup(addr, nodeName, recordType, "recovery", config, nodecontributionCopy)
 		} else {
-			nodecontribution.Status.State = success
-			nodecontribution.Status.Message = append(nodecontribution.Status.Message, statusDict["succesful"])
-			c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
+			nodecontributionCopy.Status.State = success
+			nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["successful"])
+			c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
 		}
 	} else {
 		c.balanceMultiThreading(5)
-		go c.setup(nodecontribution.Spec.Tenant, addr, nodeName, recordType, "initial", config, nodecontribution)
+		go c.setup(addr, nodeName, recordType, "initial", config, nodecontributionCopy)
 	}
 
 	c.recorder.Event(nodecontribution, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
@@ -384,7 +392,7 @@ check:
 }
 
 // setup registers DNS record and makes the node join into the cluster
-func (c *Controller) setup(tenantName *string, addr, nodeName, recordType, procedure string, config *ssh.ClientConfig, nodecontribution *corev1alpha.NodeContribution) error {
+func (c *Controller) setup(addr, nodeName, recordType, procedure string, config *ssh.ClientConfig, nodecontributionCopy *corev1alpha.NodeContribution) error {
 	// Steps in the procedure
 	endProcedure := make(chan bool, 1)
 	dnsConfiguration := make(chan bool, 1)
@@ -392,62 +400,26 @@ func (c *Controller) setup(tenantName *string, addr, nodeName, recordType, proce
 	setup := make(chan bool, 1)
 	nodePatch := make(chan bool, 1)
 	reboot := make(chan bool, 1)
-	// Set the status as recovering
-	nodecontribution.Status.State = inprogress
-	nodecontribution.Status.Message = append(nodecontribution.Status.Message, statusDict["in-progress"])
-	nodecontributionUpdated, err := c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
-	if err == nil {
-		nodecontribution = nodecontributionUpdated
-	}
+
+	// Set the status as in progress
+	nodecontributionCopy.Status.State = inprogress
+	nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["in-progress"])
+	nodecontributionUpdated, err := c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
+
+	defer func() {
+		if !reflect.DeepEqual(nodecontributionCopy.Status, nodecontributionUpdated.Status) {
+			if _, err := c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontributionUpdated, metav1.UpdateOptions{}); err != nil {
+				// TO-DO: Provide more information on error
+				klog.V(4).Info(err)
+			}
+		}
+	}()
 
 	var conn *ssh.Client
 	// connCounter to try establishing a connection for several times when the node is rebooted
 	connCounter := 0
 	if procedure == "recovery" {
-		// Watch the events of node object
-		watchNode, err := c.kubeclientset.CoreV1().Nodes().Watch(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.name==%s", nodeName)})
-		defer watchNode.Stop()
-		if err == nil {
-			go func() {
-				// Get events from watch interface
-				for nodeEvent := range watchNode.ResultChan() {
-					// Get updated node object
-					updatedNode, status := nodeEvent.Object.(*corev1.Node)
-					if status {
-						if nodeEvent.Type == "DELETED" {
-							endProcedure <- true
-						}
-						if node.GetConditionReadyStatus(updatedNode) == trueStr {
-							nodecontribution.Status.State = success
-							nodecontribution.Status.Message = append([]string{}, statusDict["successful"])
-							nodecontributionUpdated, err := c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
-							klog.V(4).Info(err)
-							if err == nil {
-								nodecontribution = nodecontributionUpdated
-							}
-							endProcedure <- true
-						}
-					}
-				}
-			}()
-		}
-
-		go func() {
-			conn, err = ssh.Dial("tcp", addr, config)
-			if err != nil {
-				klog.V(4).Info(err)
-				nodecontribution.Status.State = failure
-				nodecontribution.Status.Message = append(nodecontribution.Status.Message, statusDict["ssh-failure"])
-				nodecontributionUpdated, err := c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
-				klog.V(4).Info(err)
-				if err == nil {
-					nodecontribution = nodecontributionUpdated
-				}
-				endProcedure <- true
-			} else {
-				reboot <- true
-			}
-		}()
+		establishConnection <- true
 	} else {
 		// Start DNS configuration of `edge-net.io`
 		dnsConfiguration <- true
@@ -462,7 +434,7 @@ nodeSetupLoop:
 			hostRecord := namecheap.DomainDNSHost{
 				Name:    strings.TrimSuffix(nodeName, ".edge-net.io"),
 				Type:    recordType,
-				Address: nodecontribution.Spec.Host,
+				Address: nodecontributionUpdated.Spec.Host,
 			}
 			result, state := node.SetHostname(hostRecord)
 			// If the host record already exists, update the status of the node contribution.
@@ -470,16 +442,12 @@ nodeSetupLoop:
 			if !result {
 				var hostnameError string
 				if state == "exist" {
-					hostnameError = fmt.Sprintf("Error: Hostname %s or address %s already exists", hostRecord.Name, hostRecord.Address)
+					hostnameError = fmt.Sprintf("Warning: Hostname %s or address %s already exists", hostRecord.Name, hostRecord.Address)
 				} else {
-					hostnameError = fmt.Sprintf("Error: Hostname %s or address %s couldn't added", hostRecord.Name, hostRecord.Address)
+					hostnameError = fmt.Sprintf("Warning: Hostname %s or address %s couldn't added", hostRecord.Name, hostRecord.Address)
 				}
-				nodecontribution.Status.State = incomplete
-				nodecontribution.Status.Message = append(nodecontribution.Status.Message, hostnameError)
-				nodecontributionUpdated, err := c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
-				if err == nil {
-					nodecontribution = nodecontributionUpdated
-				}
+				nodecontributionUpdated.Status.State = incomplete
+				nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, hostnameError)
 				klog.V(4).Info(hostnameError)
 			}
 			establishConnection <- true
@@ -489,22 +457,23 @@ nodeSetupLoop:
 				conn, err = ssh.Dial("tcp", addr, config)
 				if err != nil && connCounter < 3 {
 					klog.V(4).Info(err)
-					// Wait three minutes to try establishing a connection again
-					time.Sleep(3 * time.Minute)
+					// Wait one minute to try establishing a connection again
+					time.Sleep(1 * time.Minute)
 					establishConnection <- true
 					connCounter++
-				} else if err != nil && connCounter >= 3 {
-					nodecontribution.Status.State = failure
-					nodecontribution.Status.Message = append(nodecontribution.Status.Message, statusDict["ssh-failure"])
-					nodecontributionUpdated, err := c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
+					return
+				} else if (conn == nil) || (err != nil && connCounter >= 3) {
+					nodecontributionUpdated.Status.State = failure
+					nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["ssh-failure"])
 					klog.V(4).Info(err)
-					if err == nil {
-						nodecontribution = nodecontributionUpdated
-					}
 					endProcedure <- true
 					return
 				}
-				setup <- true
+				if procedure == "recovery" {
+					reboot <- true
+				} else {
+					setup <- true
+				}
 			}()
 		case <-setup:
 			klog.V(4).Infof("Create a token and run kubadm join: %s", nodeName)
@@ -515,15 +484,11 @@ nodeSetupLoop:
 						conn.Close()
 					}
 				}()
-				err = c.join(conn, nodeName, nodecontribution)
+				err := c.join(conn, nodeName)
 				if err != nil {
-					nodecontribution.Status.State = failure
-					nodecontribution.Status.Message = append(nodecontribution.Status.Message, statusDict["join-failure"])
-					nodecontributionUpdated, err := c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
+					nodecontributionUpdated.Status.State = failure
+					nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["join-failure"])
 					klog.V(4).Info(err)
-					if err == nil {
-						nodecontribution = nodecontributionUpdated
-					}
 					endProcedure <- true
 					return
 				}
@@ -535,61 +500,45 @@ nodeSetupLoop:
 		case <-nodePatch:
 			klog.V(4).Infof("Patch scheduling option: %s", nodeName)
 			// Set the node as schedulable or unschedulable according to the node contribution
-			err := node.SetNodeScheduling(nodeName, !nodecontribution.Spec.Enabled)
+			err := node.SetNodeScheduling(nodeName, !nodecontributionUpdated.Spec.Enabled)
 			if err != nil {
-				nodecontribution.Status.State = incomplete
-				nodecontribution.Status.Message = append(nodecontribution.Status.Message, statusDict["configuration-failure"])
-				c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
+				nodecontributionUpdated.Status.State = incomplete
+				nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["configuration-failure"])
 				endProcedure <- true
 			}
-			ownerReferences := SetAsOwnerReference(nodecontribution)
-			if tenantName != nil {
-				contributorTenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), *tenantName, metav1.GetOptions{})
+			ownerReferences := SetAsOwnerReference(nodecontributionUpdated)
+			if nodecontributionUpdated.Spec.Tenant != nil {
+				contributorTenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), *nodecontributionUpdated.Spec.Tenant, metav1.GetOptions{})
 				if err == nil {
 					ownerReferences = append(ownerReferences, tenant.SetAsOwnerReference(contributorTenant)...)
 				}
 			}
 			err = node.SetOwnerReferences(nodeName, ownerReferences)
 			if err != nil {
-				nodecontribution.Status.State = incomplete
-				nodecontribution.Status.Message = append(nodecontribution.Status.Message, statusDict["owner-reference-failure"])
-				c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
+				nodecontributionUpdated.Status.State = incomplete
+				nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["owner-reference-failure"])
 				endProcedure <- true
 			}
-			nodecontribution.Status.State = success
-			nodecontribution.Status.Message = append(nodecontribution.Status.Message, statusDict["successful"])
-			c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
-			if procedure == "initial" {
-				endProcedure <- true
-			}
+			endProcedure <- true
 		case <-reboot:
 			klog.V(4).Infof("Reboot the node: %s", nodeName)
 			// Reboot the node in a minute
 			err = rebootNode(conn)
 			if err != nil {
-				nodecontribution.Status.Message = append(nodecontribution.Status.Message, statusDict["reboot-failure"])
-				nodecontributionUpdated, err := c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
+				nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["reboot-failure"])
 				klog.V(4).Info(err)
-				if err == nil {
-					nodecontribution = nodecontributionUpdated
-				}
 			}
 			conn.Close()
-			time.Sleep(3 * time.Minute)
-			establishConnection <- true
+			endProcedure <- true
 		case <-endProcedure:
 			klog.V(4).Infof("Procedure completed: %s", nodeName)
 			break nodeSetupLoop
 		case <-time.After(5 * time.Minute):
 			klog.V(4).Infof("Timeout: %s", nodeName)
 			// Terminate the procedure after 5 minutes
-			nodecontribution.Status.State = failure
-			nodecontribution.Status.Message = append(nodecontribution.Status.Message, statusDict["timeout"])
-			nodecontributionUpdated, err := c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontribution, metav1.UpdateOptions{})
+			nodecontributionUpdated.Status.State = failure
+			nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["timeout"])
 			klog.V(4).Info(err)
-			if err == nil {
-				nodecontribution = nodecontributionUpdated
-			}
 			break nodeSetupLoop
 		}
 	}
@@ -597,7 +546,7 @@ nodeSetupLoop:
 }
 
 // join creates a token and runs kubeadm join command
-func (c *Controller) join(conn *ssh.Client, nodeName string, nodecontribution *corev1alpha.NodeContribution) error {
+func (c *Controller) join(conn *ssh.Client, nodeName string) error {
 	commands := []string{
 		"sudo su",
 		"kubeadm reset -f",
