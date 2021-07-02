@@ -84,7 +84,6 @@ var statusDict = map[string]string{
 	"invalid-host":            "Error: Host field must be an IP Address",
 	"ssh-failure":             "Error: SSH handshake failed",
 	"join-failure":            "Error: Node cannot join the cluster",
-	"reboot-failure":          "Error: Node cannot get rebooted",
 	"timeout":                 "Error: Node contribution failed due to timeout",
 }
 
@@ -178,6 +177,8 @@ func NewController(
 		},
 		DeleteFunc: controller.handleObject,
 	})
+
+	node.Clientset = kubeclientset
 
 	return controller
 }
@@ -302,17 +303,17 @@ func (c *Controller) syncHandler(key string) error {
 		if contributedNode.Spec.Unschedulable != !nodecontributionCopy.Spec.Enabled {
 			node.SetNodeScheduling(nodeName, !nodecontributionCopy.Spec.Enabled)
 		}
-		if node.GetConditionReadyStatus(contributedNode.DeepCopy()) != trueStr {
-			c.balanceMultiThreading(5)
-			go c.setup(addr, nodeName, recordType, "recovery", config, nodecontributionCopy)
-		} else {
+		if node.GetConditionReadyStatus(contributedNode.DeepCopy()) == trueStr {
 			nodecontributionCopy.Status.State = success
 			nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["successful"])
-			c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
+		} else {
+			nodecontributionCopy.Status.State = failure
+			nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["failure"])
 		}
+		c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
 	} else {
 		c.balanceMultiThreading(5)
-		go c.setup(addr, nodeName, recordType, "initial", config, nodecontributionCopy)
+		go c.setup(addr, nodeName, recordType, config, nodecontributionCopy)
 	}
 
 	c.recorder.Event(nodecontribution, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
@@ -392,14 +393,13 @@ check:
 }
 
 // setup registers DNS record and makes the node join into the cluster
-func (c *Controller) setup(addr, nodeName, recordType, procedure string, config *ssh.ClientConfig, nodecontributionCopy *corev1alpha.NodeContribution) error {
+func (c *Controller) setup(addr, nodeName, recordType string, config *ssh.ClientConfig, nodecontributionCopy *corev1alpha.NodeContribution) error {
 	// Steps in the procedure
 	endProcedure := make(chan bool, 1)
 	dnsConfiguration := make(chan bool, 1)
 	establishConnection := make(chan bool, 1)
-	setup := make(chan bool, 1)
+	kubeadm := make(chan bool, 1)
 	nodePatch := make(chan bool, 1)
-	reboot := make(chan bool, 1)
 
 	// Set the status as in progress
 	nodecontributionCopy.Status.State = inprogress
@@ -416,14 +416,10 @@ func (c *Controller) setup(addr, nodeName, recordType, procedure string, config 
 	}()
 
 	var conn *ssh.Client
-	// connCounter to try establishing a connection for several times when the node is rebooted
+	// connCounter to try establishing a connection for several times
 	connCounter := 0
-	if procedure == "recovery" {
-		establishConnection <- true
-	} else {
-		// Start DNS configuration of `edge-net.io`
-		dnsConfiguration <- true
-	}
+	// Start DNS configuration of `edge-net.io`
+	dnsConfiguration <- true
 	// This statement to organize tasks and put a general timeout on
 nodeSetupLoop:
 	for {
@@ -469,13 +465,8 @@ nodeSetupLoop:
 					endProcedure <- true
 					return
 				}
-				if procedure == "recovery" {
-					reboot <- true
-				} else {
-					setup <- true
-				}
 			}()
-		case <-setup:
+		case <-kubeadm:
 			klog.V(4).Infof("Create a token and run kubadm join: %s", nodeName)
 			// To prevent hanging forever during establishing a connection
 			go func() {
@@ -519,16 +510,6 @@ nodeSetupLoop:
 				nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["owner-reference-failure"])
 				endProcedure <- true
 			}
-			endProcedure <- true
-		case <-reboot:
-			klog.V(4).Infof("Reboot the node: %s", nodeName)
-			// Reboot the node in a minute
-			err = rebootNode(conn)
-			if err != nil {
-				nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["reboot-failure"])
-				klog.V(4).Info(err)
-			}
-			conn.Close()
 			endProcedure <- true
 		case <-endProcedure:
 			klog.V(4).Infof("Procedure completed: %s", nodeName)
@@ -582,22 +563,6 @@ func (c *Controller) join(conn *ssh.Client, nodeName string) error {
 	stdin.Close()
 	// Wait for session to finish
 	err = sess.Wait()
-	if err != nil {
-		klog.V(4).Info(err)
-		return err
-	}
-	return nil
-}
-
-// rebootNode restarts node after a minute
-func rebootNode(conn *ssh.Client) error {
-	sess, err := startSession(conn)
-	if err != nil {
-		klog.V(4).Info(err)
-		return err
-	}
-	defer sess.Close()
-	err = sess.Run("sudo shutdown -r +1")
 	if err != nil {
 		klog.V(4).Info(err)
 		return err
