@@ -58,8 +58,16 @@ const controllerAgentName = "nodecontribution-controller"
 
 // Definitions of the state of the nodecontribution resource
 const (
-	SuccessSynced         = "Synced"
-	MessageResourceSynced = "Node Contribution synced successfully"
+	successSynced         = "Synced"
+	messageResourceSynced = "Node Contribution synced successfully"
+	setupProcedure        = "Setup"
+	messageSetupPhase     = "Setup process commenced"
+	messageDoneDNS        = "DNS record configured"
+	messageDoneSSH        = "SSH connection established"
+	messageDoneKubeadm    = "Bootstrap token created and join command has been invoked"
+	messageDonePatch      = "Node scheduling updated"
+	messageTimeout        = "Procedure terminated due to timeout"
+	messageEnd            = "Procedure finished"
 	inqueue               = "In Queue"
 	inprogress            = "In Progress"
 	failure               = "Failure"
@@ -301,7 +309,13 @@ func (c *Controller) syncHandler(key string) error {
 
 	if err == nil {
 		if contributedNode.Spec.Unschedulable != !nodecontributionCopy.Spec.Enabled {
-			node.SetNodeScheduling(nodeName, !nodecontributionCopy.Spec.Enabled)
+			err := node.SetNodeScheduling(nodeName, !nodecontributionCopy.Spec.Enabled)
+			if err != nil {
+				nodecontributionCopy.Status.State = incomplete
+				nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["configuration-failure"])
+			} else {
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDonePatch)
+			}
 		}
 		if node.GetConditionReadyStatus(contributedNode.DeepCopy()) == trueStr {
 			nodecontributionCopy.Status.State = success
@@ -316,7 +330,7 @@ func (c *Controller) syncHandler(key string) error {
 		go c.setup(addr, nodeName, recordType, config, nodecontributionCopy)
 	}
 
-	c.recorder.Event(nodecontribution, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
+	c.recorder.Event(nodecontribution, corev1.EventTypeNormal, successSynced, messageResourceSynced)
 	return nil
 }
 
@@ -394,6 +408,7 @@ check:
 
 // setup registers DNS record and makes the node join into the cluster
 func (c *Controller) setup(addr, nodeName, recordType string, config *ssh.ClientConfig, nodecontributionCopy *corev1alpha.NodeContribution) error {
+	c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageSetupPhase)
 	// Steps in the procedure
 	endProcedure := make(chan bool, 1)
 	dnsConfiguration := make(chan bool, 1)
@@ -432,19 +447,16 @@ nodeSetupLoop:
 				Type:    recordType,
 				Address: nodecontributionUpdated.Spec.Host,
 			}
-			result, state := node.SetHostname(hostRecord)
-			// If the host record already exists, update the status of the node contribution.
+			updated, _ := node.SetHostname(hostRecord)
+			// If the DNS record cannot be updated, update the status of the node contribution.
 			// However, the setup procedure keeps going on, so, it is not terminated.
-			if !result {
-				var hostnameError string
-				if state == "exist" {
-					hostnameError = fmt.Sprintf("Warning: Hostname %s or address %s already exists", hostRecord.Name, hostRecord.Address)
-				} else {
-					hostnameError = fmt.Sprintf("Warning: Hostname %s or address %s couldn't added", hostRecord.Name, hostRecord.Address)
-				}
+			if !updated {
+				hostnameError := fmt.Sprintf("Warning: Hostname %s or address %s couldn't added", hostRecord.Name, hostRecord.Address)
 				nodecontributionUpdated.Status.State = incomplete
 				nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, hostnameError)
 				klog.V(4).Info(hostnameError)
+			} else {
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneDNS)
 			}
 			establishConnection <- true
 		case <-establishConnection:
@@ -465,6 +477,8 @@ nodeSetupLoop:
 					endProcedure <- true
 					return
 				}
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneSSH)
+				kubeadm <- true
 			}()
 		case <-kubeadm:
 			klog.V(4).Infof("Create a token and run kubadm join: %s", nodeName)
@@ -483,6 +497,7 @@ nodeSetupLoop:
 					endProcedure <- true
 					return
 				}
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneKubeadm)
 				_, err = c.nodesLister.Get(nodeName)
 				if err == nil {
 					nodePatch <- true
@@ -495,7 +510,8 @@ nodeSetupLoop:
 			if err != nil {
 				nodecontributionUpdated.Status.State = incomplete
 				nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["configuration-failure"])
-				endProcedure <- true
+			} else {
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDonePatch)
 			}
 			ownerReferences := SetAsOwnerReference(nodecontributionUpdated)
 			if nodecontributionUpdated.Spec.Tenant != nil {
@@ -508,14 +524,15 @@ nodeSetupLoop:
 			if err != nil {
 				nodecontributionUpdated.Status.State = incomplete
 				nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["owner-reference-failure"])
-				endProcedure <- true
 			}
 			endProcedure <- true
 		case <-endProcedure:
 			klog.V(4).Infof("Procedure completed: %s", nodeName)
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageEnd)
 			break nodeSetupLoop
 		case <-time.After(5 * time.Minute):
 			klog.V(4).Infof("Timeout: %s", nodeName)
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, setupProcedure, messageTimeout)
 			// Terminate the procedure after 5 minutes
 			nodecontributionUpdated.Status.State = failure
 			nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["timeout"])
