@@ -3,6 +3,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/EdgeNet-project/edgenet)](https://goreportcard.com/report/github.com/EdgeNet-project/edgenet)
 [![Build Status](https://travis-ci.org/EdgeNet-project/edgenet.svg?branch=master)](https://travis-ci.org/EdgeNet-project/edgenet)
 [![Coverage Status](https://coveralls.io/repos/github/EdgeNet-project/edgenet/badge.svg?branch=master)](https://coveralls.io/github/EdgeNet-project/edgenet?branch=master)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/EdgeNet-project/edgenet)](https://github.com/EdgeNet-project/edgenet/releases)
 [![Go Reference](https://pkg.go.dev/badge/github.com/EdgeNet-project/edgenet.svg)](https://pkg.go.dev/github.com/EdgeNet-project/edgenet)
 
 EdgeNet is Kubernetes adapted for the network edge. It allows you to deploy applications to hundreds of nodes
