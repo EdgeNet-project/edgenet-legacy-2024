@@ -1,5 +1,4 @@
-## <img src="/assets/logos/edgenet_logos_2020_05_03/edgenet_logo_2020_05_03_w_text.svg" alt="Welcome to EdgeNet" width="400">
-
+## <img src="/assets/logos/edgenet_logos_2020_05_03/edgenet_logo_2020_05_03_w_text_300dpi_10pct.png" alt="Welcome to EdgeNet" width="400">
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/EdgeNet-project/edgenet)](https://goreportcard.com/report/github.com/EdgeNet-project/edgenet)
 [![Build Status](https://travis-ci.org/EdgeNet-project/edgenet.svg?branch=master)](https://travis-ci.org/EdgeNet-project/edgenet)
