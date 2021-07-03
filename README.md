@@ -25,7 +25,7 @@ by other Kubernetes-related projects, you will easily be able to navigate this r
 
 ## Contributing
 
-The EdgeNet software is free and open source; we invite you to contribute.
+The EdgeNet software is free and open source, licensed under the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0); we invite you to contribute.
 
 A good way to start familiarizing yourself with the code is to help us write unit tests. Take a look at the [architecture document](https://github.com/EdgeNet-project/edgenet/tree/release-1.0-documentation/docs/architecture) and follow the links to individual code files, and dig in!
 
@@ -36,6 +36,8 @@ code. Our current sprint is one of the milestones, and you can see more near-ter
 [project backlog](https://github.com/orgs/EdgeNet-project/projects/2).
 You can pick one of these to work on, or suggest your own.
 
-To start work, clone the latest release branch. When you have something you would like us to look at,
-please create a pull request for @bsenel to review.
+To start work, clone the latest release branch.
+If you add new code, please be sure to preface it with the standard copyright notice and license information found elsewhere in the code.
+When you have something you would like us to look at, please create a pull request for @bsenel to review.
+
 
