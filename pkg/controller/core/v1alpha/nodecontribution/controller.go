@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"reflect"
 	"strings"
@@ -86,6 +87,7 @@ var statusDict = map[string]string{
 	"successful":              "Node is up and running",
 	"failure":                 "Node is unready",
 	"in-progress":             "Node setup in progress",
+	"in-queue":                "Node contribution is in queue to be processed",
 	"configuration-failure":   "Warning: Scheduling configuration failed",
 	"owner-reference-failure": "Warning: Setting owner reference failed",
 	"status-update":           "Error: Object update failure",
@@ -166,7 +168,7 @@ func NewController(
 		UpdateFunc: func(old, new interface{}) {
 			newNodeContribution := new.(*corev1alpha.NodeContribution)
 			oldNodeContribution := old.(*corev1alpha.NodeContribution)
-			if reflect.DeepEqual(newNodeContribution.Spec, oldNodeContribution.Spec) {
+			if reflect.DeepEqual(newNodeContribution.Spec, oldNodeContribution.Spec) && (newNodeContribution.Status.State != inqueue) {
 				return
 			}
 			controller.enqueueNodeContribution(new)
@@ -178,7 +180,7 @@ func NewController(
 		UpdateFunc: func(old, new interface{}) {
 			newNode := new.(*corev1.Node)
 			oldNode := old.(*corev1.Node)
-			if newNode.ResourceVersion == oldNode.ResourceVersion {
+			if newNode.ResourceVersion == oldNode.ResourceVersion || node.GetConditionReadyStatus(oldNode) == node.GetConditionReadyStatus(newNode) {
 				return
 			}
 			controller.handleObject(new)
@@ -284,9 +286,22 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
+	if nodecontribution.Status.State != inqueue && nodecontribution.Status.State != inprogress && nodecontribution.Status.State != success {
+		nodecontributionCopy := nodecontribution.DeepCopy()
+		nodecontributionCopy.Status.State = inqueue
+		nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["in-queue"])
+		c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
+		return nil
+	}
+
+	go c.init(nodecontribution)
+	c.recorder.Event(nodecontribution, corev1.EventTypeNormal, successSynced, messageResourceSynced)
+	return nil
+}
+
+func (c *Controller) init(nodecontribution *corev1alpha.NodeContribution) {
 	nodecontributionCopy := nodecontribution.DeepCopy()
 	nodecontributionCopy.Status.Message = []string{}
-
 	nodeName := fmt.Sprintf("%s.edge-net.io", nodecontributionCopy.GetName())
 
 	recordType := remoteip.GetRecordType(nodecontributionCopy.Spec.Host)
@@ -294,7 +309,7 @@ func (c *Controller) syncHandler(key string) error {
 		nodecontributionCopy.Status.State = failure
 		nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["invalid-host"])
 		c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
-		return nil
+		return
 	}
 	// Set the client config according to the node contribution,
 	// with the maximum time of 15 seconds to establist the connection.
@@ -327,11 +342,8 @@ func (c *Controller) syncHandler(key string) error {
 		c.edgenetclientset.CoreV1alpha().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
 	} else {
 		c.balanceMultiThreading(5)
-		go c.setup(addr, nodeName, recordType, config, nodecontributionCopy)
+		c.setup(addr, nodeName, recordType, config, nodecontributionCopy)
 	}
-
-	c.recorder.Event(nodecontribution, corev1.EventTypeNormal, successSynced, messageResourceSynced)
-	return nil
 }
 
 // enqueueNodeContribution takes a NodeContribution resource and converts it into a namespace/name
@@ -387,6 +399,22 @@ func (c *Controller) handleObject(obj interface{}) {
 
 // balanceMultiThreading is a simple algorithm to limit concurrent threads
 func (c *Controller) balanceMultiThreading(limit int) {
+	var queue int
+	ncRaw, err := c.nodecontributionsLister.List(labels.Everything())
+	if err == nil {
+		for _, ncRow := range ncRaw {
+			if ncRow.Status.State == inqueue {
+				queue++
+			}
+		}
+	}
+
+	if queue >= limit {
+		rand.Seed(time.Now().UnixNano())
+		randomDuration := rand.Intn(queue * 1000)
+		time.Sleep(time.Duration(randomDuration) * time.Millisecond)
+	}
+
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 check:
