@@ -180,7 +180,7 @@ func NewController(
 		UpdateFunc: func(old, new interface{}) {
 			newNode := new.(*corev1.Node)
 			oldNode := old.(*corev1.Node)
-			if newNode.ResourceVersion == oldNode.ResourceVersion || node.GetConditionReadyStatus(oldNode) == node.GetConditionReadyStatus(newNode) {
+			if newNode.ResourceVersion == oldNode.ResourceVersion {
 				return
 			}
 			controller.handleObject(new)
@@ -392,7 +392,10 @@ func (c *Controller) handleObject(obj interface{}) {
 			return
 		}
 
-		c.enqueueNodeContribution(nodecontribution)
+		if (node.GetConditionReadyStatus(object.(*corev1.Node)) == trueStr && nodecontribution.Status.State != success && nodecontribution.Status.State != inqueue) ||
+			(node.GetConditionReadyStatus(object.(*corev1.Node)) != trueStr && nodecontribution.Status.State == success) {
+			c.enqueueNodeContribution(nodecontribution)
+		}
 		return
 	}
 }
