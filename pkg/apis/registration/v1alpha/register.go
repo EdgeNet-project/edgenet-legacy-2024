@@ -1,5 +1,5 @@
 /*
-Copyright 2021 Sorbonne Université
+Copyright 2021 Contributors to the EdgeNet project.
 
 Old Credits:
 Copyright 2017 The Kubernetes Authors.
