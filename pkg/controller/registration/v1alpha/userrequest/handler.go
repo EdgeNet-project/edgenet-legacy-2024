@@ -117,9 +117,8 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 						userRequest.Status.Message = []string{statusDict["email-fail"]}
 					}
 				}
-				labels := userRequest.GetLabels()
 				ownerReferences := SetAsOwnerReference(userRequest)
-				if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "registration.edgenet.io", "userrequests", fmt.Sprintf("%s-%s", userRequest.GetName(), labels["edge-net.io/user-template-hash"]), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
+				if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "registration.edgenet.io", "userrequests", userRequest.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
 					log.Infof("Couldn't create user request cluster role %s, %s: %s", tenant.GetName(), userRequest.GetName(), err)
 					// TODO: Provide err information at the status
 				}

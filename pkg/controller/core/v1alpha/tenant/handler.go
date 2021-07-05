@@ -388,7 +388,7 @@ func (t *Handler) sendEmail(tenant *corev1alpha.Tenant, user *registrationv1alph
 				for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
 					aupLabels := acceptableUsePolicyRow.GetLabels()
 					if aupLabels != nil && aupLabels["edge-net.io/username"] != "" && aupLabels["edge-net.io/user-template-hash"] != "" {
-						authorized := permission.CheckAuthorization("", acceptableUsePolicyRow.Spec.Email, "UserRequest", user.GetName(), "cluster")
+						authorized := permission.CheckAuthorization("", acceptableUsePolicyRow.Spec.Email, "userrequests", user.GetName(), "cluster")
 						if authorized {
 							contentData.CommonData.Email = append(contentData.CommonData.Email, acceptableUsePolicyRow.Spec.Email)
 						}
