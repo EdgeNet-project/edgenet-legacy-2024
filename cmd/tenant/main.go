@@ -19,5 +19,5 @@ func main() {
 		panic(err.Error())
 	}
 	// Start the controller to provide the functionalities of tenant resource
-	tenant.Start(clientset, edgenetClientset)
+	tenant.Start(kubeclientset, edgenetclientset)
 }

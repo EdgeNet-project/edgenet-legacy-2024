@@ -19,5 +19,5 @@ func main() {
 		panic(err.Error())
 	}
 	// Start the controller to provide the functionalities of subnamespace resource
-	subnamespace.Start(clientset, edgenetClientset)
+	subnamespace.Start(kubeclientset, edgenetclientset)
 }

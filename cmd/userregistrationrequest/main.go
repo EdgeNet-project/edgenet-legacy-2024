@@ -19,5 +19,5 @@ func main() {
 		panic(err.Error())
 	}
 	// Start the controller to provide the functionalities of userrequest resource
-	userrequest.Start(clientset, edgenetClientset)
+	userrequest.Start(kubeclientset, edgenetclientset)
 }

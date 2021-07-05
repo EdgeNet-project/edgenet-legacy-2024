@@ -19,5 +19,5 @@ func main() {
 		panic(err.Error())
 	}
 	// Start the controller to provide the functionalities of acceptableusepolicy resource
-	acceptableusepolicy.Start(clientset, edgenetClientset)
+	acceptableusepolicy.Start(kubeclientset, edgenetclientset)
 }

@@ -19,5 +19,5 @@ func main() {
 		panic(err.Error())
 	}
 	// Start the controller to provide the functionalities of emailverification resource
-	emailverification.Start(clientset, edgenetClientset)
+	emailverification.Start(kubeclientset, edgenetclientset)
 }
