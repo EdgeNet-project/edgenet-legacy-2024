@@ -127,7 +127,7 @@ func (t *Handler) ObjectDeleted(obj interface{}) {
 }
 
 // Create generates a tenant resource quota with the name provided
-func (t *Handler) Create(name string) (string, string) {
+func (t *Handler) Create(name string, ownerReferences []metav1.OwnerReference) (string, string) {
 	cpuQuota := "0m"
 	memoryQuota := "0Mi"
 	_, err := t.edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), name, metav1.GetOptions{})
@@ -135,6 +135,7 @@ func (t *Handler) Create(name string) (string, string) {
 		// Set a tenant resource quota
 		tenantResourceQuota := corev1alpha.TenantResourceQuota{}
 		tenantResourceQuota.SetName(name)
+		tenantResourceQuota.SetOwnerReferences(ownerReferences)
 		claim := corev1alpha.TenantResourceDetails{}
 		claim.Name = "Default"
 		claim.CPU = "8000m"

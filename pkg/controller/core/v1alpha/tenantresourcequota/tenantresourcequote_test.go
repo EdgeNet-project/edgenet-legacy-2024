@@ -437,7 +437,7 @@ func TestCreatetenantResourceQuota(t *testing.T) {
 
 	_, err := g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.Equals(t, true, errors.IsNotFound(err))
-	g.handler.Create(g.tenantResourceQuotaObj.GetName())
+	g.handler.Create(g.tenantResourceQuotaObj.GetName(), nil)
 	_, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 }

@@ -194,7 +194,7 @@ func (t *Handler) createCoreNamespace(tenant *corev1alpha.Tenant, ownerReference
 func (t *Handler) applyQuota(tenant *corev1alpha.Tenant) error {
 	trqHandler := tenantresourcequota.Handler{}
 	trqHandler.Init(t.clientset, t.edgenetClientset)
-	cpuQuota, memoryQuota := trqHandler.Create(tenant.GetName())
+	cpuQuota, memoryQuota := trqHandler.Create(tenant.GetName(), SetAsOwnerReference(tenant))
 
 	resourceQuota := corev1.ResourceQuota{}
 	resourceQuota.Name = "core-quota"
