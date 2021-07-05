@@ -81,6 +81,25 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 		err := t.createCoreNamespace(tenant, ownerReferences)
 		if err == nil || errors.IsAlreadyExists(err) {
 			t.applyQuota(tenant)
+
+			// Reconfigure permissions
+			if acceptableUsePolicyRaw, err := t.edgenetClientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
+				for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
+					aupLabels := acceptableUsePolicyRow.GetLabels()
+					if aupLabels != nil && aupLabels["edge-net.io/username"] != "" && aupLabels["edge-net.io/role"] != "" && aupLabels["edge-net.io/firstname"] != "" && aupLabels["edge-net.io/lastname"] != "" && aupLabels["edge-net.io/user-template-hash"] != "" {
+						user := registrationv1alpha.UserRequest{}
+						user.SetName(aupLabels["edge-net.io/username"])
+						user.Spec.Tenant = tenant.GetName()
+						user.Spec.Email = acceptableUsePolicyRow.Spec.Email
+						user.Spec.FirstName = aupLabels["edge-net.io/firstname"]
+						user.Spec.LastName = aupLabels["edge-net.io/lastname"]
+						user.Spec.Role = aupLabels["edge-net.io/role"]
+						user.SetLabels(map[string]string{"edge-net.io/user-template-hash": aupLabels["edge-net.io/user-template-hash"]})
+						t.ConfigurePermissions(tenant, user.DeepCopy(), SetAsOwnerReference(tenant))
+					}
+				}
+			}
+
 			// Create the cluster roles
 			if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "core.edgenet.io", "tenants", tenant.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
 				log.Infof("Couldn't create owner cluster role %s: %s", tenant.GetName(), err)
