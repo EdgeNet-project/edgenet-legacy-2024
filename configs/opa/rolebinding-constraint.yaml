@@ -1,18 +1,13 @@
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: RoleBindingLimitation
 metadata:
-  name: edgenet-cluster
+  name: clusterrole
 spec:
   match:
-    namespaceSelector:
-      matchExpressions:
-      - key: owner
-        operator: In
-        values: ["tenant","slice","team"]
     kinds:
       - apiGroups: ["rbac.authorization.k8s.io"]
         kinds: ["RoleBinding"]
   parameters:
     roles:
-      - kind: Role
-        name: ["user", "slice", "team", "tenant"]
+      - kind: ClusterRole
+        name: ["edgenet:tenant-admin", "edgenet:tenant-collaborator", "edgenet:tenant-owner"]

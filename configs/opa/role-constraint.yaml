@@ -1,0 +1,12 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: RoleLimitation
+metadata:
+  name: resourcequota
+spec:
+  match:
+    kinds:
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        kinds: ["Role"]
+  parameters:
+    rules:
+      - resource: resourcequotas

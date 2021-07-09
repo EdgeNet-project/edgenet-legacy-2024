@@ -22,14 +22,9 @@ spec:
                   type: object
                   required:
                     - resource
-                    - verbs
                   properties:
                     resource:
                       type: string
-                    verbs:
-                      type: array
-                      items:
-                        type: string
   targets:
     - target: admission.k8s.gatekeeper.sh
       rego: |
@@ -42,13 +37,6 @@ spec:
         msg := sprintf("Resources shouldn't include prohibited ones in %s namespace: %v", [input.review.object.metadata.namespace, restricted_resources])
         }
 
-        violation[{"msg": msg, "details": {"restricted_verbs": restricted_verbs}}] {
-        restricted_verbs[[resource, verb]]
-        count(restricted_verbs) > 0
-        not admin
-        msg := sprintf("Verbs shouldn't include prohibited ones in %s namespace: %v", [input.review.object.metadata.namespace, restricted_verbs])
-        }
-
         admin {
         "system:masters" == input.review.userInfo.groups[_]
         }
@@ -56,34 +44,11 @@ spec:
         restricted_resources[resource] {
         some i, j
         resource := input.review.object.rules[i].resources[j]
-        not matches_any(resource)
+        matches_any(resource)
         }
 
         matches_any(resource) {
         some k
         param_resource := input.parameters.rules[k].resource
         resource == param_resource
-        }
-
-        restricted_verbs[[resource, verb]] {
-        some i, j, k
-        resource := input.review.object.rules[i].resources[j]
-        verb := input.review.object.rules[i].verbs[k]
-        not matches_any_verb(resource, verb)
-        }
-
-        matches_any_verb(resource, verb) {
-        some l, m
-        param_resource := input.parameters.rules[l].resource
-        param_verb := input.parameters.rules[l].verbs[m]
-        resource == param_resource
-        param_verb == "*"
-        }
-
-        matches_any_verb(resource, verb) {
-        some l, m
-        param_resource := input.parameters.rules[l].resource
-        param_verb := input.parameters.rules[l].verbs[m]
-        resource == param_resource
-        verb == param_verb
         }

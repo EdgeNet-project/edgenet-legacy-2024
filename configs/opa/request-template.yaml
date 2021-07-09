@@ -14,8 +14,6 @@ spec:
         openAPIV3Schema:
           properties:
             spec:
-              required:
-                - allowed
               values:
                 type: array
                 items:

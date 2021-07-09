@@ -5,7 +5,7 @@ metadata:
 spec:
   match:
     kinds:
-      - apiGroups: ["apps.edgenet.io"]
+      - apiGroups: ["registration.edgenet.io"]
         kinds: ["TenantRequest", "UserRequest"]
   parameters:
     values:

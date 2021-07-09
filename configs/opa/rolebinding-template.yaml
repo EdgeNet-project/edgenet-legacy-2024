@@ -38,16 +38,14 @@ spec:
         violation[{"msg": msg, "details": {"restricted_kinds": restricted_kinds}}] {
             restricted_kinds[kind]
             count(restricted_kinds) > 0
+            restricted_names[name]
+            count(restricted_names) > 0  
             not admin
-            msg := sprintf("Kinds shouldn't include prohibited ones in %s namespace: %v", [input.review.object.metadata.namespace, restricted_kinds])
+
+            msg := sprintf("Cluster roles %v in %s namespace prohibited", [restricted_names, input.review.object.metadata.namespace])
         }
 
-        violation[{"msg": msg, "details": {"restricted_roles": restricted_names}}] {
-            restricted_names[name]
-            count(restricted_names) > 0
-            not admin
-            msg := sprintf("Role names starting with %v in %s namespace prohibited", [restricted_names, input.review.object.metadata.namespace])
-        }
+
 
         admin {
             "system:masters" == input.review.userInfo.groups[_]
@@ -55,7 +53,7 @@ spec:
 
         restricted_kinds[kind] {
             kind := input.review.object.roleRef.kind
-            not matches_any(kind)
+            matches_any(kind)
         }
 
         matches_any(kind) {
@@ -64,13 +62,13 @@ spec:
             kind == param_kind
         }
 
-        restricted_names[param_name] {
-            some j, k
-            param_name := input.parameters.roles[j].name[k]
-            matches(param_name)
+        restricted_names[name] {
+            name := input.review.object.roleRef.name
+            not matches_any_role(name)
         }
 
-        matches(param_name) {
-            name := input.review.object.roleRef.name
-            startswith(name, param_name)
+        matches_any_role(name) {
+            some j, k
+            param_name := input.parameters.roles[j].name[k]
+          	name == param_name
         }
