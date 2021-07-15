@@ -114,3 +114,15 @@ services:
       - ~/.kube/:/root/.kube/
       - ../configs/:/root/configs/
       - ../assets/templates/:/root/assets/templates/
+  vpnpeer:
+    container_name: vpnpeer
+    restart: always
+    build:
+      context: ../
+      dockerfile: ./build/vpnpeer/Dockerfile
+    image: vpnpeer:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
