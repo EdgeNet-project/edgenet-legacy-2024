@@ -22,6 +22,7 @@ import (
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	"golang.zx2c4.com/wireguard/wgctrl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	"k8s.io/apimachinery/pkg/labels"
 	"net"
 	"time"
 
@@ -29,7 +30,6 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/networking/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/networking/v1alpha"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -84,8 +84,10 @@ func NewController(
 
 	klog.Info("Setting up event handlers")
 	vpnpeerInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.enqueueVPNPeer,
+		AddFunc:    controller.enqueueVPNPeer,
+		DeleteFunc: controller.enqueueVPNPeer,
 		UpdateFunc: func(old, new interface{}) {
+			controller.enqueueVPNPeer(old)
 			controller.enqueueVPNPeer(new)
 		},
 	})
@@ -170,42 +172,49 @@ func (c *Controller) processNextWorkItem() bool {
 // converge the two. It then updates the Status block of the VPNPeer resource
 // with the current status of the resource.
 func (c *Controller) syncHandler(key string) error {
-	_, name, err := cache.SplitMetaNamespaceKey(key)
+	peers, err := c.vpnpeersLister.List(labels.Everything())
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
-		return nil
+		return err
 	}
 
-	peer, err := c.vpnpeersLister.Get(name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			utilruntime.HandleError(fmt.Errorf("vpnpeer '%s' in work queue no longer exists", key))
-			return nil
+	peer := findPeer(peers, key)
+	if peer == nil {
+		// A. Deletion
+		err = removePeer(c.linkname, key)
+		if err != nil {
+			return err
 		}
-
-		return err
+		klog.Infof("Peer with public key %s removed", key)
+	} else {
+		// B. Creation/Update
+		err = addPeer(c.linkname, *peer)
+		if err != nil {
+			return err
+		}
+		klog.Infof("Peer with public key %s synced", key)
+		c.recorder.Event(peer, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	}
 
-	err = addPeer(c.linkname, *peer)
-	if err != nil {
-		return err
-	}
-
-	c.recorder.Event(peer, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	return nil
 }
 
-// enqueueVPNPeer takes a VPNPeer resource and converts it into a namespace/name
-// string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than VPNPeer.
+// enqueueVPNPeer takes a VPNPeer resource.
+// This method should *not* be passed resources of any type other than VPNPeer.
 func (c *Controller) enqueueVPNPeer(obj interface{}) {
-	var key string
-	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		utilruntime.HandleError(err)
-		return
+	// We enqueue the peer public key instead of the object name.
+	// This allows us to handle deletion (or public key update) easily,
+	// since a WireGuard peer on a given link is uniquely identified by its public key.
+	peer := obj.(*v1alpha.VPNPeer)
+	c.workqueue.Add(peer.Spec.PublicKey)
+}
+
+func findPeer(peers []*v1alpha.VPNPeer, publicKey string) *v1alpha.VPNPeer {
+	for _, peer := range peers {
+		if peer.Spec.PublicKey == publicKey {
+			return peer
+		}
 	}
-	c.workqueue.Add(key)
+	return nil
 }
 
 func addPeer(linkname string, peer v1alpha.VPNPeer) error {
@@ -264,36 +273,31 @@ func addPeer(linkname string, peer v1alpha.VPNPeer) error {
 	return nil
 }
 
-//func removePeer(linkname string, nc v1alpha.NodeContribution) error {
-//	if nc.Spec.VPN == nil {
-//		klog.Infof("No VPN configuration specified for nodecontribution object %s", nc.Name)
-//		return nil
-//	}
-//
-//	client, err := wgctrl.New()
-//	if err != nil {
-//		return fmt.Errorf("error while creating WG client: %s", err.Error())
-//	}
-//
-//	publicKey, err := wgtypes.ParseKey(nc.Spec.VPN.PublicKey)
-//	if err != nil {
-//		return fmt.Errorf("error while parsing WG public key: %s", err.Error())
-//	}
-//
-//	peerConfig := wgtypes.PeerConfig{
-//		PublicKey:                   publicKey,
-//		Remove:                      true,
-//	}
-//
-//	deviceConfig := wgtypes.Config{
-//		Peers:        []wgtypes.PeerConfig{peerConfig},
-//		ReplacePeers: false,
-//	}
-//
-//	err = client.ConfigureDevice(linkname, deviceConfig)
-//	if err != nil {
-//		return fmt.Errorf("error while configure WG device %s: %s", linkname, err.Error())
-//	}
-//
-//	return nil
-//}
+func removePeer(linkname string, publicKey string) error {
+	client, err := wgctrl.New()
+	if err != nil {
+		return fmt.Errorf("error while creating WG client: %s", err.Error())
+	}
+
+	pk, err := wgtypes.ParseKey(publicKey)
+	if err != nil {
+		return fmt.Errorf("error while parsing WG public key: %s", err.Error())
+	}
+
+	peerConfig := wgtypes.PeerConfig{
+		PublicKey: pk,
+		Remove:    true,
+	}
+
+	deviceConfig := wgtypes.Config{
+		Peers:        []wgtypes.PeerConfig{peerConfig},
+		ReplacePeers: false,
+	}
+
+	err = client.ConfigureDevice(linkname, deviceConfig)
+	if err != nil {
+		return fmt.Errorf("error while configure WG device %s: %s", linkname, err.Error())
+	}
+
+	return nil
+}
