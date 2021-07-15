@@ -7,8 +7,9 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/oschwald/geoip2-golang v1.4.0
 	github.com/sirupsen/logrus v1.7.0
-	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0
-	gopkg.in/yaml.v2 v2.3.0
+	golang.org/x/crypto v0.0.0-20210503195802-e9a32991a82e
+	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20210506160403-92e472f520a5
+	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.19.2
 	k8s.io/apimachinery v0.19.2
 	k8s.io/client-go v0.19.2
