@@ -27,6 +27,7 @@ import (
 	apps "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps"
 	core "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core"
 	internalinterfaces "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/internalinterfaces"
+	networking "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/networking"
 	registration "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -176,6 +177,7 @@ type SharedInformerFactory interface {
 
 	Apps() apps.Interface
 	Core() core.Interface
+	Networking() networking.Interface
 	Registration() registration.Interface
 }
 
@@ -185,6 +187,10 @@ func (f *sharedInformerFactory) Apps() apps.Interface {
 
 func (f *sharedInformerFactory) Core() core.Interface {
 	return core.New(f, f.namespace, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) Networking() networking.Interface {
+	return networking.New(f, f.namespace, f.tweakListOptions)
 }
 
 func (f *sharedInformerFactory) Registration() registration.Interface {

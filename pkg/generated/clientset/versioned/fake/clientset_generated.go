@@ -24,6 +24,8 @@ import (
 	fakeappsv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha/fake"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha"
 	fakecorev1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha/fake"
+	networkingv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/networking/v1alpha"
+	fakenetworkingv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/networking/v1alpha/fake"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/registration/v1alpha"
 	fakeregistrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/registration/v1alpha/fake"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -88,6 +90,11 @@ func (c *Clientset) AppsV1alpha() appsv1alpha.AppsV1alphaInterface {
 // CoreV1alpha retrieves the CoreV1alphaClient
 func (c *Clientset) CoreV1alpha() corev1alpha.CoreV1alphaInterface {
 	return &fakecorev1alpha.FakeCoreV1alpha{Fake: &c.Fake}
+}
+
+// NetworkingV1alpha retrieves the NetworkingV1alphaClient
+func (c *Clientset) NetworkingV1alpha() networkingv1alpha.NetworkingV1alphaInterface {
+	return &fakenetworkingv1alpha.FakeNetworkingV1alpha{Fake: &c.Fake}
 }
 
 // RegistrationV1alpha retrieves the RegistrationV1alphaClient

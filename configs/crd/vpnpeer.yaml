@@ -1,0 +1,77 @@
+# Copyright 2021 Contributors to the EdgeNet project.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: vpnpeers.networking.edgenet.io
+spec:
+  group: networking.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Address-V4
+          type: string
+          jsonPath: .spec.addressV4
+        - name: Address-V6
+          type: string
+          jsonPath: .spec.addressV6
+        - name: Endpoint
+          type: string
+          jsonPath: .spec.endpointAddress
+        - name: Port
+          type: string
+          jsonPath: .spec.endpointPort
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - addressV4
+                - addressV6
+                - publicKey
+              properties:
+                addressV4:
+                  type: string
+                  pattern: '^[0-9.]+$'
+                  description: The IPv4 address assigned to the node's VPN interface.
+                addressV6:
+                  type: string
+                  pattern: '^[a-f0-9:]+$'
+                  description: The IPv6 address assigned to the node's VPN interface.
+                endpointAddress:
+                  type: string
+                  pattern: '^[a-f0-9.:]+$'
+                  nullable: true
+                  description: The public IPv4/v6 address of the node. Required for NAT-NAT communications.
+                endpointPort:
+                  type: integer
+                  minimum: 1
+                  nullable: true
+                  description: The port on which WireGuard is listening. Required for NAT-NAT communications.
+                publicKey:
+                  type: string
+                  description: The WireGuard public key of the node's VPN interface (Base64 encoded).
+  scope: Cluster
+  names:
+    plural: vpnpeers
+    singular: vpnpeer
+    kind: VPNPeer
+    shortNames:
+      - vpn

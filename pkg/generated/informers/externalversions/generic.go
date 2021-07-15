@@ -23,6 +23,7 @@ import (
 
 	v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
+	networkingv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/networking/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
@@ -69,6 +70,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().Tenants().Informer()}, nil
 	case corev1alpha.SchemeGroupVersion.WithResource("tenantresourcequotas"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().TenantResourceQuotas().Informer()}, nil
+
+		// Group=networking.edgenet.io, Version=v1alpha
+	case networkingv1alpha.SchemeGroupVersion.WithResource("vpnpeers"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Networking().V1alpha().VPNPeers().Informer()}, nil
 
 		// Group=registration.edgenet.io, Version=v1alpha
 	case registrationv1alpha.SchemeGroupVersion.WithResource("emailverifications"):
