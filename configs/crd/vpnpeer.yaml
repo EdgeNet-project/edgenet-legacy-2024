@@ -43,17 +43,17 @@ spec:
             spec:
               type: object
               required:
+                - addressV4
+                - addressV6
                 - publicKey
               properties:
                 addressV4:
                   type: string
                   pattern: '^[0-9.]+$'
-                  nullable: true
                   description: The IPv4 address assigned to the node's VPN interface.
                 addressV6:
                   type: string
                   pattern: '^[a-f0-9:]+$'
-                  nullable: true
                   description: The IPv6 address assigned to the node's VPN interface.
                 endpointAddress:
                   type: string

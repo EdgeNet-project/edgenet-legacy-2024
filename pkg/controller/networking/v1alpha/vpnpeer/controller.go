@@ -236,16 +236,15 @@ func addPeer(linkname string, peer v1alpha.VPNPeer) error {
 		return fmt.Errorf("error while parsing WG public key: %s", err.Error())
 	}
 
-	allowedIPs := make([]net.IPNet, 0)
-	if peer.Spec.AddressV4 != nil {
-		ip := net.ParseIP(*peer.Spec.AddressV4)
-		mask := net.CIDRMask(32, 32)
-		allowedIPs = append(allowedIPs, net.IPNet{IP: ip, Mask: mask})
-	}
-	if peer.Spec.AddressV6 != nil {
-		ip := net.ParseIP(*peer.Spec.AddressV6)
-		mask := net.CIDRMask(128, 128)
-		allowedIPs = append(allowedIPs, net.IPNet{IP: ip, Mask: mask})
+	allowedIPs := []net.IPNet{
+		{
+			IP:   net.ParseIP(peer.Spec.AddressV4),
+			Mask: net.CIDRMask(32, 32),
+		},
+		{
+			IP:   net.ParseIP(peer.Spec.AddressV6),
+			Mask: net.CIDRMask(128, 128),
+		},
 	}
 
 	var endpoint *net.UDPAddr

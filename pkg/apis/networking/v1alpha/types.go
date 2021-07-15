@@ -37,8 +37,8 @@ type VPNPeer struct {
 
 // VPNPeerSpec is the spec for a VPNPeer resource
 type VPNPeerSpec struct {
-	AddressV4       *string `json:"addressV4"`
-	AddressV6       *string `json:"addressV6"`
+	AddressV4       string  `json:"addressV4"`
+	AddressV6       string  `json:"addressV6"`
 	EndpointAddress *string `json:"endpointAddress"`
 	EndpointPort    *int    `json:"endpointPort"`
 	PublicKey       string  `json:"publicKey"`
