@@ -23,6 +23,7 @@ import (
 
 	appsv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha"
+	networkingv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/networking/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/registration/v1alpha"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
@@ -33,6 +34,7 @@ type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	AppsV1alpha() appsv1alpha.AppsV1alphaInterface
 	CoreV1alpha() corev1alpha.CoreV1alphaInterface
+	NetworkingV1alpha() networkingv1alpha.NetworkingV1alphaInterface
 	RegistrationV1alpha() registrationv1alpha.RegistrationV1alphaInterface
 }
 
@@ -42,6 +44,7 @@ type Clientset struct {
 	*discovery.DiscoveryClient
 	appsV1alpha         *appsv1alpha.AppsV1alphaClient
 	coreV1alpha         *corev1alpha.CoreV1alphaClient
+	networkingV1alpha   *networkingv1alpha.NetworkingV1alphaClient
 	registrationV1alpha *registrationv1alpha.RegistrationV1alphaClient
 }
 
@@ -53,6 +56,11 @@ func (c *Clientset) AppsV1alpha() appsv1alpha.AppsV1alphaInterface {
 // CoreV1alpha retrieves the CoreV1alphaClient
 func (c *Clientset) CoreV1alpha() corev1alpha.CoreV1alphaInterface {
 	return c.coreV1alpha
+}
+
+// NetworkingV1alpha retrieves the NetworkingV1alphaClient
+func (c *Clientset) NetworkingV1alpha() networkingv1alpha.NetworkingV1alphaInterface {
+	return c.networkingV1alpha
 }
 
 // RegistrationV1alpha retrieves the RegistrationV1alphaClient
@@ -89,6 +97,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.networkingV1alpha, err = networkingv1alpha.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 	cs.registrationV1alpha, err = registrationv1alpha.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
@@ -107,6 +119,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
 	cs.appsV1alpha = appsv1alpha.NewForConfigOrDie(c)
 	cs.coreV1alpha = corev1alpha.NewForConfigOrDie(c)
+	cs.networkingV1alpha = networkingv1alpha.NewForConfigOrDie(c)
 	cs.registrationV1alpha = registrationv1alpha.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
@@ -118,6 +131,7 @@ func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.appsV1alpha = appsv1alpha.New(c)
 	cs.coreV1alpha = corev1alpha.New(c)
+	cs.networkingV1alpha = networkingv1alpha.New(c)
 	cs.registrationV1alpha = registrationv1alpha.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
