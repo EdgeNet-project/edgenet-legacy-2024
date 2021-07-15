@@ -177,7 +177,11 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	peer := findPeer(peers, key)
+	peer, err := findPeer(peers, key)
+	if err != nil {
+		return err
+	}
+
 	if peer == nil {
 		// A. Deletion
 		err = removePeer(c.linkname, key)
@@ -208,13 +212,17 @@ func (c *Controller) enqueueVPNPeer(obj interface{}) {
 	c.workqueue.Add(peer.Spec.PublicKey)
 }
 
-func findPeer(peers []*v1alpha.VPNPeer, publicKey string) *v1alpha.VPNPeer {
+func findPeer(peers []*v1alpha.VPNPeer, publicKey string) (*v1alpha.VPNPeer, error) {
+	var found *v1alpha.VPNPeer
 	for _, peer := range peers {
 		if peer.Spec.PublicKey == publicKey {
-			return peer
+			if found != nil {
+				return nil, fmt.Errorf("multiple peers found with public key %s", publicKey)
+			}
+			found = peer
 		}
 	}
-	return nil
+	return found, nil
 }
 
 func addPeer(linkname string, peer v1alpha.VPNPeer) error {
