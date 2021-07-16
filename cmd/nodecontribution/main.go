@@ -15,13 +15,14 @@ import (
 
 func main() {
 	stopCh := signals.SetupSignalHandler()
-	bootstrap.SetKubeConfig()
-	kubeclientset, err := bootstrap.CreateClientset("kubeconfig")
+	// TODO: Pass an argument to select using kubeconfig or service account for clients
+	// bootstrap.SetKubeConfig()
+	kubeclientset, err := bootstrap.CreateClientset("serviceaccount")
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	edgenetclientset, err := bootstrap.CreateEdgeNetClientset("kubeconfig")
+	edgenetclientset, err := bootstrap.CreateEdgeNetClientset("serviceaccount")
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

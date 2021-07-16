@@ -1,11 +1,12 @@
 package main
 
 import (
-	"github.com/EdgeNet-project/edgenet/pkg/controller/networking/v1alpha/vpnpeer"
 	"log"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/EdgeNet-project/edgenet/pkg/controller/networking/v1alpha/vpnpeer"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
@@ -17,13 +18,14 @@ import (
 
 func main() {
 	stopCh := signals.SetupSignalHandler()
-	bootstrap.SetKubeConfig()
-	kubeclientset, err := bootstrap.CreateClientset("kubeconfig")
+	// TODO: Pass an argument to select using kubeconfig or service account for clients
+	// bootstrap.SetKubeConfig()
+	kubeclientset, err := bootstrap.CreateClientset("serviceaccount")
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	edgenetclientset, err := bootstrap.CreateEdgeNetClientset("kubeconfig")
+	edgenetclientset, err := bootstrap.CreateEdgeNetClientset("serviceaccount")
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

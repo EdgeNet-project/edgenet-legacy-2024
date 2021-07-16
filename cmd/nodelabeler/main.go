@@ -27,11 +27,13 @@ import (
 )
 
 func main() {
+	// TODO: Pass an argument to select using kubeconfig or service account for clients
+	// bootstrap.SetKubeConfig()
 	kubeclientset, err := bootstrap.CreateClientset("serviceaccount")
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
 	// Start the controller to watch nodes and attach the labels to them
-	nodelabeler.Start(clientset)
+	nodelabeler.Start(kubeclientset)
 }
