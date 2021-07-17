@@ -1,4 +1,4 @@
-FROM golang:1.14.0-alpine AS builder
+FROM golang:1.16.0-alpine AS builder
 
 RUN apk update && \
     apk add git build-base && \
@@ -8,14 +8,14 @@ RUN apk update && \
 ADD . "$GOPATH/src/github.com/EdgeNet-project/edgenet"
 
 RUN cd "$GOPATH/src/github.com/EdgeNet-project/edgenet" && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o /go/bin/subnamespace ./cmd/subnamespace/
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o /go/bin/selectivedeployment ./cmd/selectivedeployment/
 
 
 
 FROM alpine:latest
 
-WORKDIR /root/cmd/subnamespace/
+WORKDIR /root/cmd/selectivedeployment/
 
-COPY --from=builder /go/bin/subnamespace .
+COPY --from=builder /go/bin/selectivedeployment .
 
-CMD ["./subnamespace"]
+CMD ["./selectivedeployment"]

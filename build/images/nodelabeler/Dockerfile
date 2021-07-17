@@ -1,4 +1,4 @@
-FROM golang:1.14.0-alpine AS builder
+FROM golang:1.16.0-alpine AS builder
 
 RUN apk update && \
     apk add git build-base && \
@@ -8,14 +8,15 @@ RUN apk update && \
 ADD . "$GOPATH/src/github.com/EdgeNet-project/edgenet"
 
 RUN cd "$GOPATH/src/github.com/EdgeNet-project/edgenet" && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o /go/bin/nodecontribution ./cmd/nodecontribution/
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o /go/bin/nodelabeler ./cmd/nodelabeler/
 
 
 
 FROM alpine:latest
 
-WORKDIR /root/cmd/nodecontribution/
+WORKDIR /root/cmd/nodelabeler/
 
-COPY --from=builder /go/bin/nodecontribution .
+COPY ./assets/database/ /root/assets/database/
+COPY --from=builder /go/bin/nodelabeler .
 
-CMD ["./nodecontribution"]
+CMD ["./nodelabeler"]

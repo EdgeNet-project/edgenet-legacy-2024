@@ -5,18 +5,17 @@ services:
     container_name: nodelabeler
     restart: always
     build:
-      context: ../
-      dockerfile: ./build/nodelabeler/Dockerfile
+      context: ../../
+      dockerfile: ./build/images/nodelabeler/Dockerfile
     image: nodelabeler:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../assets/database/:/root/assets/database/
   selectivedeployment:
     container_name: selectivedeployment
     restart: always
     build:
-      context: ../
-      dockerfile: ./build/selectivedeployment/Dockerfile
+      context: ../../
+      dockerfile: ./build/images/selectivedeployment/Dockerfile
     image: selectivedeployment:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
@@ -24,102 +23,82 @@ services:
     container_name: tenant
     restart: always
     build:
-      context: ../
-      dockerfile: ./build/tenant/Dockerfile
+      context: ../../
+      dockerfile: ./build/images/tenant/Dockerfile
     image: tenant:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../configs/:/root/configs/
-      - ../assets/templates/:/root/assets/templates/
-      - ../assets/certs/:/root/assets/certs/
   tenantregistrationrequest:
     container_name: tenantregistrationrequest
     restart: always
     build:
-      context: ../
-      dockerfile: ./build/tenantregistrationrequest/Dockerfile
+      context: ../../
+      dockerfile: ./build/images/tenantregistrationrequest/Dockerfile
     image: tenantregistrationrequest:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../configs/:/root/configs/
-      - ../assets/templates/:/root/assets/templates/
-      - ../assets/certs/:/root/assets/certs/
   userregistrationrequest:
     container_name: userregistrationrequest
     restart: always
     build:
-      context: ../
-      dockerfile: ./build/userregistrationrequest/Dockerfile
+      context: ../../
+      dockerfile: ./build/images/userregistrationrequest/Dockerfile
     image: userregistrationrequest:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../configs/:/root/configs/
-      - ../assets/templates/:/root/assets/templates/
-      - ../assets/certs/:/root/assets/certs/
   acceptableusepolicy:
     container_name: acceptableusepolicy
     restart: always
     build:
-      context: ../
-      dockerfile: ./build/acceptableusepolicy/Dockerfile
+      context: ../../
+      dockerfile: ./build/images/acceptableusepolicy/Dockerfile
     image: acceptableusepolicy:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../configs/:/root/configs/
-      - ../assets/templates/:/root/assets/templates/
   emailverification:
     container_name: emailverification
     restart: always
     build:
-      context: ../
-      dockerfile: ./build/emailverification/Dockerfile
+      context: ../../
+      dockerfile: ./build/images/emailverification/Dockerfile
     image: emailverification:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../configs/:/root/configs/
-      - ../assets/templates/:/root/assets/templates/
   nodecontribution:
     container_name: nodecontribution
     restart: always
     build:
-      context: ../
-      dockerfile: ./build/nodecontribution/Dockerfile
+      context: ../../
+      dockerfile: ./build/images/nodecontribution/Dockerfile
     image: nodecontribution:v1.0.0
     volumes:
       - /etc/kubernetes/:/etc/kubernetes/
       - ~/.kube/:/root/.kube/
       - ~/.ssh/:/root/.ssh/
-      - ../configs/:/root/configs/
-      - ../assets/templates/:/root/assets/templates/
   tenantresourcequota:
     container_name: tenantresourcequota
     restart: always
     build:
-      context: ../
-      dockerfile: ./build/tenantresourcequota/Dockerfile
+      context: ../../
+      dockerfile: ./build/images/tenantresourcequota/Dockerfile
     image: tenantresourcequota:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../configs/:/root/configs/
-      - ../assets/kubeconfigs:/root/assets/kubeconfigs
-      - ../assets/templates/:/root/assets/templates/
   subnamespace:
     container_name: subnamespace
     restart: always
     build:
-      context: ../
-      dockerfile: ./build/subnamespace/Dockerfile
+      context: ../../
+      dockerfile: ./build/images/subnamespace/Dockerfile
     image: subnamespace:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-      - ../configs/:/root/configs/
-      - ../assets/templates/:/root/assets/templates/
   vpnpeer:
     container_name: vpnpeer
     restart: always
     build:
-      context: ../
-      dockerfile: ./build/vpnpeer/Dockerfile
+      context: ../../
+      dockerfile: ./build/images/vpnpeer/Dockerfile
     image: vpnpeer:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/

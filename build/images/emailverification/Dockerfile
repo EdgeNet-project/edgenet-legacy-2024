@@ -1,4 +1,4 @@
-FROM golang:1.14.0-alpine AS builder
+FROM golang:1.16.0-alpine AS builder
 
 RUN apk update && \
     apk add git build-base && \
@@ -16,6 +16,8 @@ FROM alpine:latest
 
 WORKDIR /root/cmd/emailverification/
 
+COPY ./configs/ /root/configs/
+COPY ./assets/templates/ /root/assets/templates/
 COPY --from=builder /go/bin/emailverification .
 
 CMD ["./emailverification"]

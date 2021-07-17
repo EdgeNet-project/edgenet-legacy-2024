@@ -1,0 +1,955 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edgenet
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: acceptableusepolicy
+  name: acceptableusepolicy
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: acceptableusepolicy
+  name: edgenet:service:acceptableusepolicy
+rules:
+- apiGroups: ["core.edgenet.io"]
+  resources: ["acceptableusepolicies", "acceptableusepolicies/status"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["tenants"]
+  verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: acceptableusepolicy
+  name: edgenet:service:acceptableusepolicy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:acceptableusepolicy
+subjects:
+- kind: ServiceAccount
+  name: acceptableusepolicy
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: acceptableusepolicy
+  name: acceptableusepolicy
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: acceptableusepolicy
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: acceptableusepolicy
+    spec:
+      containers:
+      - command:
+        - acceptableusepolicy
+        image: edgenetproject/acceptableusepolicy:v1.0.0
+        name: acceptableusepolicy
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: acceptableusepolicy
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: emailverification
+  name: emailverification
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: emailverification
+  name: edgenet:service:emailverification
+rules:
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["emailverifications", "emailverifications/status"]
+  verbs: ["*"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["tenantrequests"]
+  verbs: ["get"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["tenantrequests/status"]
+  verbs: ["get", "update"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["userrequests"]
+  verbs: ["get"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["userrequests/status"]
+  verbs: ["get", "update"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["acceptableusepolicies"]
+  verbs: ["get", "list", "update"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["tenants"]
+  verbs: ["get"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles","clusterrolebindings", "roles","rolebindings"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: emailverification
+  name: edgenet:service:emailverification
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:emailverification
+subjects:
+- kind: ServiceAccount
+  name: emailverification
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: emailverification
+  name: emailverification
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: emailverification
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: emailverification
+    spec:
+      containers:
+      - command:
+        - emailverification
+        image: edgenetproject/emailverification:v1.0.0
+        name: emailverification
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: emailverification
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: nodecontribution
+  name: nodecontribution
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: nodecontribution
+  name: edgenet:service:nodecontribution
+rules:
+- apiGroups: ["core.edgenet.io"]
+  resources: ["nodecontributions", "nodecontributions/status"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "watch", "list", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "create", "update"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: nodecontribution
+  name: edgenet:service:nodecontribution
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:nodecontribution
+subjects:
+- kind: ServiceAccount
+  name: nodecontribution
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: nodecontribution
+  name: nodecontribution
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: nodecontribution
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: nodecontribution
+    spec:
+      containers:
+      - command:
+        - nodecontribution
+        image: edgenetproject/nodecontribution:v1.0.0
+        name: nodecontribution
+        volumeMounts:
+        - mountPath: /etc/kubernetes/
+          name: kubernetes
+          readOnly: true
+        - name: ssh
+          readOnly: true
+          mountPath: /root/.ssh/
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: nodecontribution
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      volumes:
+      - name: kubernetes
+        hostPath:
+          path: /etc/kubernetes/
+          type: Directory
+      - name: ssh
+          secret:
+            secretName: ssh-key-secret
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: nodelabeler
+  name: nodelabeler
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: nodelabeler
+  name: edgenet:service:nodelabeler
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "watch", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: nodelabeler
+  name: edgenet:service:nodelabeler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:nodelabeler
+subjects:
+- kind: ServiceAccount
+  name: nodelabeler
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: nodelabeler
+  name: nodelabeler
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: nodelabeler
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: nodelabeler
+    spec:
+      containers:
+      - command:
+        - nodelabeler
+        image: edgenetproject/nodelabeler:v1.0.0
+        name: nodelabeler
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: nodelabeler
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: selectivedeployment
+  name: selectivedeployment
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: selectivedeployment
+  name: edgenet:service:selectivedeployment
+rules:
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["selectivedeployments", "selectivedeployments/status"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets", "deployments", "statefulsets"]
+  verbs: ["get", "watch", "list", "create", "patch", update", "delete"]
+- apiGroups: ["batch"]
+  resources: ["cronjobs", "jobs"]
+  verbs: ["get", "watch", "list", "create", "patch", update", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: selectivedeployment
+  name: edgenet:service:selectivedeployment
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:selectivedeployment
+subjects:
+- kind: ServiceAccount
+  name: selectivedeployment
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: selectivedeployment
+  name: selectivedeployment
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: selectivedeployment
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: selectivedeployment
+    spec:
+      containers:
+      - command:
+        - selectivedeployment
+        image: edgenetproject/selectivedeployment:v1.0.0
+        name: selectivedeployment
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: selectivedeployment
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: subnamespace
+  name: subnamespace
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: subnamespace
+  name: edgenet:service:subnamespace
+rules:
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces", "subnamespaces/status"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["tenants"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "create", "delete"]
+- apiGroups: [""]
+  resources: ["resourcequotas"]
+  verbs: ["get", "create", "update"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles","rolebindings"]
+  verbs: ["get", "list", "create"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: subnamespace
+  name: edgenet:service:subnamespace
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:subnamespace
+subjects:
+- kind: ServiceAccount
+  name: subnamespace
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: subnamespace
+  name: subnamespace
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: subnamespace
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: subnamespace
+    spec:
+      containers:
+      - command:
+        - subnamespace
+        image: edgenetproject/subnamespace:v1.0.0
+        name: subnamespace
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: subnamespace
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: tenant
+  name: tenant
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: tenant
+  name: edgenet:service:tenant
+rules:
+- apiGroups: ["core.edgenet.io"]
+  resources: ["tenants", "tenants/status"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["acceptableusepolicies"]
+  verbs: ["get", "list", "create"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["tenantrequests"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "create", "delete"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles","clusterrolebindings", "roles","rolebindings"]
+  verbs: ["get", "list", "create", "update", "deletecollection"]
+- apiGroups: [""]
+  resources: ["resourcequotas"]
+  verbs: ["create"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["certificatesigningrequests"]
+  verbs: ["get", "list", "watch", "create"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["certificatesigningrequests/approval"]
+  verbs: ["update"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["signers"]
+  verbs: ["approve"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: tenant
+  name: edgenet:service:tenant
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:tenant
+subjects:
+- kind: ServiceAccount
+  name: tenant
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: tenant
+  name: tenant
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: tenant
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: tenant
+    spec:
+      containers:
+      - command:
+        - tenant
+        image: edgenetproject/tenant:v1.0.0
+        name: tenant
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: tenant
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: tenantregistrationrequest
+  name: tenantregistrationrequest
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: tenantregistrationrequest
+  name: edgenet:service:tenantregistrationrequest
+rules:
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["tenantrequests", "tenantrequests/status"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["tenants"]
+  verbs: ["get", "create"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["emailverifications"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: tenantregistrationrequest
+  name: edgenet:service:tenantregistrationrequest
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:tenantregistrationrequest
+subjects:
+- kind: ServiceAccount
+  name: tenantregistrationrequest
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: tenantregistrationrequest
+  name: tenantregistrationrequest
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: tenantregistrationrequest
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: tenantregistrationrequest
+    spec:
+      containers:
+      - command:
+        - tenantregistrationrequest
+        image: edgenetproject/tenantregistrationrequest:v1.0.0
+        name: tenantregistrationrequest
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: tenantregistrationrequest
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: tenantresourcequota
+  name: tenantresourcequota
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: tenantresourcequota
+  name: edgenet:service:tenantresourcequota
+rules:
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["tenantresourcequotas", "tenantresourcequotas/status"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["tenants"]
+  verbs: ["get"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces"]
+  verbs: ["get", "list", "delete", "deletecollection"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: [""]
+  resources: ["resourcequotas"]
+  verbs: ["get", "list", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: tenantresourcequota
+  name: edgenet:service:tenantresourcequota
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:tenantresourcequota
+subjects:
+- kind: ServiceAccount
+  name: tenantresourcequota
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: tenantresourcequota
+  name: tenantresourcequota
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: tenantresourcequota
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: tenantresourcequota
+    spec:
+      containers:
+      - command:
+        - tenantresourcequota
+        image: edgenetproject/tenantresourcequota:v1.0.0
+        name: tenantresourcequota
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: tenantresourcequota
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: userregistrationrequest
+  name: userregistrationrequest
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: userregistrationrequest
+  name: edgenet:service:userregistrationrequest
+rules:
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["userrequests", "userrequests/status"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["tenants"]
+  verbs: ["get"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["acceptableusepolicies"]
+  verbs: ["get", "list", "create"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["emailverifications"]
+  verbs: ["create"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles","clusterrolebindings", "roles","rolebindings"]
+  verbs: ["get", "list", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: userregistrationrequest
+  name: edgenet:service:userregistrationrequest
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:userregistrationrequest
+subjects:
+- kind: ServiceAccount
+  name: userregistrationrequest
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: userregistrationrequest
+  name: userregistrationrequest
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: userregistrationrequest
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: userregistrationrequest
+    spec:
+      containers:
+      - command:
+        - userregistrationrequest
+        image: edgenetproject/userregistrationrequest:v1.0.0
+        name: userregistrationrequest
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: userregistrationrequest
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: vpnpeer
+  name: vpnpeer
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: vpnpeer
+  name: edgenet:service:userregistrationrequest
+rules:
+- apiGroups: ["networking.edgenet.io"]
+  resources: ["vpnpeers", "vpnpeers/status"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: vpnpeer
+  name: edgenet:service:vpnpeer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:vpnpeer
+subjects:
+- kind: ServiceAccount
+  name: vpnpeer
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: vpnpeer
+  name: vpnpeer
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: vpnpeer
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: vpnpeer
+    spec:
+      containers:
+      - command:
+        - vpnpeer
+        image: edgenetproject/vpnpeer:v1.0.0
+        name: vpnpeer
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: vpnpeer
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
