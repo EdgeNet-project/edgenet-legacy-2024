@@ -37,21 +37,21 @@ test:
 	find ./assets/kubeconfigs ! -name 'README.md' -type f -exec rm -f {} +
 
 build:
-	docker-compose -f ./build/docker-compose.yml build
+	docker-compose -f ./build/yamls/docker-compose.yml build
 
 rebuild: stop clean build start
 
 start: build
-	docker-compose -f ./build/docker-compose.yml up -d
+	docker-compose -f ./build/yamls/docker-compose.yml up -d
 
 run:
-	docker-compose -f ./build/docker-compose.yml up -d
+	docker-compose -f ./build/yamls/docker-compose.yml up -d
 
 stop:
-	docker-compose -f ./build/docker-compose.yml down
+	docker-compose -f ./build/yamls/docker-compose.yml down
 
 clean:
-	docker-compose -f ./build/docker-compose.yml down --rmi all
+	docker-compose -f ./build/yamls/docker-compose.yml down --rmi all
 	$(GOCLEAN)
 
 lint:
