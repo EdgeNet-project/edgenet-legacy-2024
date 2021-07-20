@@ -1,8 +1,0 @@
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: edgenet-admin
-rules:
-- apiGroups: ["edgenet.io"]
-  resources: ["selectivedeployments"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
