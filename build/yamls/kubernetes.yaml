@@ -26,6 +26,9 @@ rules:
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenants"]
   verbs: ["get", "update"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -117,13 +120,49 @@ rules:
   verbs: ["get", "update"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["acceptableusepolicies"]
-  verbs: ["get", "list", "update"]
+  verbs: ["get", "list", "create", "update", "delete"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["acceptableusepolicies/status"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenants"]
   verbs: ["get"]
 - apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["clusterroles","clusterrolebindings", "roles","rolebindings"]
+  resources: ["clusterroles","clusterrolebindings"]
   verbs: ["get", "list"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces", "selectivedeployments"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces/status", "selectivedeployments/status"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"]
+  verbs: ["*"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+  verbs: ["*"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["*"]
+- apiGroups: ["batch"]
+  resources: ["cronjobs", "jobs"]
+  verbs: ["*"]
+- apiGroups: ["extensions"]
+  resources: ["daemonsets", "deployments", "ingresses", "networkpolicies", "replicasets", "replicationcontrollers"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["events", "controllerrevisions"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -388,6 +427,9 @@ rules:
 - apiGroups: ["batch"]
   resources: ["cronjobs", "jobs"]
   verbs: ["get", "watch", "list", "create", "patch", update", "delete"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -480,6 +522,9 @@ rules:
 - apiGroups: ["networking.k8s.io"]
   resources: ["networkpolicies"]
   verbs: ["get", "list", "create"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -559,7 +604,10 @@ rules:
   verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["acceptableusepolicies"]
-  verbs: ["get", "list", "create"]
+  verbs: ["get", "list", "create", "delete"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["acceptableusepolicies/status"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: ["registration.edgenet.io"]
   resources: ["tenantrequests"]
   verbs: ["get"]
@@ -567,8 +615,11 @@ rules:
   resources: ["namespaces"]
   verbs: ["get", "list", "create", "delete"]
 - apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
+  resources: ["clusterroles", "clusterrolebindings"]
   verbs: ["get", "list", "create", "update", "deletecollection"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["*"]
 - apiGroups: [""]
   resources: ["resourcequotas"]
   verbs: ["create"]
@@ -581,6 +632,36 @@ rules:
 - apiGroups: ["certificates.k8s.io"]
   resources: ["signers"]
   verbs: ["approve"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces", "selectivedeployments"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces/status", "selectivedeployments/status"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"]
+  verbs: ["*"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+  verbs: ["*"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["*"]
+- apiGroups: ["batch"]
+  resources: ["cronjobs", "jobs"]
+  verbs: ["*"]
+- apiGroups: ["extensions"]
+  resources: ["daemonsets", "deployments", "ingresses", "networkpolicies", "replicasets", "replicationcontrollers"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["events", "controllerrevisions"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -663,6 +744,9 @@ rules:
   verbs: ["get", "create"]
 - apiGroups: ["registration.edgenet.io"]
   resources: ["emailverifications"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["events"]
   verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -753,6 +837,9 @@ rules:
 - apiGroups: [""]
   resources: ["resourcequotas"]
   verbs: ["get", "list", "update"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -835,13 +922,49 @@ rules:
   verbs: ["get"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["acceptableusepolicies"]
-  verbs: ["get", "list", "create"]
+  verbs: ["get", "list", "create", "delete"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["acceptableusepolicies/status"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: ["registration.edgenet.io"]
   resources: ["emailverifications"]
   verbs: ["create"]
 - apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["clusterroles","clusterrolebindings", "roles","rolebindings"]
+  resources: ["clusterroles","clusterrolebindings"]
   verbs: ["get", "list", "create", "update"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces", "selectivedeployments"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces/status", "selectivedeployments/status"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"]
+  verbs: ["*"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+  verbs: ["*"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["*"]
+- apiGroups: ["batch"]
+  resources: ["cronjobs", "jobs"]
+  verbs: ["*"]
+- apiGroups: ["extensions"]
+  resources: ["daemonsets", "deployments", "ingresses", "networkpolicies", "replicasets", "replicationcontrollers"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["events", "controllerrevisions"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -919,6 +1042,9 @@ rules:
 - apiGroups: ["networking.edgenet.io"]
   resources: ["vpnpeers", "vpnpeers/status"]
   verbs: ["*"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -1034,28 +1160,15 @@ kind: ClusterRole
 metadata:
   name: edgenet:registration
 rules:
-- apiGroups:
-  - registration.edgenet.io
-  resources:
-  - tenantrequests
-  - userrequests
-  verbs:
-  - create
-- apiGroups:
-  - core.edgenet.io
-  resources:
-  - tenants
-  verbs:
-  - get
-  - list
-- apiGroups:
-  - registration.edgenet.io
-  resources:
-  - emailverifications
-  verbs:
-  - get
-  - update
-  - patch
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["tenantrequests", "userrequests"]
+  verbs: ["create"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["tenants"]
+  verbs: ["get", "list"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["emailverifications"]
+  verbs: ["get", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
