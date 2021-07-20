@@ -67,7 +67,7 @@ spec:
     spec:
       containers:
       - command:
-        - acceptableusepolicy
+        - ./acceptableusepolicy
         image: edgenetproject/acceptableusepolicy:v1.0.0
         name: acceptableusepolicy
       hostNetwork: true
@@ -80,6 +80,8 @@ spec:
         operator: Exists
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -163,7 +165,7 @@ spec:
     spec:
       containers:
       - command:
-        - emailverification
+        - ./emailverification
         image: edgenetproject/emailverification:v1.0.0
         name: emailverification
       hostNetwork: true
@@ -176,6 +178,8 @@ spec:
         operator: Exists
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -247,7 +251,7 @@ spec:
     spec:
       containers:
       - command:
-        - nodecontribution
+        - ./nodecontribution
         image: edgenetproject/nodecontribution:v1.0.0
         name: nodecontribution
         volumeMounts:
@@ -267,14 +271,16 @@ spec:
         operator: Exists
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
       volumes:
       - name: kubernetes
         hostPath:
           path: /etc/kubernetes/
           type: Directory
       - name: ssh
-          secret:
-            secretName: ssh-key-secret
+        secret:
+          secretName: ssh-key-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -337,7 +343,7 @@ spec:
     spec:
       containers:
       - command:
-        - nodelabeler
+        - ./nodelabeler
         image: edgenetproject/nodelabeler:v1.0.0
         name: nodelabeler
       hostNetwork: true
@@ -350,6 +356,8 @@ spec:
         operator: Exists
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -421,7 +429,7 @@ spec:
     spec:
       containers:
       - command:
-        - selectivedeployment
+        - ./selectivedeployment
         image: edgenetproject/selectivedeployment:v1.0.0
         name: selectivedeployment
       hostNetwork: true
@@ -434,6 +442,8 @@ spec:
         operator: Exists
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -511,7 +521,7 @@ spec:
     spec:
       containers:
       - command:
-        - subnamespace
+        - ./subnamespace
         image: edgenetproject/subnamespace:v1.0.0
         name: subnamespace
       hostNetwork: true
@@ -524,6 +534,8 @@ spec:
         operator: Exists
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -555,7 +567,7 @@ rules:
   resources: ["namespaces"]
   verbs: ["get", "list", "create", "delete"]
 - apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["clusterroles","clusterrolebindings", "roles","rolebindings"]
+  resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
   verbs: ["get", "list", "create", "update", "deletecollection"]
 - apiGroups: [""]
   resources: ["resourcequotas"]
@@ -610,7 +622,7 @@ spec:
     spec:
       containers:
       - command:
-        - tenant
+        - ./tenant
         image: edgenetproject/tenant:v1.0.0
         name: tenant
       hostNetwork: true
@@ -623,6 +635,8 @@ spec:
         operator: Exists
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -691,7 +705,7 @@ spec:
     spec:
       containers:
       - command:
-        - tenantregistrationrequest
+        - ./tenantregistrationrequest
         image: edgenetproject/tenantregistrationrequest:v1.0.0
         name: tenantregistrationrequest
       hostNetwork: true
@@ -704,6 +718,8 @@ spec:
         operator: Exists
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -778,7 +794,7 @@ spec:
     spec:
       containers:
       - command:
-        - tenantresourcequota
+        - ./tenantresourcequota
         image: edgenetproject/tenantresourcequota:v1.0.0
         name: tenantresourcequota
       hostNetwork: true
@@ -791,6 +807,8 @@ spec:
         operator: Exists
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -865,7 +883,7 @@ spec:
     spec:
       containers:
       - command:
-        - userregistrationrequest
+        - ./userregistrationrequest
         image: edgenetproject/userregistrationrequest:v1.0.0
         name: userregistrationrequest
       hostNetwork: true
@@ -878,6 +896,8 @@ spec:
         operator: Exists
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -917,7 +937,7 @@ subjects:
   namespace: edgenet
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   labels:
     app: edgenet
@@ -925,13 +945,10 @@ metadata:
   name: vpnpeer
   namespace: edgenet
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: edgenet
       component: vpnpeer
-  strategy:
-    type: Recreate
   template:
     metadata:
       labels:
@@ -940,7 +957,7 @@ spec:
     spec:
       containers:
       - command:
-        - vpnpeer
+        - ./vpnpeer
         image: edgenetproject/vpnpeer:v1.0.0
         name: vpnpeer
       hostNetwork: true
@@ -953,6 +970,8 @@ spec:
         operator: Exists
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
