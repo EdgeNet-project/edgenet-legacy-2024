@@ -4,6 +4,69 @@ metadata:
   name: edgenet
 ---
 apiVersion: v1
+kind: Secret
+metadata:
+  name: kubeconfig-secret
+  namespace: edgenet
+type: Opaque
+stringData:
+  config : |
+    # Provide the certificate authority of your cluster along with the IP address below.
+    # The address that you will provide at the server field should be like https://51.75.127.152:6443.
+    # apiVersion: v1
+    # clusters:
+    # - cluster:
+    #     certificate-authority-data: <CA>
+    #     server: <kube-apiserver>
+    #   name: kubernetes
+    # contexts: null
+    # current-context: null
+    # kind: Config
+    # preferences: {}
+    # users: null
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: configs-secret
+  namespace: edgenet
+type: Opaque
+stringData:
+  headnode.yaml: |
+    # DNS should contain the root domain consisting of domain name and top-level domain.
+    # dns: "<Root domain>"
+    # ip: "<IP address of the control plane node>"
+  smtp.yaml: |
+    # SMTP settings for mailer service. The 'to' field indicates the email address to receive the emails
+    # that concerns the cluster administration.
+    # host: ""
+    # port: ""
+    # from: ""
+    # username : ""
+    # password : ""
+    # to: ""
+  console.yaml: |
+    # URL to the console if you deploy on your cluster. For example, https://console.edge-net.org.
+    # url: "<URL of the console>"
+  namecheap.yaml: |
+    # Provide the namecheap credentials for DNS records.
+    # app: ""
+    # apiUser : ""
+    # apiToken : ""
+    # username : ""
+#---
+# Provide the Private and Public SSH keys of the control plane node to enable node contribution feature.
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  name: ssh-key-secret
+#  namespace: edgenet
+#type: Opaque
+#data:
+#  id_rsa: <SSH Private Key of the control plane node>
+#  id_rsa.pub: <SSH Public Key of the control plane node>
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   labels:
@@ -28,7 +91,7 @@ rules:
   verbs: ["get", "update"]
 - apiGroups: [""]
   resources: ["events"]
-  verbs: ["create"]
+  verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -71,8 +134,13 @@ spec:
       containers:
       - command:
         - ./acceptableusepolicy
-        image: edgenetproject/acceptableusepolicy:v1.0.0
+        image: bsenel/acceptableusepolicy:v1.0.0
+        imagePullPolicy: Always
         name: acceptableusepolicy
+        volumeMounts:
+        - name: configs
+          readOnly: true
+          mountPath: /root/configs/
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -85,6 +153,10 @@ spec:
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
+      volumes:
+      - name: configs
+        secret:
+          secretName: configs-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -120,49 +192,16 @@ rules:
   verbs: ["get", "update"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["acceptableusepolicies"]
-  verbs: ["get", "list", "create", "update", "delete"]
-- apiGroups: ["core.edgenet.io"]
-  resources: ["acceptableusepolicies/status"]
-  verbs: ["get", "list", "watch"]
+  verbs: ["get", "list", "update"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenants"]
   verbs: ["get"]
 - apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["clusterroles","clusterrolebindings"]
+  resources: ["clusterroles","clusterrolebindings", "roles","rolebindings"]
   verbs: ["get", "list"]
-- apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["roles", "rolebindings"]
-  verbs: ["*"]
-- apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces", "selectivedeployments"]
-  verbs: ["*"]
-- apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces/status", "selectivedeployments/status"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: [""]
-  resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"]
-  verbs: ["*"]
-- apiGroups: ["apps"]
-  resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
-  verbs: ["*"]
-- apiGroups: ["autoscaling"]
-  resources: ["horizontalpodautoscalers"]
-  verbs: ["*"]
-- apiGroups: ["batch"]
-  resources: ["cronjobs", "jobs"]
-  verbs: ["*"]
-- apiGroups: ["extensions"]
-  resources: ["daemonsets", "deployments", "ingresses", "networkpolicies", "replicasets", "replicationcontrollers"]
-  verbs: ["*"]
-- apiGroups: ["networking.k8s.io"]
-  resources: ["ingresses", "networkpolicies"]
-  verbs: ["*"]
-- apiGroups: ["networking.k8s.io"]
-  resources: ["events", "controllerrevisions"]
-  verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["events"]
-  verbs: ["create"]
+  verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -205,8 +244,13 @@ spec:
       containers:
       - command:
         - ./emailverification
-        image: edgenetproject/emailverification:v1.0.0
+        image: bsenel/emailverification:v1.0.0
+        imagePullPolicy: Always
         name: emailverification
+        volumeMounts:
+        - name: configs
+          readOnly: true
+          mountPath: /root/configs/
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -219,6 +263,10 @@ spec:
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
+      volumes:
+      - name: configs
+        secret:
+          secretName: configs-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -248,7 +296,7 @@ rules:
   verbs: ["get", "create", "update"]
 - apiGroups: [""]
   resources: ["events"]
-  verbs: ["create"]
+  verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -291,15 +339,19 @@ spec:
       containers:
       - command:
         - ./nodecontribution
-        image: edgenetproject/nodecontribution:v1.0.0
+        image: bsenel/nodecontribution:v1.0.0
+        imagePullPolicy: Always
         name: nodecontribution
         volumeMounts:
-        - mountPath: /etc/kubernetes/
+        - mountPath: /etc/kubernetes/pki/ca.crt
           name: kubernetes
           readOnly: true
         - name: ssh
           readOnly: true
           mountPath: /root/.ssh/
+        - name: configs
+          readOnly: true
+          mountPath: /root/configs/
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -315,11 +367,14 @@ spec:
       volumes:
       - name: kubernetes
         hostPath:
-          path: /etc/kubernetes/
-          type: Directory
+          path: /etc/kubernetes/pki/ca.crt
+          type: File
       - name: ssh
         secret:
           secretName: ssh-key-secret
+      - name: configs
+        secret:
+          secretName: configs-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -383,7 +438,8 @@ spec:
       containers:
       - command:
         - ./nodelabeler
-        image: edgenetproject/nodelabeler:v1.0.0
+        image: bsenel/nodelabeler:v1.0.0
+        imagePullPolicy: Always
         name: nodelabeler
       hostNetwork: true
       priorityClassName: system-cluster-critical
@@ -429,7 +485,7 @@ rules:
   verbs: ["get", "watch", "list", "create", "patch", update", "delete"]
 - apiGroups: [""]
   resources: ["events"]
-  verbs: ["create"]
+  verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -472,7 +528,8 @@ spec:
       containers:
       - command:
         - ./selectivedeployment
-        image: edgenetproject/selectivedeployment:v1.0.0
+        image: bsenel/selectivedeployment:v1.0.0
+        imagePullPolicy: Always
         name: selectivedeployment
       hostNetwork: true
       priorityClassName: system-cluster-critical
@@ -524,7 +581,7 @@ rules:
   verbs: ["get", "list", "create"]
 - apiGroups: [""]
   resources: ["events"]
-  verbs: ["create"]
+  verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -567,8 +624,13 @@ spec:
       containers:
       - command:
         - ./subnamespace
-        image: edgenetproject/subnamespace:v1.0.0
+        image: bsenel/subnamespace:v1.0.0
+        imagePullPolicy: Always
         name: subnamespace
+        volumeMounts:
+        - name: configs
+          readOnly: true
+          mountPath: /root/configs/
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -581,6 +643,10 @@ spec:
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
+      volumes:
+      - name: configs
+        secret:
+          secretName: configs-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -600,17 +666,23 @@ metadata:
   name: edgenet:service:tenant
 rules:
 - apiGroups: ["core.edgenet.io"]
-  resources: ["tenants", "tenants/status"]
+  resources: ["tenants", "tenants/status", "subnamespaces", "acceptableusepolicies"]
   verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
-  resources: ["acceptableusepolicies"]
-  verbs: ["get", "list", "create", "delete"]
+  resources: ["tenantresourcequotas"]
+  verbs: ["create"]
 - apiGroups: ["core.edgenet.io"]
-  resources: ["acceptableusepolicies/status"]
+  resources: ["subnamespaces/status", "acceptableusepolicies/status"]
   verbs: ["get", "list", "watch"]
 - apiGroups: ["registration.edgenet.io"]
   resources: ["tenantrequests"]
   verbs: ["get"]
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["selectivedeployments"]
+  verbs: ["*"]
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["selectivedeployments/status"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["namespaces"]
   verbs: ["get", "list", "create", "delete"]
@@ -632,12 +704,6 @@ rules:
 - apiGroups: ["certificates.k8s.io"]
   resources: ["signers"]
   verbs: ["approve"]
-- apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces", "selectivedeployments"]
-  verbs: ["*"]
-- apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces/status", "selectivedeployments/status"]
-  verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"]
   verbs: ["*"]
@@ -656,12 +722,12 @@ rules:
 - apiGroups: ["networking.k8s.io"]
   resources: ["ingresses", "networkpolicies"]
   verbs: ["*"]
-- apiGroups: ["networking.k8s.io"]
-  resources: ["events", "controllerrevisions"]
+- apiGroups: [""]
+  resources: ["controllerrevisions"]
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["events"]
-  verbs: ["create"]
+  verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -704,8 +770,16 @@ spec:
       containers:
       - command:
         - ./tenant
-        image: edgenetproject/tenant:v1.0.0
+        image: bsenel/tenant:v1.0.0
+        imagePullPolicy: Always
         name: tenant
+        volumeMounts:
+        - name: configs
+          readOnly: true
+          mountPath: /root/configs/
+        - name: kubeconfig
+          readOnly: true
+          mountPath: /root/.kube/
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -718,6 +792,13 @@ spec:
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
+      volumes:
+      - name: configs
+        secret:
+          secretName: configs-secret
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -739,15 +820,69 @@ rules:
 - apiGroups: ["registration.edgenet.io"]
   resources: ["tenantrequests", "tenantrequests/status"]
   verbs: ["*"]
-- apiGroups: ["core.edgenet.io"]
-  resources: ["tenants"]
-  verbs: ["get", "create"]
 - apiGroups: ["registration.edgenet.io"]
   resources: ["emailverifications"]
   verbs: ["create"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["tenants"]
+  verbs: ["get", "create"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces", "acceptableusepolicies"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces/status", "acceptableusepolicies/status"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["selectivedeployments"]
+  verbs: ["*"]
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["selectivedeployments/status"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "create", "delete"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles", "clusterrolebindings"]
+  verbs: ["get", "list", "create", "update", "deletecollection"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["resourcequotas"]
+  verbs: ["create"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["certificatesigningrequests"]
+  verbs: ["get", "list", "watch", "create"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["certificatesigningrequests/approval"]
+  verbs: ["update"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["signers"]
+  verbs: ["approve"]
+- apiGroups: [""]
+  resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"]
+  verbs: ["*"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+  verbs: ["*"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["*"]
+- apiGroups: ["batch"]
+  resources: ["cronjobs", "jobs"]
+  verbs: ["*"]
+- apiGroups: ["extensions"]
+  resources: ["daemonsets", "deployments", "ingresses", "networkpolicies", "replicasets", "replicationcontrollers"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["controllerrevisions"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["events"]
-  verbs: ["create"]
+  verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -790,8 +925,16 @@ spec:
       containers:
       - command:
         - ./tenantregistrationrequest
-        image: edgenetproject/tenantregistrationrequest:v1.0.0
+        image: bsenel/tenantregistrationrequest:v1.0.0
+        imagePullPolicy: Always
         name: tenantregistrationrequest
+        volumeMounts:
+        - name: configs
+          readOnly: true
+          mountPath: /root/configs/
+        - name: kubeconfig
+          readOnly: true
+          mountPath: /root/.kube/
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -804,6 +947,13 @@ spec:
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
+      volumes:
+      - name: configs
+        secret:
+          secretName: configs-secret
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -822,7 +972,7 @@ metadata:
     component: tenantresourcequota
   name: edgenet:service:tenantresourcequota
 rules:
-- apiGroups: ["registration.edgenet.io"]
+- apiGroups: ["core.edgenet.io"]
   resources: ["tenantresourcequotas", "tenantresourcequotas/status"]
   verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
@@ -839,7 +989,7 @@ rules:
   verbs: ["get", "list", "update"]
 - apiGroups: [""]
   resources: ["events"]
-  verbs: ["create"]
+  verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -882,8 +1032,13 @@ spec:
       containers:
       - command:
         - ./tenantresourcequota
-        image: edgenetproject/tenantresourcequota:v1.0.0
+        image: bsenel/tenantresourcequota:v1.0.0
+        imagePullPolicy: Always
         name: tenantresourcequota
+        volumeMounts:
+        - name: configs
+          readOnly: true
+          mountPath: /root/configs/
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -896,6 +1051,10 @@ spec:
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
+      volumes:
+      - name: configs
+        secret:
+          secretName: configs-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -917,30 +1076,39 @@ rules:
 - apiGroups: ["registration.edgenet.io"]
   resources: ["userrequests", "userrequests/status"]
   verbs: ["*"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["emailverifications"]
+  verbs: ["create"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenants"]
   verbs: ["get"]
 - apiGroups: ["core.edgenet.io"]
-  resources: ["acceptableusepolicies"]
-  verbs: ["get", "list", "create", "delete"]
+  resources: ["subnamespaces", "acceptableusepolicies"]
+  verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
-  resources: ["acceptableusepolicies/status"]
+  resources: ["subnamespaces/status", "acceptableusepolicies/status"]
   verbs: ["get", "list", "watch"]
-- apiGroups: ["registration.edgenet.io"]
-  resources: ["emailverifications"]
-  verbs: ["create"]
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["selectivedeployments"]
+  verbs: ["*"]
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["selectivedeployments/status"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["clusterroles","clusterrolebindings"]
   verbs: ["get", "list", "create", "update"]
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["roles", "rolebindings"]
   verbs: ["*"]
-- apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces", "selectivedeployments"]
-  verbs: ["*"]
-- apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces/status", "selectivedeployments/status"]
-  verbs: ["get", "list", "watch"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["certificatesigningrequests"]
+  verbs: ["get", "list", "watch", "create"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["certificatesigningrequests/approval"]
+  verbs: ["update"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["signers"]
+  verbs: ["approve"]
 - apiGroups: [""]
   resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"]
   verbs: ["*"]
@@ -959,12 +1127,12 @@ rules:
 - apiGroups: ["networking.k8s.io"]
   resources: ["ingresses", "networkpolicies"]
   verbs: ["*"]
-- apiGroups: ["networking.k8s.io"]
-  resources: ["events", "controllerrevisions"]
+- apiGroups: [""]
+  resources: ["controllerrevisions"]
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["events"]
-  verbs: ["create"]
+  verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -1007,8 +1175,16 @@ spec:
       containers:
       - command:
         - ./userregistrationrequest
-        image: edgenetproject/userregistrationrequest:v1.0.0
+        image: bsenel/userregistrationrequest:v1.0.0
+        imagePullPolicy: Always
         name: userregistrationrequest
+        volumeMounts:
+        - name: configs
+          readOnly: true
+          mountPath: /root/configs/
+        - name: kubeconfig
+          readOnly: true
+          mountPath: /root/.kube/
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -1021,6 +1197,13 @@ spec:
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
+      volumes:
+      - name: configs
+        secret:
+          secretName: configs-secret
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -1037,14 +1220,14 @@ metadata:
   labels:
     app: edgenet
     component: vpnpeer
-  name: edgenet:service:userregistrationrequest
+  name: edgenet:service:vpnpeer
 rules:
 - apiGroups: ["networking.edgenet.io"]
   resources: ["vpnpeers", "vpnpeers/status"]
   verbs: ["*"]
 - apiGroups: [""]
   resources: ["events"]
-  verbs: ["create"]
+  verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -1084,12 +1267,11 @@ spec:
       containers:
       - command:
         - ./vpnpeer
-        image: edgenetproject/vpnpeer:v1.0.0
+        image: bsenel/vpnpeer:v1.0.0
+        imagePullPolicy: Always
         name: vpnpeer
       hostNetwork: true
       priorityClassName: system-cluster-critical
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: ""
       serviceAccountName: vpnpeer
       tolerations:
       - key: CriticalAddonsOnly
