@@ -16,7 +16,6 @@ FROM alpine:latest
 
 WORKDIR /root/cmd/tenant/
 
-COPY ./configs/ /root/configs/
 COPY ./assets/templates/ /root/assets/templates/
 COPY ./assets/certs/ /root/assets/certs/
 COPY --from=builder /go/bin/tenant .

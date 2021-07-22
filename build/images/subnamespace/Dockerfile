@@ -16,7 +16,6 @@ FROM alpine:latest
 
 WORKDIR /root/cmd/subnamespace/
 
-COPY ./configs/ /root/configs/
 COPY ./assets/templates/ /root/assets/templates/
 COPY --from=builder /go/bin/subnamespace .
 

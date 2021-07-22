@@ -16,7 +16,6 @@ FROM alpine:latest
 
 WORKDIR /root/cmd/tenantresourcequota/
 
-COPY ./configs/ /root/configs/
 COPY ./assets/templates/ /root/assets/templates/
 COPY --from=builder /go/bin/tenantresourcequota .
 
