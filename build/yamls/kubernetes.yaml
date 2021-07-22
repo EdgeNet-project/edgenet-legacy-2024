@@ -1,3 +1,16 @@
+# Copyright 2021 Contributors to the EdgeNet project.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -65,6 +78,872 @@ stringData:
 #data:
 #  id_rsa: <SSH Private Key of the control plane node>
 #  id_rsa.pub: <SSH Public Key of the control plane node>
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: acceptableusepolicies.core.edgenet.io
+spec:
+  group: core.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Accepted
+          type: boolean
+          jsonPath: .spec.accepted
+        - name: Expiry
+          type: string
+          jsonPath: .status.expiry
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - accepted
+              properties:
+                email:
+                  type: string
+                accepted:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                tenant:
+                  type: string
+                expiry:
+                  type: string
+                  format: dateTime
+                  nullable: true
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+  scope: Cluster
+  names:
+    plural: acceptableusepolicies
+    singular: acceptableusepolicy
+    kind: AcceptableUsePolicy
+    shortNames:
+      - aup
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: emailverifications.registration.edgenet.io
+spec:
+  group: registration.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Email
+          type: string
+          jsonPath: .spec.email
+        - name: Verified
+          type: boolean
+          jsonPath: .spec.verified
+        - name: Expiry
+          type: string
+          jsonPath: .status.expiry
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - email
+                - verified
+              properties:
+                email:
+                  type: string
+                verified:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                expiry:
+                  type: string
+                  format: dateTime
+                  nullable: true
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+  scope: Cluster
+  names:
+    plural: emailverifications
+    singular: emailverification
+    kind: EmailVerification
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: nodecontributions.core.edgenet.io
+spec:
+  group: core.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Address
+          type: string
+          jsonPath: .spec.host
+        - name: Port
+          type: integer
+          jsonPath: .spec.port
+        - name: Enabled
+          type: boolean
+          jsonPath: .spec.enabled
+        - name: Status
+          type: string
+          jsonPath: .status.state
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - host
+                - port
+                - enabled
+              properties:
+                tenant:
+                  type: string
+                  nullable: true
+                  pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
+                host:
+                  type: string
+                port:
+                  type: integer
+                  minimum: 1
+                user:
+                  type: string
+                enabled:
+                  type: boolean
+                limitations:
+                  type: array
+                  nullable: true
+                  items:
+                    type: object
+                    properties:
+                      kind:
+                        type: string
+                        enum:
+                          - Tenant
+                          - Namespace
+                      identifier:
+                        type: string
+                        pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
+            status:
+              type: object
+              properties:
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+  scope: Cluster
+  names:
+    plural: nodecontributions
+    singular: nodecontribution
+    kind: NodeContribution
+    shortNames:
+      - nc
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: selectivedeployments.apps.edgenet.io
+spec:
+  group: apps.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Ready
+          type: string
+          jsonPath: .status.ready
+        - name: Status
+          type: string
+          jsonPath: .status.state
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - workloads
+                - selector
+              properties:
+                workloads:
+                  type: object
+                  properties:
+                    deployment:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    daemonset:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    statefulset:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    job:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    cronjob:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                selector:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        enum:
+                          - City
+                          - State
+                          - Country
+                          - Continent
+                          - Polygon
+                      value:
+                        type: array
+                        items:
+                          type: string
+                      operator:
+                        type: string
+                        enum:
+                          - In
+                          - NotIn
+                      quantity:
+                        type: integer
+                        description: The count of nodes that will be picked for this selector.
+                        minimum: 1
+                        nullable: true
+                  minimum: 1
+                recovery:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                ready:
+                  type: string
+                state:
+                  type: string
+                message:
+                  type: array
+                  items:
+                    type: string
+  scope: Namespaced
+  names:
+    plural: selectivedeployments
+    singular: selectivedeployment
+    kind: SelectiveDeployment
+    shortNames:
+      - sd
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: subnamespaces.core.edgenet.io
+spec:
+  group: core.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Status
+          type: string
+          jsonPath: .status.state
+        - name: CPU Allocation
+          type: string
+          jsonPath: .spec.resources.cpu
+        - name: Memory Allocation
+          type: string
+          jsonPath: .spec.resources.memory
+        - name: Network Policy Inheritance
+          type: string
+          jsonPath: .spec.inheritance.networkpolicy
+        - name: RBAC Inheritance
+          type: string
+          jsonPath: .spec.inheritance.rbac
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - resources
+              properties:
+                resources:
+                  type: object
+                  properties:
+                    cpu:
+                      type: string
+                    memory:
+                      type: string
+                inheritance:
+                  type: object
+                  properties:
+                    networkpolicy:
+                      type: boolean
+                      default: true
+                    rbac:
+                      type: boolean
+                      default: true
+                expiry:
+                  type: string
+                  format: dateTime
+                  nullable: true
+            status:
+              type: object
+              properties:
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+  scope: Namespaced
+  names:
+    plural: subnamespaces
+    singular: subnamespace
+    kind: SubNamespace
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: tenants.core.edgenet.io
+spec:
+  group: core.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Official Name
+          type: string
+          jsonPath: .spec.fullname
+        - name: Short Name
+          type: string
+          jsonPath: .spec.shortname
+        - name: URL
+          type: string
+          jsonPath: .spec.url
+        - name: City
+          type: string
+          jsonPath: .spec.address.city
+        - name: Country
+          type: string
+          jsonPath: .spec.address.country
+        - name: Enabled
+          type: boolean
+          jsonPath: .spec.enabled
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - fullname
+                - shortname
+                - url
+                - address
+                - contact
+                - enabled
+              properties:
+                fullname:
+                  type: string
+                shortname:
+                  type: string
+                url:
+                  type: string
+                address:
+                  type: object
+                  required:
+                    - street
+                    - zip
+                    - city
+                    - country
+                  properties:
+                    street:
+                      type: string
+                    zip:
+                      type: string
+                    city:
+                      type: string
+                    region:
+                      type: string
+                      description: region or state
+                    country:
+                      type: string
+                contact:
+                  type: object
+                  required:
+                    - firstname
+                    - lastname
+                    - email
+                    - phone
+                  properties:
+                    firstname:
+                      type: string
+                    lastname:
+                      type: string
+                    email:
+                      type: string
+                    phone:
+                      type: string
+                enabled:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                nodecontribution:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+                registrationrequest:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+                state:
+                  type: string
+                message:
+                  type: array
+                  items:
+                    type: string
+  scope: Cluster
+  names:
+    plural: tenants
+    singular: tenant
+    kind: Tenant
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: tenantrequests.registration.edgenet.io
+spec:
+  group: registration.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Official Name
+          type: string
+          jsonPath: .spec.fullname
+        - name: Short Name
+          type: string
+          jsonPath: .spec.shortname
+        - name: URL
+          type: string
+          jsonPath: .spec.url
+        - name: City
+          type: string
+          jsonPath: .spec.address.city
+        - name: Country
+          type: string
+          jsonPath: .spec.address.country
+        - name: Expiry
+          type: string
+          jsonPath: .status.expiry
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - fullname
+                - shortname
+                - url
+                - address
+                - contact
+              properties:
+                fullname:
+                  type: string
+                shortname:
+                  type: string
+                url:
+                  type: string
+                address:
+                  type: object
+                  required:
+                    - street
+                    - zip
+                    - city
+                    - country
+                  properties:
+                    street:
+                      type: string
+                    zip:
+                      type: string
+                    city:
+                      type: string
+                    region:
+                      type: string
+                      description: region or state
+                    country:
+                      type: string
+                contact:
+                  type: object
+                  required:
+                    - username
+                    - firstname
+                    - lastname
+                    - email
+                    - phone
+                  properties:
+                    username:
+                      type: string
+                      pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
+                    firstname:
+                      type: string
+                    lastname:
+                      type: string
+                    email:
+                      type: string
+                    phone:
+                      type: string
+                approved:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                emailverified:
+                  type: boolean
+                expiry:
+                  type: string
+                  format: dateTime
+                  nullable: true
+                state:
+                  type: string
+                message:
+                  type: array
+                  items:
+                    type: string
+  scope: Cluster
+  names:
+    plural: tenantrequests
+    singular: tenantrequest
+    kind: TenantRequest
+    shortNames:
+      - trr
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: tenantresourcequotas.core.edgenet.io
+spec:
+  group: core.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - claim
+              properties:
+                claim:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - name
+                      - cpu
+                      - memory
+                    properties:
+                      name:
+                        type: string
+                        enum:
+                          - Default
+                          - Privilege
+                          - Reward
+                      cpu:
+                        type: string
+                      memory:
+                        type: string
+                      expiry:
+                        type: string
+                        format: date
+                        nullable: true
+                drop:
+                  type: array
+                  nullable: true
+                  items:
+                    type: object
+                    required:
+                      - name
+                      - cpu
+                      - memory
+                    properties:
+                      name:
+                        type: string
+                        enum:
+                          - Equilibrate
+                          - Temporary
+                      cpu:
+                        type: string
+                      memory:
+                        type: string
+                      expiry:
+                        type: string
+                        format: date
+            status:
+              type: object
+              properties:
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+  scope: Cluster
+  names:
+    plural: tenantresourcequotas
+    singular: tenantresourcequota
+    kind: TenantResourceQuota
+    shortNames:
+      - trq
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: userrequests.registration.edgenet.io
+spec:
+  group: registration.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: "Tenant"
+          type: string
+          jsonPath: .spec.tenant
+        - name: "First Name"
+          type: string
+          jsonPath: .spec.firstname
+        - name: "Last Name"
+          type: string
+          jsonPath: .spec.lastname
+        - name: Email
+          type: string
+          jsonPath: .spec.email
+        - name: Expiry
+          type: string
+          jsonPath: .status.expiry
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - tenant
+                - firstname
+                - lastname
+                - email
+              properties:
+                tenant:
+                  type: string
+                  pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
+                firstname:
+                  type: string
+                  pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
+                lastname:
+                  type: string
+                  pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
+                email:
+                  type: string
+                  format: email
+                role:
+                  type: string
+                  enum:
+                    - Owner
+                    - Admin
+                    - Collaborator
+                  default: Collaborator
+                approved:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                emailverified:
+                  type: boolean
+                expiry:
+                  type: string
+                  format: dateTime
+                  nullable: true
+                state:
+                  type: string
+                message:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+  scope: Cluster
+  names:
+    plural: userrequests
+    singular: userrequest
+    kind: UserRequest
+    shortNames:
+      - urr
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: vpnpeers.networking.edgenet.io
+spec:
+  group: networking.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Address-V4
+          type: string
+          jsonPath: .spec.addressV4
+        - name: Address-V6
+          type: string
+          jsonPath: .spec.addressV6
+        - name: Endpoint
+          type: string
+          jsonPath: .spec.endpointAddress
+        - name: Port
+          type: string
+          jsonPath: .spec.endpointPort
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - addressV4
+                - addressV6
+                - publicKey
+              properties:
+                addressV4:
+                  type: string
+                  pattern: '^[0-9.]+$'
+                  description: The IPv4 address assigned to the node's VPN interface.
+                addressV6:
+                  type: string
+                  pattern: '^[a-f0-9:]+$'
+                  description: The IPv6 address assigned to the node's VPN interface.
+                endpointAddress:
+                  type: string
+                  pattern: '^[a-f0-9.:]+$'
+                  nullable: true
+                  description: The public IPv4/v6 address of the node. Required for NAT-NAT communications.
+                endpointPort:
+                  type: integer
+                  minimum: 1
+                  nullable: true
+                  description: The port on which WireGuard is listening. Required for NAT-NAT communications.
+                publicKey:
+                  type: string
+                  description: The WireGuard public key of the node's VPN interface (Base64 encoded).
+  scope: Cluster
+  names:
+    plural: vpnpeers
+    singular: vpnpeer
+    kind: VPNPeer
+    shortNames:
+      - vpn
 ---
 apiVersion: v1
 kind: ServiceAccount
