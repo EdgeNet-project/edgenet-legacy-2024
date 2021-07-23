@@ -144,43 +144,32 @@ check:
 		return nil, nil, err
 	}
 
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	// if you want to change the loading rules (which files in which order), you can do so here
+	/*
+		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+		// if you want to change the loading rules (which files in which order), you can do so here
 
-	configOverrides := &clientcmd.ConfigOverrides{}
-	// if you want to change override values or bind them to flags, there are methods to help you
+		configOverrides := &clientcmd.ConfigOverrides{}
+		// if you want to change override values or bind them to flags, there are methods to help you
 
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+		kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
 
-	rawConfig, err := kubeConfig.RawConfig()
-	if err != nil {
-		// Log the error to debug
-		log.Println(err)
-		return nil, nil, err
-	}
-	authInfo := api.AuthInfo{}
-	authInfo.Username = email
-	authInfo.ClientCertificateData = csr.Status.Certificate
-	authInfo.ClientKeyData = pemdata
-	rawConfig.AuthInfos[email] = &authInfo
-	err = clientcmd.ModifyConfig(kubeConfig.ConfigAccess(), rawConfig, false)
-	if err != nil {
-		log.Println(err)
-		return nil, nil, err
-	}
-	/*pathOptions := clientcmd.NewDefaultPathOptions()
-	buf := bytes.NewBuffer([]byte{})
-	kcmd := cmdconfig.NewCmdConfigSetAuthInfo(buf, pathOptions)
-	kcmd.SetArgs([]string{email})
-	kcmd.Flags().Parse([]string{
-		fmt.Sprintf("--client-certificate=/var/www/edgenet/assets/certs/%s.crt", email),
-		fmt.Sprintf("--client-key=/var/www/edgenet/assets/certs/%s.key", email),
-	})
-
-	if err := kcmd.Execute(); err != nil {
-		log.Printf("Couldn't set auth info on the kubeconfig file: %s", username)
-		return nil, nil, err
-	}*/
+		rawConfig, err := kubeConfig.RawConfig()
+		if err != nil {
+			// Log the error to debug
+			log.Println(err)
+			return nil, nil, err
+		}
+		authInfo := api.AuthInfo{}
+		authInfo.Username = email
+		authInfo.ClientCertificateData = csr.Status.Certificate
+		authInfo.ClientKeyData = pemdata
+		rawConfig.AuthInfos[email] = &authInfo
+		err = clientcmd.ModifyConfig(kubeConfig.ConfigAccess(), rawConfig, false)
+		if err != nil {
+			log.Println(err)
+			return nil, nil, err
+		}
+	*/
 
 	return csr.Status.Certificate, pemdata, nil
 }
@@ -188,22 +177,6 @@ check:
 // MakeConfig reads cluster, server, and CA info of the current context from the config file
 // to use them on the creation of kubeconfig. Then generates kubeconfig by certs.
 func MakeConfig(tenant, username, email string, clientCert, clientKey []byte) error {
-	// Define the cluster and server by taking advantage of the current config file
-	/*cluster, server, CA, err := util.GetClusterServerOfCurrentContext()
-	if err != nil {
-		log.Println(err)
-		return err
-	}*/
-	// Put the collected data into new kubeconfig file
-	/*newKubeConfig := kubeconfigutil.CreateWithCerts(server, cluster, email, CA, clientKey, clientCert)
-	newKubeConfig.Contexts[newKubeConfig.CurrentContext].Namespace = tenant
-	kubeconfigutil.WriteToDisk(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", tenant, username), newKubeConfig)*/
-	// Check if the creation process is completed
-	/*_, err = ioutil.ReadFile(fmt.Sprintf("../../assets/kubeconfigs/%s-%s.cfg", tenant, username))
-	if err != nil {
-		log.Println(err)
-		return err
-	}*/
 	// The code below inits dir
 	if flag.Lookup("dir") != nil {
 		dir = flag.Lookup("dir").Value.(flag.Getter).Get().(string)
@@ -223,7 +196,8 @@ func MakeConfig(tenant, username, email string, clientCert, clientKey []byte) er
 		return err
 	}
 	rawConfig.AuthInfos = map[string]*api.AuthInfo{}
-	userContext := rawConfig.Contexts[rawConfig.CurrentContext]
+	userContext := new(api.Context)
+	userContext.Cluster = "kubernetes"
 	userContext.Namespace = tenant
 	userContext.AuthInfo = email
 	rawConfig.Contexts = map[string]*api.Context{}
@@ -288,17 +262,6 @@ func CreateConfig(serviceAccount *corev1.ServiceAccount) string {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	// Define the cluster and server by taking advantage of the current config file
-	/*cluster, server, _, err := util.GetClusterServerOfCurrentContext()
-	if err != nil {
-		log.Println(err)
-		return fmt.Sprintf("Err: %s", err)
-	}
-	// Put the collected data into new kubeconfig file
-	newKubeConfig := kubeconfigutil.CreateWithToken(server, cluster, serviceAccount.GetName(), secret.Data["ca.crt"], string(secret.Data["token"]))
-	newKubeConfig.Contexts[newKubeConfig.CurrentContext].Namespace = serviceAccount.GetNamespace()
-	kubeconfigutil.WriteToDisk(fmt.Sprintf("../../assets/kubeconfigs/edgenet-%s-%s.cfg", serviceAccount.GetNamespace(), serviceAccount.GetName()), newKubeConfig)
-	*/
 
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	// if you want to change the loading rules (which files in which order), you can do so here
