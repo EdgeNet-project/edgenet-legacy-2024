@@ -79,7 +79,7 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 			}
 
 			acceptableUsePolicy.Status.State = success
-			acceptableUsePolicy.Status.Message = []string{statusDict["aup-ok"]}
+			acceptableUsePolicy.Status.Message = []string{statusDict["aup-agreed"]}
 			// Get the user who owns this acceptable use policy object
 			if aupLabels != nil && aupLabels["edge-net.io/firstname"] != "" && aupLabels["edge-net.io/lastname"] != "" {
 				contentData := mailer.CommonContentData{}

@@ -59,10 +59,10 @@ const success = "Successful"
 
 // Dictionary of status messages
 var statusDict = map[string]string{
-	"aup-ok":          "Acceptable use policy approved",
+	"aup-ok":          "Acceptable use policy created",
+	"aup-agreed":      "Acceptable use policy agreed",
 	"aup-set-fail":    "Expiry date couldn't be set",
 	"aup-expired":     "Acceptable use policy expired",
-	"aup-agreed":      "Acceptable Use Policy Agreed and Renewed",
 	"tenant-disabled": "Tenant disabled",
 }
 
