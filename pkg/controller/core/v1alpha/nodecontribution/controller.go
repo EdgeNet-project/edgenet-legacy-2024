@@ -137,7 +137,7 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	// Get the SSH Private Key of the control plane node
-	key, err := ioutil.ReadFile("../../.ssh/id_edgenet_2021")
+	key, err := ioutil.ReadFile("../../.ssh/id_rsa")
 	if err != nil {
 		klog.V(4).Info(err.Error())
 		panic(err.Error())
