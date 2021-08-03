@@ -2150,6 +2150,10 @@ spec:
         imagePullPolicy: Always
         name: vpnpeer
       hostNetwork: true
+      securityContext:
+        capabilities:
+          add:
+            - NET_ADMIN
       priorityClassName: system-cluster-critical
       serviceAccountName: vpnpeer
       tolerations:
