@@ -1231,6 +1231,9 @@ spec:
         - name: configs
           readOnly: true
           mountPath: /root/configs/
+        - name: kubeconfig
+          readOnly: true
+          mountPath: /root/.kube/
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -1254,6 +1257,9 @@ spec:
       - name: configs
         secret:
           secretName: configs-secret
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
