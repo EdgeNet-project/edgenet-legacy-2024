@@ -7,17 +7,16 @@ import (
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
-	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/node"
 	log "github.com/sirupsen/logrus"
-	core_v1 "k8s.io/api/core/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	appsinformers "k8s.io/client-go/informers/apps/v1"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -26,39 +25,14 @@ import (
 
 const controllerAgentName = "nodelabeler-controller"
 
-const (
-	// successSynced         = "Synced"
-	// messageResourceSynced = "Node Contribution synced successfully"
-	// setupProcedure        = "Setup"
-	// messageSetupPhase     = "Setup process commenced"
-	// messageDoneDNS        = "DNS record configured"
-	// messageDoneSSH        = "SSH connection established"
-	// messageDoneKubeadm    = "Bootstrap token created and join command has been invoked"
-	// messageDonePatch      = "Node scheduling updated"
-	// messageTimeout        = "Procedure terminated due to timeout"
-	// messageEnd            = "Procedure finished"
-	inqueue = "In Queue"
-	// inprogress            = "In Progress"
-	// failure               = "Failure"
-	// incomplete            = "Halting"
-	// success               = "Successful"
-	// create                = "create"
-	// update                = "update"
-	// delete                = "delete"
-	// trueStr               = "True"
-	// falseStr              = "False"
-	// unknownStr            = "Unknown"
-)
-
 // The main structure of controller
-
 type Controller struct {
 	// kubeclientset is a standard kubernetes clientset
 	kubeclientset kubernetes.Interface
 	// edgenetclientset is a clientset for the EdgeNet API groups
 	edgenetclientset clientset.Interface
 
-	lister listers.SharedIndexLister
+	lister corelisters.NodeLister
 	synced cache.InformerSynced
 
 	// workqueue is a rate limited work queue. This is used to queue work to be
@@ -76,7 +50,7 @@ type Controller struct {
 func NewController(
 	kubeclientset kubernetes.Interface,
 	edgenetclientset clientset.Interface,
-	informer appsinformers.SharedIndexInformer) *Controller {
+	informer coreinformers.NodeInformer) *Controller {
 
 	// Create event broadcaster
 	// Add sample-controller types to the default Kubernetes Scheme so Events can be
@@ -100,7 +74,7 @@ func NewController(
 	klog.Info("Setting up event handlers")
 
 	// Event handlers deal with events of resources. In here, we take into consideration of adding and updating nodes.
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			// Put the resource object into a key
 			key, err := cache.MetaNamespaceKeyFunc(obj)
@@ -111,7 +85,7 @@ func NewController(
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			updated := node.CompareIPAddresses(oldObj.(*core_v1.Node), newObj.(*core_v1.Node))
+			updated := node.CompareIPAddresses(oldObj.(*corev1.Node), newObj.(*corev1.Node))
 			if updated {
 				key, err := cache.MetaNamespaceKeyFunc(newObj)
 				log.Infof("Update node detected: %s", key)
@@ -201,7 +175,7 @@ func (c *Controller) syncHandler(key string) error {
 		return nil
 	}
 
-	item, err := c.lister.GetIndexer().Get(name)
+	item, err := c.lister.Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			utilruntime.HandleError(fmt.Errorf("nodecontribution '%s' in work queue no longer exists", key))
@@ -216,16 +190,6 @@ func (c *Controller) syncHandler(key string) error {
 	return nil
 }
 
-func (c *Controller) enqueueNodeContribution(obj interface{}) {
-	var key string
-	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		utilruntime.HandleError(err)
-		return
-	}
-	c.workqueue.Add(key)
-}
-
 func (c *Controller) setNodeGeolocation(obj interface{}) {
 	log.Info("Handler.ObjectCreated")
 	// Get internal and external IP addresses of the node
@@ -238,7 +202,7 @@ func (c *Controller) setNodeGeolocation(obj interface{}) {
 	}
 	// Check if the internal IP exists and
 	// the result of detecting geolocation by external IP is false
-	if internalIP != "" && result == false {
+	if internalIP != "" && !result {
 		log.Infof("Internal IP: %s", internalIP)
 		node.GetGeolocationByIP(obj.(*corev1.Node).Name, internalIP)
 	}
