@@ -5,7 +5,6 @@ import (
 	"time"
 
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
-	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	"github.com/EdgeNet-project/edgenet/pkg/node"
 	log "github.com/sirupsen/logrus"
@@ -29,8 +28,6 @@ const controllerAgentName = "nodelabeler-controller"
 type Controller struct {
 	// kubeclientset is a standard kubernetes clientset
 	kubeclientset kubernetes.Interface
-	// edgenetclientset is a clientset for the EdgeNet API groups
-	edgenetclientset clientset.Interface
 
 	lister corelisters.NodeLister
 	synced cache.InformerSynced
@@ -55,20 +52,19 @@ func NewController(
 	// Create event broadcaster
 	// Add sample-controller types to the default Kubernetes Scheme so Events can be
 	// logged for sample-controller types.
-	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
+	utilruntime.Must(edgenetscheme.AddToScheme(edgenetscheme.Scheme))
 	klog.V(4).Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(klog.Infof)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
-	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
+	recorder := eventBroadcaster.NewRecorder(edgenetscheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeclientset:    kubeclientset,
-		edgenetclientset: edgenetclientset,
-		lister:           informer.Lister(),
-		synced:           informer.Informer().HasSynced,
-		workqueue:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NodeContributions"),
-		recorder:         recorder,
+		kubeclientset: kubeclientset,
+		lister:        informer.Lister(),
+		synced:        informer.Informer().HasSynced,
+		workqueue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NodeContributions"),
+		recorder:      recorder,
 	}
 
 	klog.Info("Setting up event handlers")
