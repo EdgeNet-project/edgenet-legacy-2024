@@ -34,7 +34,7 @@ func main() {
 	stopCh := signals.SetupSignalHandler()
 	// TODO: Pass an argument to select using kubeconfig or service account for clients
 	// bootstrap.SetKubeConfig()
-	kubeclientset, err := bootstrap.CreateClientset("kubeconfig")
+	kubeclientset, err := bootstrap.CreateClientset("serviceaccount")
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
