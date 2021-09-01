@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	"github.com/EdgeNet-project/edgenet/pkg/node"
 	log "github.com/sirupsen/logrus"
@@ -46,7 +45,6 @@ type Controller struct {
 // NewController returns a new controller
 func NewController(
 	kubeclientset kubernetes.Interface,
-	edgenetclientset clientset.Interface,
 	informer coreinformers.NodeInformer) *Controller {
 
 	// Create event broadcaster
