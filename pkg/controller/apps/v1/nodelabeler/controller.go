@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	"github.com/EdgeNet-project/edgenet/pkg/node"
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -13,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
+	clientsetscheme "k8s.io/client-go/kubernetes/scheme"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -23,7 +23,7 @@ import (
 
 const controllerAgentName = "nodelabeler-controller"
 
-// The main structure of controller
+// The main structure of controllerc
 type Controller struct {
 	// kubeclientset is a standard kubernetes clientset
 	kubeclientset kubernetes.Interface
@@ -50,12 +50,12 @@ func NewController(
 	// Create event broadcaster
 	// Add sample-controller types to the default Kubernetes Scheme so Events can be
 	// logged for sample-controller types.
-	utilruntime.Must(edgenetscheme.AddToScheme(edgenetscheme.Scheme))
+	utilruntime.Must(clientsetscheme.AddToScheme(clientsetscheme.Scheme))
 	klog.V(4).Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(klog.Infof)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
-	recorder := eventBroadcaster.NewRecorder(edgenetscheme.Scheme, corev1.EventSource{Component: controllerAgentName})
+	recorder := eventBroadcaster.NewRecorder(clientsetscheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
 		kubeclientset: kubeclientset,
