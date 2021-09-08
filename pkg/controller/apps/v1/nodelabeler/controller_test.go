@@ -89,9 +89,6 @@ func (g *TestGroup) Init() {
 	}
 
 	g.nodeObj = nodeObj
-
-	// namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "default"}}
-	// kubeclientset.CoreV1().Namespaces().Create(context.TODO(), namespace, metav1.CreateOptions{})
 }
 
 func TestAssigningGeoLabels(t *testing.T) {
@@ -156,7 +153,10 @@ func TestAssigningGeoLabels(t *testing.T) {
 		t.Run(k, func(t *testing.T) {
 			kubeclientset.CoreV1().Nodes().Create(context.TODO(), tc.Node.DeepCopy(), metav1.CreateOptions{})
 
+			time.Sleep(time.Millisecond * 500)
+
 			node, _ := kubeclientset.CoreV1().Nodes().Get(context.TODO(), tc.Node.GetName(), metav1.GetOptions{})
+
 			if !reflect.DeepEqual(node.Labels, tc.Expected) {
 				for actualKey, actualValue := range node.Labels {
 					for expectedKey, expectedValue := range tc.Expected {
