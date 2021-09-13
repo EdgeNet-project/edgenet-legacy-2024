@@ -161,7 +161,7 @@ func (c *Controller) syncHandler(key string) error {
 	item, err := c.lister.Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			utilruntime.HandleError(fmt.Errorf("nodecontribution '%s' in work queue no longer exists", key))
+			utilruntime.HandleError(fmt.Errorf("nodelabeler '%s' in work queue no longer exists", key))
 			return nil
 		}
 
