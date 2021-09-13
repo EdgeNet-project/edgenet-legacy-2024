@@ -2,6 +2,7 @@ package nodelabeler
 
 import (
 	"context"
+	"flag"
 	"io/ioutil"
 	"log"
 	"os"
@@ -31,6 +32,9 @@ var controller *Controller
 var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 
 func TestMain(m *testing.M) {
+	flag.String("geolite-path", "../../../../../assets/database/GeoLite2-City/GeoLite2-City.mmdb", "Set GeoIP DB path.")
+	flag.Parse()
+
 	klog.SetOutput(ioutil.Discard)
 	log.SetOutput(ioutil.Discard)
 	logrus.SetOutput(ioutil.Discard)
