@@ -51,7 +51,7 @@ func NewController(
 	// Add sample-controller types to the default Kubernetes Scheme so Events can be
 	// logged for sample-controller types.
 	utilruntime.Must(scheme.AddToScheme(scheme.Scheme))
-	klog.V(4).Info("Creating event broadcaster")
+	klog.V(4).Infoln("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(klog.Infof)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
@@ -65,7 +65,7 @@ func NewController(
 		recorder:      recorder,
 	}
 
-	klog.Info("Setting up event handlers")
+	klog.Infoln("Setting up event handlers")
 
 	// Event handlers deal with events of resources. In here, we take into consideration of adding and updating nodes.
 	informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -173,7 +173,7 @@ func (c *Controller) syncHandler(key string) error {
 }
 
 func (c *Controller) setNodeGeolocation(obj interface{}) {
-	klog.V(4).Info("Handler.ObjectCreated")
+	klog.V(4).Infoln("Handler.ObjectCreated")
 	// Get internal and external IP addresses of the node
 	internalIP, externalIP := node.GetNodeIPAddresses(obj.(*corev1.Node))
 	result := false
