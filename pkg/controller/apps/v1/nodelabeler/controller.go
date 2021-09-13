@@ -70,11 +70,11 @@ func NewController(
 
 	// Event handlers deal with events of resources. In here, we take into consideration of adding and updating nodes.
 	informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.enqueueTenant,
+		AddFunc: controller.enqueueNodelabeler,
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			updated := node.CompareIPAddresses(oldObj.(*corev1.Node), newObj.(*corev1.Node))
 			if updated {
-				controller.enqueueTenant(newObj)
+				controller.enqueueNodelabeler(newObj)
 			}
 		},
 	})
@@ -191,7 +191,7 @@ func (c *Controller) setNodeGeolocation(obj interface{}) {
 	}
 }
 
-func (c *Controller) enqueueTenant(obj interface{}) {
+func (c *Controller) enqueueNodelabeler(obj interface{}) {
 	// Put the resource object into a key
 	var key string
 	var err error
