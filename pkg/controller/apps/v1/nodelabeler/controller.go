@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/node"
-	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 
 	corev1 "k8s.io/api/core/v1"
@@ -174,19 +173,19 @@ func (c *Controller) syncHandler(key string) error {
 }
 
 func (c *Controller) setNodeGeolocation(obj interface{}) {
-	log.Info("Handler.ObjectCreated")
+	klog.V(4).Info("Handler.ObjectCreated")
 	// Get internal and external IP addresses of the node
 	internalIP, externalIP := node.GetNodeIPAddresses(obj.(*corev1.Node))
 	result := false
 	// Check if the external IP exists to use it in the first place
 	if externalIP != "" {
-		log.Infof("External IP: %s", externalIP)
+		klog.V(4).Infof("External IP: %s", externalIP)
 		result = node.GetGeolocationByIP(obj.(*corev1.Node).Name, externalIP)
 	}
 	// Check if the internal IP exists and
 	// the result of detecting geolocation by external IP is false
 	if internalIP != "" && !result {
-		log.Infof("Internal IP: %s", internalIP)
+		klog.V(4).Infof("Internal IP: %s", internalIP)
 		node.GetGeolocationByIP(obj.(*corev1.Node).Name, internalIP)
 	}
 }
