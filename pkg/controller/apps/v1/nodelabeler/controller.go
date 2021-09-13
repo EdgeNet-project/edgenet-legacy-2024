@@ -6,8 +6,9 @@ import (
 
 	"github.com/EdgeNet-project/edgenet/pkg/node"
 	log "github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+
+	corev1 "k8s.io/api/core/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -61,7 +62,7 @@ func NewController(
 		kubeclientset: kubeclientset,
 		lister:        informer.Lister(),
 		synced:        informer.Informer().HasSynced,
-		workqueue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NodeContributions"),
+		workqueue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NodeLabeler"),
 		recorder:      recorder,
 	}
 
@@ -69,23 +70,11 @@ func NewController(
 
 	// Event handlers deal with events of resources. In here, we take into consideration of adding and updating nodes.
 	informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			// Put the resource object into a key
-			key, err := cache.MetaNamespaceKeyFunc(obj)
-			log.Infof("Add node detected: %s", key)
-			if err == nil {
-				// Add the key to the queue
-				controller.workqueue.Add(key)
-			}
-		},
+		AddFunc: controller.enqueueTenant,
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			updated := node.CompareIPAddresses(oldObj.(*corev1.Node), newObj.(*corev1.Node))
 			if updated {
-				key, err := cache.MetaNamespaceKeyFunc(newObj)
-				log.Infof("Update node detected: %s", key)
-				if err == nil {
-					controller.workqueue.Add(key)
-				}
+				controller.enqueueTenant(newObj)
 			}
 		},
 	})
@@ -200,4 +189,17 @@ func (c *Controller) setNodeGeolocation(obj interface{}) {
 		log.Infof("Internal IP: %s", internalIP)
 		node.GetGeolocationByIP(obj.(*corev1.Node).Name, internalIP)
 	}
+}
+
+func (c *Controller) enqueueTenant(obj interface{}) {
+	// Put the resource object into a key
+	var key string
+	var err error
+
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+
+	c.workqueue.Add(key)
 }
