@@ -249,7 +249,7 @@ func (t *Handler) ConfigurePermissions(tenant *corev1alpha.Tenant, user *registr
 				tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
 			}
 
-			if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "core.edgenet.io", "acceptableusepolicies", acceptableUsePolicy, "administrator", []string{"get, delete"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
+			if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "core.edgenet.io", "acceptableusepolicies", acceptableUsePolicy, "administrator", []string{"get", "delete"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
 				log.Infof("Couldn't create aup cluster role %s for administrators, %s: %s", tenant.GetName(), acceptableUsePolicy, err)
 				// TODO: Provide err information at the status
 			}
