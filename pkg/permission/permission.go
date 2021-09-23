@@ -104,7 +104,7 @@ func CreateClusterRoles() error {
 		{APIGroups: []string{"core.edgenet.io"}, Resources: []string{"subnamespaces/status"}, Verbs: []string{"get", "list", "watch"}},
 		{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"selectivedeployments"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"rbac.authorization.k8s.io"}, Resources: []string{"roles", "rolebindings"}, Verbs: []string{"*"}},
-		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"}, Verbs: []string{"*"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets", "serviceaccounts"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"apps"}, Resources: []string{"daemonsets", "deployments", "replicasets", "statefulsets"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"autoscaling"}, Resources: []string{"horizontalpodautoscalers"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"batch"}, Resources: []string{"cronjobs", "jobs"}, Verbs: []string{"*"}},
@@ -149,7 +149,7 @@ func CreateClusterRoles() error {
 	}
 
 	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"selectivedeployments"}, Verbs: []string{"*"}},
-		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"}, Verbs: []string{"*"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets", "serviceaccounts"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"apps"}, Resources: []string{"daemonsets", "deployments", "replicasets", "statefulsets"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"autoscaling"}, Resources: []string{"horizontalpodautoscalers"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"batch"}, Resources: []string{"cronjobs", "jobs"}, Verbs: []string{"*"}},
