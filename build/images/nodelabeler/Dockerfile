@@ -16,7 +16,6 @@ FROM alpine:latest
 
 WORKDIR /root/cmd/nodelabeler/
 
-COPY ./assets/database/ /root/assets/database/
 COPY --from=builder /go/bin/nodelabeler .
 
 CMD ["./nodelabeler"]
