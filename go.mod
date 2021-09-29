@@ -5,7 +5,7 @@ go 1.15
 require (
 	github.com/billputer/go-namecheap v0.0.0-20191113012015-80fb801c9a11
 	github.com/google/uuid v1.1.1
-	github.com/oschwald/geoip2-golang v1.4.0
+	github.com/savaki/geoip2 v0.0.0-20150727150920-9968b08fbf39
 	github.com/sirupsen/logrus v1.7.0
 	golang.org/x/crypto v0.0.0-20210503195802-e9a32991a82e
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20210506160403-92e472f520a5

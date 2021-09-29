@@ -40,12 +40,20 @@ type Controller struct {
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
 	recorder record.EventRecorder
+
+	maxmindUrl        string
+	maxmindAccountId  string
+	maxmindLicenseKey string
 }
 
 // NewController returns a new controller
 func NewController(
 	kubeclientset kubernetes.Interface,
-	informer coreinformers.NodeInformer) *Controller {
+	informer coreinformers.NodeInformer,
+	maxmindUrl string,
+	maxmindAccountId string,
+	maxmindLicenseKey string,
+) *Controller {
 
 	// Create event broadcaster
 	// Add sample-controller types to the default Kubernetes Scheme so Events can be
@@ -58,11 +66,14 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeclientset: kubeclientset,
-		lister:        informer.Lister(),
-		synced:        informer.Informer().HasSynced,
-		workqueue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NodeLabeler"),
-		recorder:      recorder,
+		kubeclientset:     kubeclientset,
+		lister:            informer.Lister(),
+		synced:            informer.Informer().HasSynced,
+		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NodeLabeler"),
+		recorder:          recorder,
+		maxmindUrl:        maxmindUrl,
+		maxmindAccountId:  maxmindAccountId,
+		maxmindLicenseKey: maxmindLicenseKey,
 	}
 
 	klog.Infoln("Setting up event handlers")
@@ -180,13 +191,25 @@ func (c *Controller) setNodeGeolocation(obj interface{}) {
 	// Check if the external IP exists to use it in the first place
 	if externalIP != "" {
 		klog.V(4).Infof("External IP: %s", externalIP)
-		result = node.GetGeolocationByIP(obj.(*corev1.Node).Name, externalIP)
+		result = node.GetGeolocationByIP(
+			c.maxmindUrl,
+			c.maxmindAccountId,
+			c.maxmindLicenseKey,
+			obj.(*corev1.Node).Name,
+			externalIP,
+		)
 	}
 	// Check if the internal IP exists and
 	// the result of detecting geolocation by external IP is false
 	if internalIP != "" && !result {
 		klog.V(4).Infof("Internal IP: %s", internalIP)
-		node.GetGeolocationByIP(obj.(*corev1.Node).Name, internalIP)
+		node.GetGeolocationByIP(
+			c.maxmindUrl,
+			c.maxmindAccountId,
+			c.maxmindLicenseKey,
+			obj.(*corev1.Node).Name,
+			internalIP,
+		)
 	}
 }
 

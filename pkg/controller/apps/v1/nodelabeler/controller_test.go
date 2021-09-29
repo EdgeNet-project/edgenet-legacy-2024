@@ -2,11 +2,12 @@ package nodelabeler
 
 import (
 	"context"
-	"flag"
 	"io/ioutil"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
-	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,8 +33,24 @@ var controller *Controller
 var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 
 func TestMain(m *testing.M) {
-	flag.String("geolite-path", "../../../../../assets/database/GeoLite2-City/GeoLite2-City.mmdb", "Set GeoIP DB path.")
-	flag.Parse()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s := strings.Split(r.URL.Path, "/")
+		// 1.2.3.4 -> 1-2-3-4.json
+		filename := strings.Replace(s[len(s)-1], ".", "-", -1) + ".json"
+		response, err := ioutil.ReadFile(filename)
+		if err != nil {
+			w.WriteHeader(400)
+			_, err := w.Write([]byte(err.Error()))
+			if err != nil {
+				panic(err)
+			}
+		}
+		_, err = w.Write(response)
+		if err != nil {
+			panic(err)
+		}
+	}))
+	defer ts.Close()
 
 	klog.SetOutput(ioutil.Discard)
 	log.SetOutput(ioutil.Discard)
@@ -44,8 +61,13 @@ func TestMain(m *testing.M) {
 	go func() {
 		kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
 
-		newController := NewController(kubeclientset,
-			kubeInformerFactory.Core().V1().Nodes())
+		newController := NewController(
+			kubeclientset,
+			kubeInformerFactory.Core().V1().Nodes(),
+			ts.URL+"/",
+			"null-account-id",
+			"null-license-key",
+		)
 
 		kubeInformerFactory.Start(stopCh)
 		controller = newController
@@ -113,13 +135,17 @@ func TestAssigningGeoLabels(t *testing.T) {
 			Address: "132.227.123.51",
 		},
 	}
-	geolabelsFR := map[string]string{
+	expectedLabelsFR := map[string]string{
+		"kubernetes.io/hostname":  "fr.edge-net.io",
 		"edge-net.io/continent":   "Europe",
 		"edge-net.io/state-iso":   "IDF",
 		"edge-net.io/country-iso": "FR",
-		"edge-net.io/city":        "Paris",
-		"edge-net.io/lat":         "n48.860700",
-		"edge-net.io/lon":         "e2.328100",
+		"edge-net.io/city":        "Pantin",
+		"edge-net.io/lat":         "n48.895800",
+		"edge-net.io/lon":         "e2.406400",
+		"edge-net.io/isp":         "Renater",
+		"edge-net.io/as":          "Renater",
+		"edge-net.io/asn":         "1307",
 	}
 
 	// Create the US Node
@@ -136,40 +162,33 @@ func TestAssigningGeoLabels(t *testing.T) {
 			Address: "206.196.180.220",
 		},
 	}
-	geolabelsUS := map[string]string{
+	expectedLabelsUS := map[string]string{
+		"kubernetes.io/hostname":  "us.edge-net.io",
 		"edge-net.io/continent":   "North_America",
 		"edge-net.io/state-iso":   "MD",
 		"edge-net.io/country-iso": "US",
 		"edge-net.io/city":        "College_Park",
-		"edge-net.io/lat":         "n38.989600",
-		"edge-net.io/lon":         "w-76.945700",
+		"edge-net.io/lat":         "n38.996500",
+		"edge-net.io/lon":         "w-76.934000",
+		"edge-net.io/isp":         "University_of_Maryland",
+		"edge-net.io/as":          "MAX-GIGAPOP",
+		"edge-net.io/asn":         "10886",
 	}
 
 	cases := map[string]struct {
 		Node     *corev1.Node
 		Expected map[string]string
 	}{
-		"fr": {nodeFR, geolabelsFR},
-		"us": {nodeUS, geolabelsUS},
+		"fr": {nodeFR, expectedLabelsFR},
+		"us": {nodeUS, expectedLabelsUS},
 	}
 
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
 			kubeclientset.CoreV1().Nodes().Create(context.TODO(), tc.Node.DeepCopy(), metav1.CreateOptions{})
-
 			time.Sleep(time.Millisecond * 500)
-
 			node, _ := kubeclientset.CoreV1().Nodes().Get(context.TODO(), tc.Node.GetName(), metav1.GetOptions{})
-
-			if !reflect.DeepEqual(node.Labels, tc.Expected) {
-				for actualKey, actualValue := range node.Labels {
-					for expectedKey, expectedValue := range tc.Expected {
-						if actualKey == expectedKey {
-							util.Equals(t, expectedValue, actualValue)
-						}
-					}
-				}
-			}
+			util.Equals(t, tc.Expected, node.Labels)
 		})
 	}
 }
