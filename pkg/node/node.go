@@ -26,6 +26,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -174,8 +175,14 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 }
 
 // sanitizeNodeLabel converts arbitrary strings to valid k8s labels.
+// > a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.',
+// > and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345',
+// > regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')
 func sanitizeNodeLabel(s string) string {
-	s = strings.Replace(s, " ", "_", -1)
+	r, _ := regexp.Compile("[^\\w-_.]")
+	s = r.ReplaceAllString(s, "_")
+	s = strings.TrimLeft(s, "-_.")
+	s = strings.TrimRight(s, "-_.")
 	return s
 }
 
@@ -216,7 +223,7 @@ func GetGeolocationByIP(
 	// Fetch geolocation information
 	record, err := getMaxmindLocation(maxmindUrl, maxmindAccountId, maxmindLicenseKey, address)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 		return false
 	}
 

@@ -80,7 +80,7 @@
   "traits": {
     "autonomous_system_number": 10886,
     "autonomous_system_organization": "MAX-GIGAPOP",
-    "isp": "University of Maryland",
+    "isp": "University of Maryland.",
     "organization": "University of Maryland",
     "ip_address": "206.196.180.220",
     "network": "206.196.180.0/22"
