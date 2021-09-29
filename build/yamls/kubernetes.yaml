@@ -67,6 +67,9 @@ stringData:
     # apiUser : ""
     # apiToken : ""
     # username : ""
+  # MaxMind GeoIP2 precision API keys
+  maxmind-account-id: ""
+  maxmind-license-key: ""
 #---
 # Provide the Private and Public SSH keys of the control plane node to enable node contribution feature.
 #apiVersion: v1
@@ -1326,6 +1329,17 @@ spec:
         image: bsenel/nodelabeler:v1.0.0
         imagePullPolicy: Always
         name: nodelabeler
+        env:
+          - name: MAXMIND_ACCOUNT_ID
+            valueFrom:
+              secretKeyRef:
+                name: configs-secret
+                key: maxmind-account-id
+          - name: MAXMIND_LICENSE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: configs-secret
+                key: maxmind-license-key
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
