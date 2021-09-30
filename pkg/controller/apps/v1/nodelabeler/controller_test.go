@@ -2,6 +2,7 @@ package nodelabeler
 
 import (
 	"context"
+	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -15,12 +16,13 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 	"github.com/sirupsen/logrus"
 
+	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	testclient "k8s.io/client-go/kubernetes/fake"
+	kubetestclient "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/klog"
 )
 
@@ -30,7 +32,8 @@ type TestGroup struct {
 }
 
 var controller *Controller
-var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
+var kubeclientset kubernetes.Interface = kubetestclient.NewSimpleClientset()
+var edgenetclientset clientset.Interface = edgenettestclient.NewSimpleClientset()
 
 func TestMain(m *testing.M) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +66,7 @@ func TestMain(m *testing.M) {
 
 		newController := NewController(
 			kubeclientset,
+			edgenetclientset,
 			kubeInformerFactory.Core().V1().Nodes(),
 			ts.URL+"/",
 			"null-account-id",

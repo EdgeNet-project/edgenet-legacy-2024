@@ -41,6 +41,11 @@ func main() {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
+	edgenetclientset, err := bootstrap.CreateEdgeNetClientset("serviceaccount")
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
 
 	maxmindUrl := strings.TrimSpace(os.Getenv("MAXMIND_URL"))
 	if maxmindUrl == "" {
@@ -54,6 +59,7 @@ func main() {
 
 	controller := nodelabeler.NewController(
 		kubeclientset,
+		edgenetclientset,
 		kubeInformerFactory.Core().V1().Nodes(),
 		maxmindUrl,
 		maxmindAccountId,

@@ -219,7 +219,6 @@ func GetGeolocationByIP(
 	hostname string,
 	address string,
 ) bool {
-
 	// Fetch geolocation information
 	record, err := getMaxmindLocation(maxmindUrl, maxmindAccountId, maxmindLicenseKey, address)
 	if err != nil {
