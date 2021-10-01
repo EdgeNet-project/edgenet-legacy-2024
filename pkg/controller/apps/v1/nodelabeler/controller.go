@@ -1,7 +1,10 @@
 package nodelabeler
 
 import (
+	"context"
 	"fmt"
+	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/node"
@@ -25,8 +28,8 @@ const controllerAgentName = "nodelabeler-controller"
 
 // The main structure of controller
 type Controller struct {
-	// kubeclientset is a standard kubernetes clientset
-	kubeclientset kubernetes.Interface
+	kubeclientset    kubernetes.Interface
+	edgenetclientset clientset.Interface
 
 	lister corelisters.NodeLister
 	synced cache.InformerSynced
@@ -40,12 +43,21 @@ type Controller struct {
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
 	recorder record.EventRecorder
+
+	maxmindUrl        string
+	maxmindAccountId  string
+	maxmindLicenseKey string
 }
 
 // NewController returns a new controller
 func NewController(
 	kubeclientset kubernetes.Interface,
-	informer coreinformers.NodeInformer) *Controller {
+	edgenetclientset clientset.Interface,
+	informer coreinformers.NodeInformer,
+	maxmindUrl string,
+	maxmindAccountId string,
+	maxmindLicenseKey string,
+) *Controller {
 
 	// Create event broadcaster
 	// Add sample-controller types to the default Kubernetes Scheme so Events can be
@@ -58,11 +70,15 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeclientset: kubeclientset,
-		lister:        informer.Lister(),
-		synced:        informer.Informer().HasSynced,
-		workqueue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NodeLabeler"),
-		recorder:      recorder,
+		kubeclientset:     kubeclientset,
+		edgenetclientset:  edgenetclientset,
+		lister:            informer.Lister(),
+		synced:            informer.Informer().HasSynced,
+		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NodeLabeler"),
+		recorder:          recorder,
+		maxmindUrl:        maxmindUrl,
+		maxmindAccountId:  maxmindAccountId,
+		maxmindLicenseKey: maxmindLicenseKey,
 	}
 
 	klog.Infoln("Setting up event handlers")
@@ -174,19 +190,52 @@ func (c *Controller) syncHandler(key string) error {
 
 func (c *Controller) setNodeGeolocation(obj interface{}) {
 	klog.V(4).Infoln("Handler.ObjectCreated")
-	// Get internal and external IP addresses of the node
-	internalIP, externalIP := node.GetNodeIPAddresses(obj.(*corev1.Node))
+	nodeObj := obj.(*corev1.Node)
+
+	internalIP, externalIP := node.GetNodeIPAddresses(nodeObj)
 	result := false
-	// Check if the external IP exists to use it in the first place
-	if externalIP != "" {
-		klog.V(4).Infof("External IP: %s", externalIP)
-		result = node.GetGeolocationByIP(obj.(*corev1.Node).Name, externalIP)
+
+	// 1. Use the VPNPeer endpoint address if available.
+	peer, err := c.edgenetclientset.NetworkingV1alpha().VPNPeers().Get(context.TODO(), nodeObj.Name, v1.GetOptions{})
+	if err != nil {
+		klog.V(4).Infof(
+			"Failed to find a matching VPNPeer object for %s: %s. The node IP will be used instead.",
+			nodeObj.Name,
+			err,
+		)
+	} else {
+		klog.V(4).Infof("VPNPeer endpoint IP: %s", *peer.Spec.EndpointAddress)
+		result = node.GetGeolocationByIP(
+			c.maxmindUrl,
+			c.maxmindAccountId,
+			c.maxmindLicenseKey,
+			nodeObj.Name,
+			*peer.Spec.EndpointAddress,
+		)
 	}
-	// Check if the internal IP exists and
-	// the result of detecting geolocation by external IP is false
+
+	// 2. Otherwise use the node external IP if available.
+	if externalIP != "" && !result {
+		klog.V(4).Infof("External IP: %s", externalIP)
+		result = node.GetGeolocationByIP(
+			c.maxmindUrl,
+			c.maxmindAccountId,
+			c.maxmindLicenseKey,
+			nodeObj.Name,
+			externalIP,
+		)
+	}
+
+	// 3. Otherwise use the node internal IP if available.
 	if internalIP != "" && !result {
 		klog.V(4).Infof("Internal IP: %s", internalIP)
-		node.GetGeolocationByIP(obj.(*corev1.Node).Name, internalIP)
+		node.GetGeolocationByIP(
+			c.maxmindUrl,
+			c.maxmindAccountId,
+			c.maxmindLicenseKey,
+			nodeObj.Name,
+			internalIP,
+		)
 	}
 }
 

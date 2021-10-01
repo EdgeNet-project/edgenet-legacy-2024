@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"reflect"
 	"testing"
 
 	"github.com/EdgeNet-project/edgenet/pkg/util"
@@ -510,86 +509,6 @@ func TestGetConditionReadyStatus(t *testing.T) {
 	}
 	for _, tc := range cases {
 		util.Equals(t, tc.expected, GetConditionReadyStatus(tc.node.DeepCopy()))
-	}
-}
-
-func TestGeolocationByIP(t *testing.T) {
-	g := testGroup{}
-	g.Init()
-	// Prepare cases
-	nodeFR := g.nodeObj
-	nodeFR.ObjectMeta = metav1.ObjectMeta{
-		Name: "fr.edge-net.io",
-		Labels: map[string]string{
-			"kubernetes.io/hostname": "fr.edge-net.io",
-		},
-	}
-	nodeFR.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
-			Type:    "InternalIP",
-			Address: "132.227.123.51",
-		},
-	}
-	geolabelsFR := map[string]string{
-		"edge-net.io/continent":   "Europe",
-		"edge-net.io/state-iso":   "IDF",
-		"edge-net.io/country-iso": "FR",
-		"edge-net.io/city":        "Paris",
-		"edge-net.io/lat":         "n48.860700",
-		"edge-net.io/lon":         "e2.328100",
-	}
-	nodeUS := g.nodeObj
-	nodeUS.ObjectMeta = metav1.ObjectMeta{
-		Name: "us.edge-net.io",
-		Labels: map[string]string{
-			"kubernetes.io/hostname": "us.edge-net.io",
-		},
-	}
-	nodeUS.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
-			Type:    "ExternalIP",
-			Address: "206.196.180.220",
-		},
-	}
-	geolabelsUS := map[string]string{
-		"edge-net.io/continent":   "North_America",
-		"edge-net.io/state-iso":   "MD",
-		"edge-net.io/country-iso": "US",
-		"edge-net.io/city":        "College_Park",
-		"edge-net.io/lat":         "n38.989600",
-		"edge-net.io/lon":         "w-76.945700",
-	}
-
-	cases := map[string]struct {
-		Node     corev1.Node
-		Expected map[string]string
-	}{
-		"fr": {nodeFR, geolabelsFR},
-		"us": {nodeUS, geolabelsUS},
-	}
-
-	for k, tc := range cases {
-		t.Run(fmt.Sprintf("%s", k), func(t *testing.T) {
-			g.client.CoreV1().Nodes().Create(context.TODO(), tc.Node.DeepCopy(), metav1.CreateOptions{})
-			internalIP, externalIP := GetNodeIPAddresses(tc.Node.DeepCopy())
-			result := false
-			if externalIP != "" {
-				result = GetGeolocationByIP(tc.Node.GetName(), externalIP)
-			}
-			if internalIP != "" && result == false {
-				GetGeolocationByIP(tc.Node.GetName(), internalIP)
-			}
-			node, _ := g.client.CoreV1().Nodes().Get(context.TODO(), tc.Node.GetName(), metav1.GetOptions{})
-			if !reflect.DeepEqual(node.Labels, tc.Expected) {
-				for actualKey, actualValue := range node.Labels {
-					for expectedKey, expectedValue := range tc.Expected {
-						if actualKey == expectedKey {
-							util.Equals(t, expectedValue, actualValue)
-						}
-					}
-				}
-			}
-		})
 	}
 }
 

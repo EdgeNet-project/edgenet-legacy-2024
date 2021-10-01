@@ -22,6 +22,8 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
@@ -43,12 +45,30 @@ func main() {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
+	edgenetclientset, err := bootstrap.CreateEdgeNetClientset("serviceaccount")
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+
+	maxmindUrl := strings.TrimSpace(os.Getenv("MAXMIND_URL"))
+	if maxmindUrl == "" {
+		maxmindUrl = "https://geoip.maxmind.com/geoip/v2.1/city/"
+	}
+	maxmindAccountId := strings.TrimSpace(os.Getenv("MAXMIND_ACCOUNT_ID"))
+	maxmindLicenseKey := strings.TrimSpace(os.Getenv("MAXMIND_LICENSE_KEY"))
 
 	// Start the controller to provide the functionalities of nodelabeler resource
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
 
-	controller := nodelabeler.NewController(kubeclientset,
-		kubeInformerFactory.Core().V1().Nodes())
+	controller := nodelabeler.NewController(
+		kubeclientset,
+		edgenetclientset,
+		kubeInformerFactory.Core().V1().Nodes(),
+		maxmindUrl,
+		maxmindAccountId,
+		maxmindLicenseKey,
+	)
 
 	kubeInformerFactory.Start(stopCh)
 

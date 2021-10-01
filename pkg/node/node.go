@@ -22,19 +22,20 @@ package node
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"math"
-	"net"
+	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/node/infrastructure"
+	"github.com/savaki/geoip2"
 
 	namecheap "github.com/billputer/go-namecheap"
-	geoip2 "github.com/oschwald/geoip2-golang"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -173,37 +174,65 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 	return true
 }
 
-// GetGeolocationByIP return geolabels by taking advantage of GeoLite database
-func GetGeolocationByIP(hostname string, ipStr string) bool {
-	// Parse IP address
-	ip := net.ParseIP(ipStr)
-	var pathDB string
-	if flag.Lookup("geolite-path") != nil {
-		pathDB = flag.Lookup("geolite-path").Value.(flag.Getter).Get().(string)
-	}
-	if pathDB == "" {
-		pathDB = "../../assets/database/GeoLite2-City/GeoLite2-City.mmdb"
-	}
-	// Open GeoLite database
-	db, err := geoip2.Open(pathDB)
+// sanitizeNodeLabel converts arbitrary strings to valid k8s labels.
+// > a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.',
+// > and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345',
+// > regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')
+func sanitizeNodeLabel(s string) string {
+	r, _ := regexp.Compile("[^\\w-_.]")
+	s = r.ReplaceAllString(s, "_")
+	s = strings.TrimLeft(s, "-_.")
+	s = strings.TrimRight(s, "-_.")
+	return s
+}
+
+// getMaxmindLocation is similar to geoip2.fetch(...) but allows to specify a custom URL for testing.
+func getMaxmindLocation(url string, accountId string, licenseKey string, address string) (*geoip2.Response, error) {
+	req, err := http.NewRequest("GET", url+address, nil)
 	if err != nil {
-		log.Fatal(err)
-		return false
+		return nil, err
 	}
-	// Close the database as a final job
-	defer db.Close()
-	// Get the geolocation information by IP
-	record, err := db.City(ip)
+	req.SetBasicAuth(accountId, licenseKey)
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode >= 400 {
+		v := geoip2.Error{}
+		err := json.NewDecoder(res.Body).Decode(&v)
+		if err != nil {
+			return nil, err
+		}
+		return nil, v
+	}
+	response := &geoip2.Response{}
+	err = json.NewDecoder(res.Body).Decode(response)
+	return response, err
+}
+
+// GetGeolocationByIP returns geolabels from the MaxMind GeoIP2 precision service
+func GetGeolocationByIP(
+	maxmindUrl string,
+	maxmindAccountId string,
+	maxmindLicenseKey string,
+	hostname string,
+	address string,
+) bool {
+	// Fetch geolocation information
+	record, err := getMaxmindLocation(maxmindUrl, maxmindAccountId, maxmindLicenseKey, address)
+	if err != nil {
+		log.Println(err)
 		return false
 	}
 
-	// Patch for being compatible with Kubernetes alphanumeric characters limitations
-	continent := strings.Replace(record.Continent.Names["en"], " ", "_", -1)
+	continent := sanitizeNodeLabel(record.Continent.Names["en"])
 	country := record.Country.IsoCode
 	state := record.Country.IsoCode
-	city := strings.Replace(record.City.Names["en"], " ", "_", -1)
+	city := sanitizeNodeLabel(record.City.Names["en"])
+	isp := sanitizeNodeLabel(record.Traits.Isp)
+	as := sanitizeNodeLabel(record.Traits.AutonomousSystemOrganization)
+	asn := strconv.Itoa(record.Traits.AutonomousSystemNumber)
 	var lon string
 	var lat string
 	if record.Location.Longitude >= 0 {
@@ -228,10 +257,14 @@ func GetGeolocationByIP(hostname string, ipStr string) bool {
 		"edge-net.io~1city":        city,
 		"edge-net.io~1lon":         lon,
 		"edge-net.io~1lat":         lat,
+		"edge-net.io~1isp":         isp,
+		"edge-net.io~1as":          as,
+		"edge-net.io~1asn":         asn,
 	}
 
 	// Attach geolabels to the node
 	result := setNodeLabels(hostname, geoLabels)
+
 	// If the result is different than the expected, return false
 	// The expected result is having a different longitude and latitude than zero
 	// Zero value typically means there isn't any result meaningful
