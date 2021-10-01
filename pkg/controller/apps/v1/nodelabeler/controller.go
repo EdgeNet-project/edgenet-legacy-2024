@@ -209,8 +209,8 @@ func (c *Controller) setNodeGeolocation(obj interface{}) {
 			c.maxmindUrl,
 			c.maxmindAccountId,
 			c.maxmindLicenseKey,
+			nodeObj.Name,
 			*peer.Spec.EndpointAddress,
-			externalIP,
 		)
 	}
 

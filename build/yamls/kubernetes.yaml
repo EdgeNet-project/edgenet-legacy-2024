@@ -1284,6 +1284,9 @@ rules:
 - apiGroups: [""]
   resources: ["nodes"]
   verbs: ["get", "watch", "list", "patch"]
+- apiGroups: ["networking.edgenet.io"]
+  resources: ["vpnpeers"]
+  verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
