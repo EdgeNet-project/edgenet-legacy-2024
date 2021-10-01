@@ -30,6 +30,7 @@ type TestGroup struct {
 	claimObj               corev1alpha.TenantResourceDetails
 	dropObj                corev1alpha.TenantResourceDetails
 	tenantObj              corev1alpha.Tenant
+	subNamespaceObj        corev1alpha.SubNamespace
 	nodeObj                corev1.Node
 	client                 kubernetes.Interface
 	edgenetClient          versioned.Interface
@@ -95,6 +96,26 @@ func (g *TestGroup) Init() {
 			Enabled: true,
 		},
 	}
+	subNamespaceObj := corev1alpha.SubNamespace{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "SubNamespace",
+			APIVersion: "core.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sub",
+			Namespace: "edgenet",
+		},
+		Spec: corev1alpha.SubNamespaceSpec{
+			Resources: corev1alpha.Resources{
+				CPU:    "6000m",
+				Memory: "6Gi",
+			},
+			Inheritance: corev1alpha.Inheritance{
+				RBAC:          true,
+				NetworkPolicy: true,
+			},
+		},
+	}
 	nodeObj := corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "fr-idf-0000.edge-net.io",
@@ -135,6 +156,7 @@ func (g *TestGroup) Init() {
 	g.claimObj = claimObj
 	g.dropObj = dropObj
 	g.tenantObj = tenantObj
+	g.subNamespaceObj = subNamespaceObj
 	g.nodeObj = nodeObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetClient = edgenettestclient.NewSimpleClientset()
@@ -178,12 +200,12 @@ func TestCreate(t *testing.T) {
 		expected int
 	}{
 		"without expiry date": {nil, 110, 2},
-		"expiries soon":       {[]time.Duration{100}, 300, 0},
-		"expired":             {[]time.Duration{-1000}, 300, 0},
-		"mix/1":               {[]time.Duration{1500, 2200, -100}, 300, 4},
-		"mix/2":               {[]time.Duration{90, 2500, -100}, 300, 2},
-		"mix/3":               {[]time.Duration{1450, 1600, 1800, 1900, -10, -100}, 250, 8},
-		"mix/4":               {[]time.Duration{90, 50, 2500, 3400, -10, -100}, 300, 4},
+		"expiries soon":       {[]time.Duration{100}, 400, 0},
+		"expired":             {[]time.Duration{-1000}, 400, 0},
+		"mix/1":               {[]time.Duration{1900, 2200, -100}, 400, 4},
+		"mix/2":               {[]time.Duration{90, 2500, -100}, 400, 2},
+		"mix/3":               {[]time.Duration{1750, 2600, 1800, 1900, -10, -100}, 400, 8},
+		"mix/4":               {[]time.Duration{90, 50, 2500, 3400, -10, -100}, 400, 4},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
@@ -234,10 +256,10 @@ func TestUpdate(t *testing.T) {
 		expected int
 	}{
 		"without expiry date": {nil, 30, 2},
-		"expiries soon":       {[]time.Duration{30}, 300, 0},
-		"expired":             {[]time.Duration{-100}, 150, 0},
-		"mix/1":               {[]time.Duration{1700, 1850, -100}, 300, 4},
-		"mix/2":               {[]time.Duration{30, 2700, -100}, 250, 2},
+		"expiries soon":       {[]time.Duration{30}, 400, 0},
+		"expired":             {[]time.Duration{-100}, 400, 0},
+		"mix/1":               {[]time.Duration{1700, 1850, -100}, 400, 4},
+		"mix/2":               {[]time.Duration{30, 2700, -100}, 400, 2},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {

@@ -56,7 +56,7 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 
 // ObjectCreatedOrUpdated is called when an object is created or updated
 func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
-	log.Info("tenantResourceQuotaHandler.ObjectCreated")
+	log.Info("tenantResourceQuotaHandler.ObjectCreatedOrUpdated")
 	// Make a copy of the tenant resource quota object to make changes on it
 	tenantResourceQuota := obj.(*corev1alpha.TenantResourceQuota).DeepCopy()
 	tenant, err := t.edgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
@@ -123,13 +123,12 @@ func (t *Handler) NamespaceTraversal(coreNamespace string) (int64, int64, *corev
 }
 
 func (t *Handler) traverse(coreNamespace, namespace string, aggregatedCPU *int64, aggregatedMemory *int64, lastInSubNamespace *corev1alpha.SubNamespace, lastInDate *metav1.Time) {
-	t.aggregateQuota(coreNamespace, aggregatedCPU, aggregatedMemory)
-
+	t.aggregateQuota(namespace, aggregatedCPU, aggregatedMemory)
 	subNamespaceRaw, _ := t.edgenetClientset.CoreV1alpha().SubNamespaces(namespace).List(context.TODO(), metav1.ListOptions{})
 	if len(subNamespaceRaw.Items) != 0 {
 		for _, subNamespaceRow := range subNamespaceRaw.Items {
 			if lastInDate.IsZero() || lastInDate.Sub(subNamespaceRow.GetCreationTimestamp().Time) >= 0 {
-				*lastInSubNamespace = subNamespaceRow
+				lastInSubNamespace = subNamespaceRow.DeepCopy()
 				*lastInDate = subNamespaceRow.GetCreationTimestamp()
 			}
 			subNamespaceStr := fmt.Sprintf("%s-%s", coreNamespace, subNamespaceRow.GetName())
