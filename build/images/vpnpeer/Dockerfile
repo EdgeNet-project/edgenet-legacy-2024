@@ -8,7 +8,7 @@ RUN apk update && \
 ADD . "$GOPATH/src/github.com/EdgeNet-project/edgenet"
 
 RUN cd "$GOPATH/src/github.com/EdgeNet-project/edgenet" && \
-    CGO_ENABLED=0 GOOS=linux go build -a -o /go/bin/vpnpeer ./cmd/vpnpeer/
+    CGO_ENABLED=0 go build -a -o /go/bin/vpnpeer ./cmd/vpnpeer/
 
 FROM alpine:latest
 
