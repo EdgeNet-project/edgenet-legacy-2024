@@ -1016,7 +1016,7 @@ spec:
       containers:
       - command:
         - ./acceptableusepolicy
-        image: bsenel/acceptableusepolicy:v1.0.0
+        image: edgenetio/acceptableusepolicy:v1.0.0
         imagePullPolicy: Always
         name: acceptableusepolicy
         volumeMounts:
@@ -1126,7 +1126,7 @@ spec:
       containers:
       - command:
         - ./emailverification
-        image: bsenel/emailverification:v1.0.0
+        image: edgenetio/emailverification:v1.0.0
         imagePullPolicy: Always
         name: emailverification
         volumeMounts:
@@ -1221,7 +1221,7 @@ spec:
       containers:
       - command:
         - ./nodecontribution
-        image: bsenel/nodecontribution:v1.0.0
+        image: edgenetio/nodecontribution:v1.0.0
         imagePullPolicy: Always
         name: nodecontribution
         volumeMounts:
@@ -1326,7 +1326,7 @@ spec:
       containers:
       - command:
         - ./nodelabeler
-        image: bsenel/nodelabeler:v1.0.0
+        image: edgenetio/nodelabeler:v1.0.0
         imagePullPolicy: Always
         name: nodelabeler
         env:
@@ -1427,7 +1427,7 @@ spec:
       containers:
       - command:
         - ./selectivedeployment
-        image: bsenel/selectivedeployment:v1.0.0
+        image: edgenetio/selectivedeployment:v1.0.0
         imagePullPolicy: Always
         name: selectivedeployment
       hostNetwork: true
@@ -1523,7 +1523,7 @@ spec:
       containers:
       - command:
         - ./subnamespace
-        image: bsenel/subnamespace:v1.0.0
+        image: edgenetio/subnamespace:v1.0.0
         imagePullPolicy: Always
         name: subnamespace
         volumeMounts:
@@ -1669,7 +1669,7 @@ spec:
       containers:
       - command:
         - ./tenant
-        image: bsenel/tenant:v1.0.0
+        image: edgenetio/tenant:v1.0.0
         imagePullPolicy: Always
         name: tenant
         volumeMounts:
@@ -1824,7 +1824,7 @@ spec:
       containers:
       - command:
         - ./tenantregistrationrequest
-        image: bsenel/tenantregistrationrequest:v1.0.0
+        image: edgenetio/tenantregistrationrequest:v1.0.0
         imagePullPolicy: Always
         name: tenantregistrationrequest
         volumeMounts:
@@ -1931,7 +1931,7 @@ spec:
       containers:
       - command:
         - ./tenantresourcequota
-        image: bsenel/tenantresourcequota:v1.0.0
+        image: edgenetio/tenantresourcequota:v1.0.0
         imagePullPolicy: Always
         name: tenantresourcequota
         volumeMounts:
@@ -2074,7 +2074,7 @@ spec:
       containers:
       - command:
         - ./userregistrationrequest
-        image: bsenel/userregistrationrequest:v1.0.0
+        image: edgenetio/userregistrationrequest:v1.0.0
         imagePullPolicy: Always
         name: userregistrationrequest
         volumeMounts:
@@ -2166,14 +2166,14 @@ spec:
       containers:
       - command:
         - ./vpnpeer
-        image: bsenel/vpnpeer:v1.0.0
+        image: edgenetio/vpnpeer:v1.0.0
         imagePullPolicy: Always
         name: vpnpeer
+        securityContext:
+          capabilities:
+            add:
+              - NET_ADMIN
       hostNetwork: true
-      securityContext:
-        capabilities:
-          add:
-            - NET_ADMIN
       priorityClassName: system-cluster-critical
       serviceAccountName: vpnpeer
       tolerations:
@@ -2256,7 +2256,7 @@ rules:
   verbs: ["get", "update", "patch"]
 - apiGroups: ["networking.edgenet.io"]
   resources: ["vpnpeers"]
-  verbs: ["get", "list"]
+  verbs: ["create", "get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

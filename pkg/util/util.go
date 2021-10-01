@@ -120,23 +120,23 @@ func GetClusterServerOfCurrentContext() (string, string, []byte, error) {
 			return "", "", nil, err
 		}*/
 
-	currentContext := rawConfig.CurrentContext
+	// currentContext := rawConfig.CurrentContext
 
-	var cluster string = rawConfig.Contexts[currentContext].Cluster
+	// var cluster string = rawConfig.Contexts[currentContext].Cluster
 	/*for _, contextRaw := range rawConfig.Contexts {
 		if contextRaw.Name == currentContext {
 			cluster = contextRaw.Context.Cluster
 		}
 	}*/
-	var server string = rawConfig.Clusters[cluster].Server
-	var CA []byte = rawConfig.Clusters[cluster].CertificateAuthorityData
+	var server string = rawConfig.Clusters["kubernetes"].Server
+	var CA []byte = rawConfig.Clusters["kubernetes"].CertificateAuthorityData
 	/*for _, clusterRaw := range rawConfig.Clusters {
 		if clusterRaw.Name == cluster {
 			server = clusterRaw.Cluster.Server
 			CA = clusterRaw.Cluster.CA
 		}
 	}*/
-	return cluster, server, CA, nil
+	return "kubernetes", server, CA, nil
 }
 
 // GetServerOfCurrentContext provides the server info of the current context
@@ -152,15 +152,15 @@ func GetServerOfCurrentContext() (string, error) {
 		log.Printf("unexpected error executing command: %v", err)
 		return "", err
 	}*/
-	currentContext := rawConfig.CurrentContext
+	// currentContext := rawConfig.CurrentContext
 
-	var cluster string = rawConfig.Contexts[currentContext].Cluster
+	// var cluster string = rawConfig.Contexts[currentContext].Cluster
 	/*for _, contextRaw := range configViewDet.Contexts {
 		if contextRaw.Name == currentContext {
 			cluster = contextRaw.Context.Cluster
 		}
 	}*/
-	var server string = rawConfig.Clusters[cluster].Server
+	var server string = rawConfig.Clusters["kubernetes"].Server
 	/*for _, clusterRaw := range configViewDet.Clusters {
 		if clusterRaw.Name == cluster {
 			server = clusterRaw.Cluster.Server
