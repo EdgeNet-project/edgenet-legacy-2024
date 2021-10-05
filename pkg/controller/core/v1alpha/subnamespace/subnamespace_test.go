@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"testing"
 	"time"
@@ -15,6 +14,7 @@ import (
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -167,8 +167,13 @@ func TestCreate(t *testing.T) {
 
 	subnamespace1 := g.subNamespaceObj.DeepCopy()
 	subnamespace1.SetName("all")
-	subnamespace1.Spec.Resources.CPU = "1000m"
-	subnamespace1.Spec.Resources.Memory = "1Gi"
+	subnamespace1.Spec.Resources.CPU = "2000m"
+	subnamespace1.Spec.Resources.Memory = "2Gi"
+	subnamespace1nested := g.subNamespaceObj.DeepCopy()
+	subnamespace1nested.SetName("all-nested")
+	subnamespace1nested.Spec.Resources.CPU = "1000m"
+	subnamespace1nested.Spec.Resources.Memory = "1Gi"
+	subnamespace1nested.SetNamespace(fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subnamespace1.GetName()))
 	subnamespace2 := g.subNamespaceObj.DeepCopy()
 	subnamespace2.SetName("rbac")
 	subnamespace2.Spec.Inheritance.NetworkPolicy = false
@@ -193,9 +198,32 @@ func TestCreate(t *testing.T) {
 		childNamespace, err := g.client.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subnamespace1.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 
-		coreResourceQuota, _ := g.client.CoreV1().ResourceQuotas(g.tenantObj.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
-		util.Equals(t, int64(7), coreResourceQuota.Spec.Hard.Cpu().Value())
-		util.Equals(t, int64(7516192768), coreResourceQuota.Spec.Hard.Memory().Value())
+		t.Run("check core resource quota", func(t *testing.T) {
+			coreResourceQuota, _ := g.client.CoreV1().ResourceQuotas(g.tenantObj.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
+			util.Equals(t, int64(6), coreResourceQuota.Spec.Hard.Cpu().Value())
+			util.Equals(t, int64(6442450944), coreResourceQuota.Spec.Hard.Memory().Value())
+		})
+
+		t.Run("check sub resource quota", func(t *testing.T) {
+			subResourceQuota, _ := g.client.CoreV1().ResourceQuotas(childNamespace.GetName()).Get(context.TODO(), "sub-quota", metav1.GetOptions{})
+			util.Equals(t, int64(2), subResourceQuota.Spec.Hard.Cpu().Value())
+			util.Equals(t, int64(2147483648), subResourceQuota.Spec.Hard.Memory().Value())
+			t.Run("nested subnamespaces", func(t *testing.T) {
+				_, err := g.edgenetClient.CoreV1alpha().SubNamespaces(childNamespace.GetName()).Create(context.TODO(), subnamespace1nested, metav1.CreateOptions{})
+				util.OK(t, err)
+				g.handler.ObjectCreatedOrUpdated(subnamespace1nested)
+				nestedChildNamespace, err := g.client.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subnamespace1nested.GetName()), metav1.GetOptions{})
+				util.OK(t, err)
+
+				subResourceQuota, _ := g.client.CoreV1().ResourceQuotas(childNamespace.GetName()).Get(context.TODO(), "sub-quota", metav1.GetOptions{})
+				util.Equals(t, int64(1), subResourceQuota.Spec.Hard.Cpu().Value())
+				util.Equals(t, int64(1073741824), subResourceQuota.Spec.Hard.Memory().Value())
+
+				nestedSubResourceQuota, _ := g.client.CoreV1().ResourceQuotas(nestedChildNamespace.GetName()).Get(context.TODO(), "sub-quota", metav1.GetOptions{})
+				util.Equals(t, int64(1), nestedSubResourceQuota.Spec.Hard.Cpu().Value())
+				util.Equals(t, int64(1073741824), nestedSubResourceQuota.Spec.Hard.Memory().Value())
+			})
+		})
 
 		if roleRaw, err := g.client.RbacV1().Roles(subnamespace1.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 			// TODO: Provide err information at the status
