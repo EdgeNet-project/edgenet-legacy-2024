@@ -743,10 +743,6 @@ spec:
                     properties:
                       name:
                         type: string
-                        enum:
-                          - Default
-                          - Privilege
-                          - Reward
                       cpu:
                         type: string
                       memory:
@@ -767,9 +763,6 @@ spec:
                     properties:
                       name:
                         type: string
-                        enum:
-                          - Equilibrate
-                          - Temporary
                       cpu:
                         type: string
                       memory:
@@ -777,6 +770,7 @@ spec:
                       expiry:
                         type: string
                         format: date
+                        nullable: true
             status:
               type: object
               properties:
