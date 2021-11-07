@@ -3,163 +3,252 @@ package nodelabeler
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/node"
+	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	log "github.com/sirupsen/logrus"
-	core_v1 "k8s.io/api/core/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"github.com/EdgeNet-project/edgenet/pkg/node"
+	"k8s.io/apimachinery/pkg/api/errors"
+
+	corev1 "k8s.io/api/core/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/watch"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
+	scheme "k8s.io/client-go/kubernetes/scheme"
+	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog"
 )
 
+const controllerAgentName = "nodelabeler-controller"
+
 // The main structure of controller
-type controller struct {
-	logger    *log.Entry
-	clientset kubernetes.Interface
-	queue     workqueue.RateLimitingInterface
-	informer  cache.SharedIndexInformer
-	handler   HandlerInterface
+type Controller struct {
+	kubeclientset    kubernetes.Interface
+	edgenetclientset clientset.Interface
+
+	lister corelisters.NodeLister
+	synced cache.InformerSynced
+
+	// workqueue is a rate limited work queue. This is used to queue work to be
+	// processed instead of performing it as soon as a change happens. This
+	// means we can ensure we only process a fixed amount of resources at a
+	// time, and makes it easy to ensure we are never processing the same item
+	// simultaneously in two different workers.
+	workqueue workqueue.RateLimitingInterface
+	// recorder is an event recorder for recording Event resources to the
+	// Kubernetes API.
+	recorder record.EventRecorder
+
+	maxmindUrl        string
+	maxmindAccountId  string
+	maxmindLicenseKey string
 }
 
-// Start function is entry point of the controller
-func Start(kubernetes kubernetes.Interface) {
-	clientset := kubernetes
+// NewController returns a new controller
+func NewController(
+	kubeclientset kubernetes.Interface,
+	edgenetclientset clientset.Interface,
+	informer coreinformers.NodeInformer,
+	maxmindUrl string,
+	maxmindAccountId string,
+	maxmindLicenseKey string,
+) *Controller {
 
-	// Create the shared informer to list and watch node resources
-	informer := cache.NewSharedIndexInformer(
-		&cache.ListWatch{
-			// The main purpose of listing is to attach geo labels to whole nodes at the beginning
-			ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-				return clientset.CoreV1().Nodes().List(context.TODO(), options)
-			},
-			// This function watches all changes/updates of nodes
-			WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-				return clientset.CoreV1().Nodes().Watch(context.TODO(), options)
-			},
-		},
-		&core_v1.Node{},
-		0,
-		cache.Indexers{},
-	)
-	// Create a work queue which contains a key of the resource to be handled by the handler
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	// Create event broadcaster
+	// Add sample-controller types to the default Kubernetes Scheme so Events can be
+	// logged for sample-controller types.
+	utilruntime.Must(scheme.AddToScheme(scheme.Scheme))
+	klog.V(4).Infoln("Creating event broadcaster")
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartLogging(klog.Infof)
+	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
+	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
+
+	controller := &Controller{
+		kubeclientset:     kubeclientset,
+		edgenetclientset:  edgenetclientset,
+		lister:            informer.Lister(),
+		synced:            informer.Informer().HasSynced,
+		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NodeLabeler"),
+		recorder:          recorder,
+		maxmindUrl:        maxmindUrl,
+		maxmindAccountId:  maxmindAccountId,
+		maxmindLicenseKey: maxmindLicenseKey,
+	}
+
+	klog.Infoln("Setting up event handlers")
+
 	// Event handlers deal with events of resources. In here, we take into consideration of adding and updating nodes.
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			// Put the resource object into a key
-			key, err := cache.MetaNamespaceKeyFunc(obj)
-			log.Infof("Add node detected: %s", key)
-			if err == nil {
-				// Add the key to the queue
-				queue.Add(key)
-			}
-		},
+	informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.enqueueNodelabeler,
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			updated := node.CompareIPAddresses(oldObj.(*core_v1.Node), newObj.(*core_v1.Node))
+			updated := node.CompareIPAddresses(oldObj.(*corev1.Node), newObj.(*corev1.Node))
 			if updated {
-				key, err := cache.MetaNamespaceKeyFunc(newObj)
-				log.Infof("Update node detected: %s", key)
-				if err == nil {
-					queue.Add(key)
-				}
+				controller.enqueueNodelabeler(newObj)
 			}
 		},
 	})
-	controller := controller{
-		logger:    log.NewEntry(log.New()),
-		clientset: clientset,
-		informer:  informer,
-		queue:     queue,
-		handler:   &Handler{},
-	}
 
-	// A channel to terminate elegantly
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	// Run the controller loop as a background task to start processing resources
-	go controller.run(stopCh, clientset)
-	// A channel to observe OS signals for smooth shut down
-	sigTerm := make(chan os.Signal, 1)
-	signal.Notify(sigTerm, syscall.SIGTERM)
-	signal.Notify(sigTerm, syscall.SIGINT)
-	<-sigTerm
+	node.Clientset = kubeclientset
+
+	return controller
 }
 
-// Run starts the controller loop
-func (c *controller) run(stopCh <-chan struct{}, clientset kubernetes.Interface) {
-	// A Go panic which includes logging and terminating
+func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
-	// Shutdown after all goroutines have done
-	defer c.queue.ShutDown()
-	c.logger.Info("run: initiating")
-	c.handler.Init(clientset)
-	// Run the informer to list and watch resources
-	go c.informer.Run(stopCh)
+	defer c.workqueue.ShutDown()
 
-	// Synchronization to settle resources one
-	if !cache.WaitForCacheSync(stopCh, c.hasSynced) {
-		utilruntime.HandleError(fmt.Errorf("Error syncing cache"))
-		return
-	}
-	c.logger.Info("run: cache sync complete")
-	// Operate the runWorker
-	wait.Until(c.runWorker, time.Second, stopCh)
-}
+	klog.V(4).Infoln("Starting Node Labeler Controller")
 
-// To link the informer's HasSynced method to the Controller interface
-func (c *controller) hasSynced() bool {
-	return c.informer.HasSynced()
-}
+	klog.V(4).Infoln("Waiting for informer caches to sync")
 
-// To process new objects added to the queue
-func (c *controller) runWorker() {
-	log.Info("runWorker: starting")
-	// Run processNextItem for all the changes
-	for c.processNextItem() {
-		log.Info("runWorker: processing next item")
+	if ok := cache.WaitForCacheSync(stopCh,
+		c.synced); !ok {
+		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
-	log.Info("runWorker: completed")
+	klog.V(4).Infoln("Starting workers")
+	for i := 0; i < threadiness; i++ {
+		go wait.Until(c.runWorker, time.Second, stopCh)
+	}
+
+	klog.V(4).Infoln("Started workers")
+	<-stopCh
+	klog.V(4).Infoln("Shutting down workers")
+
+	return nil
 }
 
-// This function deals with the queue and sends each item in it to the specified handler to be processed.
-func (c *controller) processNextItem() bool {
-	log.Info("processNextItem: start")
-	// Fetch the next item of the queue
-	key, quit := c.queue.Get()
-	if quit {
+func (c *Controller) runWorker() {
+	for c.processNextWorkItem() {
+	}
+}
+
+func (c *Controller) processNextWorkItem() bool {
+	obj, shutdown := c.workqueue.Get()
+
+	if shutdown {
 		return false
 	}
-	defer c.queue.Done(key)
-	// Get the key string
-	keyRaw := key.(string)
-	// Use the string key to get the object from the indexer
-	item, exists, err := c.informer.GetIndexer().GetByKey(keyRaw)
-	if err != nil {
-		if c.queue.NumRequeues(key) < 3 {
-			c.logger.Errorf("processNextItem: Failed fetching item with key %s, error is %v, retrying...", key, err)
-			c.queue.AddRateLimited(key)
-		} else {
-			c.logger.Errorf("processNextItem: Failed fetching item with key %s, error is %v, no more retries", key, err)
-			c.queue.Forget(key)
-			utilruntime.HandleError(err)
+
+	err := func(obj interface{}) error {
+		defer c.workqueue.Done(obj)
+		var key string
+		var ok bool
+
+		if key, ok = obj.(string); !ok {
+			c.workqueue.Forget(obj)
+			utilruntime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
+			return nil
 		}
+		if err := c.syncHandler(key); err != nil {
+			c.workqueue.AddRateLimited(key)
+			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
+		}
+		c.workqueue.Forget(obj)
+		klog.V(4).Infof("Successfully synced '%s'", key)
+		return nil
+	}(obj)
+
+	if err != nil {
+		utilruntime.HandleError(err)
+		return true
 	}
 
-	if exists {
-		c.logger.Infof("processNextItem: object created/updated detected: %s", keyRaw)
-		c.handler.SetNodeGeolocation(item)
-		c.queue.Forget(key)
-	}
 	return true
+}
+
+// syncHandler compares the actual state with the desired, and attempts to
+// converge the two. It then updates the Status block of the Foo resource
+// with the current status of the resource.
+func (c *Controller) syncHandler(key string) error {
+	_, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
+		return nil
+	}
+
+	item, err := c.lister.Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			utilruntime.HandleError(fmt.Errorf("nodelabeler '%s' in work queue no longer exists", key))
+			return nil
+		}
+
+		return err
+	}
+	klog.V(4).Infof("processNextItem: object created/updated detected: %s", key)
+	c.setNodeGeolocation(item)
+
+	return nil
+}
+
+func (c *Controller) setNodeGeolocation(obj interface{}) {
+	klog.V(4).Infoln("Handler.ObjectCreated")
+	nodeObj := obj.(*corev1.Node)
+
+	internalIP, externalIP := node.GetNodeIPAddresses(nodeObj)
+	result := false
+
+	// 1. Use the VPNPeer endpoint address if available.
+	peer, err := c.edgenetclientset.NetworkingV1alpha().VPNPeers().Get(context.TODO(), nodeObj.Name, v1.GetOptions{})
+	if err != nil {
+		klog.V(4).Infof(
+			"Failed to find a matching VPNPeer object for %s: %s. The node IP will be used instead.",
+			nodeObj.Name,
+			err,
+		)
+	} else {
+		klog.V(4).Infof("VPNPeer endpoint IP: %s", *peer.Spec.EndpointAddress)
+		result = node.GetGeolocationByIP(
+			c.maxmindUrl,
+			c.maxmindAccountId,
+			c.maxmindLicenseKey,
+			nodeObj.Name,
+			*peer.Spec.EndpointAddress,
+		)
+	}
+
+	// 2. Otherwise use the node external IP if available.
+	if externalIP != "" && !result {
+		klog.V(4).Infof("External IP: %s", externalIP)
+		result = node.GetGeolocationByIP(
+			c.maxmindUrl,
+			c.maxmindAccountId,
+			c.maxmindLicenseKey,
+			nodeObj.Name,
+			externalIP,
+		)
+	}
+
+	// 3. Otherwise use the node internal IP if available.
+	if internalIP != "" && !result {
+		klog.V(4).Infof("Internal IP: %s", internalIP)
+		node.GetGeolocationByIP(
+			c.maxmindUrl,
+			c.maxmindAccountId,
+			c.maxmindLicenseKey,
+			nodeObj.Name,
+			internalIP,
+		)
+	}
+}
+
+func (c *Controller) enqueueNodelabeler(obj interface{}) {
+	// Put the resource object into a key
+	var key string
+	var err error
+
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+
+	c.workqueue.Add(key)
 }
