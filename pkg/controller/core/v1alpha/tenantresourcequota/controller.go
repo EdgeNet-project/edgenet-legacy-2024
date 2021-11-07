@@ -56,20 +56,12 @@ type controller struct {
 type informerevent struct {
 	key      string
 	function string
-	change   fields
-}
-
-// This contains the fields to check whether they are updated
-type fields struct {
-	expiry bool
-	spec   bool
 }
 
 // Constant variables for events
 const create = "create"
 const update = "update"
 const delete = "delete"
-const failure = "Pulled off"
 const success = "Applied"
 const trueStr = "True"
 const falseStr = "False"
@@ -116,16 +108,6 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			event.key, err = cache.MetaNamespaceKeyFunc(newObj)
 			event.function = update
-			event.change.expiry = false
-			event.change.spec = false
-			oldExists := CheckExpiryDate(oldObj.(*corev1alpha.TenantResourceQuota))
-			newExists := CheckExpiryDate(newObj.(*corev1alpha.TenantResourceQuota))
-			if oldExists == false && newExists == true {
-				event.change.expiry = true
-			}
-			if !reflect.DeepEqual(oldObj.(*corev1alpha.TenantResourceQuota).Spec, newObj.(*corev1alpha.TenantResourceQuota).Spec) {
-				event.change.spec = true
-			}
 			log.Infof("Update TRQ: %s", event.key)
 			if err == nil {
 				queue.Add(event)
@@ -160,7 +142,7 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 	nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			nodeObj := obj.(*corev1.Node)
-			for key, _ := range nodeObj.Labels {
+			for key := range nodeObj.Labels {
 				if key == "node-role.kubernetes.io/master" {
 					return
 				}
@@ -172,32 +154,31 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 						tenantResourceQuota, err := edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
 						if err == nil {
 							exists := false
-							CPUAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
+							cpuAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
 							memoryAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Memory().Value())*1.3), resource.BinarySI).DeepCopy()
 							claims := tenantResourceQuota.Spec.Claim
 							for i, claimRow := range tenantResourceQuota.Spec.Claim {
-								if claimRow.Name == "Reward" {
+								if claimRow.Name == nodeObj.GetName() {
 									exists = true
-									rewardedCPU := resource.MustParse(claimRow.CPU)
-									rewardedCPU.Add(CPUAward)
-									rewardedMemory := resource.MustParse(claimRow.Memory)
-									rewardedMemory.Add(memoryAward)
-									claimRow.CPU = rewardedCPU.String()
-									claimRow.Memory = rewardedMemory.String()
+									claimRow.CPU = cpuAward.String()
+									claimRow.Memory = memoryAward.String()
 									claims = append(claims[:i], claims[i+1:]...)
 									claims = append(claims, claimRow)
 								}
 							}
 							if !exists {
 								claim := corev1alpha.TenantResourceDetails{}
-								claim.Name = "Reward"
-								claim.CPU = CPUAward.String()
+								claim.Name = nodeObj.GetName()
+								claim.CPU = cpuAward.String()
 								claim.Memory = memoryAward.String()
 								tenantResourceQuota.Spec.Claim = append(tenantResourceQuota.Spec.Claim, claim)
+								edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
 							} else {
-								tenantResourceQuota.Spec.Claim = claims
+								if !reflect.DeepEqual(tenantResourceQuota.Spec.Claim, claims) {
+									tenantResourceQuota.Spec.Claim = claims
+									edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
+								}
 							}
-							edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
 						}
 					}
 				}
@@ -215,32 +196,31 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 						tenantResourceQuota, err := edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
 						if err == nil {
 							exists := false
-							CPUAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
+							cpuAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
 							memoryAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Memory().Value())*1.3), resource.BinarySI).DeepCopy()
 							claims := tenantResourceQuota.Spec.Claim
 							for i, claimRow := range tenantResourceQuota.Spec.Claim {
-								if claimRow.Name == "Reward" {
+								if claimRow.Name == newObj.GetName() {
 									exists = true
-									rewardedCPU := resource.MustParse(claimRow.CPU)
-									rewardedCPU.Add(CPUAward)
-									rewardedMemory := resource.MustParse(claimRow.Memory)
-									rewardedMemory.Add(memoryAward)
-									claimRow.CPU = rewardedCPU.String()
-									claimRow.Memory = rewardedMemory.String()
+									claimRow.CPU = cpuAward.String()
+									claimRow.Memory = memoryAward.String()
 									claims = append(claims[:i], claims[i+1:]...)
 									claims = append(claims, claimRow)
 								}
 							}
 							if !exists {
 								claim := corev1alpha.TenantResourceDetails{}
-								claim.Name = "Reward"
-								claim.CPU = CPUAward.String()
+								claim.Name = newObj.GetName()
+								claim.CPU = cpuAward.String()
 								claim.Memory = memoryAward.String()
 								tenantResourceQuota.Spec.Claim = append(tenantResourceQuota.Spec.Claim, claim)
+								edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
 							} else {
-								tenantResourceQuota.Spec.Claim = claims
+								if !reflect.DeepEqual(tenantResourceQuota.Spec.Claim, claims) {
+									tenantResourceQuota.Spec.Claim = claims
+									edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
+								}
 							}
-							edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
 						}
 					}
 				}
@@ -250,23 +230,16 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 					if owner.Kind == "Tenant" {
 						tenantResourceQuota, err := edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
 						if err == nil {
-							CPUAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
-							memoryAward := resource.NewQuantity(int64(float64(newObj.Status.Capacity.Memory().Value())*1.3), resource.BinarySI).DeepCopy()
 							claims := tenantResourceQuota.Spec.Claim
 							for i, claimRow := range tenantResourceQuota.Spec.Claim {
-								if claimRow.Name == "Reward" {
-									rewardedCPU := resource.MustParse(claimRow.CPU)
-									rewardedCPU.Sub(CPUAward)
-									rewardedMemory := resource.MustParse(claimRow.Memory)
-									rewardedMemory.Sub(memoryAward)
-									claimRow.CPU = rewardedCPU.String()
-									claimRow.Memory = rewardedMemory.String()
+								if claimRow.Name == newObj.GetName() {
 									claims = append(claims[:i], claims[i+1:]...)
-									claims = append(claims, claimRow)
 								}
 							}
-							tenantResourceQuota.Spec.Claim = claims
-							edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
+							if !reflect.DeepEqual(tenantResourceQuota.Spec.Claim, claims) {
+								tenantResourceQuota.Spec.Claim = claims
+								edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
+							}
 						}
 					}
 				}
@@ -281,20 +254,14 @@ func Start(kubernetes kubernetes.Interface, edgenet versioned.Interface) {
 					if owner.Kind == "Tenant" {
 						tenantResourceQuota, err := edgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
 						if err == nil {
-							CPUAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Cpu().Value())*1.5), resource.BinarySI).DeepCopy()
-							memoryAward := resource.NewQuantity(int64(float64(nodeObj.Status.Capacity.Memory().Value())*1.3), resource.BinarySI).DeepCopy()
 							claims := tenantResourceQuota.Spec.Claim
-							for i, claimRow := range tenantResourceQuota.Spec.Claim {
-								if claimRow.Name == "Reward" {
-									rewardedCPU := resource.MustParse(claimRow.CPU)
-									rewardedCPU.Sub(CPUAward)
-									rewardedMemory := resource.MustParse(claimRow.Memory)
-									rewardedMemory.Sub(memoryAward)
-									claimRow.CPU = rewardedCPU.String()
-									claimRow.Memory = rewardedMemory.String()
+							i := 0
+							for _, claimRow := range tenantResourceQuota.Spec.Claim {
+								if claimRow.Name == nodeObj.GetName() {
 									claims = append(claims[:i], claims[i+1:]...)
-									claims = append(claims, claimRow)
+									i--
 								}
+								i++
 							}
 							tenantResourceQuota.Spec.Claim = claims
 							edgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
@@ -339,7 +306,7 @@ func (c *controller) run(stopCh <-chan struct{}, clientset kubernetes.Interface,
 
 	// Synchronization to settle resources one
 	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced, c.nodeInformer.HasSynced) {
-		utilruntime.HandleError(fmt.Errorf("Error syncing cache"))
+		utilruntime.HandleError(fmt.Errorf("error syncing cache"))
 		return
 	}
 	c.logger.Info("run: cache sync complete")
@@ -392,11 +359,10 @@ func (c *controller) processNextItem() bool {
 	} else {
 		if event.(informerevent).function == create {
 			c.logger.Infof("Controller.processNextItem: object created detected: %s", keyRaw)
-			c.handler.ObjectCreated(item)
+			c.handler.ObjectCreatedOrUpdated(item)
 		} else if event.(informerevent).function == update {
-			log.Println(event.(informerevent).key)
 			c.logger.Infof("Controller.processNextItem: object updated detected: %s", keyRaw)
-			c.handler.ObjectUpdated(item, event.(informerevent).change)
+			c.handler.ObjectCreatedOrUpdated(item)
 		}
 	}
 	c.queue.Forget(event.(informerevent).key)

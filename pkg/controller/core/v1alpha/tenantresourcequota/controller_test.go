@@ -2,6 +2,7 @@ package tenantresourcequota
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -31,7 +33,7 @@ func TestStartController(t *testing.T) {
 	// Update the tenant resource quota
 	drop := g.dropObj
 	drop.Expiry = &metav1.Time{
-		Time: time.Now().Add(400 * time.Millisecond),
+		Time: time.Now().Add(1300 * time.Millisecond),
 	}
 	tenantResourceQuota.Spec.Drop = append(tenantResourceQuota.Spec.Drop, drop)
 	g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.UpdateOptions{})
@@ -39,10 +41,40 @@ func TestStartController(t *testing.T) {
 	tenantResourceQuota, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, 1, len(tenantResourceQuota.Spec.Drop))
-	time.Sleep(time.Millisecond * 500)
+	coreResourceQuota, err := g.client.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
+	util.OK(t, err)
+	cpuQuota, memoryQuota := g.handler.calculateTenantQuota(tenantResourceQuota)
+	util.Equals(t, cpuQuota, coreResourceQuota.Spec.Hard.Cpu().Value())
+	util.Equals(t, memoryQuota, coreResourceQuota.Spec.Hard.Memory().Value())
+
+	g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Create(context.TODO(), g.subNamespaceObj.DeepCopy(), metav1.CreateOptions{})
+	namespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", g.tenantObj.GetName(), g.subNamespaceObj.GetName())}}
+	g.client.CoreV1().Namespaces().Create(context.TODO(), &namespace, metav1.CreateOptions{})
+	subQuotaCPU := resource.MustParse(g.subNamespaceObj.Spec.Resources.CPU)
+	subQuotaMemory := resource.MustParse(g.subNamespaceObj.Spec.Resources.Memory)
+	resourceQuota := corev1.ResourceQuota{}
+	resourceQuota.Name = "sub-quota"
+	resourceQuota.Spec = corev1.ResourceQuotaSpec{
+		Hard: map[corev1.ResourceName]resource.Quantity{
+			"cpu":              resource.MustParse(g.subNamespaceObj.Spec.Resources.CPU),
+			"memory":           resource.MustParse(g.subNamespaceObj.Spec.Resources.Memory),
+			"requests.storage": resource.MustParse("8Gi"),
+		},
+	}
+	g.client.CoreV1().ResourceQuotas(namespace.GetName()).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{})
+
+	time.Sleep(time.Millisecond * 1200)
 	tenantResourceQuota, err = g.edgenetClient.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, 0, len(tenantResourceQuota.Spec.Drop))
+	coreResourceQuota, err = g.client.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
+	util.OK(t, err)
+	cpuQuota, memoryQuota = g.handler.calculateTenantQuota(tenantResourceQuota)
+	util.Equals(t, cpuQuota-subQuotaCPU.Value(), coreResourceQuota.Spec.Hard.Cpu().Value())
+	util.Equals(t, memoryQuota-subQuotaMemory.Value(), coreResourceQuota.Spec.Hard.Memory().Value())
+
+	g.edgenetClient.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Delete(context.TODO(), g.subNamespaceObj.GetName(), metav1.DeleteOptions{})
+	g.client.CoreV1().Namespaces().Delete(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), g.subNamespaceObj.GetName()), metav1.DeleteOptions{})
 
 	expectedMemoryRes := resource.MustParse(g.claimObj.Memory)
 	expectedMemory := expectedMemoryRes.Value()
@@ -58,14 +90,19 @@ func TestStartController(t *testing.T) {
 	util.OK(t, err)
 	reward := false
 	for _, claim := range tenantResourceQuota.Spec.Claim {
-		if claim.Name == "Reward" {
+		if claim.Name == nodeCopy.GetName() {
 			reward = true
 		}
 	}
 	util.Equals(t, true, reward)
-	cpuQuota, memoryQuota := getQuotas(tenantResourceQuota.Spec.Claim)
+	cpuQuota, memoryQuota = getQuotas(tenantResourceQuota.Spec.Claim)
 	util.Equals(t, expectedMemoryRew, memoryQuota)
 	util.Equals(t, expectedCPURew, cpuQuota)
+	coreResourceQuota, err = g.client.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
+	util.OK(t, err)
+	cpuQuota, memoryQuota = g.handler.calculateTenantQuota(tenantResourceQuota)
+	util.Equals(t, cpuQuota, coreResourceQuota.Spec.Hard.Cpu().Value())
+	util.Equals(t, memoryQuota, coreResourceQuota.Spec.Hard.Memory().Value())
 
 	nodeCopy.Status.Conditions[0].Status = "False"
 	g.client.CoreV1().Nodes().Update(context.TODO(), nodeCopy.DeepCopy(), metav1.UpdateOptions{})
@@ -101,6 +138,7 @@ func TestStartController(t *testing.T) {
 	cpuQuota, memoryQuota = getQuotas(tenantResourceQuota.Spec.Claim)
 	util.Equals(t, expectedMemory, memoryQuota)
 	util.Equals(t, expectedCPU, cpuQuota)
+
 }
 
 func getQuotas(claimRaw []corev1alpha.TenantResourceDetails) (int64, int64) {
