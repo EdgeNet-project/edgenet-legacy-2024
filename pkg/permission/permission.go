@@ -20,17 +20,43 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
+	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
+	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	"github.com/EdgeNet-project/edgenet/pkg/mailer"
+	"github.com/EdgeNet-project/edgenet/pkg/registration"
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog"
 )
+
+// Constant variables for events
+const failure = "failure"
+
+// Dictionary of status messages
+var statusDict = map[string]string{
+	"request-approved":                  "Tenant request has been approved",
+	"tenant-established":                "Tenant successfully established",
+	"namespace-failure":                 "Tenant core namespace cannot be created",
+	"resource-quota-failure":            "Assigning tenant resource quota failed, user: %s",
+	"aup-rolebinding-failure":           "AUP role binding creation failed, user: %s",
+	"permission-rolebinding-failure":    "Permission role binding creation failed, user: %s",
+	"administrator-rolebinding-failure": "Administrator role binding creation failed, user: %s",
+	"user-failure":                      "User creation failed due to lack of labels, user: %s",
+	"cert-failure":                      "Client cert generation failed, user: %s",
+	"kubeconfig-failure":                "Kubeconfig file creation failed, user: %s",
+}
 
 // Clientset to be synced by the custom resources
 var Clientset kubernetes.Interface
+var EdgenetClientset clientset.Interface
+
 var labels = map[string]string{"edge-net.io/generated": "true"}
 
 // CheckAuthorization returns true if the user is holder of a role
@@ -104,7 +130,7 @@ func CreateClusterRoles() error {
 		{APIGroups: []string{"core.edgenet.io"}, Resources: []string{"subnamespaces/status"}, Verbs: []string{"get", "list", "watch"}},
 		{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"selectivedeployments"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"rbac.authorization.k8s.io"}, Resources: []string{"roles", "rolebindings"}, Verbs: []string{"*"}},
-		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"}, Verbs: []string{"*"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets", "serviceaccounts"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"apps"}, Resources: []string{"daemonsets", "deployments", "replicasets", "statefulsets"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"autoscaling"}, Resources: []string{"horizontalpodautoscalers"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"batch"}, Resources: []string{"cronjobs", "jobs"}, Verbs: []string{"*"}},
@@ -149,7 +175,7 @@ func CreateClusterRoles() error {
 	}
 
 	policyRule = []rbacv1.PolicyRule{{APIGroups: []string{"apps.edgenet.io"}, Resources: []string{"selectivedeployments"}, Verbs: []string{"*"}},
-		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"}, Verbs: []string{"*"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets", "serviceaccounts"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"apps"}, Resources: []string{"daemonsets", "deployments", "replicasets", "statefulsets"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"autoscaling"}, Resources: []string{"horizontalpodautoscalers"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"batch"}, Resources: []string{"cronjobs", "jobs"}, Verbs: []string{"*"}},
@@ -270,4 +296,184 @@ func CreateObjectSpecificRoleBinding(tenant, namespace, roleName string, user *r
 		}
 	}
 	return err
+}
+
+// SendTenantEmail to send notification to participants
+func SendTenantEmail(tenant *corev1alpha.Tenant, user *registrationv1alpha.UserRequest, subject string) {
+	// Set the HTML template variables
+	contentData := mailer.CommonContentData{}
+	if tenant == nil {
+		userLabels := user.GetLabels()
+		usernameHash := fmt.Sprintf("%s-%s", user.GetName(), userLabels["edge-net.io/user-template-hash"])
+		contentData.CommonData.Tenant = user.Spec.Tenant
+		contentData.CommonData.Username = usernameHash
+		contentData.CommonData.Name = fmt.Sprintf("%s %s", user.Spec.FirstName, user.Spec.LastName)
+		contentData.CommonData.Email = []string{user.Spec.Email}
+	} else {
+		contentData.CommonData.Tenant = tenant.GetName()
+		if user == nil {
+			if tenantRequest, err := EdgenetClientset.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tenant.GetName(), metav1.GetOptions{}); err == nil {
+				contentData.CommonData.Username = tenantRequest.Spec.Contact.Username
+			}
+			contentData.CommonData.Name = fmt.Sprintf("%s %s", tenant.Spec.Contact.FirstName, tenant.Spec.Contact.LastName)
+			contentData.CommonData.Email = []string{tenant.Spec.Contact.Email}
+		} else {
+			userLabels := user.GetLabels()
+			usernameHash := fmt.Sprintf("%s-%s", user.GetName(), userLabels["edge-net.io/user-template-hash"])
+			contentData.CommonData.Username = usernameHash
+			contentData.CommonData.Name = fmt.Sprintf("%s %s", user.Spec.FirstName, user.Spec.LastName)
+			if acceptableUsePolicyRaw, err := EdgenetClientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
+				for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
+					aupLabels := acceptableUsePolicyRow.GetLabels()
+					if aupLabels != nil && aupLabels["edge-net.io/username"] != "" && aupLabels["edge-net.io/user-template-hash"] != "" {
+						authorized := CheckAuthorization("", acceptableUsePolicyRow.Spec.Email, "userrequests", user.GetName(), "cluster")
+						if authorized {
+							contentData.CommonData.Email = append(contentData.CommonData.Email, acceptableUsePolicyRow.Spec.Email)
+						}
+					}
+				}
+			}
+		}
+	}
+	mailer.Send(subject, contentData)
+}
+
+// ConfigurePermissions to generate rolebindings for owners, and users welcomed by owners
+func ConfigureTenantPermissions(tenant *corev1alpha.Tenant, user *registrationv1alpha.UserRequest, ownerReferences []metav1.OwnerReference) {
+	policyStatus := false
+	exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["user-failure"], user.Spec.Email))
+	userLabels := user.GetLabels()
+	if userLabels != nil && userLabels["edge-net.io/user-template-hash"] != "" {
+		if exists {
+			tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
+		}
+
+		var acceptableUsePolicyAccess = func(acceptableUsePolicy string) {
+			if err := CreateObjectSpecificClusterRole(tenant.GetName(), "core.edgenet.io", "acceptableusepolicies", acceptableUsePolicy, "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
+				klog.V(4).Infof("Couldn't create aup cluster role %s, %s: %s", tenant.GetName(), acceptableUsePolicy, err)
+				// TODO: Provide err information at the status
+			}
+			clusterRoleName := fmt.Sprintf("edgenet:%s:acceptableusepolicies:%s-%s", tenant.GetName(), acceptableUsePolicy, "owner")
+			roleBindLabels := map[string]string{"edge-net.io/tenant": tenant.GetName(), "edge-net.io/username": user.GetName(), "edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"]}
+			exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["aup-rolebinding-failure"], user.Spec.Email))
+			if err := CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, fmt.Sprintf("%s-%s", user.GetName(), userLabels["edge-net.io/user-template-hash"]), user.Spec.Email, roleBindLabels, ownerReferences); err != nil {
+				klog.V(4).Infof("Couldn't create aup cluster role binding %s, %s: %s", tenant.GetName(), acceptableUsePolicy, err)
+				SendTenantEmail(tenant, user, "user-creation-failure")
+				if !exists {
+					tenant.Status.State = failure
+					tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["aup-rolebinding-failure"], user.Spec.Email))
+				}
+			} else if err == nil && exists {
+				tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
+			}
+
+			if err := CreateObjectSpecificClusterRole(tenant.GetName(), "core.edgenet.io", "acceptableusepolicies", acceptableUsePolicy, "administrator", []string{"get, delete"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
+				klog.V(4).Infof("Couldn't create aup cluster role %s for administrators, %s: %s", tenant.GetName(), acceptableUsePolicy, err)
+				// TODO: Provide err information at the status
+			}
+			clusterRoleName = fmt.Sprintf("edgenet:%s:acceptableusepolicies:%s-%s", tenant.GetName(), acceptableUsePolicy, "administrator")
+			// Give authorization to the administrators
+			if acceptableUsePolicyRaw, err := EdgenetClientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
+				for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
+					aupLabels := acceptableUsePolicyRow.GetLabels()
+					if aupLabels != nil && aupLabels["edge-net.io/username"] != "" && aupLabels["edge-net.io/role"] != "" {
+						if user.GetName() != aupLabels["edge-net.io/username"] && (aupLabels["edge-net.io/role"] == "Owner" || aupLabels["edge-net.io/role"] == "Admin") {
+							roleBindLabels := map[string]string{"edge-net.io/tenant": tenant.GetName(), "edge-net.io/username": aupLabels["edge-net.io/username"], "edge-net.io/user-template-hash": aupLabels["edge-net.io/user-template-hash"]}
+							if err := CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, fmt.Sprintf("%s-%s", aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"]), acceptableUsePolicyRow.Spec.Email, roleBindLabels, ownerReferences); err != nil {
+								klog.V(4).Infof("Couldn't create aup cluster role binding %s, %s for %s: %s", tenant.GetName(), acceptableUsePolicy, fmt.Sprintf(aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"]), err)
+							}
+						}
+					}
+				}
+			}
+		}
+		// A hash code attached as suffix to allow people to roll in with the same username
+		usernameHash := fmt.Sprintf("%s-%s", user.GetName(), userLabels["edge-net.io/user-template-hash"])
+		acceptableUsePolicy, err := EdgenetClientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), usernameHash, metav1.GetOptions{})
+		if err == nil {
+			policyStatus = acceptableUsePolicy.Spec.Accepted
+			acceptableUsePolicyAccess(acceptableUsePolicy.GetName())
+		} else if errors.IsNotFound(err) {
+			// Generate an acceptable use policy object attached to user
+			aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/identity": "true", "edge-net.io/username": user.GetName(),
+				"edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"], "edge-net.io/firstname": user.Spec.FirstName, "edge-net.io/lastname": user.Spec.LastName, "edge-net.io/role": user.Spec.Role}
+			userAcceptableUsePolicy := &corev1alpha.AcceptableUsePolicy{TypeMeta: metav1.TypeMeta{Kind: "AcceptableUsePolicy", APIVersion: "apps.edgenet.io/v1alpha"},
+				ObjectMeta: metav1.ObjectMeta{Name: usernameHash, OwnerReferences: ownerReferences}, Spec: corev1alpha.AcceptableUsePolicySpec{Email: user.Spec.Email, Accepted: false}}
+			userAcceptableUsePolicy.SetLabels(aupLabels)
+			if _, err := EdgenetClientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), userAcceptableUsePolicy, metav1.CreateOptions{}); err != nil {
+				// TODO: Define the error precisely
+			}
+			acceptableUsePolicyAccess(userAcceptableUsePolicy.GetName())
+
+			// Create the client certs for permanent use
+			crt, key, err := registration.MakeUser(tenant.GetName(), usernameHash, user.Spec.Email)
+			exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], user.Spec.Email))
+			if err != nil {
+				klog.V(4).Infof("Couldn't generate client cert %s, %s: %s", tenant.GetName(), user.Spec.Email, err)
+				SendTenantEmail(tenant, user, "user-cert-failure")
+				if !exists {
+					tenant.Status.State = failure
+					tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], user.Spec.Email))
+				}
+			} else if err == nil && exists {
+				tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
+			}
+			err = registration.MakeConfig(tenant.GetName(), usernameHash, user.Spec.Email, crt, key)
+			exists, index = util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["kubeconfig-failure"], user.Spec.Email))
+			if err != nil {
+				klog.V(4).Infof("Couldn't make kubeconfig file %s, %s: %s", tenant.GetName(), user.Spec.Email, err)
+				SendTenantEmail(tenant, user, "user-kubeconfig-failure")
+				if !exists {
+					tenant.Status.State = failure
+					tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["kubeconfig-failure"], user.Spec.Email))
+				}
+			} else if err == nil && exists {
+				tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
+			}
+
+			if aupFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["aup-rolebinding-failure"], user.Spec.Email)); !aupFailure {
+				if certFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], user.Spec.Email)); !certFailure {
+					if kubeconfigFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["kubeconfig-failure"], user.Spec.Email)); !kubeconfigFailure {
+						SendTenantEmail(nil, user, "user-registration-successful")
+					}
+				}
+			}
+		}
+
+		if policyStatus {
+			// Prepare role bindings
+			// Create the role binding for essential permissions
+			exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["permission-rolebinding-failure"], user.Spec.Email))
+			if err := CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), fmt.Sprintf("edgenet:tenant-%s", strings.ToLower(user.Spec.Role)), user); err != nil {
+				klog.V(4).Infof("Couldn't create permission cluster role binding %s, %s: %s", tenant.GetName(), user.Spec.Email, err)
+				SendTenantEmail(tenant, user, "user-creation-failure")
+				if !exists {
+					tenant.Status.State = failure
+					tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["permission-rolebinding-failure"], user.Spec.Email))
+				}
+			} else if err == nil && exists {
+				tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
+			}
+
+			if strings.ToLower(user.Spec.Role) != "collaborator" {
+				// Create the cluster role binding related to the tenant object
+				roleBindLabels := map[string]string{"edge-net.io/tenant": tenant.GetName(), "edge-net.io/username": user.GetName(), "edge-net.io/user-template-hash": userLabels["edge-net.io/user-template-hash"]}
+				exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["administrator-rolebinding-failure"], user.Spec.Email))
+				clusterRoleName := fmt.Sprintf("edgenet:%s:tenants:%s-%s", tenant.GetName(), tenant.GetName(), strings.ToLower(user.Spec.Role))
+				if err := CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, fmt.Sprintf("%s-%s", user.GetName(), userLabels["edge-net.io/user-template-hash"]), user.Spec.Email, roleBindLabels, ownerReferences); err != nil {
+					klog.V(4).Infof("Couldn't create administrator cluster role binding %s, %s: %s", tenant.GetName(), user.Spec.Email, err)
+					SendTenantEmail(tenant, user, "user-creation-failure")
+					if !exists {
+						tenant.Status.State = failure
+						tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["administrator-rolebinding-failure"], user.Spec.Email))
+					}
+				} else if err == nil && exists {
+					tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
+				}
+			}
+		}
+	} else if !exists {
+		tenant.Status.State = failure
+		tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["user-failure"], user.Spec.Email))
+	}
 }
