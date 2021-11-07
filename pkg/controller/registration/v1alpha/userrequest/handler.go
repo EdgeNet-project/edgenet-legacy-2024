@@ -58,6 +58,7 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 	t.clientset = kubernetes
 	t.edgenetClientset = edgenet
 	permission.Clientset = t.clientset
+	permission.EdgenetClientset = t.edgenetClientset
 }
 
 // ObjectCreatedOrUpdated is called when an object is created
@@ -80,9 +81,7 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 		if tenant.Spec.Enabled {
 			if userRequest.Spec.Approved {
 				userRequest.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
-				tenantHandler := tenantv1alpha.Handler{}
-				tenantHandler.Init(t.clientset, t.edgenetClientset)
-				tenantHandler.ConfigurePermissions(tenant, userRequest, tenantv1alpha.SetAsOwnerReference(tenant))
+				permission.ConfigureTenantPermissions(tenant, userRequest, tenantv1alpha.SetAsOwnerReference(tenant))
 
 				if aupFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["aup-rolebinding-failure"], userRequest.Spec.Email)); !aupFailure {
 					if certFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], userRequest.Spec.Email)); !certFailure {
