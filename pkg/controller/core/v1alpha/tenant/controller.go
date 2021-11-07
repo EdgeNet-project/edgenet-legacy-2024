@@ -241,7 +241,7 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	c.TuneTenant(tenant.DeepCopy())
+	c.TuneTenant(tenant)
 	return nil
 }
 
