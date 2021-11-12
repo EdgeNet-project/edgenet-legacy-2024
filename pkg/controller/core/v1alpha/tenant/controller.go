@@ -295,7 +295,7 @@ func (c *Controller) TuneTenant(tenant *corev1alpha.Tenant) {
 		}
 
 		exists, _ := util.Contains(tenantCopy.Status.Message, statusDict["tenant-established"])
-		if !exists && len(tenant.Status.Message) == 0 {
+		if !exists && len(tenantCopy.Status.Message) == 0 {
 			tenantCopy.Status.State = established
 			tenantCopy.Status.Message = []string{statusDict["tenant-established"]}
 			permission.SendTenantEmail(tenantCopy, nil, "tenant-creation-successful")

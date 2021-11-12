@@ -43,7 +43,7 @@ func TestMain(m *testing.M) {
 	// flag.String("geolite-path", "../../../../../assets/database/GeoLite2-City/GeoLite2-City.mmdb", "Set GeoIP DB path.")
 	flag.Parse()
 
-	klog.SetOutput(ioutil.Discard)
+	// klog.SetOutput(ioutil.Discard)
 	log.SetOutput(ioutil.Discard)
 	logrus.SetOutput(ioutil.Discard)
 
@@ -249,20 +249,21 @@ func TestCreate(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
+	updateUser := g.userObj.DeepCopy()
+	updateUser.SetName("update-user")
 
 	// Create a tenant to update later
 	edgenetclientset.CoreV1alpha().Tenants().Create(context.TODO(), g.tenantObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoke TuneTenant func to create a user
-	controller.TuneTenant(g.tenantObj.DeepCopy())
+	// controller.TuneTenant(g.tenantObj.DeepCopy())
 	g.mockSigner(g.tenantObj.GetName())
-	permission.ConfigureTenantPermissions(g.tenantObj.DeepCopy(), g.userObj.DeepCopy(), []metav1.OwnerReference{})
-	labels := g.userObj.GetLabels()
-	aupName := fmt.Sprintf("%s-%s", g.userObj.GetName(), labels["edge-net.io/user-template-hash"])
+	permission.ConfigureTenantPermissions(g.tenantObj.DeepCopy(), updateUser.DeepCopy(), []metav1.OwnerReference{})
+	labels := updateUser.GetLabels()
+	aupName := fmt.Sprintf("%s-%s", updateUser.GetName(), labels["edge-net.io/user-template-hash"])
 	tenant, err := edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 
 	g.mockSigner(tenant.GetName())
-	controller.TuneTenant(tenant)
 	time.Sleep(500 * time.Millisecond)
 
 	aup, err := edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), aupName, metav1.GetOptions{})
@@ -270,13 +271,11 @@ func TestUpdate(t *testing.T) {
 	util.Equals(t, false, aup.Spec.Accepted)
 	aup.Spec.Accepted = true
 	edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), aup, metav1.UpdateOptions{})
-	controller.TuneTenant(tenant)
-	permission.ConfigureTenantPermissions(g.tenantObj.DeepCopy(), g.userObj.DeepCopy(), []metav1.OwnerReference{})
+	permission.ConfigureTenantPermissions(g.tenantObj.DeepCopy(), updateUser.DeepCopy(), []metav1.OwnerReference{})
 
 	_, err = kubeclientset.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-owner-%s-%s", g.tenantObj.Spec.Contact.Username, labels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
 	util.OK(t, err)
 	tenant.Spec.Enabled = false
-	controller.TuneTenant(tenant)
 
 	_, err = kubeclientset.RbacV1().Roles(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-owner-%s", g.tenantObj.Spec.Contact.Username), metav1.GetOptions{})
 	util.Equals(t, "roles.rbac.authorization.k8s.io \"edgenet:tenant-owner-johndoe\" not found", err.Error())
@@ -286,9 +285,14 @@ func TestUpdate(t *testing.T) {
 		tenantStatusTest.SetName("status-test")
 		tenantStatusTest.Status.State = failure
 		tenantStatusTest.Status.Message = append(tenantStatusTest.Status.Message, statusDict["namespace-failure"])
-		edgenetclientset.CoreV1alpha().Tenants().Create(context.TODO(), tenantStatusTest.DeepCopy(), metav1.CreateOptions{})
-		controller.TuneTenant(tenantStatusTest.DeepCopy())
+		aa, _ := edgenetclientset.CoreV1alpha().Tenants().Create(context.TODO(), tenantStatusTest.DeepCopy(), metav1.CreateOptions{})
+		// controller.TuneTenant(tenantStatusTest.DeepCopy())
+		time.Sleep(500 * time.Millisecond)
 		tenant, err := edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantStatusTest.GetName(), metav1.GetOptions{})
+
+		fmt.Printf("%v\n\n", aa)
+		fmt.Printf("%v\n", tenant)
+
 		util.OK(t, err)
 		util.Equals(t, statusDict["tenant-established"], tenant.Status.Message[0])
 	})
