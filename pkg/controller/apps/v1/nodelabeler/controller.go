@@ -59,10 +59,7 @@ func NewController(
 	maxmindAccountId string,
 	maxmindLicenseKey string,
 ) *Controller {
-
 	// Create event broadcaster
-	// Add sample-controller types to the default Kubernetes Scheme so Events can be
-	// logged for sample-controller types.
 	utilruntime.Must(scheme.AddToScheme(scheme.Scheme))
 	klog.V(4).Infoln("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()

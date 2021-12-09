@@ -136,7 +136,7 @@ func NewController(
 	return controller
 }
 
-// enqueueFoo takes a Tenant resource and converts it into a namespace/name
+// enqueueTenant takes a Tenant resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
 // passed resources of any type other than Tenant.
 func (c *Controller) enqueueTenant(obj interface{}) {
