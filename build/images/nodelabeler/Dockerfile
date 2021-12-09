@@ -8,7 +8,7 @@ RUN apk update && \
 ADD . "$GOPATH/src/github.com/EdgeNet-project/edgenet"
 
 RUN cd "$GOPATH/src/github.com/EdgeNet-project/edgenet" && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o /go/bin/nodelabeler ./cmd/nodelabeler/
+    CGO_ENABLED=0 go build -a -o /go/bin/nodelabeler ./cmd/nodelabeler/
 
 
 
@@ -16,7 +16,6 @@ FROM alpine:latest
 
 WORKDIR /root/cmd/nodelabeler/
 
-COPY ./assets/database/ /root/assets/database/
 COPY --from=builder /go/bin/nodelabeler .
 
 CMD ["./nodelabeler"]

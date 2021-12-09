@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"k8s.io/klog"
 	"log"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
@@ -8,6 +10,9 @@ import (
 )
 
 func main() {
+	klog.InitFlags(nil)
+	flag.Parse()
+
 	// TODO: Pass an argument to select using kubeconfig or service account for clients
 	// bootstrap.SetKubeConfig()
 	kubeclientset, err := bootstrap.CreateClientset("serviceaccount")

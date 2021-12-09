@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"time"
 
@@ -14,6 +15,9 @@ import (
 )
 
 func main() {
+	klog.InitFlags(nil)
+	flag.Parse()
+
 	stopCh := signals.SetupSignalHandler()
 	// TODO: Pass an argument to select using kubeconfig or service account for clients
 	// bootstrap.SetKubeConfig()

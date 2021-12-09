@@ -67,6 +67,9 @@ stringData:
     # apiUser : ""
     # apiToken : ""
     # username : ""
+  # MaxMind GeoIP2 precision API keys
+  maxmind-account-id: ""
+  maxmind-license-key: ""
 #---
 # Provide the Private and Public SSH keys of the control plane node to enable node contribution feature.
 #apiVersion: v1
@@ -740,10 +743,6 @@ spec:
                     properties:
                       name:
                         type: string
-                        enum:
-                          - Default
-                          - Privilege
-                          - Reward
                       cpu:
                         type: string
                       memory:
@@ -764,9 +763,6 @@ spec:
                     properties:
                       name:
                         type: string
-                        enum:
-                          - Equilibrate
-                          - Temporary
                       cpu:
                         type: string
                       memory:
@@ -774,6 +770,7 @@ spec:
                       expiry:
                         type: string
                         format: date
+                        nullable: true
             status:
               type: object
               properties:
@@ -1013,7 +1010,7 @@ spec:
       containers:
       - command:
         - ./acceptableusepolicy
-        image: bsenel/acceptableusepolicy:v1.0.0
+        image: edgenetio/acceptableusepolicy:v1.0.0
         imagePullPolicy: Always
         name: acceptableusepolicy
         volumeMounts:
@@ -1123,7 +1120,7 @@ spec:
       containers:
       - command:
         - ./emailverification
-        image: bsenel/emailverification:v1.0.0
+        image: edgenetio/emailverification:v1.0.0
         imagePullPolicy: Always
         name: emailverification
         volumeMounts:
@@ -1218,7 +1215,7 @@ spec:
       containers:
       - command:
         - ./nodecontribution
-        image: bsenel/nodecontribution:v1.0.0
+        image: edgenetio/nodecontribution:v1.0.0
         imagePullPolicy: Always
         name: nodecontribution
         volumeMounts:
@@ -1281,6 +1278,9 @@ rules:
 - apiGroups: [""]
   resources: ["nodes"]
   verbs: ["get", "watch", "list", "patch"]
+- apiGroups: ["networking.edgenet.io"]
+  resources: ["vpnpeers"]
+  verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -1323,9 +1323,20 @@ spec:
       containers:
       - command:
         - ./nodelabeler
-        image: bsenel/nodelabeler:v1.0.0
+        image: edgenetio/nodelabeler:v1.0.0
         imagePullPolicy: Always
         name: nodelabeler
+        env:
+          - name: MAXMIND_ACCOUNT_ID
+            valueFrom:
+              secretKeyRef:
+                name: configs-secret
+                key: maxmind-account-id
+          - name: MAXMIND_LICENSE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: configs-secret
+                key: maxmind-license-key
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -1364,10 +1375,10 @@ rules:
   verbs: ["get", "watch", "list"]
 - apiGroups: ["apps"]
   resources: ["daemonsets", "deployments", "statefulsets"]
-  verbs: ["get", "watch", "list", "create", "patch", update", "delete"]
+  verbs: ["get", "watch", "list", "create", "patch", "update", "delete"]
 - apiGroups: ["batch"]
   resources: ["cronjobs", "jobs"]
-  verbs: ["get", "watch", "list", "create", "patch", update", "delete"]
+  verbs: ["get", "watch", "list", "create", "patch", "update", "delete"]
 - apiGroups: [""]
   resources: ["events"]
   verbs: ["*"]
@@ -1413,7 +1424,7 @@ spec:
       containers:
       - command:
         - ./selectivedeployment
-        image: bsenel/selectivedeployment:v1.0.0
+        image: edgenetio/selectivedeployment:v1.0.0
         imagePullPolicy: Always
         name: selectivedeployment
       hostNetwork: true
@@ -1509,7 +1520,7 @@ spec:
       containers:
       - command:
         - ./subnamespace
-        image: bsenel/subnamespace:v1.0.0
+        image: edgenetio/subnamespace:v1.0.0
         imagePullPolicy: Always
         name: subnamespace
         volumeMounts:
@@ -1608,7 +1619,7 @@ rules:
   resources: ["ingresses", "networkpolicies"]
   verbs: ["*"]
 - apiGroups: [""]
-  resources: ["controllerrevisions"]
+  resources: ["controllerrevisions", "resourcequotas"]
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["events"]
@@ -1655,7 +1666,7 @@ spec:
       containers:
       - command:
         - ./tenant
-        image: bsenel/tenant:v1.0.0
+        image: edgenetio/tenant:v1.0.0
         imagePullPolicy: Always
         name: tenant
         volumeMounts:
@@ -1763,7 +1774,7 @@ rules:
   resources: ["ingresses", "networkpolicies"]
   verbs: ["*"]
 - apiGroups: [""]
-  resources: ["controllerrevisions"]
+  resources: ["controllerrevisions", "resourcequotas"]
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["events"]
@@ -1810,7 +1821,7 @@ spec:
       containers:
       - command:
         - ./tenantregistrationrequest
-        image: bsenel/tenantregistrationrequest:v1.0.0
+        image: edgenetio/tenantregistrationrequest:v1.0.0
         imagePullPolicy: Always
         name: tenantregistrationrequest
         volumeMounts:
@@ -1917,7 +1928,7 @@ spec:
       containers:
       - command:
         - ./tenantresourcequota
-        image: bsenel/tenantresourcequota:v1.0.0
+        image: edgenetio/tenantresourcequota:v1.0.0
         imagePullPolicy: Always
         name: tenantresourcequota
         volumeMounts:
@@ -2013,7 +2024,7 @@ rules:
   resources: ["ingresses", "networkpolicies"]
   verbs: ["*"]
 - apiGroups: [""]
-  resources: ["controllerrevisions"]
+  resources: ["controllerrevisions", "resourcequotas"]
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["events"]
@@ -2060,7 +2071,7 @@ spec:
       containers:
       - command:
         - ./userregistrationrequest
-        image: bsenel/userregistrationrequest:v1.0.0
+        image: edgenetio/userregistrationrequest:v1.0.0
         imagePullPolicy: Always
         name: userregistrationrequest
         volumeMounts:
@@ -2152,14 +2163,14 @@ spec:
       containers:
       - command:
         - ./vpnpeer
-        image: bsenel/vpnpeer:v1.0.0
+        image: edgenetio/vpnpeer:v1.0.0
         imagePullPolicy: Always
         name: vpnpeer
+        securityContext:
+          capabilities:
+            add:
+              - NET_ADMIN
       hostNetwork: true
-      securityContext:
-        capabilities:
-          add:
-            - NET_ADMIN
       priorityClassName: system-cluster-critical
       serviceAccountName: vpnpeer
       tolerations:
@@ -2242,7 +2253,7 @@ rules:
   verbs: ["get", "update", "patch"]
 - apiGroups: ["networking.edgenet.io"]
   resources: ["vpnpeers"]
-  verbs: ["get", "list"]
+  verbs: ["create", "get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
