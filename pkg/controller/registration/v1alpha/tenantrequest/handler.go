@@ -27,6 +27,8 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/emailverification"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
+	"github.com/EdgeNet-project/edgenet/pkg/permission"
+	"github.com/EdgeNet-project/edgenet/pkg/registration"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	log "github.com/sirupsen/logrus"
@@ -54,6 +56,9 @@ func (t *Handler) Init(kubernetes kubernetes.Interface, edgenet versioned.Interf
 	log.Info("TenantRequestHandler.Init")
 	t.clientset = kubernetes
 	t.edgenetClientset = edgenet
+
+	permission.EdgenetClientset = t.edgenetClientset
+	registration.EdgenetClientset = t.edgenetClientset
 }
 
 // ObjectCreatedOrUpdated is called when an object is created
@@ -71,9 +76,7 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 			}
 		}()
 		if tenantRequest.Spec.Approved {
-			tenantHandler := tenantv1alpha.Handler{}
-			tenantHandler.Init(t.clientset, t.edgenetClientset)
-			created := tenantHandler.Create(tenantRequest)
+			created := registration.CreateTenant(tenantRequest)
 			if created {
 				tenantRequest.Status.State = approved
 				tenantRequest.Status.Message = []string{statusDict["tenant-approved"]}
@@ -95,7 +98,7 @@ func (t *Handler) ObjectCreatedOrUpdated(obj interface{}) {
 								user.Spec.LastName = tenantRequest.Spec.Contact.LastName
 								user.Spec.Role = "Owner"
 								user.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
-								tenantHandler.ConfigurePermissions(tenant, user.DeepCopy(), tenantv1alpha.SetAsOwnerReference(tenant))
+								permission.ConfigureTenantPermissions(tenant, user.DeepCopy(), tenantv1alpha.SetAsOwnerReference(tenant))
 								break check
 							}
 						}

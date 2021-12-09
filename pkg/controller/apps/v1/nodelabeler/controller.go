@@ -3,9 +3,10 @@ package nodelabeler
 import (
 	"context"
 	"fmt"
+	"time"
+
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/node"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -58,10 +59,7 @@ func NewController(
 	maxmindAccountId string,
 	maxmindLicenseKey string,
 ) *Controller {
-
 	// Create event broadcaster
-	// Add sample-controller types to the default Kubernetes Scheme so Events can be
-	// logged for sample-controller types.
 	utilruntime.Must(scheme.AddToScheme(scheme.Scheme))
 	klog.V(4).Infoln("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()

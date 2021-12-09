@@ -122,7 +122,7 @@ type Controller struct {
 	publicKey ssh.Signer
 }
 
-// NewController returns a new sample controller
+// NewController returns a new controller
 func NewController(
 	kubeclientset kubernetes.Interface,
 	edgenetclientset clientset.Interface,

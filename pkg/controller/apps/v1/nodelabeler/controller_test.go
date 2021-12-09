@@ -2,7 +2,6 @@ package nodelabeler
 
 import (
 	"context"
-	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 	"github.com/EdgeNet-project/edgenet/pkg/util"

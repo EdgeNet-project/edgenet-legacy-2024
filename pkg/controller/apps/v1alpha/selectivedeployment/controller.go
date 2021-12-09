@@ -130,7 +130,7 @@ type Controller struct {
 	recorder record.EventRecorder
 }
 
-// NewController returns a new sample controller
+// NewController returns a new controller
 func NewController(
 	kubeclientset kubernetes.Interface,
 	edgenetclientset clientset.Interface,
