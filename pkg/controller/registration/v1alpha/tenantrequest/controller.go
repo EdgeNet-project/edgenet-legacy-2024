@@ -22,17 +22,15 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/EdgeNet-project/edgenet/pkg/access"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	tenantv1alpha "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenant"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/emailverification"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/registration/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
-	"github.com/EdgeNet-project/edgenet/pkg/permission"
-	"github.com/EdgeNet-project/edgenet/pkg/registration"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
@@ -135,10 +133,8 @@ func NewController(
 		},
 	})
 
-	permission.Clientset = kubeclientset
-	permission.EdgenetClientset = edgenetclientset
-	registration.Clientset = kubeclientset
-	registration.EdgenetClientset = edgenetclientset
+	access.Clientset = kubeclientset
+	access.EdgenetClientset = edgenetclientset
 
 	return controller
 }
@@ -269,7 +265,7 @@ func (c *Controller) applyProcedure(tenantRequestCopy *registrationv1alpha.Tenan
 	tenantRequestCopy.Status.Expiry = oldStatus.Expiry
 
 	if tenantRequestCopy.Spec.Approved {
-		created := registration.CreateTenant(tenantRequestCopy)
+		created := access.CreateTenant(tenantRequestCopy)
 		if created {
 			tenantRequestCopy.Status.State = approved
 			tenantRequestCopy.Status.Message = []string{statusDict["tenant-approved"]}
@@ -291,7 +287,7 @@ func (c *Controller) applyProcedure(tenantRequestCopy *registrationv1alpha.Tenan
 							user.Spec.LastName = tenantRequestCopy.Spec.Contact.LastName
 							user.Spec.Role = "Owner"
 							user.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
-							permission.ConfigureTenantPermissions(tenant, user.DeepCopy(), tenantv1alpha.SetAsOwnerReference(tenant))
+							access.ConfigureTenantPermissions(tenant, user.DeepCopy(), tenantv1alpha.SetAsOwnerReference(tenant))
 							break check
 						}
 					}
@@ -311,9 +307,7 @@ func (c *Controller) applyProcedure(tenantRequestCopy *registrationv1alpha.Tenan
 		}
 		exists, _ := util.Contains(tenantRequestCopy.Status.Message, statusDict["email-ok"])
 		if !exists {
-			emailVerificationHandler := emailverification.Handler{}
-			emailVerificationHandler.Init(c.kubeclientset, c.edgenetclientset)
-			created := emailVerificationHandler.Create(tenantRequestCopy, SetAsOwnerReference(tenantRequestCopy))
+			created := access.CreateEmailVerification(tenantRequestCopy, SetAsOwnerReference(tenantRequestCopy))
 			if created {
 				// Update the status as successful
 				tenantRequestCopy.Status.State = success

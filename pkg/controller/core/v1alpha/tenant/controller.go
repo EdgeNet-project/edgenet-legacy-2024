@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenantresourcequota"
@@ -29,8 +30,6 @@ import (
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/permission"
-	"github.com/EdgeNet-project/edgenet/pkg/registration"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
@@ -125,13 +124,10 @@ func NewController(
 		},
 	})
 
-	permission.Clientset = kubeclientset
-	permission.EdgenetClientset = edgenetclientset
+	access.Clientset = kubeclientset
+	access.EdgenetClientset = edgenetclientset
 
-	registration.Clientset = kubeclientset
-	registration.EdgenetClientset = edgenetclientset
-
-	permission.CreateClusterRoles()
+	access.CreateClusterRoles()
 
 	return controller
 }
@@ -278,17 +274,17 @@ func (c *Controller) TuneTenant(tenant *corev1alpha.Tenant) {
 						user.Spec.LastName = aupLabels["edge-net.io/lastname"]
 						user.Spec.Role = aupLabels["edge-net.io/role"]
 						user.SetLabels(map[string]string{"edge-net.io/user-template-hash": aupLabels["edge-net.io/user-template-hash"]})
-						permission.ConfigureTenantPermissions(tenantCopy, user.DeepCopy(), SetAsOwnerReference(tenantCopy))
+						access.ConfigureTenantPermissions(tenantCopy, user.DeepCopy(), SetAsOwnerReference(tenantCopy))
 					}
 				}
 			}
 
 			// Create the cluster roles
-			if err := permission.CreateObjectSpecificClusterRole(tenantCopy.GetName(), "core.edgenet.io", "tenants", tenantCopy.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
+			if err := access.CreateObjectSpecificClusterRole(tenantCopy.GetName(), "core.edgenet.io", "tenants", tenantCopy.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
 				klog.V(4).Infof("Couldn't create owner cluster role %s: %s", tenantCopy.GetName(), err)
 				// TODO: Provide err information at the status
 			}
-			if err := permission.CreateObjectSpecificClusterRole(tenantCopy.GetName(), "core.edgenet.io", "tenants", tenantCopy.GetName(), "admin", []string{"get"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
+			if err := access.CreateObjectSpecificClusterRole(tenantCopy.GetName(), "core.edgenet.io", "tenants", tenantCopy.GetName(), "admin", []string{"get"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
 				klog.V(4).Infof("Couldn't create admin cluster role %s: %s", tenantCopy.GetName(), err)
 				// TODO: Provide err information at the status
 			}
@@ -298,7 +294,7 @@ func (c *Controller) TuneTenant(tenant *corev1alpha.Tenant) {
 		if !exists && len(tenantCopy.Status.Message) == 0 {
 			tenantCopy.Status.State = established
 			tenantCopy.Status.Message = []string{statusDict["tenant-established"]}
-			permission.SendTenantEmail(tenantCopy, nil, "tenant-creation-successful")
+			access.SendTenantEmail(tenantCopy, nil, "tenant-creation-successful")
 		}
 	} else {
 		// Delete all subsidiary namespaces

@@ -1,20 +1,33 @@
-package permission
+/*
+Copyright 2021 Contributors to the EdgeNet project.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package access
 
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"log"
-	"os"
 	"strings"
 	"testing"
+	"time"
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
-	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,15 +38,13 @@ import (
 type TestGroup struct {
 	tenant        corev1alpha.Tenant
 	user          registrationv1alpha.UserRequest
+	namespace     corev1.Namespace
+	tenantObj     corev1alpha.Tenant
+	userObj       registrationv1alpha.UserRequest
+	tenantRequest registrationv1alpha.TenantRequest
+	userRequest   registrationv1alpha.UserRequest
 	client        kubernetes.Interface
 	edgenetclient versioned.Interface
-	namespace     corev1.Namespace
-}
-
-func TestMain(m *testing.M) {
-	log.SetOutput(ioutil.Discard)
-	logrus.SetOutput(ioutil.Discard)
-	os.Exit(m.Run())
 }
 
 func (g *TestGroup) Init() {
@@ -81,11 +92,75 @@ func (g *TestGroup) Init() {
 			Role:      "Collaborator",
 		},
 	}
+	adminObj := registrationv1alpha.UserRequest{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "UserRequest",
+			APIVersion: "registration.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "johndoe",
+		},
+		Spec: registrationv1alpha.UserRequestSpec{
+			Tenant:    "edgenet",
+			FirstName: "John",
+			LastName:  "Doe",
+			Email:     "john.doe@edge-net.org",
+			Role:      "Admin",
+		},
+	}
+	tenantRequestObj := registrationv1alpha.TenantRequest{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "tenantRequest",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "edgenet-request",
+		},
+		Spec: registrationv1alpha.TenantRequestSpec{
+			FullName:  "EdgeNet",
+			ShortName: "EdgeNet",
+			URL:       "https://www.edge-net.org",
+			Address: corev1alpha.Address{
+				City:    "Paris - NY - CA",
+				Country: "France - US",
+				Street:  "4 place Jussieu, boite 169",
+				ZIP:     "75005",
+			},
+			Contact: corev1alpha.Contact{
+				Email:     "tom.public@edge-net.org",
+				FirstName: "Tom",
+				LastName:  "Public",
+				Phone:     "+33NUMBER",
+				Username:  "tompublic",
+			},
+		},
+	}
+	userRequest := registrationv1alpha.UserRequest{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "UserRequest",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "johnsmith",
+			Namespace: "tenant-edgenet",
+		},
+		Spec: registrationv1alpha.UserRequestSpec{
+			FirstName: "John",
+			LastName:  "Smith",
+			Email:     "john.smith@edge-net.org",
+		},
+	}
+	g.tenantRequest = tenantRequestObj
+	g.userRequest = userRequest
+	g.tenantObj = tenantObj
+	g.tenantObj.Spec.Enabled = true
+	g.userObj = adminObj
 	g.tenant = tenantObj
 	g.user = userObj
 	g.client = testclient.NewSimpleClientset()
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
 	Clientset = g.client
+	EdgenetClientset = g.edgenetclient
 	g.namespace = corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s", g.tenant.GetName())}}
 	g.client.CoreV1().Namespaces().Create(context.TODO(), &g.namespace, metav1.CreateOptions{})
 }
@@ -333,6 +408,123 @@ func TestPermissionSystem(t *testing.T) {
 		t.Run(k, func(t *testing.T) {
 			authorized := CheckAuthorization(tc.namespace, tc.user.Spec.Email, tc.resource, tc.resourceName, tc.scope)
 			util.Equals(t, tc.expected, authorized)
+		})
+	}
+}
+
+func TestKubeconfigWithUser(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+
+	t.Run("create user with client certificates", func(t *testing.T) {
+		// Mock the signer
+		go func() {
+			timeout := time.After(10 * time.Second)
+			ticker := time.Tick(1 * time.Second)
+		check:
+			for {
+				select {
+				case <-timeout:
+					break check
+				case <-ticker:
+					CSRObj, getErr := g.client.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), g.userObj.GetName()), metav1.GetOptions{})
+					if getErr == nil {
+						CSRObj.Status.Certificate = CSRObj.Spec.Request
+						_, updateErr := g.client.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), CSRObj, metav1.UpdateOptions{})
+						if updateErr == nil {
+							break check
+						}
+					}
+				}
+			}
+		}()
+
+		cert, key, err := GenerateClientCerts(g.tenantObj.GetName(), g.userObj.GetName(), g.userObj.Spec.Email)
+		util.OK(t, err)
+
+		t.Run("generate config", func(t *testing.T) {
+			err = MakeConfig(g.tenantObj.GetName(), g.userObj.GetName(), g.userObj.Spec.Email, cert, key)
+			util.OK(t, err)
+		})
+	})
+}
+
+func TestKubeconfigWithServiceAccount(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	t.Run("create service account", func(t *testing.T) {
+		serviceAccount, err := CreateServiceAccount(g.userObj, "User", []metav1.OwnerReference{})
+		util.OK(t, err)
+		t.Run("generate config without secret", func(t *testing.T) {
+			output := CreateConfig(serviceAccount)
+			util.Equals(t, fmt.Sprintf("Serviceaccount %s doesn't have a token", g.userObj.GetName()), output)
+		})
+	})
+
+	t.Run("generate config with service account containing token", func(t *testing.T) {
+		secret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-token-1234",
+				Namespace: g.userObj.Spec.Tenant,
+			},
+		}
+		secret.Data = make(map[string][]byte)
+		secret.Data["token"] = []byte("test1234token")
+		serviceAccount := corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      g.userObj.GetName(),
+				Namespace: g.userObj.Spec.Tenant,
+			},
+			Secrets: []corev1.ObjectReference{
+				corev1.ObjectReference{
+					Name:      "test-token-1234",
+					Namespace: g.userObj.Spec.Tenant,
+				},
+			},
+		}
+		_, err := g.client.CoreV1().Secrets(secret.Namespace).Create(context.TODO(), &secret, metav1.CreateOptions{})
+		util.OK(t, err)
+		output := CreateConfig(&serviceAccount)
+		list := []string{
+			"certificate-authority-data",
+			"clusters",
+			"cluster",
+			"server",
+			"contexts",
+			"context",
+			"current-context",
+			"namespace",
+			secret.Namespace,
+			"user",
+			g.userObj.GetName(),
+			string(secret.Data["token"]),
+			"kind",
+			"Config",
+			"apiVersion",
+		}
+		for _, expected := range list {
+			if !strings.Contains(output, expected) {
+				t.Errorf("Config malformed. Expected \"%s\" in the config not found", expected)
+			}
+		}
+	})
+}
+
+func TestCreateEmailVerification(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	cases := map[string]struct {
+		input    interface{}
+		expected bool
+	}{
+		"tenant request":            {g.tenantRequest.DeepCopy(), true},
+		"user registration request": {g.userRequest.DeepCopy(), true},
+		"user wrong obj":            {g.tenant, false},
+	}
+	for k, tc := range cases {
+		t.Run(k, func(t *testing.T) {
+			status := CreateEmailVerification(tc.input, []metav1.OwnerReference{})
+			util.Equals(t, tc.expected, status)
 		})
 	}
 }

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package registration
+package access
 
 import (
 	"context"
@@ -32,21 +32,15 @@ import (
 	"regexp"
 	"time"
 
-	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
-	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
-
 	yaml "gopkg.in/yaml.v2"
 	certv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/util/cert"
-	"k8s.io/klog"
-	//cmdconfig "k8s.io/kubernetes/pkg/kubectl/cmd/config"
 )
 
 // headnode implementation
@@ -55,13 +49,10 @@ type headnode struct {
 	IP  string `yaml:"ip"`
 }
 
-// Clientset to be synced by the custom resources
-var Clientset kubernetes.Interface
-var EdgenetClientset clientset.Interface
 var dir = "../.."
 
-// MakeUser generates key and certificate and then set user credentials into the config file.
-func MakeUser(tenant, username, email string) ([]byte, []byte, error) {
+// GenerateClientCerts generates key and certificate and then set user credentials into the config file.
+func GenerateClientCerts(tenant, username, email string) ([]byte, []byte, error) {
 	// The code below inits dir
 	if flag.Lookup("dir") != nil {
 		dir = flag.Lookup("dir").Value.(flag.Getter).Get().(string)
@@ -301,30 +292,4 @@ func CreateConfig(serviceAccount *corev1.ServiceAccount) string {
 		return fmt.Sprintf("Err: %s", err)
 	}
 	return string(dat)
-}
-
-// Create function is for being used by other resources to create a tenant
-func CreateTenant(obj interface{}) bool {
-	created := false
-	switch obj := obj.(type) {
-	case *registrationv1alpha.TenantRequest:
-		tenantRequest := obj.DeepCopy()
-		// Create a tenant on the cluster
-		tenant := corev1alpha.Tenant{}
-		tenant.SetName(tenantRequest.GetName())
-		tenant.Spec.Address = tenantRequest.Spec.Address
-		tenant.Spec.Contact = tenantRequest.Spec.Contact
-		tenant.Spec.FullName = tenantRequest.Spec.FullName
-		tenant.Spec.ShortName = tenantRequest.Spec.ShortName
-		tenant.Spec.URL = tenantRequest.Spec.URL
-		tenant.Spec.Enabled = true
-
-		if _, err := EdgenetClientset.CoreV1alpha().Tenants().Create(context.TODO(), tenant.DeepCopy(), metav1.CreateOptions{}); err == nil {
-			created = true
-		} else {
-			klog.V(4).Infof("Couldn't create tenant %s: %s", tenant.GetName(), err)
-		}
-	}
-
-	return created
 }

@@ -23,17 +23,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/EdgeNet-project/edgenet/pkg/access"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	tenantv1alpha "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenant"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/emailverification"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/registration/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
-	"github.com/EdgeNet-project/edgenet/pkg/permission"
-	"github.com/EdgeNet-project/edgenet/pkg/registration"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	log "github.com/sirupsen/logrus"
@@ -134,10 +132,8 @@ func NewController(
 		},
 	})
 
-	permission.Clientset = kubeclientset
-	permission.EdgenetClientset = edgenetclientset
-	registration.Clientset = kubeclientset
-	registration.EdgenetClientset = edgenetclientset
+	access.Clientset = kubeclientset
+	access.EdgenetClientset = edgenetclientset
 
 	return controller
 }
@@ -272,7 +268,7 @@ func (c *Controller) applyProcedure(userRequestCopy *registrationv1alpha.UserReq
 	if tenant.Spec.Enabled {
 		if userRequestCopy.Spec.Approved {
 			userRequestCopy.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
-			permission.ConfigureTenantPermissions(tenant, userRequestCopy, tenantv1alpha.SetAsOwnerReference(tenant))
+			access.ConfigureTenantPermissions(tenant, userRequestCopy, tenantv1alpha.SetAsOwnerReference(tenant))
 
 			if aupFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["aup-rolebinding-failure"], userRequestCopy.Spec.Email)); !aupFailure {
 				if certFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], userRequestCopy.Spec.Email)); !certFailure {
@@ -295,9 +291,7 @@ func (c *Controller) applyProcedure(userRequestCopy *registrationv1alpha.UserReq
 			}
 			exists, _ := util.Contains(userRequestCopy.Status.Message, statusDict["email-ok"])
 			if !exists {
-				emailVerificationHandler := emailverification.Handler{}
-				emailVerificationHandler.Init(c.kubeclientset, c.edgenetclientset)
-				created := emailVerificationHandler.Create(userRequestCopy, SetAsOwnerReference(userRequestCopy))
+				created := access.CreateEmailVerification(userRequestCopy, SetAsOwnerReference(userRequestCopy))
 				if created {
 					// Update the status as successful
 					userRequestCopy.Status.State = success
@@ -308,7 +302,7 @@ func (c *Controller) applyProcedure(userRequestCopy *registrationv1alpha.UserReq
 				}
 			}
 			ownerReferences := SetAsOwnerReference(userRequestCopy)
-			if err := permission.CreateObjectSpecificClusterRole(tenant.GetName(), "registration.edgenet.io", "userrequests", userRequestCopy.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
+			if err := access.CreateObjectSpecificClusterRole(tenant.GetName(), "registration.edgenet.io", "userrequests", userRequestCopy.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
 				log.Infof("Couldn't create user request cluster role %s, %s: %s", tenant.GetName(), userRequestCopy.GetName(), err)
 				// TODO: Provide err information at the status
 			}
@@ -320,7 +314,7 @@ func (c *Controller) applyProcedure(userRequestCopy *registrationv1alpha.UserReq
 						if aupLabels["edge-net.io/role"] == "Owner" || aupLabels["edge-net.io/role"] == "Admin" {
 							clusterRoleName := fmt.Sprintf("edgenet:%s:userrequests:%s-%s", tenant.GetName(), userRequestCopy.GetName(), "owner")
 							roleBindLabels := map[string]string{"edge-net.io/tenant": tenant.GetName(), "edge-net.io/username": aupLabels["edge-net.io/username"], "edge-net.io/user-template-hash": aupLabels["edge-net.io/user-template-hash"]}
-							if err := permission.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, fmt.Sprintf("%s-%s", aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"]), acceptableUsePolicyRow.Spec.Email, roleBindLabels, ownerReferences); err != nil {
+							if err := access.CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, fmt.Sprintf("%s-%s", aupLabels["edge-net.io/username"], aupLabels["edge-net.io/user-template-hash"]), acceptableUsePolicyRow.Spec.Email, roleBindLabels, ownerReferences); err != nil {
 								// TODO: Define the error precisely
 								userRequestCopy.Status.State = failure
 								userRequestCopy.Status.Message = []string{statusDict["role-failed"]}

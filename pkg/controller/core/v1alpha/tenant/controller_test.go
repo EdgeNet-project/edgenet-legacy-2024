@@ -10,13 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	edgenetinformers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
-	"github.com/EdgeNet-project/edgenet/pkg/permission"
-	"github.com/EdgeNet-project/edgenet/pkg/registration"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 	"github.com/sirupsen/logrus"
@@ -41,6 +40,8 @@ var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset(
 
 func TestMain(m *testing.M) {
 	// flag.String("geolite-path", "../../../../../assets/database/GeoLite2-City/GeoLite2-City.mmdb", "Set GeoIP DB path.")
+	flag.String("dir", "../../../../..", "Override the directory.")
+	flag.String("smtp-path", "../../../../../configs/smtp_test.yaml", "Set SMTP path.")
 	flag.Parse()
 
 	// klog.SetOutput(ioutil.Discard)
@@ -60,8 +61,8 @@ func TestMain(m *testing.M) {
 		kubeInformerFactory.Start(stopCh)
 		edgenetInformerFactory.Start(stopCh)
 
-		permission.EdgenetClientset = newController.edgenetclientset
-		registration.EdgenetClientset = newController.edgenetclientset
+		access.EdgenetClientset = newController.edgenetclientset
+		access.EdgenetClientset = newController.edgenetclientset
 
 		controller = newController
 		if err := controller.Run(2, stopCh); err != nil {
@@ -197,10 +198,10 @@ func TestCreateTenant(t *testing.T) {
 	tenantRequest := g.tenantRequestObj.DeepCopy()
 	tenantRequest.SetName("request-approval-test")
 
-	created := registration.CreateTenant(tenantRequest)
+	created := access.CreateTenant(tenantRequest)
 	util.Equals(t, true, created)
 
-	created = registration.CreateTenant(tenantRequest)
+	created = access.CreateTenant(tenantRequest)
 	util.Equals(t, false, created)
 }
 
@@ -211,7 +212,7 @@ func TestCreate(t *testing.T) {
 	edgenetclientset.CoreV1alpha().Tenants().Create(context.TODO(), g.tenantObj.DeepCopy(), metav1.CreateOptions{})
 	controller.TuneTenant(g.tenantObj.DeepCopy())
 	g.mockSigner(g.tenantObj.GetName())
-	permission.ConfigureTenantPermissions(g.tenantObj.DeepCopy(), g.userObj.DeepCopy(), []metav1.OwnerReference{})
+	access.ConfigureTenantPermissions(g.tenantObj.DeepCopy(), g.userObj.DeepCopy(), []metav1.OwnerReference{})
 	labels := g.userObj.GetLabels()
 	aupName := fmt.Sprintf("%s-%s", g.userObj.GetName(), labels["edge-net.io/user-template-hash"])
 	t.Run("user configuration", func(t *testing.T) {
@@ -225,7 +226,7 @@ func TestCreate(t *testing.T) {
 		aup.Spec.Accepted = true
 		edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), aup, metav1.UpdateOptions{})
 		controller.TuneTenant(tenant)
-		permission.ConfigureTenantPermissions(g.tenantObj.DeepCopy(), g.userObj.DeepCopy(), []metav1.OwnerReference{})
+		access.ConfigureTenantPermissions(g.tenantObj.DeepCopy(), g.userObj.DeepCopy(), []metav1.OwnerReference{})
 
 		t.Run("cluster role binding", func(t *testing.T) {
 			_, err := kubeclientset.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner-%s-%s", g.tenantObj.GetName(), g.tenantObj.GetName(), g.tenantObj.Spec.Contact.Username, labels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
@@ -257,7 +258,7 @@ func TestUpdate(t *testing.T) {
 	// Invoke TuneTenant func to create a user
 	// controller.TuneTenant(g.tenantObj.DeepCopy())
 	g.mockSigner(g.tenantObj.GetName())
-	permission.ConfigureTenantPermissions(g.tenantObj.DeepCopy(), updateUser.DeepCopy(), []metav1.OwnerReference{})
+	access.ConfigureTenantPermissions(g.tenantObj.DeepCopy(), updateUser.DeepCopy(), []metav1.OwnerReference{})
 	labels := updateUser.GetLabels()
 	aupName := fmt.Sprintf("%s-%s", updateUser.GetName(), labels["edge-net.io/user-template-hash"])
 	tenant, err := edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), g.tenantObj.GetName(), metav1.GetOptions{})
@@ -271,7 +272,7 @@ func TestUpdate(t *testing.T) {
 	util.Equals(t, false, aup.Spec.Accepted)
 	aup.Spec.Accepted = true
 	edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), aup, metav1.UpdateOptions{})
-	permission.ConfigureTenantPermissions(g.tenantObj.DeepCopy(), updateUser.DeepCopy(), []metav1.OwnerReference{})
+	access.ConfigureTenantPermissions(g.tenantObj.DeepCopy(), updateUser.DeepCopy(), []metav1.OwnerReference{})
 
 	_, err = kubeclientset.RbacV1().RoleBindings(g.tenantObj.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-owner-%s-%s", g.tenantObj.Spec.Contact.Username, labels["edge-net.io/user-template-hash"]), metav1.GetOptions{})
 	util.OK(t, err)

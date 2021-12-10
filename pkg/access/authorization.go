@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package permission
+package access
 
 import (
 	"context"
@@ -24,15 +24,12 @@ import (
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
-	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
-	"github.com/EdgeNet-project/edgenet/pkg/registration"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 )
 
@@ -52,10 +49,6 @@ var statusDict = map[string]string{
 	"cert-failure":                      "Client cert generation failed, user: %s",
 	"kubeconfig-failure":                "Kubeconfig file creation failed, user: %s",
 }
-
-// Clientset to be synced by the custom resources
-var Clientset kubernetes.Interface
-var EdgenetClientset clientset.Interface
 
 var labels = map[string]string{"edge-net.io/generated": "true"}
 
@@ -406,7 +399,7 @@ func ConfigureTenantPermissions(tenant *corev1alpha.Tenant, user *registrationv1
 			acceptableUsePolicyAccess(userAcceptableUsePolicy.GetName())
 
 			// Create the client certs for permanent use
-			crt, key, err := registration.MakeUser(tenant.GetName(), usernameHash, user.Spec.Email)
+			crt, key, err := GenerateClientCerts(tenant.GetName(), usernameHash, user.Spec.Email)
 			exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], user.Spec.Email))
 			if err != nil {
 				klog.V(4).Infof("Couldn't generate client cert %s, %s: %s", tenant.GetName(), user.Spec.Email, err)
@@ -418,7 +411,7 @@ func ConfigureTenantPermissions(tenant *corev1alpha.Tenant, user *registrationv1
 			} else if err == nil && exists {
 				tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
 			}
-			err = registration.MakeConfig(tenant.GetName(), usernameHash, user.Spec.Email, crt, key)
+			err = MakeConfig(tenant.GetName(), usernameHash, user.Spec.Email, crt, key)
 			exists, index = util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["kubeconfig-failure"], user.Spec.Email))
 			if err != nil {
 				klog.V(4).Infof("Couldn't make kubeconfig file %s, %s: %s", tenant.GetName(), user.Spec.Email, err)
