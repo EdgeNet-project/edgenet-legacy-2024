@@ -30,21 +30,23 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
 type TestGroup struct {
-	tenant        corev1alpha.Tenant
-	user          registrationv1alpha.UserRequest
-	namespace     corev1.Namespace
-	tenantObj     corev1alpha.Tenant
-	userObj       registrationv1alpha.UserRequest
-	tenantRequest registrationv1alpha.TenantRequest
-	userRequest   registrationv1alpha.UserRequest
-	client        kubernetes.Interface
-	edgenetclient versioned.Interface
+	tenant                 corev1alpha.Tenant
+	user                   registrationv1alpha.UserRequest
+	namespace              corev1.Namespace
+	tenantObj              corev1alpha.Tenant
+	userObj                registrationv1alpha.UserRequest
+	tenantRequest          registrationv1alpha.TenantRequest
+	userRequest            registrationv1alpha.UserRequest
+	tenantResourceQuotaObj corev1alpha.TenantResourceQuota
+	client                 kubernetes.Interface
+	edgenetclient          versioned.Interface
 }
 
 func (g *TestGroup) Init() {
@@ -150,6 +152,17 @@ func (g *TestGroup) Init() {
 			Email:     "john.smith@edge-net.org",
 		},
 	}
+	tenantResourceQuotaObj := corev1alpha.TenantResourceQuota{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "tenantResourceQuota",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "edgenet",
+			UID:  "trq",
+		},
+	}
+	g.tenantResourceQuotaObj = tenantResourceQuotaObj
 	g.tenantRequest = tenantRequestObj
 	g.userRequest = userRequest
 	g.tenantObj = tenantObj
@@ -527,4 +540,15 @@ func TestCreateEmailVerification(t *testing.T) {
 			util.Equals(t, tc.expected, status)
 		})
 	}
+}
+
+func TestCreateTenantResourceQuota(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+
+	_, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
+	util.Equals(t, true, errors.IsNotFound(err))
+	CreateTenantResourceQuota(g.tenantResourceQuotaObj.GetName(), nil)
+	_, err = EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
 }

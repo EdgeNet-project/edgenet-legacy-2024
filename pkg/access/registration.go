@@ -154,3 +154,29 @@ func SendEmailVerificationNotification(subject, tenant, username, fullname, emai
 
 	mailer.Send(subject, contentData)
 }
+
+// CreateTenantResourceQuota generates a tenant resource quota with the name provided
+func CreateTenantResourceQuota(name string, ownerReferences []metav1.OwnerReference) (string, string) {
+	cpuQuota := "0m"
+	memoryQuota := "0Mi"
+	_, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		// Set a tenant resource quota
+		tenantResourceQuota := corev1alpha.TenantResourceQuota{}
+		tenantResourceQuota.SetName(name)
+		tenantResourceQuota.SetOwnerReferences(ownerReferences)
+		claim := corev1alpha.TenantResourceDetails{}
+		claim.Name = "Default"
+		claim.CPU = "8000m"
+		claim.Memory = "8192Mi"
+		tenantResourceQuota.Spec.Claim = append(tenantResourceQuota.Spec.Claim, claim)
+		_, err = EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{})
+		if err != nil {
+			klog.V(4).Infof(statusDict["TRQ-failed"], name, err)
+		}
+
+		cpuQuota = claim.CPU
+		memoryQuota = claim.Memory
+	}
+	return cpuQuota, memoryQuota
+}
