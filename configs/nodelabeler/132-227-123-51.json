@@ -1,0 +1,98 @@
+{
+    "city": {
+      "geoname_id": 2988621,
+      "names": {
+        "en": "Pantin",
+        "ja": "パンタン",
+        "ru": "Пантин",
+        "zh-CN": "庞坦"
+      }
+    },
+    "continent": {
+      "code": "EU",
+      "geoname_id": 6255148,
+      "names": {
+        "zh-CN": "欧洲",
+        "de": "Europa",
+        "en": "Europe",
+        "es": "Europa",
+        "fr": "Europe",
+        "ja": "ヨーロッパ",
+        "pt-BR": "Europa",
+        "ru": "Европа"
+      }
+    },
+    "country": {
+      "is_in_european_union": true,
+      "iso_code": "FR",
+      "geoname_id": 3017382,
+      "names": {
+        "en": "France",
+        "es": "Francia",
+        "fr": "France",
+        "ja": "フランス共和国",
+        "pt-BR": "França",
+        "ru": "Франция",
+        "zh-CN": "法国",
+        "de": "Frankreich"
+      }
+    },
+    "location": {
+      "accuracy_radius": 10,
+      "latitude": 48.8958,
+      "longitude": 2.4064,
+      "time_zone": "Europe/Paris"
+    },
+    "maxmind": {
+      "queries_remaining": 16572
+    },
+    "postal": {
+      "code": "93500"
+    },
+    "registered_country": {
+      "is_in_european_union": true,
+      "iso_code": "FR",
+      "geoname_id": 3017382,
+      "names": {
+        "ja": "フランス共和国",
+        "pt-BR": "França",
+        "ru": "Франция",
+        "zh-CN": "法国",
+        "de": "Frankreich",
+        "en": "France",
+        "es": "Francia",
+        "fr": "France"
+      }
+    },
+    "subdivisions": [
+      {
+        "iso_code": "IDF",
+        "geoname_id": 3012874,
+        "names": {
+          "fr": "Île-de-France",
+          "pt-BR": "Ilha de França",
+          "de": "Île-de-France",
+          "en": "Île-de-France",
+          "es": "Isla de Francia"
+        }
+      },
+      {
+        "iso_code": "93",
+        "geoname_id": 2975246,
+        "names": {
+          "es": "Sena Saint Denis",
+          "fr": "Seine-Saint-Denis",
+          "de": "Seine-Saint-Denis",
+          "en": "Seine-Saint-Denis"
+        }
+      }
+    ],
+    "traits": {
+      "autonomous_system_number": 1307,
+      "autonomous_system_organization": "Renater",
+      "isp": "Renater",
+      "organization": "Renater",
+      "ip_address": "132.227.123.51",
+      "network": "132.227.120.0/21"
+    }
+  }

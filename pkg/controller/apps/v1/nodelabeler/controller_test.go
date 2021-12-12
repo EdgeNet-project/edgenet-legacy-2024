@@ -2,8 +2,8 @@ package nodelabeler
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,7 +15,6 @@ import (
 
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
-	"github.com/sirupsen/logrus"
 
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	corev1 "k8s.io/api/core/v1"
@@ -37,11 +36,15 @@ var kubeclientset kubernetes.Interface = kubetestclient.NewSimpleClientset()
 var edgenetclientset clientset.Interface = edgenettestclient.NewSimpleClientset()
 
 func TestMain(m *testing.M) {
+	//klog.SetOutput(ioutil.Discard)
+	//log.SetOutput(ioutil.Discard)
+	//logrus.SetOutput(ioutil.Discard)
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s := strings.Split(r.URL.Path, "/")
+		s := strings.Split(r.URL.Path, "../../../../../configs/nodelabeler/")
 		// 1.2.3.4 -> 1-2-3-4.json
 		filename := strings.Replace(s[len(s)-1], ".", "-", -1) + ".json"
-		response, err := ioutil.ReadFile(filename)
+		response, err := ioutil.ReadFile(fmt.Sprintf("../../../../../configs/nodelabeler/%s", filename))
 		if err != nil {
 			w.WriteHeader(400)
 			_, err := w.Write([]byte(err.Error()))
@@ -55,10 +58,6 @@ func TestMain(m *testing.M) {
 		}
 	}))
 	defer ts.Close()
-
-	klog.SetOutput(ioutil.Discard)
-	log.SetOutput(ioutil.Discard)
-	logrus.SetOutput(ioutil.Discard)
 
 	stopCh := signals.SetupSignalHandler()
 

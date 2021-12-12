@@ -1,0 +1,88 @@
+{
+    "city": {
+      "geoname_id": 4351977,
+      "names": {
+        "en": "College Park",
+        "ja": "カレッジパーク"
+      }
+    },
+    "continent": {
+      "code": "NA",
+      "geoname_id": 6255149,
+      "names": {
+        "pt-BR": "América do Norte",
+        "ru": "Северная Америка",
+        "zh-CN": "北美洲",
+        "de": "Nordamerika",
+        "en": "North America",
+        "es": "Norteamérica",
+        "fr": "Amérique du Nord",
+        "ja": "北アメリカ"
+      }
+    },
+    "country": {
+      "iso_code": "US",
+      "geoname_id": 6252001,
+      "names": {
+        "ru": "США",
+        "zh-CN": "美国",
+        "de": "USA",
+        "en": "United States",
+        "es": "EE. UU.",
+        "fr": "É.-U.",
+        "ja": "アメリカ",
+        "pt-BR": "EUA"
+      }
+    },
+    "location": {
+      "accuracy_radius": 20,
+      "latitude": 38.9965,
+      "longitude": -76.934,
+      "metro_code": 511,
+      "time_zone": "America/New_York"
+    },
+    "maxmind": {
+      "queries_remaining": 16573
+    },
+    "postal": {
+      "code": "20740"
+    },
+    "registered_country": {
+      "iso_code": "US",
+      "geoname_id": 6252001,
+      "names": {
+        "pt-BR": "EUA",
+        "ru": "США",
+        "zh-CN": "美国",
+        "de": "USA",
+        "en": "United States",
+        "es": "EE. UU.",
+        "fr": "É.-U.",
+        "ja": "アメリカ"
+      }
+    },
+    "subdivisions": [
+      {
+        "iso_code": "MD",
+        "geoname_id": 4361885,
+        "names": {
+          "ja": "メリーランド州",
+          "pt-BR": "Maryland",
+          "ru": "Мэриленд",
+          "zh-CN": "马里兰州",
+          "de": "Maryland",
+          "en": "Maryland",
+          "es": "Maryland",
+          "fr": "Maryland"
+        }
+      }
+    ],
+    "traits": {
+      "autonomous_system_number": 10886,
+      "autonomous_system_organization": "MAX-GIGAPOP",
+      "isp": "University of Maryland.",
+      "organization": "University of Maryland",
+      "ip_address": "206.196.180.220",
+      "network": "206.196.180.0/22"
+    }
+  }

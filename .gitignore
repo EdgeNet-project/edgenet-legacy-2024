@@ -27,6 +27,8 @@ configs/**
 !configs/opa/**
 !configs/ca_sample.crt
 !configs/public.cfg
+!configs/nodelabeler
+!configs/nodelabeler/**
 
 # assets
 assets/certs/**
