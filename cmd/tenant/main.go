@@ -32,7 +32,7 @@ func main() {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	// Start the controller to provide the functionalities of nodecontribution resource
+	// Start the controller to provide the functionalities of tenant resource
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
 	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
 

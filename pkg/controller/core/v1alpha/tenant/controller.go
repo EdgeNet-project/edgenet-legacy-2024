@@ -25,7 +25,6 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenantresourcequota"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha"
@@ -340,9 +339,7 @@ func (c *Controller) createCoreNamespace(tenant *corev1alpha.Tenant, ownerRefere
 }
 
 func (c *Controller) applyQuota(tenant *corev1alpha.Tenant) error {
-	trqHandler := tenantresourcequota.Handler{}
-	trqHandler.Init(c.kubeclientset, c.edgenetclientset)
-	cpuQuota, memoryQuota := trqHandler.Create(tenant.GetName(), SetAsOwnerReference(tenant))
+	cpuQuota, memoryQuota := access.CreateTenantResourceQuota(tenant.GetName(), SetAsOwnerReference(tenant))
 
 	resourceQuota := corev1.ResourceQuota{}
 	resourceQuota.Name = "core-quota"
