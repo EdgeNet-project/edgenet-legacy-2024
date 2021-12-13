@@ -26,6 +26,7 @@ import (
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha"
@@ -38,7 +39,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
@@ -48,34 +48,17 @@ import (
 
 const controllerAgentName = "tenant-controller"
 
-// Constant variables for events
-const create = "create"
-const update = "update"
-const delete = "delete"
-const failure = "failure"
-const approved = "approved"
-const established = "established"
-
-// The main structure of controller
-type Controller struct {
-	// kubeclientset is a standard kubernetes clientset
-	kubeclientset kubernetes.Interface
-	// edgenetclientset is a clientset for the EdgeNet API groups
-	edgenetclientset clientset.Interface
-
-	tenantLister listers.TenantLister
-	tenantSynced cache.InformerSynced
-
-	// workqueue is a rate limited work queue. This is used to queue work to be
-	// processed instead of performing it as soon as a change happens. This
-	// means we can ensure we only process a fixed amount of resources at a
-	// time, and makes it easy to ensure we are never processing the same item
-	// simultaneously in two different workers.
-	workqueue workqueue.RateLimitingInterface
-	// recorder is an event recorder for recording Event resources to the
-	// Kubernetes API.
-	recorder record.EventRecorder
-}
+// Definitions of the state of the tenant resource
+const (
+	successSynced         = "Synced"
+	messageResourceSynced = "Tenant synced successfully"
+	create                = "create"
+	update                = "update"
+	delete                = "delete"
+	failure               = "failure"
+	approved              = "approved"
+	established           = "established"
+)
 
 // Dictionary of status messages
 var statusDict = map[string]string{
@@ -89,6 +72,27 @@ var statusDict = map[string]string{
 	"user-failure":                      "User creation failed due to lack of labels, user: %s",
 	"cert-failure":                      "Client cert generation failed, user: %s",
 	"kubeconfig-failure":                "Kubeconfig file creation failed, user: %s",
+}
+
+// The main structure of controller
+type Controller struct {
+	// kubeclientset is a standard kubernetes clientset
+	kubeclientset kubernetes.Interface
+	// edgenetclientset is a clientset for the EdgeNet API groups
+	edgenetclientset clientset.Interface
+
+	tenantsLister listers.TenantLister
+	tenantsSynced cache.InformerSynced
+
+	// workqueue is a rate limited work queue. This is used to queue work to be
+	// processed instead of performing it as soon as a change happens. This
+	// means we can ensure we only process a fixed amount of resources at a
+	// time, and makes it easy to ensure we are never processing the same item
+	// simultaneously in two different workers.
+	workqueue workqueue.RateLimitingInterface
+	// recorder is an event recorder for recording Event resources to the
+	// Kubernetes API.
+	recorder record.EventRecorder
 }
 
 func NewController(
@@ -106,14 +110,13 @@ func NewController(
 	controller := &Controller{
 		kubeclientset:    kubeclientset,
 		edgenetclientset: edgenetclientset,
-		tenantLister:     tenantInformer.Lister(),
-		tenantSynced:     tenantInformer.Informer().HasSynced,
-		workqueue:        workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		tenantsLister:    tenantInformer.Lister(),
+		tenantsSynced:    tenantInformer.Informer().HasSynced,
+		workqueue:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Tenants"),
 		recorder:         recorder,
 	}
 
 	klog.V(4).Infoln("Setting up event handlers")
-
 	tenantInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueTenant,
 		UpdateFunc: func(oldObj, newObj interface{}) {
@@ -131,20 +134,7 @@ func NewController(
 	return controller
 }
 
-// enqueueTenant takes a Tenant resource and converts it into a namespace/name
-// string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than Tenant.
-func (c *Controller) enqueueTenant(obj interface{}) {
-	var key string
-	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		utilruntime.HandleError(err)
-		return
-	}
-	c.workqueue.Add(key)
-}
-
-// Run will set up the event handlers for the types of tenant and node, as well
+// Run will set up the event handlers for the types of tenant, as well
 // as syncing informer caches and starting workers. It will block until stopCh
 // is closed, at which point it will shutdown the workqueue and wait for
 // workers to finish processing their current work items.
@@ -155,7 +145,8 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	klog.V(4).Infoln("Starting Tenant controller")
 
 	klog.V(4).Infoln("Waiting for informer caches to sync")
-	if ok := cache.WaitForCacheSync(stopCh, c.tenantSynced); !ok {
+	if ok := cache.WaitForCacheSync(stopCh,
+		c.tenantsSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
@@ -179,9 +170,9 @@ func (c *Controller) runWorker() {
 	}
 }
 
-// This function deals with the queue and sends each item in it to the specified handler to be processed.
+// processNextWorkItem will read a single work item off the workqueue and
+// attempt to process it, by calling the syncHandler.
 func (c *Controller) processNextWorkItem() bool {
-	// Fetch the item from workqueue
 	obj, shutdown := c.workqueue.Get()
 
 	if shutdown {
@@ -190,20 +181,19 @@ func (c *Controller) processNextWorkItem() bool {
 
 	err := func(obj interface{}) error {
 		defer c.workqueue.Done(obj)
-
 		var key string
 		var ok bool
 
 		if key, ok = obj.(string); !ok {
 			c.workqueue.Forget(obj)
-			utilruntime.HandleError(fmt.Errorf("expected `string` in workqueue but got %#v", obj))
+			utilruntime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
 			return nil
 		}
 		if err := c.syncHandler(key); err != nil {
 			c.workqueue.AddRateLimited(key)
 			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
 		}
-		c.workqueue.Forget(key)
+		c.workqueue.Forget(obj)
 		klog.V(4).Infof("Successfully synced '%s'", key)
 		return nil
 	}(obj)
@@ -216,28 +206,43 @@ func (c *Controller) processNextWorkItem() bool {
 	return true
 }
 
+// syncHandler compares the actual state with the desired, and attempts to
+// converge the two. It then updates the Status block of the Tenant
+// resource with the current status of the resource.
 func (c *Controller) syncHandler(key string) error {
 	_, name, err := cache.SplitMetaNamespaceKey(key)
-
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
 		return nil
 	}
 
-	tenant, err := c.tenantLister.Get(name)
-
+	tenant, err := c.tenantsLister.Get(name)
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("tenant '%s' in work queue no longer exists", name))
-
-		// In this case we assume the resource is deleted
 		if errors.IsNotFound(err) {
+			utilruntime.HandleError(fmt.Errorf("tenant '%s' in work queue no longer exists", key))
 			return nil
 		}
+
 		return err
 	}
 
 	c.TuneTenant(tenant)
+
+	c.recorder.Event(tenant, corev1.EventTypeNormal, successSynced, messageResourceSynced)
 	return nil
+}
+
+// enqueueTenant takes a Tenant resource and converts it into a namespace/name
+// string which is then put onto the work queue. This method should *not* be
+// passed resources of any type other than Tenant.
+func (c *Controller) enqueueTenant(obj interface{}) {
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.workqueue.Add(key)
 }
 
 func (c *Controller) TuneTenant(tenant *corev1alpha.Tenant) {
