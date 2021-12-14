@@ -35,10 +35,13 @@ import (
 
 // commonData to have the common data
 type commonData struct {
-	Tenant   string
-	Username string
-	Name     string
-	Email    []string
+	Tenant      string
+	Namespace   string
+	Cluster     string
+	Name        string
+	Username    string
+	RoleRequest string
+	Email       []string
 }
 
 // CommonContentData to set the common variables

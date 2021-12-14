@@ -22,6 +22,14 @@ package v1alpha
 // EmailVerificationLister.
 type EmailVerificationListerExpansion interface{}
 
+// RoleRequestListerExpansion allows custom methods to be added to
+// RoleRequestLister.
+type RoleRequestListerExpansion interface{}
+
+// RoleRequestNamespaceListerExpansion allows custom methods to be added to
+// RoleRequestNamespaceLister.
+type RoleRequestNamespaceListerExpansion interface{}
+
 // TenantRequestListerExpansion allows custom methods to be added to
 // TenantRequestLister.
 type TenantRequestListerExpansion interface{}

@@ -32,6 +32,10 @@ func (c *FakeRegistrationV1alpha) EmailVerifications() v1alpha.EmailVerification
 	return &FakeEmailVerifications{c}
 }
 
+func (c *FakeRegistrationV1alpha) RoleRequests(namespace string) v1alpha.RoleRequestInterface {
+	return &FakeRoleRequests{c, namespace}
+}
+
 func (c *FakeRegistrationV1alpha) TenantRequests() v1alpha.TenantRequestInterface {
 	return &FakeTenantRequests{c}
 }

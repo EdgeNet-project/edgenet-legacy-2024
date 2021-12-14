@@ -68,6 +68,55 @@ type TenantRequestList struct {
 }
 
 // +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// RoleRequest describes a RoleRequest resource
+type RoleRequest struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the rolerequest resource spec
+	Spec RoleRequestSpec `json:"spec"`
+	// Status is the rolerequest resource status
+	Status RoleRequestStatus `json:"status,omitempty"`
+}
+
+// RoleRequestSpec is the spec for a RoleRequest resource
+type RoleRequestSpec struct {
+	FirstName      string      `json:"firstname"`
+	LastName       string      `json:"lastname"`
+	Email          string      `json:"email"`
+	RoleRef        RoleRefSpec `json:"roleref"`
+	Authentication []string    `json:"authentication"`
+	Approved       bool        `json:"approved"`
+}
+
+// RoleRefSpec indicates the requested Role / ClusterRole
+type RoleRefSpec struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+}
+
+// RoleRequestStatus is the status for a RoleRequest resource
+type RoleRequestStatus struct {
+	Expiry  *metav1.Time `json:"expiry"`
+	State   string       `json:"state"`
+	Message string       `json:"message"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// RoleRequestList is a list of RoleRequest resources
+type RoleRequestList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	Items []RoleRequest `json:"items"`
+}
+
+// +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 

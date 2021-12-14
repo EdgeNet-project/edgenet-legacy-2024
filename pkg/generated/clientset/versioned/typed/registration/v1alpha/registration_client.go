@@ -27,6 +27,7 @@ import (
 type RegistrationV1alphaInterface interface {
 	RESTClient() rest.Interface
 	EmailVerificationsGetter
+	RoleRequestsGetter
 	TenantRequestsGetter
 	UserRequestsGetter
 }
@@ -38,6 +39,10 @@ type RegistrationV1alphaClient struct {
 
 func (c *RegistrationV1alphaClient) EmailVerifications() EmailVerificationInterface {
 	return newEmailVerifications(c)
+}
+
+func (c *RegistrationV1alphaClient) RoleRequests(namespace string) RoleRequestInterface {
+	return newRoleRequests(c, namespace)
 }
 
 func (c *RegistrationV1alphaClient) TenantRequests() TenantRequestInterface {

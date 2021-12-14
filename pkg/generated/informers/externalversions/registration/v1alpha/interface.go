@@ -26,6 +26,8 @@ import (
 type Interface interface {
 	// EmailVerifications returns a EmailVerificationInformer.
 	EmailVerifications() EmailVerificationInformer
+	// RoleRequests returns a RoleRequestInformer.
+	RoleRequests() RoleRequestInformer
 	// TenantRequests returns a TenantRequestInformer.
 	TenantRequests() TenantRequestInformer
 	// UserRequests returns a UserRequestInformer.
@@ -46,6 +48,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // EmailVerifications returns a EmailVerificationInformer.
 func (v *version) EmailVerifications() EmailVerificationInformer {
 	return &emailVerificationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// RoleRequests returns a RoleRequestInformer.
+func (v *version) RoleRequests() RoleRequestInformer {
+	return &roleRequestInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // TenantRequests returns a TenantRequestInformer.
