@@ -42,6 +42,7 @@ type commonData struct {
 	Username    string
 	RoleRequest string
 	Email       []string
+	AuthMethod  []string
 }
 
 // CommonContentData to set the common variables

@@ -75,6 +75,10 @@ const (
 	messageRoleApproved    = "Requested Role / Cluster Role approved successfully"
 	failureBinding         = "Binding Failed"
 	messageBindingFailed   = "Role binding failed"
+	failureCert            = "Generation Failed"
+	messageCertFailed      = "Client certificate generation failed"
+	failureConfig          = "Kubeconfig Failed"
+	messageConfigFailed    = "Making Kubeconfig failed"
 	failure                = "Failure"
 	pending                = "Pending"
 	approved               = "Approved"
@@ -438,7 +442,7 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 					}
 					if len(emailList) > 0 {
 						sendRoleRequestNotification("role-request-notification", roleRequestCopy.GetNamespace(), namespaceLabels["edge-net.io/cluster-uid"],
-							fmt.Sprintf("%s %s", roleRequestCopy.Spec.FirstName, roleRequestCopy.Spec.LastName), roleRequestCopy.Spec.Email, roleRequestCopy.GetName(), emailList)
+							fmt.Sprintf("%s %s", roleRequestCopy.Spec.FirstName, roleRequestCopy.Spec.LastName), roleRequestCopy.Spec.Email, roleRequestCopy.GetName(), emailList, []string{})
 					}
 				}()
 			} else {
@@ -495,7 +499,26 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 						}
 					}
 					if roleBound {
-						// TODO: Email including kubeconfig file with specified authentication methods, if any.
+						authMethodList := []string{}
+						for _, method := range roleRequestCopy.Spec.Authentication {
+							if strings.ToLower(method) == "client-certificate" {
+								if crt, key, err := access.GenerateClientCerts(roleRequestCopy.GetNamespace(), roleRequestLabels["edge-net.io/acceptable-use-policy"], roleRequestCopy.Spec.Email); err == nil {
+									if err = access.MakeConfig(roleRequestCopy.GetNamespace(), roleRequestLabels["edge-net.io/acceptable-use-policy"], roleRequestCopy.Spec.Email, crt, key); err == nil {
+										authMethodList = append(authMethodList, strings.ToLower(method))
+									} else {
+										c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureConfig, messageConfigFailed)
+									}
+								} else {
+									c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureCert, messageCertFailed)
+								}
+							}
+							if strings.ToLower(method) == "oidc" {
+								authMethodList = append(authMethodList, strings.ToLower(method))
+							}
+						}
+						klog.V(4).Infoln(authMethodList)
+						sendRoleRequestNotification("role-request-approved", roleRequestCopy.GetNamespace(), namespaceLabels["edge-net.io/cluster-uid"],
+							fmt.Sprintf("%s %s", roleRequestCopy.Spec.FirstName, roleRequestCopy.Spec.LastName), roleRequestCopy.Spec.Email, roleRequestCopy.GetName(), []string{roleRequestCopy.Spec.Email}, authMethodList)
 					}
 				}
 			}
@@ -505,7 +528,7 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 	}
 }
 
-func sendRoleRequestNotification(subject, namespace, clusterUID, fullname, email, roleRequestName string, emailList []string) {
+func sendRoleRequestNotification(subject, namespace, clusterUID, fullname, email, roleRequestName string, emailList, authMethod []string) {
 	contentData := new(mailer.CommonContentData)
 	contentData.CommonData.Namespace = namespace
 	contentData.CommonData.Cluster = clusterUID
@@ -513,6 +536,7 @@ func sendRoleRequestNotification(subject, namespace, clusterUID, fullname, email
 	contentData.CommonData.Username = email
 	contentData.CommonData.RoleRequest = roleRequestName
 	contentData.CommonData.Email = emailList
+	contentData.CommonData.AuthMethod = authMethod
 	mailer.Send(subject, contentData)
 }
 
