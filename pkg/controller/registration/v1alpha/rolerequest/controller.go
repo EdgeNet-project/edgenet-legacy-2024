@@ -434,9 +434,9 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 				go func() {
 					emailList := []string{}
 					if roleBindingRaw, err := c.kubeclientset.RbacV1().RoleBindings(roleRequestCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
+						r, _ := regexp.Compile("(.*)(owner|admin|manager)(.*)")
 						for _, roleBindingRow := range roleBindingRaw.Items {
-							match, _ := regexp.MatchString("(.*)(owner|admin|manager)(.*)", roleBindingRow.GetName())
-							if !match {
+							if match := r.MatchString(roleBindingRow.GetName()); !match {
 								continue
 							}
 							for _, subjectRow := range roleBindingRow.Subjects {
