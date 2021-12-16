@@ -44,7 +44,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -135,6 +134,10 @@ func NewController(
 			newRoleRequest := new.(*registrationv1alpha.RoleRequest)
 			oldRoleRequest := old.(*registrationv1alpha.RoleRequest)
 			if reflect.DeepEqual(newRoleRequest.Spec, oldRoleRequest.Spec) {
+				if (oldRoleRequest.Status.Expiry != nil && newRoleRequest.Status.Expiry != nil) &&
+					!oldRoleRequest.Status.Expiry.Time.Equal(newRoleRequest.Status.Expiry.Time) {
+					controller.enqueueRoleRequestAfter(newRoleRequest, time.Until(newRoleRequest.Status.Expiry.Time))
+				}
 				return
 			}
 			controller.enqueueRoleRequest(new)
@@ -167,7 +170,6 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
-	go c.RunExpiryController()
 
 	klog.V(4).Infoln("Started workers")
 	<-stopCh
@@ -261,6 +263,19 @@ func (c *Controller) enqueueRoleRequest(obj interface{}) {
 	c.workqueue.Add(key)
 }
 
+// enqueueRoleRequestAfter takes a RoleRequest resource and converts it into a namespace/name
+// string which is then put onto the work queue after the expiry date to be deleted. This method should *not* be
+// passed resources of any type other than RoleRequest.
+func (c *Controller) enqueueRoleRequestAfter(obj interface{}, after time.Duration) {
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.workqueue.AddAfter(key, after)
+}
+
 func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleRequest) {
 	oldStatus := roleRequestCopy.Status
 	statusUpdate := func() {
@@ -270,13 +285,16 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 			}
 		}
 	}
-	defer statusUpdate()
 	if roleRequestCopy.Status.Expiry == nil {
 		// Set the approval timeout which is 72 hours
 		roleRequestCopy.Status.Expiry = &metav1.Time{
 			Time: time.Now().Add(72 * time.Hour),
 		}
+	} else if time.Until(roleRequestCopy.Status.Expiry.Time) <= 0 {
+		c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestCopy.GetNamespace()).Delete(context.TODO(), roleRequestCopy.GetName(), metav1.DeleteOptions{})
+		return
 	}
+	defer statusUpdate()
 
 	// Below code checks whether namespace, where role request made, is local to the cluster or is propagated along with a federated deployment.
 	// If another cluster propagates the namespace, we skip checking the owner tenant's status as the Selective Deployment entity manages this life-cycle.
@@ -345,7 +363,7 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 			if acceptableUsePolicy, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), roleRequestLabels["edge-net.io/acceptable-use-policy"], metav1.GetOptions{}); err == nil {
 				if acceptableUsePolicy.Spec.Email == roleRequestCopy.Spec.Email {
 					aupExists = true
-					if acceptableUsePolicy.Spec.Accepted == true {
+					if acceptableUsePolicy.Spec.Accepted {
 						policyAgreed = true
 					}
 				}
@@ -363,7 +381,7 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 						} else {
 							klog.V(4).Infoln(err)
 						}
-						if acceptableUsePolicyRow.Spec.Accepted == true {
+						if acceptableUsePolicyRow.Spec.Accepted {
 							policyAgreed = true
 						}
 						break
@@ -371,7 +389,7 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 				}
 			}
 		}
-		if aupExists == false {
+		if !aupExists {
 			acceptableUsePolicy := new(corev1alpha.AcceptableUsePolicy)
 			acceptableUsePolicy.SetName(fmt.Sprintf("%s-%s", roleRequestCopy.GetName(), util.GenerateRandomString(6)))
 			acceptableUsePolicy.Spec.Email = roleRequestCopy.Spec.Email
@@ -549,72 +567,6 @@ func (c *Controller) sendEmail(roleRequest *registrationv1alpha.RoleRequest, ten
 	contentData.CommonData.Name = fmt.Sprintf("%s %s", roleRequest.Spec.FirstName, roleRequest.Spec.LastName)
 	contentData.CommonData.Email = []string{roleRequest.Spec.Email}
 	mailer.Send(subject, contentData)
-}
-
-// RunExpiryController puts a procedure in place to turn accepted policies into not accepted
-func (c *Controller) RunExpiryController() {
-	var closestExpiry time.Time
-	terminated := make(chan bool)
-	newExpiry := make(chan time.Time)
-	defer close(terminated)
-	defer close(newExpiry)
-
-	watchRoleRequest, err := c.edgenetclientset.RegistrationV1alpha().RoleRequests("").Watch(context.TODO(), metav1.ListOptions{})
-	if err == nil {
-		watchEvents := func(watchRoleRequest watch.Interface, newExpiry *chan time.Time) {
-			// Watch the events of role request object
-			// Get events from watch interface
-			for roleRequestEvent := range watchRoleRequest.ResultChan() {
-				// Get updated role request object
-				updatedRoleRequest, status := roleRequestEvent.Object.(*registrationv1alpha.RoleRequest)
-				if status {
-					if updatedRoleRequest.Status.Expiry != nil {
-						*newExpiry <- updatedRoleRequest.Status.Expiry.Time
-					}
-				}
-			}
-		}
-		go watchEvents(watchRoleRequest, &newExpiry)
-	} else {
-		go c.RunExpiryController()
-		terminated <- true
-	}
-
-infiniteLoop:
-	for {
-		// Wait on multiple channel operations
-		select {
-		case timeout := <-newExpiry:
-			if closestExpiry.Sub(timeout) > 0 {
-				closestExpiry = timeout
-				klog.V(4).Infof("ExpiryController: Closest expiry date is %v", closestExpiry)
-			}
-		case <-time.After(time.Until(closestExpiry)):
-			roleRequestRaw, err := c.edgenetclientset.RegistrationV1alpha().RoleRequests("").List(context.TODO(), metav1.ListOptions{})
-			if err != nil {
-				// TO-DO: Provide more information on error
-				klog.V(4).Infoln(err)
-			}
-			for _, roleRequestRow := range roleRequestRaw.Items {
-				if roleRequestRow.Status.Expiry != nil && roleRequestRow.Status.Expiry.Time.Sub(time.Now()) <= 0 {
-					c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestRow.GetNamespace()).Delete(context.TODO(), roleRequestRow.GetName(), metav1.DeleteOptions{})
-				} else if roleRequestRow.Status.Expiry != nil && roleRequestRow.Status.Expiry.Time.Sub(time.Now()) > 0 {
-					if closestExpiry.Sub(time.Now()) <= 0 || closestExpiry.Sub(roleRequestRow.Status.Expiry.Time) > 0 {
-						closestExpiry = roleRequestRow.Status.Expiry.Time
-						klog.V(4).Infof("ExpiryController: Closest expiry date is %v after the expiration of a role request", closestExpiry)
-					}
-				}
-			}
-
-			if closestExpiry.Sub(time.Now()) <= 0 {
-				closestExpiry = time.Now().AddDate(1, 0, 0)
-				klog.V(4).Infof("ExpiryController: Closest expiry date is %v after the expiration of a role request", closestExpiry)
-			}
-		case <-terminated:
-			watchRoleRequest.Stop()
-			break infiniteLoop
-		}
-	}
 }
 
 // SetAsOwnerReference put the rolerequest as owner
