@@ -31,7 +31,6 @@ import (
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -271,12 +270,12 @@ func (c *Controller) applyProcedure(acceptableUsePolicyCopy *corev1alpha.Accepta
 			acceptableUsePolicyCopy.Status.Message = []string{statusDict["aup-agreed"]}
 			// Get the user who owns this acceptable use policy object
 			if aupLabels != nil && aupLabels["edge-net.io/firstname"] != "" && aupLabels["edge-net.io/lastname"] != "" {
-				contentData := mailer.CommonContentData{}
+				/*contentData := mailer.CommonContentData{}
 				contentData.CommonData.Tenant = aupLabels["edge-net.io/tenant"]
 				contentData.CommonData.Username = aupLabels["edge-net.io/username"]
 				contentData.CommonData.Name = fmt.Sprintf("%s %s", aupLabels["edge-net.io/firstname"], aupLabels["edge-net.io/lastname"])
 				contentData.CommonData.Email = []string{acceptableUsePolicyCopy.Spec.Email}
-				mailer.Send("acceptable-use-policy-accepted", contentData)
+				mailer.Send("acceptable-use-policy-accepted", contentData)*/
 			}
 		} else if acceptableUsePolicyCopy.Status.Expiry.Time.Sub(time.Now()) > 0 {
 			acceptableUsePolicyCopy.Status.State = success
@@ -358,14 +357,14 @@ infiniteLoop:
 			for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
 				if acceptableUsePolicyRow.Status.Expiry != nil && acceptableUsePolicyRow.Status.Expiry.Time.Sub(time.Now()) <= 0 && acceptableUsePolicyRow.Spec.Accepted {
 					acceptableUsePolicy := acceptableUsePolicyRow.DeepCopy()
-					aupLabels := acceptableUsePolicy.GetLabels()
+					//aupLabels := acceptableUsePolicy.GetLabels()
 
-					contentData := mailer.CommonContentData{}
+					/*contentData := mailer.CommonContentData{}
 					contentData.CommonData.Tenant = aupLabels["edge-net.io/tenant"]
 					contentData.CommonData.Username = aupLabels["edge-net.io/username"]
 					contentData.CommonData.Name = fmt.Sprintf("%s %s", aupLabels["edge-net.io/firstname"], aupLabels["edge-net.io/lastname"])
 					contentData.CommonData.Email = []string{acceptableUsePolicy.Spec.Email}
-					mailer.Send("acceptable-use-policy-expired", contentData)
+					mailer.Send("acceptable-use-policy-expired", contentData)*/
 					acceptableUsePolicy.Spec.Accepted = false
 					go c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), acceptableUsePolicy, metav1.UpdateOptions{})
 				} else if acceptableUsePolicyRow.Status.Expiry != nil && acceptableUsePolicyRow.Status.Expiry.Time.Sub(time.Now()) > 0 {

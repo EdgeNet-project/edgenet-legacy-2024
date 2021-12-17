@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"strconv"
 	"testing"
@@ -17,6 +19,7 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
+	"github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -37,9 +40,9 @@ var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
 
 func TestMain(m *testing.M) {
-	//klog.SetOutput(ioutil.Discard)
-	//log.SetOutput(ioutil.Discard)
-	//logrus.SetOutput(ioutil.Discard)
+	klog.SetOutput(ioutil.Discard)
+	log.SetOutput(ioutil.Discard)
+	logrus.SetOutput(ioutil.Discard)
 
 	flag.String("dir", "../../../../..", "Override the directory.")
 	flag.String("smtp-path", "../../../../../configs/smtp_test.yaml", "Set SMTP path.")

@@ -33,7 +33,6 @@ import (
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/registration/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	authorizationv1 "k8s.io/api/authorization/v1"
@@ -244,7 +243,7 @@ func (c *Controller) syncHandler(key string) error {
 	}
 
 	if rolerequest.Status.State != approved {
-		c.applyProcedure(rolerequest.DeepCopy())
+		c.processRoleRequest(rolerequest.DeepCopy())
 	}
 	c.recorder.Event(rolerequest, corev1.EventTypeNormal, successSynced, messageResourceSynced)
 	return nil
@@ -276,7 +275,7 @@ func (c *Controller) enqueueRoleRequestAfter(obj interface{}, after time.Duratio
 	c.workqueue.AddAfter(key, after)
 }
 
-func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleRequest) {
+func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.RoleRequest) {
 	oldStatus := roleRequestCopy.Status
 	statusUpdate := func() {
 		if !reflect.DeepEqual(oldStatus, roleRequestCopy.Status) {
@@ -459,8 +458,8 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 						}
 					}
 					if len(emailList) > 0 {
-						sendRoleRequestNotification("role-request-notification", roleRequestCopy.GetNamespace(), namespaceLabels["edge-net.io/cluster-uid"],
-							fmt.Sprintf("%s %s", roleRequestCopy.Spec.FirstName, roleRequestCopy.Spec.LastName), roleRequestCopy.Spec.Email, roleRequestCopy.GetName(), emailList, []string{})
+						access.SendEmailForRoleRequest(roleRequestCopy, "role-request-made", "[EdgeNet] A role request made",
+							string(systemNamespace.GetUID()), emailList, []string{})
 					}
 				}()
 			} else {
@@ -472,6 +471,7 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 				// Check if role binding already exists; if not, create a role binding for the user.
 				// If role binding exists, check if the user already holds the role. If not, pin the role to the user.
 				if roleBindingRaw, err := c.kubeclientset.RbacV1().RoleBindings(roleRequestCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
+					// TODO: Simplfy below
 					roleBindingExists := false
 					roleBound := false
 					for _, roleBindingRow := range roleBindingRaw.Items {
@@ -516,6 +516,7 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 							roleBound = true
 						}
 					}
+
 					if roleBound {
 						authMethodList := []string{}
 						for _, method := range roleRequestCopy.Spec.Authentication {
@@ -535,8 +536,8 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 							}
 						}
 						klog.V(4).Infoln(authMethodList)
-						sendRoleRequestNotification("role-request-approved", roleRequestCopy.GetNamespace(), namespaceLabels["edge-net.io/cluster-uid"],
-							fmt.Sprintf("%s %s", roleRequestCopy.Spec.FirstName, roleRequestCopy.Spec.LastName), roleRequestCopy.Spec.Email, roleRequestCopy.GetName(), []string{roleRequestCopy.Spec.Email}, authMethodList)
+						access.SendEmailForRoleRequest(roleRequestCopy, "role-request-approved", "[EdgeNet] Your role request approved",
+							string(systemNamespace.GetUID()), []string{roleRequestCopy.Spec.Email}, authMethodList)
 					}
 				}
 			}
@@ -544,29 +545,6 @@ func (c *Controller) applyProcedure(roleRequestCopy *registrationv1alpha.RoleReq
 	} else {
 		c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestCopy.GetNamespace()).Delete(context.TODO(), roleRequestCopy.GetName(), metav1.DeleteOptions{})
 	}
-}
-
-func sendRoleRequestNotification(subject, namespace, clusterUID, fullname, email, roleRequestName string, emailList, authMethod []string) {
-	contentData := new(mailer.CommonContentData)
-	contentData.CommonData.Namespace = namespace
-	contentData.CommonData.Cluster = clusterUID
-	contentData.CommonData.Name = fullname
-	contentData.CommonData.Username = email
-	contentData.CommonData.RoleRequest = roleRequestName
-	contentData.CommonData.Email = emailList
-	contentData.CommonData.AuthMethod = authMethod
-	mailer.Send(subject, contentData)
-}
-
-// sendEmail to send notification to participants
-func (c *Controller) sendEmail(roleRequest *registrationv1alpha.RoleRequest, tenantName, subject string) {
-	// Set the HTML template variables
-	contentData := mailer.CommonContentData{}
-	contentData.CommonData.Tenant = tenantName
-	contentData.CommonData.Username = roleRequest.Spec.Email
-	contentData.CommonData.Name = fmt.Sprintf("%s %s", roleRequest.Spec.FirstName, roleRequest.Spec.LastName)
-	contentData.CommonData.Email = []string{roleRequest.Spec.Email}
-	mailer.Send(subject, contentData)
 }
 
 // SetAsOwnerReference put the rolerequest as owner

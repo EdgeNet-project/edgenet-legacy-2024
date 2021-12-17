@@ -31,7 +31,6 @@ import (
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/registration/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	log "github.com/sirupsen/logrus"
@@ -279,7 +278,7 @@ func (c *Controller) applyProcedure(userRequestCopy *registrationv1alpha.UserReq
 					}
 				}
 			}
-			c.sendEmail(userRequestCopy, tenant.GetName(), "user-creation-failure")
+			//c.sendEmail(userRequestCopy, tenant.GetName(), "user-creation-failure")
 			userRequestCopy.Status.State = failure
 			userRequestCopy.Status.Message = []string{statusDict["user-failed"]}
 		} else {
@@ -330,7 +329,7 @@ func (c *Controller) applyProcedure(userRequestCopy *registrationv1alpha.UserReq
 }
 
 // sendEmail to send notification to participants
-func (c *Controller) sendEmail(userRequest *registrationv1alpha.UserRequest, tenantName, subject string) {
+/*func (c *Controller) sendEmail(userRequest *registrationv1alpha.UserRequest, tenantName, subject string) {
 	// Set the HTML template variables
 	contentData := mailer.CommonContentData{}
 	contentData.CommonData.Tenant = tenantName
@@ -338,7 +337,7 @@ func (c *Controller) sendEmail(userRequest *registrationv1alpha.UserRequest, ten
 	contentData.CommonData.Name = fmt.Sprintf("%s %s", userRequest.Spec.FirstName, userRequest.Spec.LastName)
 	contentData.CommonData.Email = []string{userRequest.Spec.Email}
 	mailer.Send(subject, contentData)
-}
+}*/
 
 // RunExpiryController puts a procedure in place to turn accepted policies into not accepted
 func (c *Controller) RunExpiryController() {

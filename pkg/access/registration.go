@@ -18,7 +18,6 @@ package access
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
@@ -86,11 +85,11 @@ func CreateEmailVerification(obj interface{}, ownerReferences []metav1.OwnerRefe
 		_, err := EdgenetClientset.RegistrationV1alpha().EmailVerifications().Create(context.TODO(), emailVerification.DeepCopy(), metav1.CreateOptions{})
 		if err == nil {
 			created = true
-			SendEmailVerificationNotification("tenant-email-verification", tenantRequest.GetName(), tenantRequest.Spec.Contact.Username,
-				fmt.Sprintf("%s %s", tenantRequest.Spec.Contact.FirstName, tenantRequest.Spec.Contact.LastName), tenantRequest.Spec.Contact.Email, code)
+			//SendEmailVerificationNotification("tenant-email-verification", tenantRequest.GetName(), tenantRequest.Spec.Contact.Username,
+			//	fmt.Sprintf("%s %s", tenantRequest.Spec.Contact.FirstName, tenantRequest.Spec.Contact.LastName), tenantRequest.Spec.Contact.Email, code)
 		} else {
-			SendEmailVerificationNotification("tenant-email-verification-malfunction", tenantRequest.GetName(), tenantRequest.Spec.Contact.Username,
-				fmt.Sprintf("%s %s", tenantRequest.Spec.Contact.FirstName, tenantRequest.Spec.Contact.LastName), tenantRequest.Spec.Contact.Email, "")
+			//SendEmailVerificationNotification("tenant-email-verification-malfunction", tenantRequest.GetName(), tenantRequest.Spec.Contact.Username,
+			//	fmt.Sprintf("%s %s", tenantRequest.Spec.Contact.FirstName, tenantRequest.Spec.Contact.LastName), tenantRequest.Spec.Contact.Email, "")
 		}
 	case *registrationv1alpha.UserRequest:
 		userRequest := obj.(*registrationv1alpha.UserRequest)
@@ -104,18 +103,44 @@ func CreateEmailVerification(obj interface{}, ownerReferences []metav1.OwnerRefe
 		_, err := EdgenetClientset.RegistrationV1alpha().EmailVerifications().Create(context.TODO(), emailVerification.DeepCopy(), metav1.CreateOptions{})
 		if err == nil {
 			created = true
-			SendEmailVerificationNotification("user-email-verification", strings.ToLower(userRequest.Spec.Tenant), userRequest.GetName(),
-				fmt.Sprintf("%s %s", userRequest.Spec.FirstName, userRequest.Spec.LastName), userRequest.Spec.Email, code)
+			//SendEmailVerificationNotification("user-email-verification", strings.ToLower(userRequest.Spec.Tenant), userRequest.GetName(),
+			//	fmt.Sprintf("%s %s", userRequest.Spec.FirstName, userRequest.Spec.LastName), userRequest.Spec.Email, code)
 		} else {
-			SendEmailVerificationNotification("user-email-verification-malfunction", strings.ToLower(userRequest.Spec.Tenant), userRequest.GetName(),
-				fmt.Sprintf("%s %s", userRequest.Spec.FirstName, userRequest.Spec.LastName), userRequest.Spec.Email, "")
+			//SendEmailVerificationNotification("user-email-verification-malfunction", strings.ToLower(userRequest.Spec.Tenant), userRequest.GetName(),
+			//	fmt.Sprintf("%s %s", userRequest.Spec.FirstName, userRequest.Spec.LastName), userRequest.Spec.Email, "")
 		}
 	}
 	return created
 }
 
+// CreateTenantResourceQuota generates a tenant resource quota with the name provided
+func CreateTenantResourceQuota(name string, ownerReferences []metav1.OwnerReference) (string, string) {
+	cpuQuota := "0m"
+	memoryQuota := "0Mi"
+	_, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		// Set a tenant resource quota
+		tenantResourceQuota := corev1alpha.TenantResourceQuota{}
+		tenantResourceQuota.SetName(name)
+		tenantResourceQuota.SetOwnerReferences(ownerReferences)
+		claim := corev1alpha.TenantResourceDetails{}
+		claim.Name = "Default"
+		claim.CPU = "8000m"
+		claim.Memory = "8192Mi"
+		tenantResourceQuota.Spec.Claim = append(tenantResourceQuota.Spec.Claim, claim)
+		_, err = EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{})
+		if err != nil {
+			klog.V(4).Infof(statusDict["TRQ-failed"], name, err)
+		}
+
+		cpuQuota = claim.CPU
+		memoryQuota = claim.Memory
+	}
+	return cpuQuota, memoryQuota
+}
+
 // SendEmail to send notification to tenant admins and authorized users about email verification
-func SendEmailVerificationNotification(subject, tenant, username, fullname, email, code string) {
+/*func SendEmailVerificationNotification(subject, tenant, username, fullname, email, code string) {
 	// Set the HTML template variables
 	var contentData interface{}
 
@@ -153,30 +178,19 @@ func SendEmailVerificationNotification(subject, tenant, username, fullname, emai
 	}
 
 	mailer.Send(subject, contentData)
-}
+}*/
 
-// CreateTenantResourceQuota generates a tenant resource quota with the name provided
-func CreateTenantResourceQuota(name string, ownerReferences []metav1.OwnerReference) (string, string) {
-	cpuQuota := "0m"
-	memoryQuota := "0Mi"
-	_, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		// Set a tenant resource quota
-		tenantResourceQuota := corev1alpha.TenantResourceQuota{}
-		tenantResourceQuota.SetName(name)
-		tenantResourceQuota.SetOwnerReferences(ownerReferences)
-		claim := corev1alpha.TenantResourceDetails{}
-		claim.Name = "Default"
-		claim.CPU = "8000m"
-		claim.Memory = "8192Mi"
-		tenantResourceQuota.Spec.Claim = append(tenantResourceQuota.Spec.Claim, claim)
-		_, err = EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{})
-		if err != nil {
-			klog.V(4).Infof(statusDict["TRQ-failed"], name, err)
-		}
-
-		cpuQuota = claim.CPU
-		memoryQuota = claim.Memory
-	}
-	return cpuQuota, memoryQuota
+func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha.RoleRequest, purpose, subject, clusterUID string, recipient, authMethod []string) {
+	email := new(mailer.Content)
+	email.Cluster = clusterUID
+	email.User = roleRequestCopy.Spec.Email
+	email.FirstName = roleRequestCopy.Spec.FirstName
+	email.LastName = roleRequestCopy.Spec.Email
+	email.Subject = subject
+	email.Recipient = recipient
+	email.RoleRequest = new(mailer.RoleRequest)
+	email.RoleRequest.Name = roleRequestCopy.GetName()
+	email.RoleRequest.Namespace = roleRequestCopy.GetNamespace()
+	email.RoleRequest.AuthMethod = authMethod
+	email.Send(purpose)
 }

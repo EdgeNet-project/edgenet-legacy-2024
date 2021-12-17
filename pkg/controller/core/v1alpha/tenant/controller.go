@@ -298,7 +298,7 @@ func (c *Controller) TuneTenant(tenant *corev1alpha.Tenant) {
 		if !exists && len(tenantCopy.Status.Message) == 0 {
 			tenantCopy.Status.State = established
 			tenantCopy.Status.Message = []string{statusDict["tenant-established"]}
-			access.SendTenantEmail(tenantCopy, nil, "tenant-creation-successful")
+			//access.SendTenantEmail(tenantCopy, nil, "tenant-creation-successful")
 		}
 	} else {
 		// Delete all subsidiary namespaces

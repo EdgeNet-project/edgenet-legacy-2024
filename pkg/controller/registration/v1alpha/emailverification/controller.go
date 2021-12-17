@@ -262,15 +262,15 @@ func (c *Controller) statusUpdate(labels map[string]string) {
 		tenantRequest.Status.EmailVerified = true
 		c.edgenetclientset.RegistrationV1alpha().TenantRequests().UpdateStatus(context.TODO(), tenantRequest, metav1.UpdateOptions{})
 		// Send email to inform admins of the cluster
-		access.SendEmailVerificationNotification("tenant-email-verified-alert", labels["edge-net.io/tenant"], tenantRequest.Spec.Contact.Username,
-			fmt.Sprintf("%s %s", tenantRequest.Spec.Contact.FirstName, tenantRequest.Spec.Contact.LastName), "", "")
+		//access.SendEmailVerificationNotification("tenant-email-verified-alert", labels["edge-net.io/tenant"], tenantRequest.Spec.Contact.Username,
+		//	fmt.Sprintf("%s %s", tenantRequest.Spec.Contact.FirstName, tenantRequest.Spec.Contact.LastName), "", "")
 	} else if strings.ToLower(labels["edge-net.io/registration"]) == "user" {
 		userRequestObj, _ := c.edgenetclientset.RegistrationV1alpha().UserRequests().Get(context.TODO(), labels["edge-net.io/username"], metav1.GetOptions{})
 		userRequestObj.Status.EmailVerified = true
 		c.edgenetclientset.RegistrationV1alpha().UserRequests().UpdateStatus(context.TODO(), userRequestObj, metav1.UpdateOptions{})
 		// Send email to inform edgenet tenant admins and authorized users
-		access.SendEmailVerificationNotification("user-email-verified-alert", labels["edge-net.io/tenant"], labels["edge-net.io/username"],
-			fmt.Sprintf("%s %s", userRequestObj.Spec.FirstName, userRequestObj.Spec.LastName), "", "")
+		//access.SendEmailVerificationNotification("user-email-verified-alert", labels["edge-net.io/tenant"], labels["edge-net.io/username"],
+		//	fmt.Sprintf("%s %s", userRequestObj.Spec.FirstName, userRequestObj.Spec.LastName), "", "")
 	} else if strings.ToLower(labels["edge-net.io/registration"]) == "email" {
 		acceptableUsePolicy, _ := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), labels["edge-net.io/username"], metav1.GetOptions{})
 		acceptableUsePolicy.Spec.Accepted = true

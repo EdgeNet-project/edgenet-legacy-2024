@@ -24,7 +24,6 @@ import (
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -292,7 +291,7 @@ func CreateObjectSpecificRoleBinding(tenant, namespace, roleName string, user *r
 }
 
 // SendTenantEmail to send notification to participants
-func SendTenantEmail(tenant *corev1alpha.Tenant, user *registrationv1alpha.UserRequest, subject string) {
+/*func SendTenantEmail(tenant *corev1alpha.Tenant, user *registrationv1alpha.UserRequest, subject string) {
 	// Set the HTML template variables
 	contentData := mailer.CommonContentData{}
 	if tenant == nil {
@@ -328,8 +327,8 @@ func SendTenantEmail(tenant *corev1alpha.Tenant, user *registrationv1alpha.UserR
 			}
 		}
 	}
-	mailer.Send(subject, contentData)
-}
+	// mailer.Send(subject, contentData)
+}*/
 
 // ConfigurePermissions to generate rolebindings for owners, and users welcomed by owners
 func ConfigureTenantPermissions(tenant *corev1alpha.Tenant, user *registrationv1alpha.UserRequest, ownerReferences []metav1.OwnerReference) {
@@ -351,7 +350,7 @@ func ConfigureTenantPermissions(tenant *corev1alpha.Tenant, user *registrationv1
 			exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["aup-rolebinding-failure"], user.Spec.Email))
 			if err := CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, fmt.Sprintf("%s-%s", user.GetName(), userLabels["edge-net.io/user-template-hash"]), user.Spec.Email, roleBindLabels, ownerReferences); err != nil {
 				klog.V(4).Infof("Couldn't create aup cluster role binding %s, %s: %s", tenant.GetName(), acceptableUsePolicy, err)
-				SendTenantEmail(tenant, user, "user-creation-failure")
+				//SendTenantEmail(tenant, user, "user-creation-failure")
 				if !exists {
 					tenant.Status.State = failure
 					tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["aup-rolebinding-failure"], user.Spec.Email))
@@ -403,7 +402,7 @@ func ConfigureTenantPermissions(tenant *corev1alpha.Tenant, user *registrationv1
 			exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], user.Spec.Email))
 			if err != nil {
 				klog.V(4).Infof("Couldn't generate client cert %s, %s: %s", tenant.GetName(), user.Spec.Email, err)
-				SendTenantEmail(tenant, user, "user-cert-failure")
+				//SendTenantEmail(tenant, user, "user-cert-failure")
 				if !exists {
 					tenant.Status.State = failure
 					tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], user.Spec.Email))
@@ -415,7 +414,7 @@ func ConfigureTenantPermissions(tenant *corev1alpha.Tenant, user *registrationv1
 			exists, index = util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["kubeconfig-failure"], user.Spec.Email))
 			if err != nil {
 				klog.V(4).Infof("Couldn't make kubeconfig file %s, %s: %s", tenant.GetName(), user.Spec.Email, err)
-				SendTenantEmail(tenant, user, "user-kubeconfig-failure")
+				//SendTenantEmail(tenant, user, "user-kubeconfig-failure")
 				if !exists {
 					tenant.Status.State = failure
 					tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["kubeconfig-failure"], user.Spec.Email))
@@ -427,7 +426,7 @@ func ConfigureTenantPermissions(tenant *corev1alpha.Tenant, user *registrationv1
 			if aupFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["aup-rolebinding-failure"], user.Spec.Email)); !aupFailure {
 				if certFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["cert-failure"], user.Spec.Email)); !certFailure {
 					if kubeconfigFailure, _ := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["kubeconfig-failure"], user.Spec.Email)); !kubeconfigFailure {
-						SendTenantEmail(nil, user, "user-registration-successful")
+						//SendTenantEmail(nil, user, "user-registration-successful")
 					}
 				}
 			}
@@ -439,7 +438,7 @@ func ConfigureTenantPermissions(tenant *corev1alpha.Tenant, user *registrationv1
 			exists, index := util.Contains(tenant.Status.Message, fmt.Sprintf(statusDict["permission-rolebinding-failure"], user.Spec.Email))
 			if err := CreateObjectSpecificRoleBinding(tenant.GetName(), tenant.GetName(), fmt.Sprintf("edgenet:tenant-%s", strings.ToLower(user.Spec.Role)), user); err != nil {
 				klog.V(4).Infof("Couldn't create permission cluster role binding %s, %s: %s", tenant.GetName(), user.Spec.Email, err)
-				SendTenantEmail(tenant, user, "user-creation-failure")
+				//SendTenantEmail(tenant, user, "user-creation-failure")
 				if !exists {
 					tenant.Status.State = failure
 					tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["permission-rolebinding-failure"], user.Spec.Email))
@@ -455,7 +454,7 @@ func ConfigureTenantPermissions(tenant *corev1alpha.Tenant, user *registrationv1
 				clusterRoleName := fmt.Sprintf("edgenet:%s:tenants:%s-%s", tenant.GetName(), tenant.GetName(), strings.ToLower(user.Spec.Role))
 				if err := CreateObjectSpecificClusterRoleBinding(tenant.GetName(), clusterRoleName, fmt.Sprintf("%s-%s", user.GetName(), userLabels["edge-net.io/user-template-hash"]), user.Spec.Email, roleBindLabels, ownerReferences); err != nil {
 					klog.V(4).Infof("Couldn't create administrator cluster role binding %s, %s: %s", tenant.GetName(), user.Spec.Email, err)
-					SendTenantEmail(tenant, user, "user-creation-failure")
+					//SendTenantEmail(tenant, user, "user-creation-failure")
 					if !exists {
 						tenant.Status.State = failure
 						tenant.Status.Message = append(tenant.Status.Message, fmt.Sprintf(statusDict["administrator-rolebinding-failure"], user.Spec.Email))
