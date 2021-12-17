@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"text/template"
 	"time"
@@ -54,13 +53,11 @@ type Content struct {
 	AcceptableUsePolicy *AcceptableUsePolicy
 }
 type RoleRequest struct {
-	Name       string
-	Namespace  string
-	AuthMethod []string
+	Name      string
+	Namespace string
 }
 type TenantRequest struct {
-	Tenant     string
-	AuthMethod []string
+	Tenant string
 }
 type EmailVerification struct {
 	Code string
@@ -108,24 +105,6 @@ func (c *Content) Send(purpose string) error {
 			AddTo(to).
 			SetSubject(c.Subject)
 		email.SetBodyData(mail.TextHTML, htmlBody.Bytes())
-		if c.RoleRequest != nil && purpose == "role-request-approved" || (c.TenantRequest != nil && purpose == "tenant-request-approved") {
-			for _, method := range c.RoleRequest.AuthMethod {
-				if method == "client-certificate" {
-					email.Attach(&mail.File{FilePath: fmt.Sprintf("%s/assets/kubeconfigs/%s.cfg", dir, c.User), Name: fmt.Sprintf("edgenet.cfg"), Inline: true})
-				}
-				if method == "oidc" {
-					email.Attach(&mail.File{FilePath: fmt.Sprintf("%s/assets/kubeconfigs/oidc.cfg", dir), Name: fmt.Sprintf("edgenet-oidc.cfg"), Inline: true})
-				}
-			}
-			for _, method := range c.TenantRequest.AuthMethod {
-				if method == "client-certificate" {
-					email.Attach(&mail.File{FilePath: fmt.Sprintf("%s/assets/kubeconfigs/%s.cfg", dir, c.User), Name: fmt.Sprintf("edgenet.cfg"), Inline: true})
-				}
-				if method == "oidc" {
-					email.Attach(&mail.File{FilePath: fmt.Sprintf("%s/assets/kubeconfigs/oidc.cfg", dir), Name: fmt.Sprintf("edgenet-oidc.cfg"), Inline: true})
-				}
-			}
-		}
 		if email.Error != nil {
 			klog.V(4).Infoln(email.Error)
 		}
@@ -154,14 +133,14 @@ func getSMTPInformation() (*smtpServer, error) {
 	}
 	file, err := os.Open(pathSMTP)
 	if err != nil {
-		log.Printf("Mailer: unexpected error executing command: %v", err)
+		klog.V(4).Infof("Mailer: unexpected error executing command: %v", err)
 		return nil, err
 	}
 	decoder := yaml.NewDecoder(file)
 	var smtpServer smtpServer
 	err = decoder.Decode(&smtpServer)
 	if err != nil {
-		log.Printf("Mailer: unexpected error executing command: %v", err)
+		klog.V(4).Infof("Mailer: unexpected error executing command: %v", err)
 		return nil, err
 	}
 	return &smtpServer, nil

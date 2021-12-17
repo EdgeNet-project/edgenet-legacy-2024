@@ -85,12 +85,11 @@ type RoleRequest struct {
 
 // RoleRequestSpec is the spec for a RoleRequest resource
 type RoleRequestSpec struct {
-	FirstName      string      `json:"firstname"`
-	LastName       string      `json:"lastname"`
-	Email          string      `json:"email"`
-	RoleRef        RoleRefSpec `json:"roleref"`
-	Authentication []string    `json:"authentication"`
-	Approved       bool        `json:"approved"`
+	FirstName string      `json:"firstname"`
+	LastName  string      `json:"lastname"`
+	Email     string      `json:"email"`
+	RoleRef   RoleRefSpec `json:"roleref"`
+	Approved  bool        `json:"approved"`
 }
 
 // RoleRefSpec indicates the requested Role / ClusterRole
@@ -188,7 +187,7 @@ type EmailVerificationSpec struct {
 type EmailVerificationStatus struct {
 	Expiry  *metav1.Time `json:"expiry"`
 	State   string       `json:"state"`
-	Message []string     `json:"message"`
+	Message string       `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

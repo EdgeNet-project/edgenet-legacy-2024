@@ -459,7 +459,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 					}
 					if len(emailList) > 0 {
 						access.SendEmailForRoleRequest(roleRequestCopy, "role-request-made", "[EdgeNet] A role request made",
-							string(systemNamespace.GetUID()), emailList, []string{})
+							string(systemNamespace.GetUID()), emailList)
 					}
 				}()
 			} else {
@@ -480,7 +480,6 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 							roleBindingExists = true
 							for _, subjectRow := range roleBindingRow.Subjects {
 								if subjectRow.Kind == "User" && subjectRow.Name == roleRequestCopy.Spec.Email {
-									roleBound = true
 									break
 								}
 							}
@@ -493,7 +492,8 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 									roleRequestCopy.Status.Message = messageBindingFailed
 									klog.V(4).Infoln(err)
 								} else {
-									roleBound = true
+									access.SendEmailForRoleRequest(roleRequestCopy, "role-request-approved", "[EdgeNet] Your role request approved",
+										string(systemNamespace.GetUID()), []string{roleRequestCopy.Spec.Email})
 								}
 								break
 							}
@@ -513,31 +513,9 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 							roleRequestCopy.Status.Message = messageBindingFailed
 							klog.V(4).Infoln(err)
 						} else {
-							roleBound = true
+							access.SendEmailForRoleRequest(roleRequestCopy, "role-request-approved", "[EdgeNet] Your role request approved",
+								string(systemNamespace.GetUID()), []string{roleRequestCopy.Spec.Email})
 						}
-					}
-
-					if roleBound {
-						authMethodList := []string{}
-						for _, method := range roleRequestCopy.Spec.Authentication {
-							if strings.ToLower(method) == "client-certificate" {
-								if crt, key, err := access.GenerateClientCerts(roleRequestCopy.GetNamespace(), roleRequestLabels["edge-net.io/acceptable-use-policy"], roleRequestCopy.Spec.Email); err == nil {
-									if err = access.MakeConfig(roleRequestCopy.GetNamespace(), roleRequestLabels["edge-net.io/acceptable-use-policy"], roleRequestCopy.Spec.Email, crt, key); err == nil {
-										authMethodList = append(authMethodList, strings.ToLower(method))
-									} else {
-										c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureConfig, messageConfigFailed)
-									}
-								} else {
-									c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureCert, messageCertFailed)
-								}
-							}
-							if strings.ToLower(method) == "oidc" {
-								authMethodList = append(authMethodList, strings.ToLower(method))
-							}
-						}
-						klog.V(4).Infoln(authMethodList)
-						access.SendEmailForRoleRequest(roleRequestCopy, "role-request-approved", "[EdgeNet] Your role request approved",
-							string(systemNamespace.GetUID()), []string{roleRequestCopy.Spec.Email}, authMethodList)
 					}
 				}
 			}

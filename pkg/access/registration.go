@@ -180,7 +180,7 @@ func CreateTenantResourceQuota(name string, ownerReferences []metav1.OwnerRefere
 	mailer.Send(subject, contentData)
 }*/
 
-func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha.RoleRequest, purpose, subject, clusterUID string, recipient, authMethod []string) {
+func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha.RoleRequest, purpose, subject, clusterUID string, recipient []string) {
 	email := new(mailer.Content)
 	email.Cluster = clusterUID
 	email.User = roleRequestCopy.Spec.Email
@@ -191,6 +191,5 @@ func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha.RoleRequest, p
 	email.RoleRequest = new(mailer.RoleRequest)
 	email.RoleRequest.Name = roleRequestCopy.GetName()
 	email.RoleRequest.Namespace = roleRequestCopy.GetNamespace()
-	email.RoleRequest.AuthMethod = authMethod
 	email.Send(purpose)
 }

@@ -109,11 +109,6 @@ func (in *EmailVerificationStatus) DeepCopyInto(out *EmailVerificationStatus) {
 		in, out := &in.Expiry, &out.Expiry
 		*out = (*in).DeepCopy()
 	}
-	if in.Message != nil {
-		in, out := &in.Message, &out.Message
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	return
 }
 
@@ -148,7 +143,7 @@ func (in *RoleRequest) DeepCopyInto(out *RoleRequest) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
-	in.Spec.DeepCopyInto(&out.Spec)
+	out.Spec = in.Spec
 	in.Status.DeepCopyInto(&out.Status)
 	return
 }
@@ -208,11 +203,6 @@ func (in *RoleRequestList) DeepCopyObject() runtime.Object {
 func (in *RoleRequestSpec) DeepCopyInto(out *RoleRequestSpec) {
 	*out = *in
 	out.RoleRef = in.RoleRef
-	if in.Authentication != nil {
-		in, out := &in.Authentication, &out.Authentication
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	return
 }
 
