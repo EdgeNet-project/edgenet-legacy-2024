@@ -52,6 +52,7 @@ type TenantRequestSpec struct {
 // TenantRequestStatus is the status for a TenantRequest resource
 type TenantRequestStatus struct {
 	EmailVerified bool         `json:"emailverified"`
+	PolicyAgreed  *bool        `json:"policyagreed"`
 	Expiry        *metav1.Time `json:"expiry"`
 	State         string       `json:"state"`
 	Message       []string     `json:"message"`
@@ -100,9 +101,10 @@ type RoleRefSpec struct {
 
 // RoleRequestStatus is the status for a RoleRequest resource
 type RoleRequestStatus struct {
-	Expiry  *metav1.Time `json:"expiry"`
-	State   string       `json:"state"`
-	Message string       `json:"message"`
+	PolicyAgreed *bool        `json:"policyagreed"`
+	Expiry       *metav1.Time `json:"expiry"`
+	State        string       `json:"state"`
+	Message      string       `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

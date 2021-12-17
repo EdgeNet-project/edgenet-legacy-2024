@@ -28,6 +28,7 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
+	acceptableusepolicyv1alpha "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/acceptableusepolicy"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
@@ -73,10 +74,6 @@ const (
 	messageRoleApproved    = "Requested Role / Cluster Role approved successfully"
 	failureBinding         = "Binding Failed"
 	messageBindingFailed   = "Role binding failed"
-	failureCert            = "Generation Failed"
-	messageCertFailed      = "Client certificate generation failed"
-	failureConfig          = "Kubeconfig Failed"
-	messageConfigFailed    = "Making Kubeconfig failed"
 	failure                = "Failure"
 	pending                = "Pending"
 	approved               = "Approved"
@@ -132,12 +129,9 @@ func NewController(
 		UpdateFunc: func(old, new interface{}) {
 			newRoleRequest := new.(*registrationv1alpha.RoleRequest)
 			oldRoleRequest := old.(*registrationv1alpha.RoleRequest)
-			if reflect.DeepEqual(newRoleRequest.Spec, oldRoleRequest.Spec) {
-				if (oldRoleRequest.Status.Expiry != nil && newRoleRequest.Status.Expiry != nil) &&
-					!oldRoleRequest.Status.Expiry.Time.Equal(newRoleRequest.Status.Expiry.Time) {
-					controller.enqueueRoleRequestAfter(newRoleRequest, time.Until(newRoleRequest.Status.Expiry.Time))
-				}
-				return
+			if (oldRoleRequest.Status.Expiry == nil && newRoleRequest.Status.Expiry != nil) ||
+				!oldRoleRequest.Status.Expiry.Time.Equal(newRoleRequest.Status.Expiry.Time) {
+				controller.enqueueRoleRequestAfter(newRoleRequest, time.Until(newRoleRequest.Status.Expiry.Time))
 			}
 			controller.enqueueRoleRequest(new)
 		},
@@ -325,94 +319,16 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 	if permitted {
 		// Below is to ensure that the requested Role / ClusterRole exists before moving forward in the procedure.
 		// If not, the status of the object falls into an error state.
-		roleExists := false
-		if roleRequestCopy.Spec.RoleRef.Kind == "ClusterRole" {
-			if clusterRoleRaw, err := c.kubeclientset.RbacV1().ClusterRoles().List(context.TODO(), metav1.ListOptions{}); err == nil {
-				for _, clusterRoleRow := range clusterRoleRaw.Items {
-					if clusterRoleRow.GetName() == roleRequestCopy.Spec.RoleRef.Name {
-						roleExists = true
-					}
-				}
-			}
-		} else if roleRequestCopy.Spec.RoleRef.Kind == "Role" {
-			if roleRaw, err := c.kubeclientset.RbacV1().Roles(roleRequestCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
-				for _, roleRow := range roleRaw.Items {
-					if roleRow.GetName() == roleRequestCopy.Spec.RoleRef.Name {
-						roleExists = true
-					}
-				}
-			}
-		}
+		roleExists := c.checkForRequestedRole(roleRequestCopy)
 		if !roleExists {
-			c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureFound, messageRoleNotFound)
-			roleRequestCopy.Status.State = failure
-			roleRequestCopy.Status.Message = messageRoleNotFound
 			return
-		} else {
-			c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, successFound, messageRoleFound)
 		}
 
 		// Every user carries a unique acceptable use policy object in the cluster that they need to agree with to start using the platform.
 		// Following code scans acceptable use policies to check if it is agreed already. If there is no acceptable use policy associated with the user,
 		// below creates one accordingly.
-		policyAgreed := false
-		aupExists := false
-		roleRequestLabels := roleRequestCopy.GetLabels()
-		if roleRequestLabels["edge-net.io/acceptable-use-policy"] != "" {
-			if acceptableUsePolicy, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), roleRequestLabels["edge-net.io/acceptable-use-policy"], metav1.GetOptions{}); err == nil {
-				if acceptableUsePolicy.Spec.Email == roleRequestCopy.Spec.Email {
-					aupExists = true
-					if acceptableUsePolicy.Spec.Accepted {
-						policyAgreed = true
-					}
-				}
-			}
-		} else {
-			if acceptableUsePolicyRaw, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
-				for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-					if acceptableUsePolicyRow.Spec.Email == roleRequestCopy.Spec.Email {
-						aupExists = true
-						roleRequestLabels := map[string]string{"edge-net.io/acceptable-use-policy": acceptableUsePolicyRow.GetName()}
-						roleRequestCopy.SetLabels(roleRequestLabels)
-						if roleRequestUpdated, err := c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestCopy.GetNamespace()).Update(context.TODO(), roleRequestCopy, metav1.UpdateOptions{}); err == nil {
-							roleRequestCopy = roleRequestUpdated.DeepCopy()
-							c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, successUpdated, messageResourceUpdated)
-						} else {
-							klog.V(4).Infoln(err)
-						}
-						if acceptableUsePolicyRow.Spec.Accepted {
-							policyAgreed = true
-						}
-						break
-					}
-				}
-			}
-		}
-		if !aupExists {
-			acceptableUsePolicy := new(corev1alpha.AcceptableUsePolicy)
-			acceptableUsePolicy.SetName(fmt.Sprintf("%s-%s", roleRequestCopy.GetName(), util.GenerateRandomString(6)))
-			acceptableUsePolicy.Spec.Email = roleRequestCopy.Spec.Email
-			acceptableUsePolicy.Spec.Accepted = false
-			aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/cluster-uid": namespaceLabels["edge-net.io/cluster-uid"]}
-			acceptableUsePolicy.SetLabels(aupLabels)
-			if _, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), acceptableUsePolicy, metav1.CreateOptions{}); err == nil {
-				roleRequestLabels := map[string]string{"edge-net.io/acceptable-use-policy": acceptableUsePolicy.GetName()}
-				roleRequestCopy.SetLabels(roleRequestLabels)
-				if roleRequestUpdated, err := c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestCopy.GetNamespace()).Update(context.TODO(), roleRequestCopy, metav1.UpdateOptions{}); err == nil {
-					roleRequestCopy = roleRequestUpdated.DeepCopy()
-					c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, successUpdated, messageResourceUpdated)
-				} else {
-					klog.V(4).Infoln(err)
-				}
-			} else {
-				c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureAUP, messageAUPFailed)
-				roleRequestCopy.Status.State = failure
-				roleRequestCopy.Status.Message = messageAUPFailed
-				klog.V(4).Infoln(err)
-				return
-			}
-		}
-
+		policyAgreed := c.checkForAcceptableUsePolicy(roleRequestCopy, namespaceLabels["edge-net.io/cluster-uid"])
+		roleRequestCopy.Status.PolicyAgreed = &policyAgreed
 		if !policyAgreed {
 			c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, warningAUP, messageAUPNotAgreed)
 			roleRequestCopy.Status.State = pending
@@ -525,12 +441,80 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 	}
 }
 
-// SetAsOwnerReference put the rolerequest as owner
-func SetAsOwnerReference(roleRequest *registrationv1alpha.RoleRequest) []metav1.OwnerReference {
-	ownerReferences := []metav1.OwnerReference{}
-	newNamespaceRef := *metav1.NewControllerRef(roleRequest, registrationv1alpha.SchemeGroupVersion.WithKind("RoleRequest"))
-	takeControl := true
-	newNamespaceRef.Controller = &takeControl
-	ownerReferences = append(ownerReferences, newNamespaceRef)
-	return ownerReferences
+func (c *Controller) checkForRequestedRole(roleRequestCopy *registrationv1alpha.RoleRequest) bool {
+	if roleRequestCopy.Spec.RoleRef.Kind == "ClusterRole" {
+		if clusterRoleRaw, err := c.kubeclientset.RbacV1().ClusterRoles().List(context.TODO(), metav1.ListOptions{}); err == nil {
+			for _, clusterRoleRow := range clusterRoleRaw.Items {
+				if clusterRoleRow.GetName() == roleRequestCopy.Spec.RoleRef.Name {
+					c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, successFound, messageRoleFound)
+					return true
+				}
+			}
+		}
+	} else if roleRequestCopy.Spec.RoleRef.Kind == "Role" {
+		if roleRaw, err := c.kubeclientset.RbacV1().Roles(roleRequestCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			for _, roleRow := range roleRaw.Items {
+				if roleRow.GetName() == roleRequestCopy.Spec.RoleRef.Name {
+					c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, successFound, messageRoleFound)
+					return true
+				}
+			}
+		}
+	}
+
+	c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureFound, messageRoleNotFound)
+	roleRequestCopy.Status.State = failure
+	roleRequestCopy.Status.Message = messageRoleNotFound
+	return false
+}
+
+func (c *Controller) checkForAcceptableUsePolicy(roleRequestCopy *registrationv1alpha.RoleRequest, clusterUID string) bool {
+	ownerReferences := roleRequestCopy.GetOwnerReferences()
+	for _, ownerReference := range ownerReferences {
+		if ownerReference.Kind == "AcceptableUsePolicy" {
+			if acceptableUsePolicy, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), ownerReference.Name, metav1.GetOptions{}); err == nil {
+				if acceptableUsePolicy.Spec.Email == roleRequestCopy.Spec.Email {
+					return acceptableUsePolicy.Spec.Accepted
+				}
+			}
+		}
+	}
+	// Comment here
+	var makeAcceptableUsePolicyOwner = func(acceptableUsePolicyCopy *corev1alpha.AcceptableUsePolicy) {
+		ownerReferences = acceptableusepolicyv1alpha.SetAsOwnerReference(acceptableUsePolicyCopy.DeepCopy())
+		roleRequestCopy.SetOwnerReferences(ownerReferences)
+		roleRequestLabels := map[string]string{"edge-net.io/acceptable-use-policy": acceptableUsePolicyCopy.GetName()}
+		roleRequestCopy.SetLabels(roleRequestLabels)
+		if roleRequestUpdated, err := c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestCopy.GetNamespace()).Update(context.TODO(), roleRequestCopy, metav1.UpdateOptions{}); err == nil {
+			roleRequestCopy = roleRequestUpdated.DeepCopy()
+			c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, successUpdated, messageResourceUpdated)
+		} else {
+			klog.V(4).Infoln(err)
+		}
+	}
+	if acceptableUsePolicyRaw, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
+		for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
+			if acceptableUsePolicyRow.Spec.Email == roleRequestCopy.Spec.Email {
+				acceptableUsePolicyCopy := acceptableUsePolicyRow.DeepCopy()
+				makeAcceptableUsePolicyOwner(acceptableUsePolicyCopy)
+				return acceptableUsePolicyCopy.Spec.Accepted
+			}
+		}
+	}
+	acceptableUsePolicy := new(corev1alpha.AcceptableUsePolicy)
+	acceptableUsePolicy.SetName(fmt.Sprintf("%s-%s", roleRequestCopy.GetName(), util.GenerateRandomString(6)))
+	acceptableUsePolicy.Spec.Email = roleRequestCopy.Spec.Email
+	acceptableUsePolicy.Spec.Accepted = false
+	aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/cluster-uid": clusterUID}
+	acceptableUsePolicy.SetLabels(aupLabels)
+	if acceptableUsePolicyCreated, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), acceptableUsePolicy, metav1.CreateOptions{}); err == nil {
+		acceptableUsePolicyCopy := acceptableUsePolicyCreated.DeepCopy()
+		makeAcceptableUsePolicyOwner(acceptableUsePolicyCopy)
+	} else {
+		c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureAUP, messageAUPFailed)
+		roleRequestCopy.Status.State = failure
+		roleRequestCopy.Status.Message = messageAUPFailed
+		klog.V(4).Infoln(err)
+	}
+	return false
 }

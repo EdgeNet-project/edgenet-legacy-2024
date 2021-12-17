@@ -153,10 +153,8 @@ type AcceptableUsePolicySpec struct {
 
 // AcceptableUsePolicyStatus is the status for a AcceptableUsePolicy resource
 type AcceptableUsePolicyStatus struct {
-	Tenant  string       `json:"tenant"`
-	Expiry  *metav1.Time `json:"expiry"`
-	State   string       `json:"state"`
-	Message []string     `json:"message"`
+	State   string `json:"state"`
+	Message string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
