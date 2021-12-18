@@ -51,7 +51,6 @@ jobs:
       matrix:
         image:
           - acceptableusepolicy
-          - emailverification
           - nodecontribution
           - nodelabeler
           - selectivedeployment
@@ -59,7 +58,6 @@ jobs:
           - tenant
           - tenantregistrationrequest
           - tenantresourcequota
-          - userregistrationrequest
           - vpnpeer
     steps:
       - name: Check out the repo
