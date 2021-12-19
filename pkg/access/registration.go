@@ -185,11 +185,24 @@ func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha.RoleRequest, p
 	email.Cluster = clusterUID
 	email.User = roleRequestCopy.Spec.Email
 	email.FirstName = roleRequestCopy.Spec.FirstName
-	email.LastName = roleRequestCopy.Spec.Email
+	email.LastName = roleRequestCopy.Spec.LastName
 	email.Subject = subject
 	email.Recipient = recipient
 	email.RoleRequest = new(mailer.RoleRequest)
 	email.RoleRequest.Name = roleRequestCopy.GetName()
 	email.RoleRequest.Namespace = roleRequestCopy.GetNamespace()
+	email.Send(purpose)
+}
+
+func SendEmailForTenantRequest(tenantRequestCopy *registrationv1alpha.TenantRequest, purpose, subject, clusterUID string, recipient []string) {
+	email := new(mailer.Content)
+	email.Cluster = clusterUID
+	email.User = tenantRequestCopy.Spec.Contact.Email
+	email.FirstName = tenantRequestCopy.Spec.Contact.FirstName
+	email.LastName = tenantRequestCopy.Spec.Contact.LastName
+	email.Subject = subject
+	email.Recipient = recipient
+	email.TenantRequest = new(mailer.TenantRequest)
+	email.TenantRequest.Tenant = tenantRequestCopy.GetName()
 	email.Send(purpose)
 }

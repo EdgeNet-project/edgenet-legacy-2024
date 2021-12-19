@@ -41,21 +41,21 @@ type TenantRequest struct {
 
 // TenantRequestSpec is the spec for a TenantRequest resource
 type TenantRequestSpec struct {
-	FullName  string              `json:"fullname"`
-	ShortName string              `json:"shortname"`
-	URL       string              `json:"url"`
-	Address   corev1alpha.Address `json:"address"`
-	Contact   corev1alpha.Contact `json:"contact"`
-	Approved  bool                `json:"approved"`
+	FullName             string              `json:"fullname"`
+	ShortName            string              `json:"shortname"`
+	URL                  string              `json:"url"`
+	Address              corev1alpha.Address `json:"address"`
+	Contact              corev1alpha.Contact `json:"contact"`
+	ClusterNetworkPolicy string              `json:"clusternetworkpolicy"`
+	Approved             bool                `json:"approved"`
 }
 
 // TenantRequestStatus is the status for a TenantRequest resource
 type TenantRequestStatus struct {
-	EmailVerified bool         `json:"emailverified"`
-	PolicyAgreed  *bool        `json:"policyagreed"`
-	Expiry        *metav1.Time `json:"expiry"`
-	State         string       `json:"state"`
-	Message       []string     `json:"message"`
+	PolicyAgreed *bool        `json:"policyagreed"`
+	Expiry       *metav1.Time `json:"expiry"`
+	State        string       `json:"state"`
+	Message      string       `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

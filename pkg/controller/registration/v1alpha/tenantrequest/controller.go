@@ -19,12 +19,15 @@ package tenantrequest
 import (
 	"context"
 	"fmt"
+	"net/mail"
 	"reflect"
+	"regexp"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
+	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
-	tenantv1alpha "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenant"
+	acceptableusepolicyv1alpha "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/acceptableusepolicy"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
@@ -32,12 +35,13 @@ import (
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/registration/v1alpha"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
+	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -50,29 +54,28 @@ const controllerAgentName = "tenantrequest-controller"
 
 // Definitions of the state of the tenantrequest resource
 const (
-	successSynced         = "Synced"
-	messageResourceSynced = "Tenant Request synced successfully"
-	create                = "create"
-	update                = "update"
-	delete                = "delete"
-	failure               = "Failure"
-	issue                 = "Malfunction"
-	success               = "Successful"
-	approved              = "Approved"
-	established           = "Established"
+	successSynced               = "Synced"
+	messageResourceSynced       = "Tenant Request synced successfully"
+	successUpdated              = "Updated"
+	messageResourceUpdated      = "Label referring to Acceptable Use Policy of Tenant Request updated successfully"
+	warningNotApproved          = "Not Approved"
+	messageNotApproved          = "Waiting for Requested Tenant to be approved"
+	successApproved             = "Approved"
+	messageRoleApproved         = "Requested Tenant approved successfully"
+	warningAUP                  = "Not Agreed"
+	messageAUPNotAgreed         = "Waiting for the Acceptable Use Policy to be agreed"
+	failureAUP                  = "Creation Failed"
+	messageAUPFailed            = "Acceptable Use Policy creation failed"
+	failureTenantCreation       = "Creation Failed"
+	messageTenantCreationFailed = "Tenant creation failed"
+	failureTenantExists         = "Conflicting"
+	messageTenantExists         = "Tenant already exists"
+	failureBinding              = "Binding Failed"
+	messageBindingFailed        = "Role binding failed"
+	failure                     = "Failure"
+	pending                     = "Pending"
+	approved                    = "Approved"
 )
-
-// Dictionary of status messages
-var statusDict = map[string]string{
-	"tenant-approved": "Tenant request has been approved",
-	"tenant-failed":   "Tenant successfully failed",
-	"tenant-taken":    "Tenant name, %s, is already taken",
-	"email-ok":        "Verification email sent",
-	"email-fail":      "Couldn't send verification email",
-	"email-exist":     "Email address, %s, already exists for another user account",
-	"email-used-reg":  "Email address, %s, has already been used in a user registration request",
-	"email-used-auth": "Email address, %s, has already been used in another tenant request",
-}
 
 // Controller is the controller implementation for Tenant Request resources
 type Controller struct {
@@ -125,6 +128,10 @@ func NewController(
 			newTenantRequest := new.(*registrationv1alpha.TenantRequest)
 			oldTenantRequest := old.(*registrationv1alpha.TenantRequest)
 			if reflect.DeepEqual(newTenantRequest.Spec, oldTenantRequest.Spec) {
+				if (oldTenantRequest.Status.Expiry == nil && newTenantRequest.Status.Expiry != nil) ||
+					!oldTenantRequest.Status.Expiry.Time.Equal(newTenantRequest.Status.Expiry.Time) {
+					controller.enqueueTenantRequestAfter(newTenantRequest, time.Until(newTenantRequest.Status.Expiry.Time))
+				}
 				return
 			}
 
@@ -158,7 +165,6 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
-	go c.RunExpiryController()
 
 	klog.V(4).Infoln("Started workers")
 	<-stopCh
@@ -232,7 +238,7 @@ func (c *Controller) syncHandler(key string) error {
 	}
 
 	if tenantrequest.Status.State != approved {
-		c.applyProcedure(tenantrequest)
+		c.processTenantRequest(tenantrequest.DeepCopy())
 	}
 	c.recorder.Event(tenantrequest, corev1.EventTypeNormal, successSynced, messageResourceSynced)
 	return nil
@@ -251,158 +257,182 @@ func (c *Controller) enqueueTenantRequest(obj interface{}) {
 	c.workqueue.Add(key)
 }
 
-func (c *Controller) applyProcedure(tenantRequestCopy *registrationv1alpha.TenantRequest) {
+// enqueueTenantRequestAfter takes a TenantRequest resource and converts it into a namespace/name
+// string which is then put onto the work queue after the expiry date to be deleted. This method should *not* be
+// passed resources of any type other than TenantRequest.
+func (c *Controller) enqueueTenantRequestAfter(obj interface{}, after time.Duration) {
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.workqueue.AddAfter(key, after)
+}
+
+func (c *Controller) processTenantRequest(tenantRequestCopy *registrationv1alpha.TenantRequest) {
 	oldStatus := tenantRequestCopy.Status
 	statusUpdate := func() {
 		if !reflect.DeepEqual(oldStatus, tenantRequestCopy.Status) {
 			c.edgenetclientset.RegistrationV1alpha().TenantRequests().UpdateStatus(context.TODO(), tenantRequestCopy, metav1.UpdateOptions{})
 		}
 	}
+	if _, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantRequestCopy.GetName(), metav1.GetOptions{}); err == nil {
+		c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureTenantExists, messageTenantExists)
+		tenantRequestCopy.Status.State = failure
+		tenantRequestCopy.Status.Message = messageTenantExists
+		return
+	}
+	if tenantRequestCopy.Status.Expiry == nil {
+		// Set the approval timeout which is 72 hours
+		tenantRequestCopy.Status.Expiry = &metav1.Time{
+			Time: time.Now().Add(72 * time.Hour),
+		}
+	} else if time.Until(tenantRequestCopy.Status.Expiry.Time) <= 0 {
+		c.edgenetclientset.RegistrationV1alpha().TenantRequests().Delete(context.TODO(), tenantRequestCopy.GetName(), metav1.DeleteOptions{})
+		return
+	}
 	defer statusUpdate()
-	// Flush the status
-	tenantRequestCopy.Status = registrationv1alpha.TenantRequestStatus{}
-	tenantRequestCopy.Status.Expiry = oldStatus.Expiry
 
-	if tenantRequestCopy.Spec.Approved {
-		created := access.CreateTenant(tenantRequestCopy)
-		if created {
-			tenantRequestCopy.Status.State = approved
-			tenantRequestCopy.Status.Message = []string{statusDict["tenant-approved"]}
+	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
+	if err != nil {
+		klog.V(4).Infoln(err)
+		return
+	}
+
+	// Every user carries a unique acceptable use policy object in the cluster that they need to agree with to start using the platform.
+	// Following code scans acceptable use policies to check if it is agreed already. If there is no acceptable use policy associated with the user,
+	// below creates one accordingly.
+	policyAgreed := c.checkForAcceptableUsePolicy(tenantRequestCopy, string(systemNamespace.GetUID()))
+	tenantRequestCopy.Status.PolicyAgreed = &policyAgreed
+	if !policyAgreed {
+		c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, warningAUP, messageAUPNotAgreed)
+		tenantRequestCopy.Status.State = pending
+		tenantRequestCopy.Status.Message = messageAUPNotAgreed
+		return
+	} else if policyAgreed {
+		if !tenantRequestCopy.Spec.Approved {
+			if tenantRequestCopy.Status.State == pending && tenantRequestCopy.Status.Message == messageNotApproved {
+				return
+			}
+			c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, warningNotApproved, messageNotApproved)
+			tenantRequestCopy.Status.State = pending
+			tenantRequestCopy.Status.Message = messageNotApproved
+
+			// The function in a goroutine below notifies those who have the right to approve this tenant request.
+			// As tenant requests are cluster-wide resources, we check the permissions granted by Cluster Role Binding following a pattern to avoid overhead.
+			// Furthermore, only those to which the system has granted permission, by attaching the "edge-net.io/generated=true" label, receive a notification email.
 			go func() {
-				timeout := time.After(60 * time.Second)
-				ticker := time.Tick(1 * time.Second)
-			check:
-				for {
-					select {
-					case <-timeout:
-						break check
-					case <-ticker:
-						if tenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantRequestCopy.GetName(), metav1.GetOptions{}); err == nil && tenant.Status.State == established {
-							user := registrationv1alpha.UserRequest{}
-							user.SetName(tenantRequestCopy.Spec.Contact.Username)
-							user.Spec.Tenant = tenantRequestCopy.GetName()
-							user.Spec.Email = tenantRequestCopy.Spec.Contact.Email
-							user.Spec.FirstName = tenantRequestCopy.Spec.Contact.FirstName
-							user.Spec.LastName = tenantRequestCopy.Spec.Contact.LastName
-							user.Spec.Role = "Owner"
-							user.SetLabels(map[string]string{"edge-net.io/user-template-hash": util.GenerateRandomString(6)})
-							access.ConfigureTenantPermissions(tenant, user.DeepCopy(), tenantv1alpha.SetAsOwnerReference(tenant))
-							break check
+				emailList := []string{}
+				if clusterRoleBindingRaw, err := c.kubeclientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
+					r, _ := regexp.Compile("(.*)(edgenet:clusteradministration)(.*)(admin|manager|deputy)(.*)")
+					for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
+						if match := r.MatchString(clusterRoleBindingRow.GetName()); !match {
+							continue
+						}
+						for _, subjectRow := range clusterRoleBindingRow.Subjects {
+							if subjectRow.Kind == "User" {
+								_, err := mail.ParseAddress(subjectRow.Name)
+								if err == nil {
+									subjectAccessReview := new(authorizationv1.SubjectAccessReview)
+									subjectAccessReview.Spec.ResourceAttributes.Resource = "tenantrequests"
+									subjectAccessReview.Spec.ResourceAttributes.Verb = "UPDATE"
+									subjectAccessReview.Spec.ResourceAttributes.Name = tenantRequestCopy.GetName()
+									if subjectAccessReviewResult, err := c.kubeclientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), subjectAccessReview, metav1.CreateOptions{}); err == nil {
+										if subjectAccessReviewResult.Status.Allowed {
+											emailList = append(emailList, subjectRow.Name)
+										}
+									}
+								}
+							}
 						}
 					}
 				}
+				if len(emailList) > 0 {
+					access.SendEmailForTenantRequest(tenantRequestCopy, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
+						string(systemNamespace.GetUID()), emailList)
+				}
 			}()
 		} else {
-			//c.sendEmail("tenant-creation-failure", tenantRequestCopy)
-			tenantRequestCopy.Status.State = failure
-			tenantRequestCopy.Status.Message = []string{statusDict["tenant-failed"]}
-		}
-	} else {
-		if tenantRequestCopy.Status.Expiry == nil {
-			// Set the approval timeout which is 72 hours
-			tenantRequestCopy.Status.Expiry = &metav1.Time{
-				Time: time.Now().Add(72 * time.Hour),
-			}
-		}
-		exists, _ := util.Contains(tenantRequestCopy.Status.Message, statusDict["email-ok"])
-		if !exists {
-			created := access.CreateEmailVerification(tenantRequestCopy, SetAsOwnerReference(tenantRequestCopy))
-			if created {
-				// Update the status as successful
-				tenantRequestCopy.Status.State = success
-				tenantRequestCopy.Status.Message = []string{statusDict["email-ok"]}
+			c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
+			tenantRequestCopy.Status.State = approved
+			tenantRequestCopy.Status.Message = messageRoleApproved
+
+			tenantCreated := access.CreateTenant(tenantRequestCopy)
+			if tenantCreated {
+				c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
+				clusterRoleName := "edgenet:tenant-owner"
+				roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRoleName}
+				rbSubjects := []rbacv1.Subject{{Kind: "User", Name: tenantRequestCopy.Spec.Contact.Email, APIGroup: "rbac.authorization.k8s.io"}}
+				roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRoleName, Namespace: tenantRequestCopy.GetName()},
+					Subjects: rbSubjects, RoleRef: roleRef}
+				roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
+				roleBind.SetLabels(roleBindLabels)
+				if _, err := c.kubeclientset.RbacV1().RoleBindings(tenantRequestCopy.GetName()).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
+					c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
+					tenantRequestCopy.Status.State = failure
+					tenantRequestCopy.Status.Message = messageBindingFailed
+					klog.V(4).Infoln(err)
+				} else {
+					access.SendEmailForTenantRequest(tenantRequestCopy, "tenant-request-approved", "[EdgeNet] Tenant request approved",
+						string(systemNamespace.GetUID()), []string{tenantRequestCopy.Spec.Contact.Email})
+				}
 			} else {
-				// TODO: Define error message more precisely
-				tenantRequestCopy.Status.State = issue
-				tenantRequestCopy.Status.Message = []string{statusDict["email-fail"]}
+				c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureTenantCreation, messageTenantCreationFailed)
+				tenantRequestCopy.Status.State = failure
+				tenantRequestCopy.Status.Message = messageTenantCreationFailed
 			}
 		}
 	}
 }
 
-// sendEmail to send notification to participants
-/*func (c *Controller) sendEmail(subject string, tenantRequest *registrationv1alpha.TenantRequest) {
-	// Set the HTML template variables
-	var contentData = mailer.CommonContentData{}
-	contentData.CommonData.Tenant = tenantRequest.GetName()
-	contentData.CommonData.Username = tenantRequest.Spec.Contact.Username
-	contentData.CommonData.Name = fmt.Sprintf("%s %s", tenantRequest.Spec.Contact.FirstName, tenantRequest.Spec.Contact.LastName)
-	contentData.CommonData.Email = []string{tenantRequest.Spec.Contact.Email}
-	mailer.Send(subject, contentData)
-}*/
-
-// RunExpiryController puts a procedure in place to turn accepted policies into not accepted
-func (c *Controller) RunExpiryController() {
-	var closestExpiry time.Time
-	terminated := make(chan bool)
-	newExpiry := make(chan time.Time)
-	defer close(terminated)
-	defer close(newExpiry)
-
-	watchTenantRequest, err := c.edgenetclientset.RegistrationV1alpha().TenantRequests().Watch(context.TODO(), metav1.ListOptions{})
-	if err == nil {
-		watchEvents := func(watchTenantRequest watch.Interface, newExpiry *chan time.Time) {
-			// Watch the events of tenant request object
-			// Get events from watch interface
-			for tenantRequestEvent := range watchTenantRequest.ResultChan() {
-				// Get updated tenant request object
-				updatedTenantRequest, status := tenantRequestEvent.Object.(*registrationv1alpha.TenantRequest)
-				if status {
-					if updatedTenantRequest.Status.Expiry != nil {
-						*newExpiry <- updatedTenantRequest.Status.Expiry.Time
-					}
+func (c *Controller) checkForAcceptableUsePolicy(tenantRequestCopy *registrationv1alpha.TenantRequest, clusterUID string) bool {
+	ownerReferences := tenantRequestCopy.GetOwnerReferences()
+	for _, ownerReference := range ownerReferences {
+		if ownerReference.Kind == "AcceptableUsePolicy" {
+			if acceptableUsePolicy, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), ownerReference.Name, metav1.GetOptions{}); err == nil {
+				if acceptableUsePolicy.Spec.Email == tenantRequestCopy.Spec.Contact.Email {
+					return acceptableUsePolicy.Spec.Accepted
 				}
 			}
 		}
-		go watchEvents(watchTenantRequest, &newExpiry)
+	}
+	// Comment here
+	var makeAcceptableUsePolicyOwner = func(acceptableUsePolicyCopy *corev1alpha.AcceptableUsePolicy) {
+		ownerReferences = acceptableusepolicyv1alpha.SetAsOwnerReference(acceptableUsePolicyCopy.DeepCopy())
+		tenantRequestCopy.SetOwnerReferences(ownerReferences)
+		roleRequestLabels := map[string]string{"edge-net.io/acceptable-use-policy": acceptableUsePolicyCopy.GetName()}
+		tenantRequestCopy.SetLabels(roleRequestLabels)
+		if tenantRequestUpdated, err := c.edgenetclientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequestCopy, metav1.UpdateOptions{}); err == nil {
+			tenantRequestCopy = tenantRequestUpdated.DeepCopy()
+			c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successUpdated, messageResourceUpdated)
+		} else {
+			klog.V(4).Infoln(err)
+		}
+	}
+	if acceptableUsePolicyRaw, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
+		for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
+			if acceptableUsePolicyRow.Spec.Email == tenantRequestCopy.Spec.Contact.Email {
+				acceptableUsePolicyCopy := acceptableUsePolicyRow.DeepCopy()
+				makeAcceptableUsePolicyOwner(acceptableUsePolicyCopy)
+				return acceptableUsePolicyCopy.Spec.Accepted
+			}
+		}
+	}
+	acceptableUsePolicy := new(corev1alpha.AcceptableUsePolicy)
+	acceptableUsePolicy.SetName(fmt.Sprintf("%s-%s", tenantRequestCopy.Spec.Contact.Username, util.GenerateRandomString(6)))
+	acceptableUsePolicy.Spec.Email = tenantRequestCopy.Spec.Contact.Email
+	acceptableUsePolicy.Spec.Accepted = false
+	aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/cluster-uid": clusterUID}
+	acceptableUsePolicy.SetLabels(aupLabels)
+	if acceptableUsePolicyCreated, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), acceptableUsePolicy, metav1.CreateOptions{}); err == nil {
+		acceptableUsePolicyCopy := acceptableUsePolicyCreated.DeepCopy()
+		makeAcceptableUsePolicyOwner(acceptableUsePolicyCopy)
 	} else {
-		go c.RunExpiryController()
-		terminated <- true
+		c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureAUP, messageAUPFailed)
+		tenantRequestCopy.Status.State = failure
+		tenantRequestCopy.Status.Message = messageAUPFailed
+		klog.V(4).Infoln(err)
 	}
-
-infiniteLoop:
-	for {
-		// Wait on multiple channel operations
-		select {
-		case timeout := <-newExpiry:
-			if closestExpiry.Sub(timeout) > 0 {
-				closestExpiry = timeout
-				klog.V(4).Infof("ExpiryController: Closest expiry date is %v", closestExpiry)
-			}
-		case <-time.After(time.Until(closestExpiry)):
-			tenantRequestRaw, err := c.edgenetclientset.RegistrationV1alpha().TenantRequests().List(context.TODO(), metav1.ListOptions{})
-			if err != nil {
-				// TODO: Provide more information on error
-				klog.V(4).Infoln(err)
-			}
-			for _, tenantRequestRow := range tenantRequestRaw.Items {
-				if tenantRequestRow.Status.Expiry != nil && tenantRequestRow.Status.Expiry.Time.Sub(time.Now()) <= 0 {
-					c.edgenetclientset.RegistrationV1alpha().TenantRequests().Delete(context.TODO(), tenantRequestRow.GetName(), metav1.DeleteOptions{})
-				} else if tenantRequestRow.Status.Expiry != nil && tenantRequestRow.Status.Expiry.Time.Sub(time.Now()) > 0 {
-					if closestExpiry.Sub(time.Now()) <= 0 || closestExpiry.Sub(tenantRequestRow.Status.Expiry.Time) > 0 {
-						closestExpiry = tenantRequestRow.Status.Expiry.Time
-						klog.V(4).Infof("ExpiryController: Closest expiry date is %v after the expiration of a tenant request", closestExpiry)
-					}
-				}
-			}
-
-			if closestExpiry.Sub(time.Now()) <= 0 {
-				closestExpiry = time.Now().AddDate(1, 0, 0)
-				klog.V(4).Infof("ExpiryController: Closest expiry date is %v after the expiration of a tenant request", closestExpiry)
-			}
-		case <-terminated:
-			watchTenantRequest.Stop()
-			break infiniteLoop
-		}
-	}
-}
-
-// SetAsOwnerReference put the tenantrequest as owner
-func SetAsOwnerReference(tenantRequest *registrationv1alpha.TenantRequest) []metav1.OwnerReference {
-	ownerReferences := []metav1.OwnerReference{}
-	newNamespaceRef := *metav1.NewControllerRef(tenantRequest, registrationv1alpha.SchemeGroupVersion.WithKind("TenantRequest"))
-	takeControl := false
-	newNamespaceRef.Controller = &takeControl
-	ownerReferences = append(ownerReferences, newNamespaceRef)
-	return ownerReferences
+	return false
 }
