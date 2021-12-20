@@ -55,9 +55,6 @@ const controllerAgentName = "subnamespace-controller"
 const (
 	successSynced         = "Synced"
 	messageResourceSynced = "Subsidiary Namespace synced successfully"
-	create                = "create"
-	update                = "update"
-	delete                = "delete"
 	failure               = "Failure"
 	established           = "Established"
 )

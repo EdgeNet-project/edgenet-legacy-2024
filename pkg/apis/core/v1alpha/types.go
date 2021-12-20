@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha
 
 import (
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -235,22 +237,21 @@ type TenantResourceQuota struct {
 
 // TenantResourceQuotaSpec is the spec for a tenant resouce quota resource
 type TenantResourceQuotaSpec struct {
-	Claim []TenantResourceDetails `json:"claim"`
-	Drop  []TenantResourceDetails `json:"drop"`
+	Claim map[string]ResourceTuning `json:"claim"`
+	Drop  map[string]ResourceTuning `json:"drop"`
 }
 
-// TenantResourceDetails indicates resources to add or remove, and how long they will remain
-type TenantResourceDetails struct {
-	Name   string       `json:"name"`
-	CPU    string       `json:"cpu"`
-	Memory string       `json:"memory"`
-	Expiry *metav1.Time `json:"expiry"`
+// ResourceTuning indicates resources to add or remove, and how long they will remain
+// CPU, Memory, Local Storage, Ephemeral Storage, and Bandwidth
+type ResourceTuning struct {
+	ResourceList map[corev1.ResourceName]resource.Quantity `json:"resourceList"`
+	Expiry       *metav1.Time                              `json:"expiry"`
 }
 
 // TenantResourceQuotaStatus is the status for a tenant resouce quota resource
 type TenantResourceQuotaStatus struct {
-	State   string   `json:"state"`
-	Message []string `json:"message"`
+	State   string `json:"state"`
+	Message string `json:"message"`
 }
 
 // Resources presents the usage of tenant resource quota

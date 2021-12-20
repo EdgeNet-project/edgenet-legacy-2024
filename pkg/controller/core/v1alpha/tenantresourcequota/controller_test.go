@@ -4,8 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
 	"testing"
 	"time"
@@ -16,7 +14,6 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
-	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -31,8 +28,8 @@ import (
 // The main structure of test group
 type TestGroup struct {
 	tenantResourceQuotaObj corev1alpha.TenantResourceQuota
-	claimObj               corev1alpha.TenantResourceDetails
-	dropObj                corev1alpha.TenantResourceDetails
+	claimObj               corev1alpha.ResourceTuning
+	dropObj                corev1alpha.ResourceTuning
 	tenantObj              corev1alpha.Tenant
 	subNamespaceObj        corev1alpha.SubNamespace
 	nodeObj                corev1.Node
@@ -43,9 +40,9 @@ var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
 
 func TestMain(m *testing.M) {
-	klog.SetOutput(ioutil.Discard)
-	log.SetOutput(ioutil.Discard)
-	logrus.SetOutput(ioutil.Discard)
+	//klog.SetOutput(ioutil.Discard)
+	//log.SetOutput(ioutil.Discard)
+	//logrus.SetOutput(ioutil.Discard)
 
 	flag.String("dir", "../../../../..", "Override the directory.")
 	flag.String("smtp-path", "../../../../../configs/smtp_test.yaml", "Set SMTP path.")
@@ -85,15 +82,17 @@ func (g *TestGroup) Init() {
 			UID:  "trq",
 		},
 	}
-	claimObj := corev1alpha.TenantResourceDetails{
-		Name:   "Default",
-		CPU:    "12000m",
-		Memory: "12Gi",
+	claimObj := corev1alpha.ResourceTuning{
+		ResourceList: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("12000m"),
+			corev1.ResourceMemory: resource.MustParse("12Gi"),
+		},
 	}
-	dropObj := corev1alpha.TenantResourceDetails{
-		Name:   "Default",
-		CPU:    "10000m",
-		Memory: "10Gi",
+	dropObj := corev1alpha.ResourceTuning{
+		ResourceList: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("10000m"),
+			corev1.ResourceMemory: resource.MustParse("10Gi"),
+		},
 	}
 	tenantObj := corev1alpha.Tenant{
 		TypeMeta: metav1.TypeMeta{
@@ -148,11 +147,12 @@ func (g *TestGroup) Init() {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "fr-idf-0000.edge-net.io",
 			OwnerReferences: []metav1.OwnerReference{
-				metav1.OwnerReference{
+				{
 					APIVersion: "apps.edgenet.io/v1alpha",
 					Kind:       "Tenant",
 					Name:       "edgenet",
-					UID:        "edgenet"},
+					UID:        "edgenet",
+				},
 			},
 		},
 		TypeMeta: metav1.TypeMeta{
@@ -173,7 +173,7 @@ func (g *TestGroup) Init() {
 				corev1.ResourcePods:             resource.MustParse("100"),
 			},
 			Conditions: []corev1.NodeCondition{
-				corev1.NodeCondition{
+				{
 					Type:   "Ready",
 					Status: "True",
 				},
@@ -219,7 +219,8 @@ func TestStartController(t *testing.T) {
 	tenantResourceQuotaObj := g.tenantResourceQuotaObj
 	tenantResourceQuotaObj.SetName(randomString)
 	tenantResourceQuotaObj.SetUID(types.UID(randomString))
-	tenantResourceQuotaObj.Spec.Claim = append(tenantResourceQuotaObj.Spec.Claim, g.claimObj)
+	tenantResourceQuotaObj.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
+	tenantResourceQuotaObj.Spec.Claim["initial"] = g.claimObj
 	edgenetclientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuotaObj.DeepCopy(), metav1.CreateOptions{})
 	// Wait for the status update of created object
 	time.Sleep(time.Millisecond * 500)
@@ -235,7 +236,8 @@ func TestStartController(t *testing.T) {
 	drop.Expiry = &metav1.Time{
 		Time: time.Now().Add(1300 * time.Millisecond),
 	}
-	tenantResourceQuota.Spec.Drop = append(tenantResourceQuota.Spec.Drop, drop)
+	tenantResourceQuota.Spec.Drop = make(map[string]corev1alpha.ResourceTuning)
+	tenantResourceQuota.Spec.Drop["initial"] = drop
 	edgenetclientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 200)
 	tenantResourceQuota, err = edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
@@ -265,7 +267,7 @@ func TestStartController(t *testing.T) {
 	}
 	kubeclientset.CoreV1().ResourceQuotas(namespace.GetName()).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{})
 
-	time.Sleep(time.Millisecond * 1200)
+	time.Sleep(time.Millisecond * 3200)
 	tenantResourceQuota, err = edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, 0, len(tenantResourceQuota.Spec.Drop))
@@ -278,10 +280,10 @@ func TestStartController(t *testing.T) {
 	edgenetclientset.CoreV1alpha().SubNamespaces(tenantResourceQuota.GetName()).Delete(context.TODO(), subnamespace.GetName(), metav1.DeleteOptions{})
 	kubeclientset.CoreV1().Namespaces().Delete(context.TODO(), fmt.Sprintf("%s-%s", tenantResourceQuota.GetName(), subnamespace.GetName()), metav1.DeleteOptions{})
 
-	expectedMemoryRes := resource.MustParse(g.claimObj.Memory)
+	expectedMemoryRes := g.claimObj.ResourceList["memory"]
 	expectedMemory := expectedMemoryRes.Value()
 	expectedMemoryRew := expectedMemory + int64(float64(g.nodeObj.Status.Capacity.Memory().Value())*1.3)
-	expectedCPURes := resource.MustParse(g.claimObj.CPU)
+	expectedCPURes := g.claimObj.ResourceList["cpu"]
 	expectedCPU := expectedCPURes.Value()
 	expectedCPURew := expectedCPU + int64(float64(g.nodeObj.Status.Capacity.Cpu().Value())*1.5)
 
@@ -292,10 +294,8 @@ func TestStartController(t *testing.T) {
 	tenantResourceQuota, err = edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	reward := false
-	for _, claim := range tenantResourceQuota.Spec.Claim {
-		if claim.Name == nodeCopy.GetName() {
-			reward = true
-		}
+	if _, claimExists := tenantResourceQuota.Spec.Claim[nodeCopy.GetName()]; claimExists {
+		reward = true
 	}
 	util.Equals(t, true, reward)
 	cpuQuota, memoryQuota = getQuotas(tenantResourceQuota.Spec.Claim)
@@ -358,7 +358,7 @@ func TestCreate(t *testing.T) {
 		"mix/1":               {[]time.Duration{1900, 2200, -100}, 400, 4},
 		"mix/2":               {[]time.Duration{90, 2500, -100}, 400, 2},
 		"mix/3":               {[]time.Duration{1750, 2600, 1800, 1900, -10, -100}, 400, 8},
-		"mix/4":               {[]time.Duration{90, 50, 2500, 3400, -10, -100}, 400, 4},
+		"mix/4":               {[]time.Duration{290, 50, 2500, 3400, -10, -100}, 400, 4},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
@@ -367,6 +367,9 @@ func TestCreate(t *testing.T) {
 			tenantResourceQuota := g.tenantResourceQuotaObj.DeepCopy()
 			tenantResourceQuota.SetUID(types.UID(k))
 			tenantResourceQuota.SetName(randomString)
+			tenantResourceQuota.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
+			tenantResourceQuota.Spec.Drop = make(map[string]corev1alpha.ResourceTuning)
+
 			claim := g.claimObj
 			drop := g.dropObj
 			if tc.input != nil {
@@ -374,15 +377,15 @@ func TestCreate(t *testing.T) {
 					claim.Expiry = &metav1.Time{
 						Time: time.Now().Add(input * time.Millisecond),
 					}
-					tenantResourceQuota.Spec.Claim = append(tenantResourceQuota.Spec.Claim, claim)
+					tenantResourceQuota.Spec.Claim[util.GenerateRandomString(6)] = claim
 					drop.Expiry = &metav1.Time{
 						Time: time.Now().Add(input * time.Millisecond),
 					}
-					tenantResourceQuota.Spec.Drop = append(tenantResourceQuota.Spec.Drop, drop)
+					tenantResourceQuota.Spec.Drop[util.GenerateRandomString(6)] = drop
 				}
 			} else {
-				tenantResourceQuota.Spec.Claim = append(tenantResourceQuota.Spec.Claim, claim)
-				tenantResourceQuota.Spec.Drop = append(tenantResourceQuota.Spec.Drop, drop)
+				tenantResourceQuota.Spec.Claim[util.GenerateRandomString(6)] = claim
+				tenantResourceQuota.Spec.Drop[util.GenerateRandomString(6)] = drop
 			}
 			edgenetclientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota, metav1.CreateOptions{})
 			time.Sleep(tc.sleep * time.Millisecond)
@@ -421,8 +424,8 @@ func TestUpdate(t *testing.T) {
 		t.Run(k, func(t *testing.T) {
 			tenantResourceQuotaCopy, err := edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 			util.OK(t, err)
-			tenantResourceQuotaCopy.Spec.Claim = []corev1alpha.TenantResourceDetails{}
-			tenantResourceQuotaCopy.Spec.Drop = []corev1alpha.TenantResourceDetails{}
+			tenantResourceQuotaCopy.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
+			tenantResourceQuotaCopy.Spec.Drop = make(map[string]corev1alpha.ResourceTuning)
 
 			claim := g.claimObj
 			drop := g.dropObj
@@ -431,15 +434,15 @@ func TestUpdate(t *testing.T) {
 					claim.Expiry = &metav1.Time{
 						Time: time.Now().Add(expiry * time.Millisecond),
 					}
-					tenantResourceQuotaCopy.Spec.Claim = append(tenantResourceQuotaCopy.Spec.Claim, claim)
+					tenantResourceQuotaCopy.Spec.Claim[util.GenerateRandomString(6)] = claim
 					drop.Expiry = &metav1.Time{
 						Time: time.Now().Add(expiry * time.Millisecond),
 					}
-					tenantResourceQuotaCopy.Spec.Drop = append(tenantResourceQuotaCopy.Spec.Drop, drop)
+					tenantResourceQuotaCopy.Spec.Drop[util.GenerateRandomString(6)] = drop
 				}
 			} else {
-				tenantResourceQuotaCopy.Spec.Claim = append(tenantResourceQuotaCopy.Spec.Claim, claim)
-				tenantResourceQuotaCopy.Spec.Drop = append(tenantResourceQuotaCopy.Spec.Drop, drop)
+				tenantResourceQuotaCopy.Spec.Claim[util.GenerateRandomString(6)] = claim
+				tenantResourceQuotaCopy.Spec.Drop[util.GenerateRandomString(6)] = drop
 			}
 			_, err = edgenetclientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuotaCopy.DeepCopy(), metav1.UpdateOptions{})
 			util.OK(t, err)
@@ -451,13 +454,13 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-func getQuotas(claimRaw []corev1alpha.TenantResourceDetails) (int64, int64) {
+func getQuotas(claimRaw map[string]corev1alpha.ResourceTuning) (int64, int64) {
 	var cpuQuota int64
 	var memoryQuota int64
 	for _, claimRow := range claimRaw {
-		CPUResource := resource.MustParse(claimRow.CPU)
+		CPUResource := claimRow.ResourceList["cpu"]
 		cpuQuota += CPUResource.Value()
-		memoryResource := resource.MustParse(claimRow.Memory)
+		memoryResource := claimRow.ResourceList["memory"]
 		memoryQuota += memoryResource.Value()
 	}
 	return cpuQuota, memoryQuota

@@ -26,6 +26,8 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
@@ -123,18 +125,22 @@ func CreateTenantResourceQuota(name string, ownerReferences []metav1.OwnerRefere
 		tenantResourceQuota := corev1alpha.TenantResourceQuota{}
 		tenantResourceQuota.SetName(name)
 		tenantResourceQuota.SetOwnerReferences(ownerReferences)
-		claim := corev1alpha.TenantResourceDetails{}
-		claim.Name = "Default"
-		claim.CPU = "8000m"
-		claim.Memory = "8192Mi"
-		tenantResourceQuota.Spec.Claim = append(tenantResourceQuota.Spec.Claim, claim)
+		claim := corev1alpha.ResourceTuning{}
+		claim.ResourceList = make(map[corev1.ResourceName]resource.Quantity)
+		cpuQuota := "8000m"
+		memoryQuota := "8192Mi"
+		if quantity, err := resource.ParseQuantity(cpuQuota); err == nil {
+			claim.ResourceList["cpu"] = quantity
+		}
+		if quantity, err := resource.ParseQuantity(memoryQuota); err == nil {
+			claim.ResourceList["memory"] = quantity
+		}
+		tenantResourceQuota.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
+		tenantResourceQuota.Spec.Claim["initial"] = claim
 		_, err = EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{})
 		if err != nil {
 			klog.V(4).Infof(statusDict["TRQ-failed"], name, err)
 		}
-
-		cpuQuota = claim.CPU
-		memoryQuota = claim.Memory
 	}
 	return cpuQuota, memoryQuota
 }

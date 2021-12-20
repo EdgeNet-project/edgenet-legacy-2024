@@ -109,11 +109,12 @@ func (g *TestGroup) Init() {
 			Name: "edgenet",
 		},
 		Spec: corev1alpha.TenantResourceQuotaSpec{
-			Claim: []corev1alpha.TenantResourceDetails{
-				corev1alpha.TenantResourceDetails{
-					Name:   "Default",
-					CPU:    "8000m",
-					Memory: "8192Mi",
+			Claim: map[string]corev1alpha.ResourceTuning{
+				"initial": {
+					ResourceList: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("8000m"),
+						corev1.ResourceMemory: resource.MustParse("8192Mi"),
+					},
 				},
 			},
 		},
