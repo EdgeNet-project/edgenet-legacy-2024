@@ -39,26 +39,39 @@ var Clientset kubernetes.Interface
 var EdgenetClientset clientset.Interface
 
 // Create function is for being used by other resources to create a tenant
-func CreateTenant(obj interface{}) bool {
+func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) bool {
 	created := false
-	switch obj := obj.(type) {
-	case *registrationv1alpha.TenantRequest:
-		tenantRequest := obj.DeepCopy()
-		// Create a tenant on the cluster
-		tenant := corev1alpha.Tenant{}
-		tenant.SetName(tenantRequest.GetName())
-		tenant.Spec.Address = tenantRequest.Spec.Address
-		tenant.Spec.Contact = tenantRequest.Spec.Contact
-		tenant.Spec.FullName = tenantRequest.Spec.FullName
-		tenant.Spec.ShortName = tenantRequest.Spec.ShortName
-		tenant.Spec.URL = tenantRequest.Spec.URL
-		tenant.Spec.Enabled = true
+	// Create a tenant on the cluster
+	tenant := new(corev1alpha.Tenant)
+	tenant.SetName(tenantRequest.GetName())
+	tenant.Spec.Address = tenantRequest.Spec.Address
+	tenant.Spec.Contact = tenantRequest.Spec.Contact
+	tenant.Spec.FullName = tenantRequest.Spec.FullName
+	tenant.Spec.ShortName = tenantRequest.Spec.ShortName
+	tenant.Spec.URL = tenantRequest.Spec.URL
+	tenant.Spec.Enabled = true
 
-		if _, err := EdgenetClientset.CoreV1alpha().Tenants().Create(context.TODO(), tenant.DeepCopy(), metav1.CreateOptions{}); err == nil {
-			created = true
-		} else {
-			klog.V(4).Infof("Couldn't create tenant %s: %s", tenant.GetName(), err)
-		}
+	if _, err := EdgenetClientset.CoreV1alpha().Tenants().Create(context.TODO(), tenant, metav1.CreateOptions{}); err == nil {
+		created = true
+	} else {
+		klog.V(4).Infof("Couldn't create tenant %s: %s", tenant.GetName(), err)
+	}
+
+	// TODO: Take tenant resource quota into account while error handling
+	tenantResourceQuota := new(corev1alpha.TenantResourceQuota)
+	tenantResourceQuota.SetName(tenantRequest.GetName())
+	tenantResourceQuota.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
+	resourceList := make(map[corev1.ResourceName]resource.Quantity)
+	for key, value := range tenantRequest.Spec.ResourceAllocation {
+		resourceList[key] = value
+	}
+	claim := corev1alpha.ResourceTuning{
+		ResourceList: resourceList,
+	}
+	tenantResourceQuota.Spec.Claim["initial"] = claim
+
+	if _, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota, metav1.CreateOptions{}); err != nil {
+		klog.V(4).Infof("Couldn't create tenant resource quota %s: %s", tenantResourceQuota.GetName(), err)
 	}
 
 	return created

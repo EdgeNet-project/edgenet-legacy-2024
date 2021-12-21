@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha
 
 import (
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
@@ -41,13 +43,14 @@ type TenantRequest struct {
 
 // TenantRequestSpec is the spec for a TenantRequest resource
 type TenantRequestSpec struct {
-	FullName             string              `json:"fullname"`
-	ShortName            string              `json:"shortname"`
-	URL                  string              `json:"url"`
-	Address              corev1alpha.Address `json:"address"`
-	Contact              corev1alpha.Contact `json:"contact"`
-	ClusterNetworkPolicy string              `json:"clusternetworkpolicy"`
-	Approved             bool                `json:"approved"`
+	FullName             string                                    `json:"fullname"`
+	ShortName            string                                    `json:"shortname"`
+	URL                  string                                    `json:"url"`
+	Address              corev1alpha.Address                       `json:"address"`
+	Contact              corev1alpha.Contact                       `json:"contact"`
+	ClusterNetworkPolicy bool                                      `json:"clusternetworkpolicy"`
+	ResourceAllocation   map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
+	Approved             bool                                      `json:"approved"`
 }
 
 // TenantRequestStatus is the status for a TenantRequest resource

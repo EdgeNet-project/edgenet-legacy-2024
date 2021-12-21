@@ -21,6 +21,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
@@ -28,7 +29,6 @@ import (
 )
 
 type TestGroup struct {
-	tenantObj        corev1alpha.Tenant
 	tenantRequestObj registrationv1alpha.TenantRequest
 }
 
@@ -73,34 +73,6 @@ func TestMain(m *testing.M) {
 
 // Init syncs the test group
 func (g *TestGroup) Init() {
-	tenantObj := corev1alpha.Tenant{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Tenant",
-			APIVersion: "apps.edgenet.io/v1alpha",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "edgenet",
-		},
-		Spec: corev1alpha.TenantSpec{
-			FullName:  "EdgeNet",
-			ShortName: "EdgeNet",
-			URL:       "https://www.edge-net.org",
-			Address: corev1alpha.Address{
-				City:    "Paris - NY - CA",
-				Country: "France - US",
-				Street:  "4 place Jussieu, boite 169",
-				ZIP:     "75005",
-			},
-			Contact: corev1alpha.Contact{
-				Email:     "john.doe@edge-net.org",
-				FirstName: "John",
-				LastName:  "Doe",
-				Phone:     "+33NUMBER",
-				Username:  "johndoe",
-			},
-			Enabled: true,
-		},
-	}
 	tenantRequestObj := registrationv1alpha.TenantRequest{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "tenantRequest",
@@ -126,11 +98,13 @@ func (g *TestGroup) Init() {
 				Phone:     "+33NUMBER",
 				Username:  "tompublic",
 			},
+			ResourceAllocation: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("12000m"),
+				corev1.ResourceMemory: resource.MustParse("12Gi"),
+			},
 		},
 	}
-	g.tenantObj = tenantObj
 	g.tenantRequestObj = tenantRequestObj
-	edgenetclientset.CoreV1alpha().Tenants().Create(context.TODO(), g.tenantObj.DeepCopy(), metav1.CreateOptions{})
 }
 
 func TestStartController(t *testing.T) {
@@ -142,7 +116,7 @@ func TestStartController(t *testing.T) {
 	// Create a tenant request
 	edgenetclientset.RegistrationV1alpha().TenantRequests().Create(context.TODO(), tenantRequestTest, metav1.CreateOptions{})
 	// Wait for the status update of created object
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(250 * time.Millisecond)
 	// Get the object and check the status
 	tenantRequest, err := edgenetclientset.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
@@ -158,7 +132,7 @@ func TestStartController(t *testing.T) {
 
 	tenantRequest.Spec.Contact.Email = "different-email@edge-net.org"
 	edgenetclientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(250 * time.Millisecond)
 	tenantRequest, err = edgenetclientset.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, pending, tenantRequest.Status.State)
@@ -174,7 +148,7 @@ func TestStartController(t *testing.T) {
 	}
 	tenantRequest.Spec.Approved = true
 	edgenetclientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(250 * time.Millisecond)
 	tenantRequest, err = edgenetclientset.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, approved, tenantRequest.Status.State)
@@ -187,7 +161,7 @@ func TestTimeout(t *testing.T) {
 	tenantRequestTest := g.tenantRequestObj.DeepCopy()
 	tenantRequestTest.SetName("tenant-request-timeout-test")
 	edgenetclientset.RegistrationV1alpha().TenantRequests().Create(context.TODO(), tenantRequestTest, metav1.CreateOptions{})
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 
 	t.Run("set expiry date", func(t *testing.T) {
 		tenantRequest, _ := edgenetclientset.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
@@ -205,7 +179,7 @@ func TestTimeout(t *testing.T) {
 		}
 		_, err := edgenetclientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
 		util.OK(t, err)
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(250 * time.Millisecond)
 		_, err = edgenetclientset.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tenantRequest.GetName(), metav1.GetOptions{})
 		util.Equals(t, true, errors.IsNotFound(err))
 	})
@@ -217,7 +191,7 @@ func TestUpdate(t *testing.T) {
 	tenantRequestTest := g.tenantRequestObj.DeepCopy()
 	tenantRequestTest.SetName("tenant-request-approval-test")
 	edgenetclientset.RegistrationV1alpha().TenantRequests().Create(context.TODO(), tenantRequestTest, metav1.CreateOptions{})
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 
 	t.Run("approval", func(t *testing.T) {
 		// Updating tenant request status to approved
@@ -232,9 +206,15 @@ func TestUpdate(t *testing.T) {
 		tenantRequestTest.Spec.Approved = true
 		edgenetclientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequestTest, metav1.UpdateOptions{})
 		// Requesting server to update internal representation of tenant request object and transition it to tenant
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(250 * time.Millisecond)
 		// Checking if handler created tenant from request
 		_, err := edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
+
+		t.Run("tenant resource quota", func(t *testing.T) {
+			tenantResourceQuota, err := edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
+			util.OK(t, err)
+			util.Equals(t, tenantRequestTest.Spec.ResourceAllocation, tenantResourceQuota.Spec.Claim["initial"].ResourceList)
+		})
 	})
 }
