@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
+	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -40,9 +43,9 @@ var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
 
 func TestMain(m *testing.M) {
-	//klog.SetOutput(ioutil.Discard)
-	//log.SetOutput(ioutil.Discard)
-	//logrus.SetOutput(ioutil.Discard)
+	klog.SetOutput(ioutil.Discard)
+	log.SetOutput(ioutil.Discard)
+	logrus.SetOutput(ioutil.Discard)
 
 	flag.String("dir", "../../../../..", "Override the directory.")
 	flag.String("smtp-path", "../../../../../configs/smtp_test.yaml", "Set SMTP path.")
@@ -223,7 +226,7 @@ func TestStartController(t *testing.T) {
 	tenantResourceQuotaObj.Spec.Claim["initial"] = g.claimObj
 	edgenetclientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuotaObj.DeepCopy(), metav1.CreateOptions{})
 	// Wait for the status update of created object
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(250 * time.Millisecond)
 	// Get the object and check the status
 	tenantResourceQuota, err := edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
@@ -234,28 +237,29 @@ func TestStartController(t *testing.T) {
 	// Update the tenant resource quota
 	drop := g.dropObj
 	drop.Expiry = &metav1.Time{
-		Time: time.Now().Add(1300 * time.Millisecond),
+		Time: time.Now().Add(400 * time.Millisecond),
 	}
 	tenantResourceQuota.Spec.Drop = make(map[string]corev1alpha.ResourceTuning)
 	tenantResourceQuota.Spec.Drop["initial"] = drop
 	edgenetclientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.UpdateOptions{})
-	time.Sleep(time.Millisecond * 200)
+	time.Sleep(250 * time.Millisecond)
 	tenantResourceQuota, err = edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, 1, len(tenantResourceQuota.Spec.Drop))
 	coreResourceQuota, err := kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
 	util.OK(t, err)
-	cpuQuota, memoryQuota := calculateTenantQuota(tenantResourceQuota)
-	util.Equals(t, cpuQuota, coreResourceQuota.Spec.Hard.Cpu().Value())
-	util.Equals(t, memoryQuota, coreResourceQuota.Spec.Hard.Memory().Value())
+	assignedQuota := fetchTenantQuota(tenantResourceQuota)
+	for key, value := range coreResourceQuota.Spec.Hard {
+		if _, elementExists := assignedQuota[key]; elementExists {
+			util.Equals(t, assignedQuota[key], value.Value())
+		}
+	}
 
 	subnamespace := g.subNamespaceObj
 	subnamespace.SetNamespace(randomString)
 	edgenetclientset.CoreV1alpha().SubNamespaces(tenantResourceQuota.GetName()).Create(context.TODO(), subnamespace.DeepCopy(), metav1.CreateOptions{})
 	namespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", tenantResourceQuota.GetName(), subnamespace.GetName())}}
 	kubeclientset.CoreV1().Namespaces().Create(context.TODO(), &namespace, metav1.CreateOptions{})
-	subQuotaCPU := resource.MustParse(subnamespace.Spec.Resources.CPU)
-	subQuotaMemory := resource.MustParse(subnamespace.Spec.Resources.Memory)
 	resourceQuota := corev1.ResourceQuota{}
 	resourceQuota.Name = "sub-quota"
 	resourceQuota.Spec = corev1.ResourceQuotaSpec{
@@ -265,17 +269,22 @@ func TestStartController(t *testing.T) {
 			"requests.storage": resource.MustParse("8Gi"),
 		},
 	}
-	kubeclientset.CoreV1().ResourceQuotas(namespace.GetName()).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{})
+	subResourceQuota, err := kubeclientset.CoreV1().ResourceQuotas(namespace.GetName()).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{})
+	util.OK(t, err)
 
-	time.Sleep(time.Millisecond * 3200)
+	time.Sleep(time.Millisecond * 250)
 	tenantResourceQuota, err = edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, 0, len(tenantResourceQuota.Spec.Drop))
 	coreResourceQuota, err = kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
 	util.OK(t, err)
-	cpuQuota, memoryQuota = calculateTenantQuota(tenantResourceQuota)
-	util.Equals(t, cpuQuota-subQuotaCPU.Value(), coreResourceQuota.Spec.Hard.Cpu().Value())
-	util.Equals(t, memoryQuota-subQuotaMemory.Value(), coreResourceQuota.Spec.Hard.Memory().Value())
+	assignedQuota = fetchTenantQuota(tenantResourceQuota)
+	for key, value := range coreResourceQuota.Spec.Hard {
+		if _, elementExists := assignedQuota[key]; elementExists {
+			subQuotaValue := subResourceQuota.Spec.Hard[key]
+			util.Equals(t, assignedQuota[key], value.Value()+subQuotaValue.Value())
+		}
+	}
 
 	edgenetclientset.CoreV1alpha().SubNamespaces(tenantResourceQuota.GetName()).Delete(context.TODO(), subnamespace.GetName(), metav1.DeleteOptions{})
 	kubeclientset.CoreV1().Namespaces().Delete(context.TODO(), fmt.Sprintf("%s-%s", tenantResourceQuota.GetName(), subnamespace.GetName()), metav1.DeleteOptions{})
@@ -290,7 +299,7 @@ func TestStartController(t *testing.T) {
 	node := g.nodeObj
 	node.OwnerReferences[0].Name = randomString
 	nodeCopy, _ := kubeclientset.CoreV1().Nodes().Create(context.TODO(), node.DeepCopy(), metav1.CreateOptions{})
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(250 * time.Millisecond)
 	tenantResourceQuota, err = edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	reward := false
@@ -298,18 +307,19 @@ func TestStartController(t *testing.T) {
 		reward = true
 	}
 	util.Equals(t, true, reward)
-	cpuQuota, memoryQuota = getQuotas(tenantResourceQuota.Spec.Claim)
+	cpuQuota, memoryQuota := getQuotas(tenantResourceQuota.Spec.Claim)
 	util.Equals(t, expectedMemoryRew, memoryQuota)
 	util.Equals(t, expectedCPURew, cpuQuota)
 	coreResourceQuota, err = kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
 	util.OK(t, err)
-	cpuQuota, memoryQuota = calculateTenantQuota(tenantResourceQuota)
-	util.Equals(t, cpuQuota, coreResourceQuota.Spec.Hard.Cpu().Value())
-	util.Equals(t, memoryQuota, coreResourceQuota.Spec.Hard.Memory().Value())
+
+	assignedQuota = fetchTenantQuota(tenantResourceQuota)
+	util.Equals(t, assignedQuota["cpu"], coreResourceQuota.Spec.Hard.Cpu().Value())
+	util.Equals(t, assignedQuota["memory"], coreResourceQuota.Spec.Hard.Memory().Value())
 
 	nodeCopy.Status.Conditions[0].Status = "False"
 	kubeclientset.CoreV1().Nodes().Update(context.TODO(), nodeCopy.DeepCopy(), metav1.UpdateOptions{})
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(250 * time.Millisecond)
 	tenantResourceQuota, err = edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	cpuQuota, memoryQuota = getQuotas(tenantResourceQuota.Spec.Claim)
@@ -318,7 +328,7 @@ func TestStartController(t *testing.T) {
 
 	nodeCopy.Status.Conditions[0].Status = "True"
 	kubeclientset.CoreV1().Nodes().Update(context.TODO(), nodeCopy.DeepCopy(), metav1.UpdateOptions{})
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(250 * time.Millisecond)
 	tenantResourceQuota, err = edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	cpuQuota, memoryQuota = getQuotas(tenantResourceQuota.Spec.Claim)
@@ -327,7 +337,7 @@ func TestStartController(t *testing.T) {
 
 	nodeCopy.Status.Conditions[0].Status = "Unknown"
 	kubeclientset.CoreV1().Nodes().Update(context.TODO(), nodeCopy.DeepCopy(), metav1.UpdateOptions{})
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(250 * time.Millisecond)
 	tenantResourceQuota, err = edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	cpuQuota, memoryQuota = getQuotas(tenantResourceQuota.Spec.Claim)
@@ -335,7 +345,7 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, expectedCPU, cpuQuota)
 
 	kubeclientset.CoreV1().Nodes().Delete(context.TODO(), nodeCopy.GetName(), metav1.DeleteOptions{})
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(250 * time.Millisecond)
 	tenantResourceQuota, err = edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	cpuQuota, memoryQuota = getQuotas(tenantResourceQuota.Spec.Claim)
@@ -406,7 +416,7 @@ func TestUpdate(t *testing.T) {
 	tenantResourceQuota.SetName(randomString)
 	_, err := edgenetclientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{})
 	util.OK(t, err)
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(250 * time.Millisecond)
 	defer edgenetclientset.CoreV1alpha().TenantResourceQuotas().Delete(context.TODO(), tenantResourceQuota.GetName(), metav1.DeleteOptions{})
 
 	cases := map[string]struct {

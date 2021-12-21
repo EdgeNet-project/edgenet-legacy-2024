@@ -61,12 +61,8 @@ func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) bool {
 	tenantResourceQuota := new(corev1alpha.TenantResourceQuota)
 	tenantResourceQuota.SetName(tenantRequest.GetName())
 	tenantResourceQuota.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
-	resourceList := make(map[corev1.ResourceName]resource.Quantity)
-	for key, value := range tenantRequest.Spec.ResourceAllocation {
-		resourceList[key] = value
-	}
 	claim := corev1alpha.ResourceTuning{
-		ResourceList: resourceList,
+		ResourceList: tenantRequest.Spec.ResourceAllocation,
 	}
 	tenantResourceQuota.Spec.Claim["initial"] = claim
 
