@@ -41,12 +41,13 @@ type Tenant struct {
 
 // TenantSpec is the spec for a Tenant resource
 type TenantSpec struct {
-	FullName  string  `json:"fullname"`
-	ShortName string  `json:"shortname"`
-	URL       string  `json:"url"`
-	Address   Address `json:"address"`
-	Contact   Contact `json:"contact"`
-	Enabled   bool    `json:"enabled"`
+	FullName             string  `json:"fullname"`
+	ShortName            string  `json:"shortname"`
+	URL                  string  `json:"url"`
+	Address              Address `json:"address"`
+	Contact              Contact `json:"contact"`
+	ClusterNetworkPolicy bool    `json:"clusternetworkpolicy"`
+	Enabled              bool    `json:"enabled"`
 }
 
 // Address describes postal address of tenant
@@ -58,9 +59,9 @@ type Address struct {
 	Country string `json:"country"`
 }
 
-// Contact contains username, personal information, and role
+// Contact contains handle, personal information, and role
 type Contact struct {
-	Username  string `json:"username"`
+	Handle    string `json:"handle"`
 	FirstName string `json:"firstname"`
 	LastName  string `json:"lastname"`
 	Email     string `json:"email"`
@@ -69,10 +70,9 @@ type Contact struct {
 
 // TenantStatus is the status for a Tenant resource
 type TenantStatus struct {
-	NodeContribution    []string `json:"nodecontribution"`
-	RegistrationRequest []string `json:"registrationrequest"`
-	State               string   `json:"state"`
-	Message             []string `json:"message"`
+	PolicyAgreed map[string]bool `json:"policyagreed"`
+	State        string          `json:"state"`
+	Message      string          `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

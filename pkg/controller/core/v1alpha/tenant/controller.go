@@ -24,7 +24,6 @@ import (
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
-	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
@@ -33,9 +32,11 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -50,29 +51,34 @@ const controllerAgentName = "tenant-controller"
 
 // Definitions of the state of the tenant resource
 const (
-	successSynced         = "Synced"
-	messageResourceSynced = "Tenant synced successfully"
-	create                = "create"
-	update                = "update"
-	delete                = "delete"
-	failure               = "failure"
-	approved              = "approved"
-	established           = "established"
+	successSynced                           = "Synced"
+	messageResourceSynced                   = "Tenant synced successfully"
+	successEstablished                      = "Established"
+	messageEstablished                      = "Tenant established successfully"
+	warningAUP                              = "Not Agreed"
+	messageAUPNotAgreed                     = "Waiting for the Acceptable Use Policy to be agreed"
+	failureAUP                              = "Creation Failed"
+	messageAUPFailed                        = "Acceptable Use Policy creation failed"
+	failureCreation                         = "Not Created"
+	messageCreationFailed                   = "Core namespace creation failed"
+	failureBinding                          = "Binding Failed"
+	messageBindingFailed                    = "Role binding failed"
+	failureNetworkPolicy                    = "Not Applied"
+	messageNetworkPolicyFailed              = "Applying network policy failed"
+	failureSubNamespaceDeletion             = "Not Removed"
+	messageSubNamespaceDeletionFailed       = "Subsidiary namespace clean up failed"
+	failureClusterRoleDeletion              = "Not Removed"
+	messageClusterRoleDeletionFailed        = "Cluster role clean up failed"
+	failureClusterRoleBindingDeletion       = "Not Removed"
+	messageClusterRoleBindingDeletionFailed = "Cluster role binding clean up failed"
+	failureRoleBindingDeletion              = "Not Removed"
+	messageRoleBindingDeletionFailed        = "Role binding clean up failed"
+	failureRoleBindingCreation              = "Not Created"
+	messageRoleBindingCreationFailed        = "Role binding creation for tenant failed"
+	failure                                 = "Failure"
+	pending                                 = "Pending"
+	established                             = "Established"
 )
-
-// Dictionary of status messages
-var statusDict = map[string]string{
-	"request-approved":                  "Tenant request has been approved",
-	"tenant-established":                "Tenant successfully established",
-	"namespace-failure":                 "Tenant core namespace cannot be created",
-	"resource-quota-failure":            "Assigning tenant resource quota failed, user: %s",
-	"aup-rolebinding-failure":           "AUP role binding creation failed, user: %s",
-	"permission-rolebinding-failure":    "Permission role binding creation failed, user: %s",
-	"administrator-rolebinding-failure": "Administrator role binding creation failed, user: %s",
-	"user-failure":                      "User creation failed due to lack of labels, user: %s",
-	"cert-failure":                      "Client cert generation failed, user: %s",
-	"kubeconfig-failure":                "Kubeconfig file creation failed, user: %s",
-}
 
 // The main structure of controller
 type Controller struct {
@@ -120,9 +126,7 @@ func NewController(
 	tenantInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueTenant,
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			if reflect.DeepEqual(oldObj.(*corev1alpha.Tenant).Status, newObj.(*corev1alpha.Tenant).Status) {
-				controller.enqueueTenant(newObj)
-			}
+			controller.enqueueTenant(newObj)
 		},
 	})
 
@@ -226,7 +230,7 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	c.TuneTenant(tenant)
+	c.ProcessTenant(tenant.DeepCopy())
 
 	c.recorder.Event(tenant, corev1.EventTypeNormal, successSynced, messageResourceSynced)
 	return nil
@@ -245,129 +249,174 @@ func (c *Controller) enqueueTenant(obj interface{}) {
 	c.workqueue.Add(key)
 }
 
-func (c *Controller) TuneTenant(tenant *corev1alpha.Tenant) {
-	klog.V(4).Infoln("TenantHandler.TuneTenant")
-
-	tenantCopy := tenant.DeepCopy()
-
-	if tenantCopy.Spec.Enabled {
-		defer func() {
-			if !reflect.DeepEqual(tenant.Status, tenantCopy.Status) {
-				if _, err := c.edgenetclientset.CoreV1alpha().Tenants().UpdateStatus(context.TODO(), tenantCopy, metav1.UpdateOptions{}); err != nil {
-					// TODO: Provide more information on error
-					klog.V(4).Info(err)
-				}
-			}
-		}()
-		// When a tenant is deleted, the owner references feature allows the namespace to be automatically removed
-		ownerReferences := SetAsOwnerReference(tenantCopy)
-		err := c.createCoreNamespace(tenantCopy, ownerReferences)
-		if err == nil || errors.IsAlreadyExists(err) {
-			c.applyQuota(tenantCopy)
-
-			// Reconfigure permissions
-			if acceptableUsePolicyRaw, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
-				for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-					aupLabels := acceptableUsePolicyRow.GetLabels()
-					if aupLabels != nil && aupLabels["edge-net.io/username"] != "" && aupLabels["edge-net.io/role"] != "" && aupLabels["edge-net.io/firstname"] != "" && aupLabels["edge-net.io/lastname"] != "" && aupLabels["edge-net.io/user-template-hash"] != "" {
-						user := registrationv1alpha.UserRequest{}
-						user.SetName(aupLabels["edge-net.io/username"])
-						user.Spec.Tenant = tenantCopy.GetName()
-						user.Spec.Email = acceptableUsePolicyRow.Spec.Email
-						user.Spec.FirstName = aupLabels["edge-net.io/firstname"]
-						user.Spec.LastName = aupLabels["edge-net.io/lastname"]
-						user.Spec.Role = aupLabels["edge-net.io/role"]
-						user.SetLabels(map[string]string{"edge-net.io/user-template-hash": aupLabels["edge-net.io/user-template-hash"]})
-						access.ConfigureTenantPermissions(tenantCopy, user.DeepCopy(), SetAsOwnerReference(tenantCopy))
-					}
-				}
-			}
-
-			// Create the cluster roles
-			if err := access.CreateObjectSpecificClusterRole(tenantCopy.GetName(), "core.edgenet.io", "tenants", tenantCopy.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
-				klog.V(4).Infof("Couldn't create owner cluster role %s: %s", tenantCopy.GetName(), err)
-				// TODO: Provide err information at the status
-			}
-			if err := access.CreateObjectSpecificClusterRole(tenantCopy.GetName(), "core.edgenet.io", "tenants", tenantCopy.GetName(), "admin", []string{"get"}, ownerReferences); err != nil && !errors.IsAlreadyExists(err) {
-				klog.V(4).Infof("Couldn't create admin cluster role %s: %s", tenantCopy.GetName(), err)
-				// TODO: Provide err information at the status
+func (c *Controller) ProcessTenant(tenantCopy *corev1alpha.Tenant) {
+	oldStatus := tenantCopy.Status
+	statusUpdate := func() {
+		if !reflect.DeepEqual(oldStatus, tenantCopy.Status) {
+			if _, err := c.edgenetclientset.CoreV1alpha().Tenants().UpdateStatus(context.TODO(), tenantCopy, metav1.UpdateOptions{}); err != nil {
+				klog.V(4).Infoln(err)
 			}
 		}
+	}
+	defer statusUpdate()
 
-		exists, _ := util.Contains(tenantCopy.Status.Message, statusDict["tenant-established"])
-		if !exists && len(tenantCopy.Status.Message) == 0 {
-			tenantCopy.Status.State = established
-			tenantCopy.Status.Message = []string{statusDict["tenant-established"]}
-			//access.SendTenantEmail(tenantCopy, nil, "tenant-creation-successful")
+	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
+	if err != nil {
+		klog.V(4).Infoln(err)
+		return
+	}
+
+	if tenantCopy.Spec.Enabled {
+		// When a tenant is deleted, the owner references feature drives the namespace to be automatically removed
+		ownerReferences := SetAsOwnerReference(tenantCopy)
+		// Create the cluster roles
+		tenantOwnerClusterRole, err := access.CreateObjectSpecificClusterRole(tenantCopy.GetName(), "core.edgenet.io", "tenants", tenantCopy.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			klog.V(4).Infof("Couldn't create owner cluster role %s: %s", tenantCopy.GetName(), err)
+			// TODO: Provide err information at the EVENTS
+		}
+		err = c.createCoreNamespace(tenantCopy, ownerReferences, string(systemNamespace.GetUID()))
+		if err == nil || errors.IsAlreadyExists(err) {
+			// Apply network policies
+			err = c.applyNetworkPolicy(tenantCopy.GetName(), string(tenantCopy.GetUID()), string(systemNamespace.GetUID()))
+			if err != nil && !errors.IsAlreadyExists(err) {
+				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureNetworkPolicy, messageNetworkPolicyFailed)
+			}
+			// Check For Acceptable Use Policy
+			policyAgreed, initialHandle := c.checkForAcceptableUsePolicy(tenantCopy, string(systemNamespace.GetUID()))
+			if !policyAgreed {
+				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, warningAUP, messageAUPNotAgreed)
+				tenantCopy.Status.State = pending
+				tenantCopy.Status.Message = messageAUPNotAgreed
+				return
+			} else {
+				// Cluster role binding
+				if err := access.CreateObjectSpecificClusterRoleBinding(tenantOwnerClusterRole, initialHandle, tenantCopy.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{}); err != nil {
+					c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureRoleBindingCreation, messageRoleBindingCreationFailed)
+				}
+				// Role binding
+				clusterRoleName := "edgenet:tenant-owner"
+				roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRoleName}
+				rbSubjects := []rbacv1.Subject{{Kind: "User", Name: tenantCopy.Spec.Contact.Email, APIGroup: "rbac.authorization.k8s.io"}}
+				roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRoleName, Namespace: tenantCopy.GetName()},
+					Subjects: rbSubjects, RoleRef: roleRef}
+				roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
+				roleBind.SetLabels(roleBindLabels)
+				if _, err := c.kubeclientset.RbacV1().RoleBindings(tenantCopy.GetName()).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+					c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
+					tenantCopy.Status.State = failure
+					tenantCopy.Status.Message = messageBindingFailed
+					klog.V(4).Infoln(err)
+				} else {
+					c.recorder.Event(tenantCopy, corev1.EventTypeNormal, successEstablished, messageEstablished)
+					tenantCopy.Status.State = established
+					tenantCopy.Status.Message = successEstablished
+				}
+			}
 		}
 	} else {
 		// Delete all subsidiary namespaces
-		if namespaceRaw, err := c.kubeclientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/tenant=%s,edge-net.io/kind=sub", tenant.GetName())}); err == nil {
+		if namespaceRaw, err := c.kubeclientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/tenant=%s,edge-net.io/tenant-uid=%s,edge-net.io/cluster-uid=%s,edge-net.io/kind=sub", tenantCopy.GetName(), string(tenantCopy.GetUID()), string(systemNamespace.GetUID()))}); err == nil {
 			for _, namespaceRow := range namespaceRaw.Items {
 				c.kubeclientset.CoreV1().Namespaces().Delete(context.TODO(), namespaceRow.GetName(), metav1.DeleteOptions{})
 			}
 		} else {
-			// TODO: Provide err information at the status
+			c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureSubNamespaceDeletion, messageSubNamespaceDeletionFailed)
 		}
 		// Delete all roles, role bindings, and subsidiary namespaces
-		if err := c.kubeclientset.RbacV1().ClusterRoles().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/tenant=%s", tenant.GetName())}); err != nil {
-			// TODO: Provide err information at the status
-
+		if err := c.kubeclientset.RbacV1().ClusterRoles().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/tenant=%s,edge-net.io/tenant-uid=%s,edge-net.io/cluster-uid=%s", tenantCopy.GetName(), string(tenantCopy.GetUID()), string(systemNamespace.GetUID()))}); err != nil {
+			c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureClusterRoleDeletion, messageClusterRoleDeletionFailed)
 		}
-		if err := c.kubeclientset.RbacV1().ClusterRoleBindings().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/tenant=%s", tenant.GetName())}); err != nil {
-			// TODO: Provide err information at the status
+		if err := c.kubeclientset.RbacV1().ClusterRoleBindings().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/tenant=%s,edge-net.io/tenant-uid=%s,edge-net.io/cluster-uid=%s", tenantCopy.GetName(), string(tenantCopy.GetUID()), string(systemNamespace.GetUID()))}); err != nil {
+			c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureClusterRoleBindingDeletion, messageClusterRoleBindingDeletionFailed)
 		}
-		if err := c.kubeclientset.RbacV1().RoleBindings(tenant.GetName()).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
-			// TODO: Provide err information at the status
+		if err := c.kubeclientset.RbacV1().RoleBindings(tenantCopy.GetName()).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
+			c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureRoleBindingDeletion, messageRoleBindingDeletionFailed)
 		}
 	}
 }
 
-func (c *Controller) createCoreNamespace(tenant *corev1alpha.Tenant, ownerReferences []metav1.OwnerReference) error {
+func (c *Controller) createCoreNamespace(tenantCopy *corev1alpha.Tenant, ownerReferences []metav1.OwnerReference, clusterUID string) error {
 	// Core namespace has the same name as the tenant
-	tenantCoreNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: tenant.GetName(), OwnerReferences: ownerReferences}}
+	coreNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: tenantCopy.GetName(), OwnerReferences: ownerReferences}}
 	// Namespace labels indicate this namespace created by a tenant, not by a team or slice
-	namespaceLabels := map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenant.GetName()}
-	tenantCoreNamespace.SetLabels(namespaceLabels)
-	exists, index := util.Contains(tenant.Status.Message, statusDict["namespace-failure"])
-	_, err := c.kubeclientset.CoreV1().Namespaces().Create(context.TODO(), tenantCoreNamespace, metav1.CreateOptions{})
+	namespaceLabels := map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenantCopy.GetName(),
+		"edge-net.io/tenant-uid": string(tenantCopy.GetUID()), "edge-net.io/cluster-uid": clusterUID}
+	coreNamespace.SetLabels(namespaceLabels)
+	_, err := c.kubeclientset.CoreV1().Namespaces().Create(context.TODO(), coreNamespace, metav1.CreateOptions{})
 	if err != nil && !errors.IsAlreadyExists(err) {
-		klog.V(4).Infof("Couldn't create namespace for %s: %s", tenant.GetName(), err)
-		if !exists {
-			tenant.Status.State = failure
-			tenant.Status.Message = append(tenant.Status.Message, statusDict["namespace-failure"])
-		}
-	} else if (err == nil || errors.IsAlreadyExists(err)) && exists {
-		tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
+		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureCreation, messageCreationFailed)
+		tenantCopy.Status.State = failure
+		tenantCopy.Status.Message = messageCreationFailed
 	}
 	return err
 }
 
-func (c *Controller) applyQuota(tenant *corev1alpha.Tenant) error {
-	cpuQuota, memoryQuota := access.CreateTenantResourceQuota(tenant.GetName(), SetAsOwnerReference(tenant))
-
-	resourceQuota := corev1.ResourceQuota{}
-	resourceQuota.Name = "core-quota"
-	resourceQuota.Spec = corev1.ResourceQuotaSpec{
-		Hard: map[corev1.ResourceName]resource.Quantity{
-			"cpu":              resource.MustParse(cpuQuota),
-			"memory":           resource.MustParse(memoryQuota),
-			"requests.storage": resource.MustParse("8Gi"),
+func (c *Controller) applyNetworkPolicy(namespace, tenantUID, clusterUID string) error {
+	// TODO: Apply a network policy to the core namespace according to spec
+	// Restricted only allows intra-tenant communication
+	// Baseline allows intra-tenant communication plus ingress from external traffic
+	// Privileged allows all kind of traffics
+	// TODO: ClusterNetworkPolicy
+	networkPolicy := new(networkingv1.NetworkPolicy)
+	networkPolicy.SetName("baseline")
+	networkPolicy.Spec.PolicyTypes = []networkingv1.PolicyType{"Ingress"}
+	port := intstr.IntOrString{IntVal: 30000}
+	endPort := int32(32768)
+	networkPolicy.Spec.Ingress = []networkingv1.NetworkPolicyIngressRule{
+		{
+			From: []networkingv1.NetworkPolicyPeer{
+				{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"edge-net.io/subtenant":   "false",
+							"edge-net.io/tenant":      namespace,
+							"edge-net.io/tenant-uid":  tenantUID,
+							"edge-net.io/cluster-uid": clusterUID,
+						},
+					},
+				},
+				{
+					IPBlock: &networkingv1.IPBlock{
+						CIDR:   "0.0.0.0/0",
+						Except: []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"},
+					},
+				},
+			},
+			Ports: []networkingv1.NetworkPolicyPort{
+				{
+					Port:    &port,
+					EndPort: &endPort,
+				},
+			},
 		},
 	}
-	exists, index := util.Contains(tenant.Status.Message, statusDict["resource-quota-failure"])
-	// Create the resource quota to prevent users from using this namespace for their applications
-	_, err := c.kubeclientset.CoreV1().ResourceQuotas(tenant.GetName()).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{})
-	if err != nil && !errors.IsAlreadyExists(err) {
-		klog.V(4).Infof("Couldn't create resource quota in %s: %s", tenant.GetName(), err)
-		if !exists {
-			tenant.Status.State = failure
-			tenant.Status.Message = append(tenant.Status.Message, statusDict["resource-quota-failure"])
-		}
-	} else if (err == nil || errors.IsAlreadyExists(err)) && exists {
-		tenant.Status.Message = append(tenant.Status.Message[:index], tenant.Status.Message[index+1:]...)
-	}
+	_, err := c.kubeclientset.NetworkingV1().NetworkPolicies(namespace).Create(context.TODO(), networkPolicy, metav1.CreateOptions{})
 	return err
+}
+
+func (c *Controller) checkForAcceptableUsePolicy(tenantCopy *corev1alpha.Tenant, clusterUID string) (bool, string) {
+	if acceptableUsePolicyRaw, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
+		for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
+			if acceptableUsePolicyRow.Spec.Email == tenantCopy.Spec.Contact.Email {
+				acceptableUsePolicyCopy := acceptableUsePolicyRow.DeepCopy()
+				return acceptableUsePolicyCopy.Spec.Accepted, acceptableUsePolicyCopy.GetName()
+			}
+		}
+	}
+	acceptableUsePolicy := new(corev1alpha.AcceptableUsePolicy)
+	acceptableUsePolicy.SetName(fmt.Sprintf("%s-%s", tenantCopy.Spec.Contact.Handle, util.GenerateRandomString(6)))
+	acceptableUsePolicy.Spec.Email = tenantCopy.Spec.Contact.Email
+	acceptableUsePolicy.Spec.Accepted = false
+	aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/cluster-uid": clusterUID}
+	acceptableUsePolicy.SetLabels(aupLabels)
+	if _, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), acceptableUsePolicy, metav1.CreateOptions{}); err != nil {
+		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureAUP, messageAUPFailed)
+		tenantCopy.Status.State = failure
+		tenantCopy.Status.Message = messageAUPFailed
+		klog.V(4).Infoln(err)
+	}
+	return false, acceptableUsePolicy.GetName()
 }
 
 // SetAsOwnerReference returns the tenant as owner
@@ -375,7 +424,7 @@ func SetAsOwnerReference(tenant *corev1alpha.Tenant) []metav1.OwnerReference {
 	// The following section makes tenant become the owner
 	ownerReferences := []metav1.OwnerReference{}
 	newTenantRef := *metav1.NewControllerRef(tenant, corev1alpha.SchemeGroupVersion.WithKind("Tenant"))
-	takeControl := false
+	takeControl := true
 	newTenantRef.Controller = &takeControl
 	ownerReferences = append(ownerReferences, newTenantRef)
 	return ownerReferences

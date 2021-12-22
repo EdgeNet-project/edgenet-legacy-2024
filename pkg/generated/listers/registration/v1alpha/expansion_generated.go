@@ -18,10 +18,6 @@ limitations under the License.
 
 package v1alpha
 
-// EmailVerificationListerExpansion allows custom methods to be added to
-// EmailVerificationLister.
-type EmailVerificationListerExpansion interface{}
-
 // RoleRequestListerExpansion allows custom methods to be added to
 // RoleRequestLister.
 type RoleRequestListerExpansion interface{}
@@ -33,7 +29,3 @@ type RoleRequestNamespaceListerExpansion interface{}
 // TenantRequestListerExpansion allows custom methods to be added to
 // TenantRequestLister.
 type TenantRequestListerExpansion interface{}
-
-// UserRequestListerExpansion allows custom methods to be added to
-// UserRequestLister.
-type UserRequestListerExpansion interface{}

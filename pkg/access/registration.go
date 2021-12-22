@@ -18,13 +18,11 @@ package access
 
 import (
 	"context"
-	"strings"
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
-	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -70,57 +68,6 @@ func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) bool {
 		klog.V(4).Infof("Couldn't create tenant resource quota %s: %s", tenantResourceQuota.GetName(), err)
 	}
 
-	return created
-}
-
-// Create to provide one-time code for verification
-func CreateEmailVerification(obj interface{}, ownerReferences []metav1.OwnerReference) bool {
-	// The section below is a part of the method which provides email verification
-	// Email verification code is a security point for email verification. The user
-	// registration object creates an email verification object with a name which is
-	// this email verification code. Only who knows the email verification
-	// code can manipulate that object by using a public token.
-	created := false
-	switch obj.(type) {
-	case *registrationv1alpha.TenantRequest:
-		tenantRequest := obj.(*registrationv1alpha.TenantRequest)
-
-		code := "tr-" + util.GenerateRandomString(16)
-		emailVerification := registrationv1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: ownerReferences}}
-		emailVerification.SetName(code)
-		emailVerification.Spec.Email = tenantRequest.Spec.Contact.Email
-		// labels: tenant, user, code - attach to the email verification and tenant
-		labels := map[string]string{"edge-net.io/tenant": tenantRequest.GetName(), "edge-net.io/username": tenantRequest.Spec.Contact.Username, "edge-net.io/registration": "tenant"}
-		emailVerification.SetLabels(labels)
-
-		_, err := EdgenetClientset.RegistrationV1alpha().EmailVerifications().Create(context.TODO(), emailVerification.DeepCopy(), metav1.CreateOptions{})
-		if err == nil {
-			created = true
-			//SendEmailVerificationNotification("tenant-email-verification", tenantRequest.GetName(), tenantRequest.Spec.Contact.Username,
-			//	fmt.Sprintf("%s %s", tenantRequest.Spec.Contact.FirstName, tenantRequest.Spec.Contact.LastName), tenantRequest.Spec.Contact.Email, code)
-		} else {
-			//SendEmailVerificationNotification("tenant-email-verification-malfunction", tenantRequest.GetName(), tenantRequest.Spec.Contact.Username,
-			//	fmt.Sprintf("%s %s", tenantRequest.Spec.Contact.FirstName, tenantRequest.Spec.Contact.LastName), tenantRequest.Spec.Contact.Email, "")
-		}
-	case *registrationv1alpha.UserRequest:
-		userRequest := obj.(*registrationv1alpha.UserRequest)
-		code := "ur-" + util.GenerateRandomString(16)
-		emailVerification := registrationv1alpha.EmailVerification{ObjectMeta: metav1.ObjectMeta{OwnerReferences: ownerReferences}}
-		emailVerification.SetName(code)
-		emailVerification.Spec.Email = userRequest.Spec.Email
-		// labels: tenant, user, code - attach to the email verification and tenant
-		labels := map[string]string{"edge-net.io/tenant": strings.ToLower(userRequest.Spec.Tenant), "edge-net.io/username": userRequest.GetName(), "edge-net.io/registration": "user"}
-		emailVerification.SetLabels(labels)
-		_, err := EdgenetClientset.RegistrationV1alpha().EmailVerifications().Create(context.TODO(), emailVerification.DeepCopy(), metav1.CreateOptions{})
-		if err == nil {
-			created = true
-			//SendEmailVerificationNotification("user-email-verification", strings.ToLower(userRequest.Spec.Tenant), userRequest.GetName(),
-			//	fmt.Sprintf("%s %s", userRequest.Spec.FirstName, userRequest.Spec.LastName), userRequest.Spec.Email, code)
-		} else {
-			//SendEmailVerificationNotification("user-email-verification-malfunction", strings.ToLower(userRequest.Spec.Tenant), userRequest.GetName(),
-			//	fmt.Sprintf("%s %s", userRequest.Spec.FirstName, userRequest.Spec.LastName), userRequest.Spec.Email, "")
-		}
-	}
 	return created
 }
 

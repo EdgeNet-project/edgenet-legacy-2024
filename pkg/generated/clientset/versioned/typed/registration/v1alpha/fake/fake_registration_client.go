@@ -28,20 +28,12 @@ type FakeRegistrationV1alpha struct {
 	*testing.Fake
 }
 
-func (c *FakeRegistrationV1alpha) EmailVerifications() v1alpha.EmailVerificationInterface {
-	return &FakeEmailVerifications{c}
-}
-
 func (c *FakeRegistrationV1alpha) RoleRequests(namespace string) v1alpha.RoleRequestInterface {
 	return &FakeRoleRequests{c, namespace}
 }
 
 func (c *FakeRegistrationV1alpha) TenantRequests() v1alpha.TenantRequestInterface {
 	return &FakeTenantRequests{c}
-}
-
-func (c *FakeRegistrationV1alpha) UserRequests() v1alpha.UserRequestInterface {
-	return &FakeUserRequests{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

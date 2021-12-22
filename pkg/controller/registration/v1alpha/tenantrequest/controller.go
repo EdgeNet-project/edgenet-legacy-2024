@@ -37,7 +37,6 @@ import (
 
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -361,22 +360,8 @@ func (c *Controller) processTenantRequest(tenantRequestCopy *registrationv1alpha
 			tenantCreated := access.CreateTenant(tenantRequestCopy)
 			if tenantCreated {
 				c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
-				clusterRoleName := "edgenet:tenant-owner"
-				roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRoleName}
-				rbSubjects := []rbacv1.Subject{{Kind: "User", Name: tenantRequestCopy.Spec.Contact.Email, APIGroup: "rbac.authorization.k8s.io"}}
-				roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRoleName, Namespace: tenantRequestCopy.GetName()},
-					Subjects: rbSubjects, RoleRef: roleRef}
-				roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
-				roleBind.SetLabels(roleBindLabels)
-				if _, err := c.kubeclientset.RbacV1().RoleBindings(tenantRequestCopy.GetName()).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
-					c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
-					tenantRequestCopy.Status.State = failure
-					tenantRequestCopy.Status.Message = messageBindingFailed
-					klog.V(4).Infoln(err)
-				} else {
-					access.SendEmailForTenantRequest(tenantRequestCopy, "tenant-request-approved", "[EdgeNet] Tenant request approved",
-						string(systemNamespace.GetUID()), []string{tenantRequestCopy.Spec.Contact.Email})
-				}
+				access.SendEmailForTenantRequest(tenantRequestCopy, "tenant-request-approved", "[EdgeNet] Tenant request approved",
+					string(systemNamespace.GetUID()), []string{tenantRequestCopy.Spec.Contact.Email})
 			} else {
 				c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureTenantCreation, messageTenantCreationFailed)
 				tenantRequestCopy.Status.State = failure
@@ -420,7 +405,7 @@ func (c *Controller) checkForAcceptableUsePolicy(tenantRequestCopy *registration
 		}
 	}
 	acceptableUsePolicy := new(corev1alpha.AcceptableUsePolicy)
-	acceptableUsePolicy.SetName(fmt.Sprintf("%s-%s", tenantRequestCopy.Spec.Contact.Username, util.GenerateRandomString(6)))
+	acceptableUsePolicy.SetName(fmt.Sprintf("%s-%s", tenantRequestCopy.Spec.Contact.Handle, util.GenerateRandomString(6)))
 	acceptableUsePolicy.Spec.Email = tenantRequestCopy.Spec.Contact.Email
 	acceptableUsePolicy.Spec.Accepted = false
 	aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/cluster-uid": clusterUID}

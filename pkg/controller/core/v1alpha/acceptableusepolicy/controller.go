@@ -55,8 +55,8 @@ const (
 	messageNotAgreed      = "Waiting for the Acceptable Use Policy to be agreed"
 	warningRevoked        = "Revoked"
 	messageRevoked        = "Acceptable Use Policy revoked and user access restricted"
-	warningRequestUpdate  = "Not Updates"
-	messageRequestUpdate  = "Failed to update the status of associated resources"
+	warningUpdate         = "Not Updates"
+	messageUpdate         = "Failed to update the status of associated resources"
 	failure               = "Failure"
 	pending               = "Pending"
 	success               = "Successful"
@@ -260,7 +260,7 @@ func (c *Controller) processAcceptableUsePolicy(acceptableUsePolicyCopy *corev1a
 						roleRequestCopy := roleRequestRow.DeepCopy()
 						roleRequestCopy.Status.PolicyAgreed = &acceptableUsePolicyCopy.Spec.Accepted
 						if _, err := c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestCopy.GetNamespace()).UpdateStatus(context.TODO(), roleRequestCopy, metav1.UpdateOptions{}); err != nil {
-							c.recorder.Event(acceptableUsePolicyCopy, corev1.EventTypeWarning, warningRequestUpdate, messageRequestUpdate)
+							c.recorder.Event(acceptableUsePolicyCopy, corev1.EventTypeWarning, warningUpdate, messageUpdate)
 							klog.V(4).Infoln(err)
 						}
 					}
@@ -276,7 +276,7 @@ func (c *Controller) processAcceptableUsePolicy(acceptableUsePolicyCopy *corev1a
 						tenantRequestCopy := tenantRequestRow.DeepCopy()
 						tenantRequestCopy.Status.PolicyAgreed = &acceptableUsePolicyCopy.Spec.Accepted
 						if _, err := c.edgenetclientset.RegistrationV1alpha().TenantRequests().UpdateStatus(context.TODO(), tenantRequestCopy, metav1.UpdateOptions{}); err != nil {
-							c.recorder.Event(acceptableUsePolicyCopy, corev1.EventTypeWarning, warningRequestUpdate, messageRequestUpdate)
+							c.recorder.Event(acceptableUsePolicyCopy, corev1.EventTypeWarning, warningUpdate, messageUpdate)
 							klog.V(4).Infoln(err)
 						}
 					}
@@ -284,6 +284,18 @@ func (c *Controller) processAcceptableUsePolicy(acceptableUsePolicyCopy *corev1a
 			}
 		}
 
+		if tenantRaw, err := c.edgenetclientset.CoreV1alpha().Tenants().List(context.TODO(), metav1.ListOptions{}); err == nil {
+			for _, tenantRow := range tenantRaw.Items {
+				if acceptableUsePolicyCopy.Spec.Email == tenantRow.Spec.Contact.Email {
+					tenantCopy := tenantRow.DeepCopy()
+					tenantCopy.Status.PolicyAgreed[acceptableUsePolicyCopy.GetName()] = acceptableUsePolicyCopy.Spec.Accepted
+					if _, err := c.edgenetclientset.CoreV1alpha().Tenants().UpdateStatus(context.TODO(), tenantCopy, metav1.UpdateOptions{}); err != nil {
+						c.recorder.Event(acceptableUsePolicyCopy, corev1.EventTypeWarning, warningUpdate, messageUpdate)
+						klog.V(4).Infoln(err)
+					}
+				}
+			}
+		}
 	} else if !acceptableUsePolicyCopy.Spec.Accepted {
 		if acceptableUsePolicyCopy.Status.State == success {
 			c.recorder.Event(acceptableUsePolicyCopy, corev1.EventTypeWarning, warningRevoked, messageRevoked)

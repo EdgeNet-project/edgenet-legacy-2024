@@ -96,7 +96,7 @@ func (g *TestGroup) Init() {
 				FirstName: "Tom",
 				LastName:  "Public",
 				Phone:     "+33NUMBER",
-				Username:  "tompublic",
+				Handle:    "tompublic",
 			},
 			ResourceAllocation: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("12000m"),

@@ -26,19 +26,13 @@ import (
 
 type RegistrationV1alphaInterface interface {
 	RESTClient() rest.Interface
-	EmailVerificationsGetter
 	RoleRequestsGetter
 	TenantRequestsGetter
-	UserRequestsGetter
 }
 
 // RegistrationV1alphaClient is used to interact with features provided by the registration.edgenet.io group.
 type RegistrationV1alphaClient struct {
 	restClient rest.Interface
-}
-
-func (c *RegistrationV1alphaClient) EmailVerifications() EmailVerificationInterface {
-	return newEmailVerifications(c)
 }
 
 func (c *RegistrationV1alphaClient) RoleRequests(namespace string) RoleRequestInterface {
@@ -47,10 +41,6 @@ func (c *RegistrationV1alphaClient) RoleRequests(namespace string) RoleRequestIn
 
 func (c *RegistrationV1alphaClient) TenantRequests() TenantRequestInterface {
 	return newTenantRequests(c)
-}
-
-func (c *RegistrationV1alphaClient) UserRequests() UserRequestInterface {
-	return newUserRequests(c)
 }
 
 // NewForConfig creates a new RegistrationV1alphaClient for the given config.

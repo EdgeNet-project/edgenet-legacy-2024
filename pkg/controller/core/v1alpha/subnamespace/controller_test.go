@@ -95,7 +95,7 @@ func (g *TestGroup) Init() {
 				FirstName: "John",
 				LastName:  "Doe",
 				Phone:     "+33NUMBER",
-				Username:  "johndoe",
+				Handle:    "johndoe",
 			},
 			Enabled: true,
 		},

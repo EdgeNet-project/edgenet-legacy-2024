@@ -54,10 +54,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&TenantRequestList{},
 		&RoleRequest{},
 		&RoleRequestList{},
-		&UserRequest{},
-		&UserRequestList{},
-		&EmailVerification{},
-		&EmailVerificationList{},
+		&RoleRequest{},
+		&RoleRequestList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

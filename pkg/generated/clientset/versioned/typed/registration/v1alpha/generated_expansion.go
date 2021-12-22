@@ -18,10 +18,6 @@ limitations under the License.
 
 package v1alpha
 
-type EmailVerificationExpansion interface{}
-
 type RoleRequestExpansion interface{}
 
 type TenantRequestExpansion interface{}
-
-type UserRequestExpansion interface{}

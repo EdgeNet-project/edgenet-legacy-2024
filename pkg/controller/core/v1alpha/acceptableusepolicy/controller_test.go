@@ -95,7 +95,7 @@ func (g *TestGroup) Init() {
 				FirstName: "Joe",
 				LastName:  "Public",
 				Phone:     "+33NUMBER",
-				Username:  "joepublic",
+				Handle:    "joepublic",
 			},
 			Enabled: true,
 		},
@@ -123,7 +123,7 @@ func (g *TestGroup) Init() {
 				LastName:  "Smith",
 				Email:     "john.smith@edge-net.org",
 				Phone:     "+33NUMBER",
-				Username:  "johnsmith",
+				Handle:    "johnsmith",
 			},
 		},
 	}
@@ -156,7 +156,7 @@ func (g *TestGroup) Init() {
 			Labels: map[string]string{
 				"edge-net.io/generated": "true",
 				"edge-net.io/tenant":    "edgenet",
-				"edge-net.io/username":  "joepublic",
+				"edge-net.io/handle":    "joepublic",
 			},
 		},
 		Spec: corev1alpha.AcceptableUsePolicySpec{
