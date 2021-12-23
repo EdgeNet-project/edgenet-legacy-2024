@@ -136,13 +136,18 @@ func (g *TestGroup) Init() {
 			Namespace: "edgenet",
 		},
 		Spec: corev1alpha.SubNamespaceSpec{
-			Resources: corev1alpha.Resources{
-				CPU:    "6000m",
-				Memory: "6Gi",
+			Mode: "hierarchy",
+			ResourceAllocation: map[corev1.ResourceName]resource.Quantity{
+				"cpu":    resource.MustParse("6000m"),
+				"memory": resource.MustParse("6Gi"),
 			},
-			Inheritance: corev1alpha.Inheritance{
-				RBAC:          true,
-				NetworkPolicy: true,
+			Inheritance: map[string]bool{
+				"rbac":           true,
+				"networkpolicy":  true,
+				"limitrange":     false,
+				"configmap":      false,
+				"secret":         false,
+				"serviceaccount": false,
 			},
 		},
 	}
@@ -264,8 +269,8 @@ func TestStartController(t *testing.T) {
 	resourceQuota.Name = "sub-quota"
 	resourceQuota.Spec = corev1.ResourceQuotaSpec{
 		Hard: map[corev1.ResourceName]resource.Quantity{
-			"cpu":              resource.MustParse(subnamespace.Spec.Resources.CPU),
-			"memory":           resource.MustParse(subnamespace.Spec.Resources.Memory),
+			"cpu":              subnamespace.Spec.ResourceAllocation["cpu"],
+			"memory":           subnamespace.Spec.ResourceAllocation["memory"],
 			"requests.storage": resource.MustParse("8Gi"),
 		},
 	}

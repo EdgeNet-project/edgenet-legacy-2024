@@ -102,22 +102,27 @@ type SubNamespace struct {
 }
 
 // SubNamespaceSpec is the spec for a SubNamespace resource
+// RBAC, NetworkPolicies, Limit Ranges, Secrets, Config Maps, Service Accounts
 type SubNamespaceSpec struct {
-	Resources   Resources    `json:"resources"`
-	Inheritance Inheritance  `json:"inheritance"`
-	Expiry      *metav1.Time `json:"expiry"`
-}
-
-// Inheritance presents the resources that will be inherited
-type Inheritance struct {
-	NetworkPolicy bool `json:"networkpolicy"`
-	RBAC          bool `json:"rbac"`
+	Mode               string                                    `json:"mode"`
+	Owner              Contact                                   `json:"owner"`
+	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
+	Inheritance        map[string]bool                           `json:"inheritance"`
+	Scope              *string                                   `json:"scope"`
+	Sync               *bool                                     `json:"sync"`
+	Expiry             *metav1.Time                              `json:"expiry"`
 }
 
 // SubNamespaceStatus is the status for a SubNamespace resource
 type SubNamespaceStatus struct {
-	State   string   `json:"state"`
-	Message []string `json:"message"`
+	State   string `json:"state"`
+	Message string `json:"message"`
+	Child   *Child `json:"child"`
+}
+
+type Child struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
