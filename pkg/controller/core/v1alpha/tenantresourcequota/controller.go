@@ -379,21 +379,6 @@ func (c *Controller) enqueueTenantResourceQuotaAfter(obj interface{}, after time
 	c.workqueue.AddAfter(key, after)
 }
 
-// The following function removes the expired claims/drops from the tenant resource quota and updates the object.
-// So the controller can set resource quotas in all namespaces owned by the tenant in the following lines.
-func removeExpiredItems(objects ...map[string]corev1alpha.ResourceTuning) ([]map[string]corev1alpha.ResourceTuning, bool) {
-	expired := false
-	for _, obj := range objects {
-		for key, value := range obj {
-			if value.Expiry != nil && time.Until(value.Expiry.Time) <= 0 {
-				expired = true
-				delete(obj, key)
-			}
-		}
-	}
-	return objects, expired
-}
-
 func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1alpha.TenantResourceQuota) {
 	oldStatus := tenantResourceQuotaCopy.Status
 	statusUpdate := func() {
@@ -448,7 +433,7 @@ func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1a
 func (c *Controller) tuneResourceQuotaAcrossNamespaces(coreNamespace string, tenantResourceQuotaCopy *corev1alpha.TenantResourceQuota) {
 	c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successTraversalStarted, messageTraversalStarted)
 	aggregateQuota, lastInSubNamespace := c.NamespaceTraversal(coreNamespace)
-	assignedQuota := fetchTenantQuota(tenantResourceQuotaCopy)
+	assignedQuota := FetchTenantQuota(tenantResourceQuotaCopy)
 	if coreResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(coreNamespace).Get(context.TODO(), "core-quota", metav1.GetOptions{}); err == nil {
 		coreResourceQuotaCopy := coreResourceQuota.DeepCopy()
 		canEntirelyCompansate := true
@@ -533,8 +518,8 @@ func (c *Controller) accumulateQuota(namespace string, aggregateQuota map[corev1
 	}
 }
 
-// fetchTenantQuota adds the resources defined in claims, and subtracts those in drops to calculate the tenant resource quota.
-func fetchTenantQuota(tenantResourceQuota *corev1alpha.TenantResourceQuota) map[corev1.ResourceName]int64 {
+// FetchTenantQuota adds the resources defined in claims, and subtracts those in drops to calculate the tenant resource quota.
+func FetchTenantQuota(tenantResourceQuota *corev1alpha.TenantResourceQuota) map[corev1.ResourceName]int64 {
 	assignedQuota := make(map[corev1.ResourceName]int64)
 	if len(tenantResourceQuota.Spec.Claim) > 0 {
 		for _, claim := range tenantResourceQuota.Spec.Claim {
@@ -563,4 +548,19 @@ func fetchTenantQuota(tenantResourceQuota *corev1alpha.TenantResourceQuota) map[
 		}
 	}
 	return assignedQuota
+}
+
+// The following function removes the expired claims/drops from the tenant resource quota and updates the object.
+// So the controller can set resource quotas in all namespaces owned by the tenant in the following lines.
+func removeExpiredItems(objects ...map[string]corev1alpha.ResourceTuning) ([]map[string]corev1alpha.ResourceTuning, bool) {
+	expired := false
+	for _, obj := range objects {
+		for key, value := range obj {
+			if value.Expiry != nil && time.Until(value.Expiry.Time) <= 0 {
+				expired = true
+				delete(obj, key)
+			}
+		}
+	}
+	return objects, expired
 }

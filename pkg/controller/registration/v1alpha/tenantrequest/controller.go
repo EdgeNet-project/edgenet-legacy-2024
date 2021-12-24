@@ -357,8 +357,7 @@ func (c *Controller) processTenantRequest(tenantRequestCopy *registrationv1alpha
 			tenantRequestCopy.Status.State = approved
 			tenantRequestCopy.Status.Message = messageRoleApproved
 
-			tenantCreated := access.CreateTenant(tenantRequestCopy)
-			if tenantCreated {
+			if err := access.CreateTenant(tenantRequestCopy); err == nil {
 				c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
 				access.SendEmailForTenantRequest(tenantRequestCopy, "tenant-request-approved", "[EdgeNet] Tenant request approved",
 					string(systemNamespace.GetUID()), []string{tenantRequestCopy.Spec.Contact.Email})

@@ -105,7 +105,7 @@ type SubNamespace struct {
 // RBAC, NetworkPolicies, Limit Ranges, Secrets, Config Maps, Service Accounts
 type SubNamespaceSpec struct {
 	Mode               string                                    `json:"mode"`
-	Owner              Contact                                   `json:"owner"`
+	Owner              *Contact                                  `json:"owner"`
 	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
 	Inheritance        map[string]bool                           `json:"inheritance"`
 	Scope              *string                                   `json:"scope"`

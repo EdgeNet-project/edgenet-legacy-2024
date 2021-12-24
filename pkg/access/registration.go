@@ -37,8 +37,7 @@ var Clientset kubernetes.Interface
 var EdgenetClientset clientset.Interface
 
 // Create function is for being used by other resources to create a tenant
-func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) bool {
-	created := false
+func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) error {
 	// Create a tenant on the cluster
 	tenant := new(corev1alpha.Tenant)
 	tenant.SetName(tenantRequest.GetName())
@@ -49,10 +48,9 @@ func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) bool {
 	tenant.Spec.URL = tenantRequest.Spec.URL
 	tenant.Spec.Enabled = true
 
-	if _, err := EdgenetClientset.CoreV1alpha().Tenants().Create(context.TODO(), tenant, metav1.CreateOptions{}); err == nil {
-		created = true
-	} else {
+	if _, err := EdgenetClientset.CoreV1alpha().Tenants().Create(context.TODO(), tenant, metav1.CreateOptions{}); err != nil {
 		klog.V(4).Infof("Couldn't create tenant %s: %s", tenant.GetName(), err)
+		return err
 	}
 
 	// TODO: Take tenant resource quota into account while error handling
@@ -68,7 +66,7 @@ func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) bool {
 		klog.V(4).Infof("Couldn't create tenant resource quota %s: %s", tenantResourceQuota.GetName(), err)
 	}
 
-	return created
+	return nil
 }
 
 // CreateTenantResourceQuota generates a tenant resource quota with the name provided
