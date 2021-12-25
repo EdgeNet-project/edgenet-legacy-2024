@@ -153,7 +153,7 @@ func NewController(
 			newTenantResourceQuota := new.(*corev1alpha.TenantResourceQuota)
 			oldTenantResourceQuota := old.(*corev1alpha.TenantResourceQuota)
 			if reflect.DeepEqual(oldTenantResourceQuota.Spec, newTenantResourceQuota.Spec) {
-				if _, expired := removeExpiredItems(newTenantResourceQuota.Spec.Claim, newTenantResourceQuota.Spec.Drop); !expired {
+				if expired := newTenantResourceQuota.DropExpiredItems(); !expired {
 					return
 				}
 			}
@@ -395,10 +395,8 @@ func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1a
 			c.edgenetclientset.CoreV1alpha().TenantResourceQuotas().Delete(context.TODO(), tenant.GetName(), metav1.DeleteOptions{})
 		}
 	} else {
-		listSlice, expired := removeExpiredItems(tenantResourceQuotaCopy.Spec.Claim, tenantResourceQuotaCopy.Spec.Drop)
+		expired := tenantResourceQuotaCopy.DropExpiredItems()
 		if expired {
-			tenantResourceQuotaCopy.Spec.Claim = listSlice[0]
-			tenantResourceQuotaCopy.Spec.Drop = listSlice[1]
 			if tenantResourceQuotaUpdated, err := c.edgenetclientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuotaCopy, metav1.UpdateOptions{}); err == nil {
 				tenantResourceQuotaCopy = tenantResourceQuotaUpdated.DeepCopy()
 				c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successRemoved, messageRemoved)
@@ -433,7 +431,7 @@ func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1a
 func (c *Controller) tuneResourceQuotaAcrossNamespaces(coreNamespace string, tenantResourceQuotaCopy *corev1alpha.TenantResourceQuota) {
 	c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successTraversalStarted, messageTraversalStarted)
 	aggregateQuota, lastInSubNamespace := c.NamespaceTraversal(coreNamespace)
-	assignedQuota := FetchTenantQuota(tenantResourceQuotaCopy)
+	assignedQuota := tenantResourceQuotaCopy.Fetch()
 	if coreResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(coreNamespace).Get(context.TODO(), "core-quota", metav1.GetOptions{}); err == nil {
 		coreResourceQuotaCopy := coreResourceQuota.DeepCopy()
 		canEntirelyCompansate := true
@@ -518,41 +516,9 @@ func (c *Controller) accumulateQuota(namespace string, aggregateQuota map[corev1
 	}
 }
 
-// FetchTenantQuota adds the resources defined in claims, and subtracts those in drops to calculate the tenant resource quota.
-func FetchTenantQuota(tenantResourceQuota *corev1alpha.TenantResourceQuota) map[corev1.ResourceName]int64 {
-	assignedQuota := make(map[corev1.ResourceName]int64)
-	if len(tenantResourceQuota.Spec.Claim) > 0 {
-		for _, claim := range tenantResourceQuota.Spec.Claim {
-			if claim.Expiry == nil || (claim.Expiry != nil && time.Until(claim.Expiry.Time) >= 0) {
-				for key, value := range claim.ResourceList {
-					if _, elementExists := assignedQuota[key]; elementExists {
-						assignedQuota[key] += value.Value()
-					} else {
-						assignedQuota[key] = value.Value()
-					}
-				}
-			}
-		}
-	}
-	if len(tenantResourceQuota.Spec.Drop) > 0 {
-		for _, drop := range tenantResourceQuota.Spec.Drop {
-			if drop.Expiry == nil || (drop.Expiry != nil && time.Until(drop.Expiry.Time) >= 0) {
-				for key, value := range drop.ResourceList {
-					if _, elementExists := assignedQuota[key]; elementExists {
-						assignedQuota[key] -= value.Value()
-					} else {
-						assignedQuota[key] = -value.Value()
-					}
-				}
-			}
-		}
-	}
-	return assignedQuota
-}
-
 // The following function removes the expired claims/drops from the tenant resource quota and updates the object.
 // So the controller can set resource quotas in all namespaces owned by the tenant in the following lines.
-func removeExpiredItems(objects ...map[string]corev1alpha.ResourceTuning) ([]map[string]corev1alpha.ResourceTuning, bool) {
+/*func removeExpiredItems(objects ...map[string]corev1alpha.ResourceTuning) ([]map[string]corev1alpha.ResourceTuning, bool) {
 	expired := false
 	for _, obj := range objects {
 		for key, value := range obj {
@@ -563,4 +529,4 @@ func removeExpiredItems(objects ...map[string]corev1alpha.ResourceTuning) ([]map
 		}
 	}
 	return objects, expired
-}
+}*/

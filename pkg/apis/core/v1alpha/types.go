@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha
 
 import (
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -273,4 +275,51 @@ type TenantResourceQuotaList struct {
 	metav1.ListMeta `json:"metadata"`
 
 	Items []TenantResourceQuota `json:"items"`
+}
+
+func (t TenantResourceQuota) Fetch() map[corev1.ResourceName]int64 {
+	assignedQuota := make(map[corev1.ResourceName]int64)
+	if len(t.Spec.Claim) > 0 {
+		for _, claim := range t.Spec.Claim {
+			if claim.Expiry == nil || (claim.Expiry != nil && time.Until(claim.Expiry.Time) >= 0) {
+				for key, value := range claim.ResourceList {
+					if _, elementExists := assignedQuota[key]; elementExists {
+						assignedQuota[key] += value.Value()
+					} else {
+						assignedQuota[key] = value.Value()
+					}
+				}
+			}
+		}
+	}
+	if len(t.Spec.Drop) > 0 {
+		for _, drop := range t.Spec.Drop {
+			if drop.Expiry == nil || (drop.Expiry != nil && time.Until(drop.Expiry.Time) >= 0) {
+				for key, value := range drop.ResourceList {
+					if _, elementExists := assignedQuota[key]; elementExists {
+						assignedQuota[key] -= value.Value()
+					} else {
+						assignedQuota[key] = -value.Value()
+					}
+				}
+			}
+		}
+	}
+	return assignedQuota
+}
+
+func (t TenantResourceQuota) DropExpiredItems() bool {
+	remove := func(objects ...map[string]ResourceTuning) bool {
+		expired := false
+		for _, obj := range objects {
+			for key, value := range obj {
+				if value.Expiry != nil && time.Until(value.Expiry.Time) <= 0 {
+					expired = true
+					delete(obj, key)
+				}
+			}
+		}
+		return expired
+	}
+	return remove(t.Spec.Claim, t.Spec.Drop)
 }

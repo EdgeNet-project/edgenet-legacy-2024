@@ -27,7 +27,6 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
-	tenantresourcequotav1alpha "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenantresourcequota"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
@@ -441,7 +440,7 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 			if parentResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(subnamespaceCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
 				sufficientQuota := false
 				if subtenantResourceQuota, err := c.edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), childName, metav1.GetOptions{}); err == nil {
-					assignedQuota := tenantresourcequotav1alpha.FetchTenantQuota(subtenantResourceQuota)
+					assignedQuota := subtenantResourceQuota.Fetch()
 					sufficientQuota = c.tuneParentResourceQuota(subnamespaceCopy, parentResourceQuota, assignedQuota)
 				} else {
 					sufficientQuota = c.tuneParentResourceQuota(subnamespaceCopy, parentResourceQuota, nil)

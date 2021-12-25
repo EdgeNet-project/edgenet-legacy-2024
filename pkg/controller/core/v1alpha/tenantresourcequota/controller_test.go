@@ -253,7 +253,7 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, 1, len(tenantResourceQuota.Spec.Drop))
 	coreResourceQuota, err := kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
 	util.OK(t, err)
-	assignedQuota := FetchTenantQuota(tenantResourceQuota)
+	assignedQuota := tenantResourceQuota.Fetch()
 	for key, value := range coreResourceQuota.Spec.Hard {
 		if _, elementExists := assignedQuota[key]; elementExists {
 			util.Equals(t, assignedQuota[key], value.Value())
@@ -283,7 +283,7 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, 0, len(tenantResourceQuota.Spec.Drop))
 	coreResourceQuota, err = kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
 	util.OK(t, err)
-	assignedQuota = FetchTenantQuota(tenantResourceQuota)
+	assignedQuota = tenantResourceQuota.Fetch()
 	for key, value := range coreResourceQuota.Spec.Hard {
 		if _, elementExists := assignedQuota[key]; elementExists {
 			subQuotaValue := subResourceQuota.Spec.Hard[key]
@@ -318,7 +318,7 @@ func TestStartController(t *testing.T) {
 	coreResourceQuota, err = kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
 	util.OK(t, err)
 
-	assignedQuota = FetchTenantQuota(tenantResourceQuota)
+	assignedQuota = tenantResourceQuota.Fetch()
 	util.Equals(t, assignedQuota["cpu"], coreResourceQuota.Spec.Hard.Cpu().Value())
 	util.Equals(t, assignedQuota["memory"], coreResourceQuota.Spec.Hard.Memory().Value())
 
