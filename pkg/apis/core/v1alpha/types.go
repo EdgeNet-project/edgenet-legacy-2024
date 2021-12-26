@@ -137,6 +137,16 @@ type SubNamespaceList struct {
 	Items []SubNamespace `json:"items"`
 }
 
+// TODO: Remove this function when using int64 is deprecated
+func (s SubNamespace) RetrieveQuantityValue(key corev1.ResourceName) int64 {
+	var value int64
+	if _, elementExists := s.Spec.ResourceAllocation[key]; elementExists {
+		quantity := s.Spec.ResourceAllocation[key]
+		value = quantity.Value()
+	}
+	return value
+}
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -277,16 +287,23 @@ type TenantResourceQuotaList struct {
 	Items []TenantResourceQuota `json:"items"`
 }
 
-func (t TenantResourceQuota) Fetch() map[corev1.ResourceName]int64 {
-	assignedQuota := make(map[corev1.ResourceName]int64)
+func (t TenantResourceQuota) Fetch() (map[corev1.ResourceName]int64, map[corev1.ResourceName]resource.Quantity) {
+	// TODO: Remove the assignedQuotaValue map
+	assignedQuotaValue := make(map[corev1.ResourceName]int64)
+	assignedQuota := make(map[corev1.ResourceName]resource.Quantity)
+
 	if len(t.Spec.Claim) > 0 {
 		for _, claim := range t.Spec.Claim {
 			if claim.Expiry == nil || (claim.Expiry != nil && time.Until(claim.Expiry.Time) >= 0) {
 				for key, value := range claim.ResourceList {
-					if _, elementExists := assignedQuota[key]; elementExists {
-						assignedQuota[key] += value.Value()
+					if _, elementExists := assignedQuotaValue[key]; elementExists {
+						assignedQuotaValue[key] += value.Value()
+						quantity := assignedQuota[key]
+						quantity.Add(value)
+						assignedQuota[key] = quantity
 					} else {
-						assignedQuota[key] = value.Value()
+						assignedQuotaValue[key] = value.Value()
+						assignedQuota[key] = value
 					}
 				}
 			}
@@ -296,16 +313,21 @@ func (t TenantResourceQuota) Fetch() map[corev1.ResourceName]int64 {
 		for _, drop := range t.Spec.Drop {
 			if drop.Expiry == nil || (drop.Expiry != nil && time.Until(drop.Expiry.Time) >= 0) {
 				for key, value := range drop.ResourceList {
-					if _, elementExists := assignedQuota[key]; elementExists {
-						assignedQuota[key] -= value.Value()
+					if _, elementExists := assignedQuotaValue[key]; elementExists {
+						assignedQuotaValue[key] -= value.Value()
+						quantity := assignedQuota[key]
+						quantity.Sub(value)
+						assignedQuota[key] = quantity
 					} else {
-						assignedQuota[key] = -value.Value()
+						assignedQuotaValue[key] = -value.Value()
+						value.Neg()
+						assignedQuota[key] = value
 					}
 				}
 			}
 		}
 	}
-	return assignedQuota
+	return assignedQuotaValue, assignedQuota
 }
 
 func (t TenantResourceQuota) DropExpiredItems() bool {

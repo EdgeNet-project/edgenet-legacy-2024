@@ -168,11 +168,9 @@ func NewController(
 				if parentResourceQuota, err := controller.kubeclientset.CoreV1().ResourceQuotas(subnamespace.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
 					parentResourceQuotaCopy := parentResourceQuota.DeepCopy()
 					for key, value := range parentResourceQuotaCopy.Spec.Hard {
-						if _, elementExists := subnamespace.Spec.ResourceAllocation[key]; elementExists {
-							resourceDemand := subnamespace.Spec.ResourceAllocation[key]
-							availableQuota := value.Value()
-							parentResourceQuotaCopy.Spec.Hard[key] = *resource.NewQuantity(availableQuota+resourceDemand.Value(), parentResourceQuota.Spec.Hard[key].Format)
-						}
+						resourceDemand := subnamespace.RetrieveQuantityValue(key)
+						availableQuota := value.Value()
+						parentResourceQuotaCopy.Spec.Hard[key] = *resource.NewQuantity(availableQuota+resourceDemand, parentResourceQuota.Spec.Hard[key].Format)
 					}
 					controller.kubeclientset.CoreV1().ResourceQuotas(parentResourceQuota.GetNamespace()).Update(context.TODO(), parentResourceQuotaCopy, metav1.UpdateOptions{})
 				}
@@ -440,7 +438,7 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 			if parentResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(subnamespaceCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
 				sufficientQuota := false
 				if subtenantResourceQuota, err := c.edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), childName, metav1.GetOptions{}); err == nil {
-					assignedQuota := subtenantResourceQuota.Fetch()
+					_, assignedQuota := subtenantResourceQuota.Fetch()
 					sufficientQuota = c.tuneParentResourceQuota(subnamespaceCopy, parentResourceQuota, assignedQuota)
 				} else {
 					sufficientQuota = c.tuneParentResourceQuota(subnamespaceCopy, parentResourceQuota, nil)
@@ -469,34 +467,24 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 	}
 }
 
-func (c *Controller) tuneParentResourceQuota(subnamespaceCopy *corev1alpha.SubNamespace, parentResourceQuota *corev1.ResourceQuota, childResourceQuotaObj interface{}) bool {
+func (c *Controller) tuneParentResourceQuota(subnamespaceCopy *corev1alpha.SubNamespace, parentResourceQuota *corev1.ResourceQuota, childResourceQuota map[corev1.ResourceName]resource.Quantity) bool {
 	remainingQuota := make(map[corev1.ResourceName]resource.Quantity)
 	for key, value := range parentResourceQuota.Spec.Hard {
-		if _, elementExists := subnamespaceCopy.Spec.ResourceAllocation[key]; elementExists {
-			resourceDemand := subnamespaceCopy.Spec.ResourceAllocation[key]
-			availableQuota := value.Value()
-			// TODO: Transform Fetch Tenant Resource Quota to use the ResourceList type
-			switch childResourceQuota := childResourceQuotaObj.(type) {
-			case map[corev1.ResourceName]resource.Quantity:
-				if _, elementExists := childResourceQuota[key]; childResourceQuota != nil && elementExists {
-					appliedQuota := childResourceQuota[key]
-					availableQuota += appliedQuota.Value()
-				}
-			case map[corev1.ResourceName]int64:
-				if _, elementExists := childResourceQuota[key]; childResourceQuota != nil && elementExists {
-					availableQuota += childResourceQuota[key]
+		resourceDemand := subnamespaceCopy.RetrieveQuantityValue(key)
+		availableQuota := value.Value()
 
-				}
-			}
+		if _, elementExists := childResourceQuota[key]; childResourceQuota != nil && elementExists {
+			appliedQuota := childResourceQuota[key]
+			availableQuota += appliedQuota.Value()
+		}
 
-			if availableQuota < resourceDemand.Value() {
-				c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureQuotaShortage, messageQuotaShortage)
-				subnamespaceCopy.Status.State = failure
-				subnamespaceCopy.Status.Message = messageQuotaShortage
-				return false
-			} else {
-				remainingQuota[key] = *resource.NewQuantity(availableQuota-resourceDemand.Value(), parentResourceQuota.Spec.Hard[key].Format)
-			}
+		if availableQuota < resourceDemand {
+			c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureQuotaShortage, messageQuotaShortage)
+			subnamespaceCopy.Status.State = failure
+			subnamespaceCopy.Status.Message = messageQuotaShortage
+			return false
+		} else {
+			remainingQuota[key] = *resource.NewQuantity(availableQuota-resourceDemand, parentResourceQuota.Spec.Hard[key].Format)
 		}
 	}
 

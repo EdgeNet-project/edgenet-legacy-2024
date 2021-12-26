@@ -431,7 +431,7 @@ func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1a
 func (c *Controller) tuneResourceQuotaAcrossNamespaces(coreNamespace string, tenantResourceQuotaCopy *corev1alpha.TenantResourceQuota) {
 	c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successTraversalStarted, messageTraversalStarted)
 	aggregateQuota, lastInSubNamespace := c.NamespaceTraversal(coreNamespace)
-	assignedQuota := tenantResourceQuotaCopy.Fetch()
+	assignedQuota, _ := tenantResourceQuotaCopy.Fetch()
 	if coreResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(coreNamespace).Get(context.TODO(), "core-quota", metav1.GetOptions{}); err == nil {
 		coreResourceQuotaCopy := coreResourceQuota.DeepCopy()
 		canEntirelyCompansate := true

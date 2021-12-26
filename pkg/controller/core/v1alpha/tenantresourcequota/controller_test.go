@@ -253,10 +253,10 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, 1, len(tenantResourceQuota.Spec.Drop))
 	coreResourceQuota, err := kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
 	util.OK(t, err)
-	assignedQuota := tenantResourceQuota.Fetch()
+	_, assignedQuota := tenantResourceQuota.Fetch()
 	for key, value := range coreResourceQuota.Spec.Hard {
 		if _, elementExists := assignedQuota[key]; elementExists {
-			util.Equals(t, assignedQuota[key], value.Value())
+			util.Equals(t, true, assignedQuota[key].Equal(value))
 		}
 	}
 
@@ -283,11 +283,12 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, 0, len(tenantResourceQuota.Spec.Drop))
 	coreResourceQuota, err = kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
 	util.OK(t, err)
-	assignedQuota = tenantResourceQuota.Fetch()
+	_, assignedQuota = tenantResourceQuota.Fetch()
 	for key, value := range coreResourceQuota.Spec.Hard {
 		if _, elementExists := assignedQuota[key]; elementExists {
 			subQuotaValue := subResourceQuota.Spec.Hard[key]
-			util.Equals(t, assignedQuota[key], value.Value()+subQuotaValue.Value())
+			value.Add(subQuotaValue)
+			util.Equals(t, true, assignedQuota[key].Equal(value))
 		}
 	}
 
@@ -318,9 +319,9 @@ func TestStartController(t *testing.T) {
 	coreResourceQuota, err = kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
 	util.OK(t, err)
 
-	assignedQuota = tenantResourceQuota.Fetch()
-	util.Equals(t, assignedQuota["cpu"], coreResourceQuota.Spec.Hard.Cpu().Value())
-	util.Equals(t, assignedQuota["memory"], coreResourceQuota.Spec.Hard.Memory().Value())
+	assignedQuotaValue, _ := tenantResourceQuota.Fetch()
+	util.Equals(t, assignedQuotaValue["cpu"], coreResourceQuota.Spec.Hard.Cpu().Value())
+	util.Equals(t, assignedQuotaValue["memory"], coreResourceQuota.Spec.Hard.Memory().Value())
 
 	nodeCopy.Status.Conditions[0].Status = "False"
 	kubeclientset.CoreV1().Nodes().Update(context.TODO(), nodeCopy.DeepCopy(), metav1.UpdateOptions{})
