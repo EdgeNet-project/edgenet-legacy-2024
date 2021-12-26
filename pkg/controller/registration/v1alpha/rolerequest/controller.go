@@ -327,7 +327,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 		// Every user carries a unique acceptable use policy object in the cluster that they need to agree with to start using the platform.
 		// Following code scans acceptable use policies to check if it is agreed already. If there is no acceptable use policy associated with the user,
 		// below creates one accordingly.
-		policyAgreed := c.checkForAcceptableUsePolicy(roleRequestCopy, namespaceLabels["edge-net.io/cluster-uid"])
+		policyAgreed := c.checkForAcceptableUsePolicy(roleRequestCopy, string(systemNamespace.GetUID()))
 		roleRequestCopy.Status.PolicyAgreed = &policyAgreed
 		if !policyAgreed {
 			c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, warningAUP, messageAUPNotAgreed)
@@ -336,12 +336,12 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 			return
 		} else if policyAgreed {
 			if !roleRequestCopy.Spec.Approved {
+				if roleRequestCopy.Status.State == pending && roleRequestCopy.Status.Message == messageRoleNotApproved {
+					return
+				}
 				c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, warningApproved, messageRoleNotApproved)
 				roleRequestCopy.Status.State = pending
 				roleRequestCopy.Status.Message = messageRoleNotApproved
-				if oldStatus.State == pending && oldStatus.Message == messageRoleNotApproved {
-					return
-				}
 
 				// The function in a goroutine below notifies those who have the right to approve this role request.
 				// As role requests run on the layer of namespaces, we here ignore the permissions granted by Cluster Role Binding to avoid email floods.
@@ -349,7 +349,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 				go func() {
 					emailList := []string{}
 					if roleBindingRaw, err := c.kubeclientset.RbacV1().RoleBindings(roleRequestCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
-						r, _ := regexp.Compile("(.*)(owner|admin|manager)(.*)")
+						r, _ := regexp.Compile("(.*)(owner|admin|manager|deputy)(.*)")
 						for _, roleBindingRow := range roleBindingRaw.Items {
 							if match := r.MatchString(roleBindingRow.GetName()); !match {
 								continue
@@ -408,7 +408,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 									roleRequestCopy.Status.Message = messageBindingFailed
 									klog.V(4).Infoln(err)
 								} else {
-									access.SendEmailForRoleRequest(roleRequestCopy, "role-request-approved", "[EdgeNet] Your role request approved",
+									access.SendEmailForRoleRequest(roleRequestCopy, "role-request-approved", "[EdgeNet] Role request approved",
 										string(systemNamespace.GetUID()), []string{roleRequestCopy.Spec.Email})
 								}
 								break
@@ -429,7 +429,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 							roleRequestCopy.Status.Message = messageBindingFailed
 							klog.V(4).Infoln(err)
 						} else {
-							access.SendEmailForRoleRequest(roleRequestCopy, "role-request-approved", "[EdgeNet] Your role request approved",
+							access.SendEmailForRoleRequest(roleRequestCopy, "role-request-approved", "[EdgeNet] Role request approved",
 								string(systemNamespace.GetUID()), []string{roleRequestCopy.Spec.Email})
 						}
 					}
