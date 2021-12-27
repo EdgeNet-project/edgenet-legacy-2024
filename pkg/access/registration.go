@@ -24,8 +24,6 @@ import (
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
@@ -53,50 +51,30 @@ func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) error {
 		return err
 	}
 
-	// TODO: Take tenant resource quota into account while error handling
-	tenantResourceQuota := new(corev1alpha.TenantResourceQuota)
-	tenantResourceQuota.SetName(tenantRequest.GetName())
-	tenantResourceQuota.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
-	claim := corev1alpha.ResourceTuning{
-		ResourceList: tenantRequest.Spec.ResourceAllocation,
-	}
-	tenantResourceQuota.Spec.Claim["initial"] = claim
-
-	if _, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota, metav1.CreateOptions{}); err != nil {
-		klog.V(4).Infof("Couldn't create tenant resource quota %s: %s", tenantResourceQuota.GetName(), err)
+	if tenantRequest.Spec.ResourceAllocation != nil {
+		// TODO: Take tenant resource quota into account while error handling
+		claim := corev1alpha.ResourceTuning{
+			ResourceList: tenantRequest.Spec.ResourceAllocation,
+		}
+		err := CreateTenantResourceQuota(tenantRequest.GetName(), nil, claim)
+		if err != nil {
+			klog.V(4).Infof("Couldn't create tenant resource quota %s: %s", tenantRequest.GetName(), err)
+		}
 	}
 
 	return nil
 }
 
 // CreateTenantResourceQuota generates a tenant resource quota with the name provided
-func CreateTenantResourceQuota(name string, ownerReferences []metav1.OwnerReference) (string, string) {
-	cpuQuota := "0m"
-	memoryQuota := "0Mi"
-	_, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		// Set a tenant resource quota
-		tenantResourceQuota := corev1alpha.TenantResourceQuota{}
-		tenantResourceQuota.SetName(name)
-		tenantResourceQuota.SetOwnerReferences(ownerReferences)
-		claim := corev1alpha.ResourceTuning{}
-		claim.ResourceList = make(map[corev1.ResourceName]resource.Quantity)
-		cpuQuota := "8000m"
-		memoryQuota := "8192Mi"
-		if quantity, err := resource.ParseQuantity(cpuQuota); err == nil {
-			claim.ResourceList["cpu"] = quantity
-		}
-		if quantity, err := resource.ParseQuantity(memoryQuota); err == nil {
-			claim.ResourceList["memory"] = quantity
-		}
-		tenantResourceQuota.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
-		tenantResourceQuota.Spec.Claim["initial"] = claim
-		_, err = EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{})
-		if err != nil {
-			klog.V(4).Infof(statusDict["TRQ-failed"], name, err)
-		}
-	}
-	return cpuQuota, memoryQuota
+func CreateTenantResourceQuota(name string, ownerReferences []metav1.OwnerReference, claim corev1alpha.ResourceTuning) error {
+	// Set a tenant resource quota
+	tenantResourceQuota := new(corev1alpha.TenantResourceQuota)
+	tenantResourceQuota.SetName(name)
+	tenantResourceQuota.SetOwnerReferences(ownerReferences)
+	tenantResourceQuota.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
+	tenantResourceQuota.Spec.Claim["initial"] = claim
+	_, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{})
+	return err
 }
 
 // SendEmail to send notification to tenant admins and authorized users about email verification

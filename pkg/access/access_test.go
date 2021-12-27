@@ -29,6 +29,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
@@ -327,7 +328,13 @@ func TestCreateTenantResourceQuota(t *testing.T) {
 
 	_, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.Equals(t, true, errors.IsNotFound(err))
-	CreateTenantResourceQuota(g.tenantResourceQuotaObj.GetName(), nil)
+	claim := corev1alpha.ResourceTuning{
+		ResourceList: map[corev1.ResourceName]resource.Quantity{
+			"cpu":    resource.MustParse("6000m"),
+			"memory": resource.MustParse("6Gi"),
+		},
+	}
+	CreateTenantResourceQuota(g.tenantResourceQuotaObj.GetName(), nil, claim)
 	_, err = EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 }
