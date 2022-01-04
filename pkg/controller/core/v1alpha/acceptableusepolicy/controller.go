@@ -19,7 +19,12 @@ package acceptableusepolicy
 import (
 	"context"
 	"fmt"
+	"hash/adler32"
+	"net/mail"
 	"reflect"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
@@ -34,6 +39,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -324,4 +330,32 @@ func SetAsOwnerReference(roleRequest *corev1alpha.AcceptableUsePolicy) []metav1.
 	newNamespaceRef.Controller = &takeControl
 	ownerReferences = append(ownerReferences, newNamespaceRef)
 	return ownerReferences
+}
+
+func GetNameHash(email string) (string, string, error) {
+	if _, err := mail.ParseAddress(email); err == nil {
+		var aupName string
+		emailValid := true
+		at := strings.LastIndex(email, "@")
+		if at >= 0 {
+			username := email[:at]
+			dns1123SubdomainRegexp := regexp.MustCompile(`[^a-z0-9]`)
+			aupName = dns1123SubdomainRegexp.ReplaceAllString(username, "")
+			for _, msg := range validation.IsDNS1123Subdomain(aupName) {
+				if msg != "" {
+					klog.V(4).Infoln(msg)
+					emailValid = false
+				}
+			}
+			if emailValid {
+				emailHasher := adler32.New()
+				if hash, err := emailHasher.Write([]byte(email)); err == nil {
+					return aupName, strconv.Itoa(hash), err
+				} else {
+					return "", "", err
+				}
+			}
+		}
+	}
+	return "", "", errors.NewBadRequest(email)
 }

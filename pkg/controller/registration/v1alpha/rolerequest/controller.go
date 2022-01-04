@@ -34,7 +34,6 @@ import (
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/registration/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -479,42 +478,46 @@ func (c *Controller) checkForAcceptableUsePolicy(roleRequestCopy *registrationv1
 			}
 		}
 	}
-	// Comment here
-	var makeAcceptableUsePolicyOwner = func(acceptableUsePolicyCopy *corev1alpha.AcceptableUsePolicy) {
-		ownerReferences = acceptableusepolicyv1alpha.SetAsOwnerReference(acceptableUsePolicyCopy.DeepCopy())
-		roleRequestCopy.SetOwnerReferences(ownerReferences)
-		roleRequestLabels := map[string]string{"edge-net.io/acceptable-use-policy": acceptableUsePolicyCopy.GetName()}
-		roleRequestCopy.SetLabels(roleRequestLabels)
-		if roleRequestUpdated, err := c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestCopy.GetNamespace()).Update(context.TODO(), roleRequestCopy, metav1.UpdateOptions{}); err == nil {
-			roleRequestCopy = roleRequestUpdated.DeepCopy()
-			c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, successUpdated, messageResourceUpdated)
-		} else {
-			klog.V(4).Infoln(err)
-		}
-	}
-	if acceptableUsePolicyRaw, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
-		for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-			if acceptableUsePolicyRow.Spec.Email == roleRequestCopy.Spec.Email {
-				acceptableUsePolicyCopy := acceptableUsePolicyRow.DeepCopy()
-				makeAcceptableUsePolicyOwner(acceptableUsePolicyCopy)
-				return acceptableUsePolicyCopy.Spec.Accepted
+	if name, hash, err := acceptableusepolicyv1alpha.GetNameHash(roleRequestCopy.Spec.Email); err == nil {
+		aupName := strings.Join([]string{name, hash}, "-")
+		// Comment here
+		var makeAcceptableUsePolicyOwner = func(acceptableUsePolicyCopy *corev1alpha.AcceptableUsePolicy) {
+			ownerReferences = acceptableusepolicyv1alpha.SetAsOwnerReference(acceptableUsePolicyCopy.DeepCopy())
+			roleRequestCopy.SetOwnerReferences(ownerReferences)
+			roleRequestLabels := map[string]string{"edge-net.io/acceptable-use-policy": acceptableUsePolicyCopy.GetName()}
+			roleRequestCopy.SetLabels(roleRequestLabels)
+			if roleRequestUpdated, err := c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestCopy.GetNamespace()).Update(context.TODO(), roleRequestCopy, metav1.UpdateOptions{}); err == nil {
+				roleRequestCopy = roleRequestUpdated.DeepCopy()
+				c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, successUpdated, messageResourceUpdated)
+			} else {
+				klog.V(4).Infoln(err)
 			}
 		}
-	}
-	acceptableUsePolicy := new(corev1alpha.AcceptableUsePolicy)
-	acceptableUsePolicy.SetName(fmt.Sprintf("%s-%s", roleRequestCopy.GetName(), util.GenerateRandomString(6)))
-	acceptableUsePolicy.Spec.Email = roleRequestCopy.Spec.Email
-	acceptableUsePolicy.Spec.Accepted = false
-	aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/cluster-uid": clusterUID}
-	acceptableUsePolicy.SetLabels(aupLabels)
-	if acceptableUsePolicyCreated, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), acceptableUsePolicy, metav1.CreateOptions{}); err == nil {
-		acceptableUsePolicyCopy := acceptableUsePolicyCreated.DeepCopy()
-		makeAcceptableUsePolicyOwner(acceptableUsePolicyCopy)
-	} else {
-		c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureAUP, messageAUPFailed)
-		roleRequestCopy.Status.State = failure
-		roleRequestCopy.Status.Message = messageAUPFailed
-		klog.V(4).Infoln(err)
+		if acceptableUsePolicy, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), aupName, metav1.GetOptions{}); err == nil {
+			if acceptableUsePolicy.Spec.Email == roleRequestCopy.Spec.Email {
+				acceptableUsePolicyCopy := acceptableUsePolicy.DeepCopy()
+				makeAcceptableUsePolicyOwner(acceptableUsePolicyCopy)
+				return acceptableUsePolicyCopy.Spec.Accepted
+			} else {
+				return false
+			}
+		}
+
+		acceptableUsePolicy := new(corev1alpha.AcceptableUsePolicy)
+		acceptableUsePolicy.SetName(aupName)
+		acceptableUsePolicy.Spec.Email = roleRequestCopy.Spec.Email
+		acceptableUsePolicy.Spec.Accepted = false
+		aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/cluster-uid": clusterUID, "edge-net.io/email-hash": hash}
+		acceptableUsePolicy.SetLabels(aupLabels)
+		if acceptableUsePolicyCreated, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), acceptableUsePolicy, metav1.CreateOptions{}); err == nil {
+			acceptableUsePolicyCopy := acceptableUsePolicyCreated.DeepCopy()
+			makeAcceptableUsePolicyOwner(acceptableUsePolicyCopy)
+		} else {
+			c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureAUP, messageAUPFailed)
+			roleRequestCopy.Status.State = failure
+			roleRequestCopy.Status.Message = messageAUPFailed
+			klog.V(4).Infoln(err)
+		}
 	}
 	return false
 }

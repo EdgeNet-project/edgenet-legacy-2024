@@ -92,7 +92,7 @@ func (g *TestGroup) Init() {
 				ZIP:     "75005",
 			},
 			Contact: corev1alpha.Contact{
-				Email:     "tom.public@edge-net.org",
+				Email:     "tom.public?@edge-net.org",
 				FirstName: "Tom",
 				LastName:  "Public",
 				Phone:     "+33NUMBER",

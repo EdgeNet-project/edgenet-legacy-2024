@@ -20,16 +20,17 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
+	acceptableusepolicyv1alpha "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/acceptableusepolicy"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -396,27 +397,31 @@ func (c *Controller) applyNetworkPolicy(namespace, tenantUID, clusterUID string)
 }
 
 func (c *Controller) checkForAcceptableUsePolicy(tenantCopy *corev1alpha.Tenant, clusterUID string) (bool, string) {
-	if acceptableUsePolicyRaw, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
-		for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-			if acceptableUsePolicyRow.Spec.Email == tenantCopy.Spec.Contact.Email {
-				acceptableUsePolicyCopy := acceptableUsePolicyRow.DeepCopy()
+	if name, hash, err := acceptableusepolicyv1alpha.GetNameHash(tenantCopy.Spec.Contact.Email); err == nil {
+		aupName := strings.Join([]string{name, hash}, "-")
+		if acceptableUsePolicy, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), aupName, metav1.GetOptions{}); err == nil {
+			if acceptableUsePolicy.Spec.Email == tenantCopy.Spec.Contact.Email {
+				acceptableUsePolicyCopy := acceptableUsePolicy.DeepCopy()
 				return acceptableUsePolicyCopy.Spec.Accepted, acceptableUsePolicyCopy.GetName()
+			} else {
+				return false, ""
 			}
 		}
+		acceptableUsePolicy := new(corev1alpha.AcceptableUsePolicy)
+		acceptableUsePolicy.SetName(aupName)
+		acceptableUsePolicy.Spec.Email = tenantCopy.Spec.Contact.Email
+		acceptableUsePolicy.Spec.Accepted = false
+		aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/cluster-uid": clusterUID, "edge-net.io/email-hash": hash}
+		acceptableUsePolicy.SetLabels(aupLabels)
+		if _, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), acceptableUsePolicy, metav1.CreateOptions{}); err != nil {
+			c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureAUP, messageAUPFailed)
+			tenantCopy.Status.State = failure
+			tenantCopy.Status.Message = messageAUPFailed
+			klog.V(4).Infoln(err)
+		}
 	}
-	acceptableUsePolicy := new(corev1alpha.AcceptableUsePolicy)
-	acceptableUsePolicy.SetName(fmt.Sprintf("%s-%s", tenantCopy.Spec.Contact.Handle, util.GenerateRandomString(6)))
-	acceptableUsePolicy.Spec.Email = tenantCopy.Spec.Contact.Email
-	acceptableUsePolicy.Spec.Accepted = false
-	aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/cluster-uid": clusterUID}
-	acceptableUsePolicy.SetLabels(aupLabels)
-	if _, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), acceptableUsePolicy, metav1.CreateOptions{}); err != nil {
-		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureAUP, messageAUPFailed)
-		tenantCopy.Status.State = failure
-		tenantCopy.Status.Message = messageAUPFailed
-		klog.V(4).Infoln(err)
-	}
-	return false, acceptableUsePolicy.GetName()
+
+	return false, ""
 }
 
 // SetAsOwnerReference returns the tenant as owner
