@@ -32,7 +32,7 @@ bootstrap:
 
 test:
 	$(GOCLEAN) -testcache ./...
-	$(GOTEST) ./... -v
+	$(GOTEST) -covermode atomic ./... -v
 	find ./assets/certs ! -name 'README.md' -type f -exec rm -f {} +
 	find ./assets/kubeconfigs ! -name 'README.md' -type f -exec rm -f {} +
 
