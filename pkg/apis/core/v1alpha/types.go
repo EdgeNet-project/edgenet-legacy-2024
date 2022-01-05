@@ -106,13 +106,22 @@ type SubNamespace struct {
 // SubNamespaceSpec is the spec for a SubNamespace resource
 // RBAC, NetworkPolicies, Limit Ranges, Secrets, Config Maps, Service Accounts
 type SubNamespaceSpec struct {
-	Mode               string                                    `json:"mode"`
-	Owner              *Contact                                  `json:"owner"`
+	Workspace *Workspace   `json:"workspace"`
+	Subtenant *Subtenant   `json:"subtenant"`
+	Expiry    *metav1.Time `json:"expiry"`
+}
+
+type Workspace struct {
 	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
 	Inheritance        map[string]bool                           `json:"inheritance"`
-	Scope              *string                                   `json:"scope"`
+	Scope              string                                    `json:"scope"`
 	Sync               *bool                                     `json:"sync"`
-	Expiry             *metav1.Time                              `json:"expiry"`
+	Owner              *Contact                                  `json:"owner"`
+}
+
+type Subtenant struct {
+	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
+	Owner              Contact                                   `json:"owner"`
 }
 
 // SubNamespaceStatus is the status for a SubNamespace resource
@@ -140,10 +149,18 @@ type SubNamespaceList struct {
 // TODO: Remove this function when using int64 is deprecated
 func (s SubNamespace) RetrieveQuantityValue(key corev1.ResourceName) int64 {
 	var value int64
-	if _, elementExists := s.Spec.ResourceAllocation[key]; elementExists {
-		quantity := s.Spec.ResourceAllocation[key]
-		value = quantity.Value()
+	if s.Spec.Workspace != nil {
+		if _, elementExists := s.Spec.Workspace.ResourceAllocation[key]; elementExists {
+			quantity := s.Spec.Workspace.ResourceAllocation[key]
+			value = quantity.Value()
+		}
+	} else {
+		if _, elementExists := s.Spec.Subtenant.ResourceAllocation[key]; elementExists {
+			quantity := s.Spec.Subtenant.ResourceAllocation[key]
+			value = quantity.Value()
+		}
 	}
+
 	return value
 }
 

@@ -19,6 +19,7 @@ package subnamespace
 import (
 	"context"
 	"fmt"
+	"log"
 	"reflect"
 	"strings"
 	"time"
@@ -307,6 +308,7 @@ func (c *Controller) enqueueSubNamespaceAfter(obj interface{}, after time.Durati
 }
 
 func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamespace) {
+	log.Println("HELLOHELLO12345")
 	if subnamespaceCopy.Spec.Expiry != nil && time.Until(subnamespaceCopy.Spec.Expiry.Time) <= 0 {
 		c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, successExpired, messageExpired)
 		c.edgenetclientset.CoreV1alpha().SubNamespaces(subnamespaceCopy.GetNamespace()).Delete(context.TODO(), subnamespaceCopy.GetName(), metav1.DeleteOptions{})
@@ -359,8 +361,7 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 			parentQuotaName string
 		}
 		child := childDet{}
-		switch strings.ToLower(subnamespaceCopy.Spec.Mode) {
-		case "hierarchy":
+		if subnamespaceCopy.Spec.Workspace != nil {
 			if subnamespaceCopy.Status.Child != nil && subnamespaceCopy.Status.Child.Kind == "Tenant" {
 				if err := c.edgenetclientset.CoreV1alpha().Tenants().Delete(context.TODO(), subnamespaceCopy.Status.Child.Name, metav1.DeleteOptions{}); err != nil {
 					c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureNotWiped, messageNotWiped)
@@ -374,9 +375,9 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 			if subnamespaceCopy.Status.Child != nil && subnamespaceCopy.Status.Child.Kind == "Namespace" {
 				child.name = subnamespaceCopy.Status.Child.Name
 				child.exists = true
-			} else if subnamespaceCopy.Spec.Scope == nil || *subnamespaceCopy.Spec.Scope == "local" {
+			} else if subnamespaceCopy.Spec.Workspace.Scope == "local" {
 				child.name = fmt.Sprintf("%s-%s", namespaceLabels["edge-net.io/tenant"], subnamespaceCopy.GetName())
-			} else if *subnamespaceCopy.Spec.Scope == "federation" {
+			} else {
 				child.name = fmt.Sprintf("%s-%s-%s", namespaceLabels["edge-net.io/cluster-uid"], namespaceLabels["edge-net.io/tenant"], subnamespaceCopy.GetName())
 			}
 
@@ -392,7 +393,7 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 			}
 			subnamespaceCopy.Status.Child.Kind = "Namespace"
 			subnamespaceCopy.Status.Child.Name = child.name
-		case "vendor":
+		} else {
 			if subnamespaceCopy.Status.Child != nil && subnamespaceCopy.Status.Child.Kind == "Namespace" {
 				if err := c.kubeclientset.CoreV1().Namespaces().Delete(context.TODO(), subnamespaceCopy.Status.Child.Name, metav1.DeleteOptions{}); err != nil {
 					c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureNotWiped, messageNotWiped)
@@ -476,7 +477,7 @@ func (c *Controller) tuneParentResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 }
 
 func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.SubNamespace, childName string, childExists bool, labels map[string]string, ownerReferences []metav1.OwnerReference) bool {
-	if strings.ToLower(subnamespaceCopy.Spec.Mode) == "hierarchy" {
+	if subnamespaceCopy.Spec.Workspace != nil {
 		if !childExists {
 			childNamespaceObj := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: childName, OwnerReferences: ownerReferences}}
 			childNamespaceObj.SetLabels(labels)
@@ -492,17 +493,17 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 			}
 		}
 
-		if subnamespaceCopy.Spec.Owner != nil {
+		if subnamespaceCopy.Spec.Workspace.Owner != nil {
 			// TODO: Create role binding for owner
 			// TODO: Simplfy below
 			if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).Get(context.TODO(), "subnamespace-owner", metav1.GetOptions{}); err == nil {
 				for _, subjectRow := range roleBinding.Subjects {
-					if subjectRow.Kind == "User" && subjectRow.Name == subnamespaceCopy.Spec.Owner.Email {
+					if subjectRow.Kind == "User" && subjectRow.Name == subnamespaceCopy.Spec.Workspace.Owner.Email {
 						break
 					}
 				}
 				roleBindingCopy := roleBinding.DeepCopy()
-				roleBindingCopy.Subjects = append(roleBindingCopy.Subjects, rbacv1.Subject{Kind: "User", Name: subnamespaceCopy.Spec.Owner.Email, APIGroup: "rbac.authorization.k8s.io"})
+				roleBindingCopy.Subjects = append(roleBindingCopy.Subjects, rbacv1.Subject{Kind: "User", Name: subnamespaceCopy.Spec.Workspace.Owner.Email, APIGroup: "rbac.authorization.k8s.io"})
 				if _, err := c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).Update(context.TODO(), roleBindingCopy, metav1.UpdateOptions{}); err != nil {
 					c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
 					subnamespaceCopy.Status.State = failure
@@ -513,7 +514,7 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 			} else {
 				objectName := "edgenet:subnamespace:owner"
 				roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: "edgenet:subnamespace:owner"}
-				rbSubjects := []rbacv1.Subject{{Kind: "User", Name: subnamespaceCopy.Spec.Owner.Email, APIGroup: "rbac.authorization.k8s.io"}}
+				rbSubjects := []rbacv1.Subject{{Kind: "User", Name: subnamespaceCopy.Spec.Workspace.Owner.Email, APIGroup: "rbac.authorization.k8s.io"}}
 				roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName, Namespace: subnamespaceCopy.GetNamespace()},
 					Subjects: rbSubjects, RoleRef: roleRef}
 				roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
@@ -528,7 +529,7 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 			}
 		}
 
-		if subnamespaceCopy.Spec.ResourceAllocation != nil {
+		if subnamespaceCopy.Spec.Workspace.ResourceAllocation != nil {
 			quotaApplied := c.applyChildResourceQuota(subnamespaceCopy, childName)
 			if !quotaApplied {
 				return false
@@ -539,16 +540,12 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 		if !done {
 			return false
 		}
-	} else if strings.ToLower(subnamespaceCopy.Spec.Mode) == "vendor" {
-		if subnamespaceCopy.Spec.Owner == nil {
-			return false
-		}
-
+	} else {
 		if !childExists {
 			// Separate tenant creation and tenant resource quota creation
 			tenantRequest := new(registrationv1alpha.TenantRequest)
-			tenantRequest.Spec.Contact = *subnamespaceCopy.Spec.Owner
-			tenantRequest.Spec.ResourceAllocation = subnamespaceCopy.Spec.ResourceAllocation
+			tenantRequest.Spec.Contact = subnamespaceCopy.Spec.Subtenant.Owner
+			tenantRequest.Spec.ResourceAllocation = subnamespaceCopy.Spec.Subtenant.ResourceAllocation
 			if _, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), childName, metav1.GetOptions{}); err == nil {
 				childName = fmt.Sprintf("%s-%s", childName, util.GenerateRandomString(6))
 				tenantRequest.SetName(childName)
@@ -569,7 +566,7 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 	resourceQuota := corev1.ResourceQuota{}
 	resourceQuota.Name = "sub-quota"
 	resourceQuota.Spec = corev1.ResourceQuotaSpec{
-		Hard: subnamespaceCopy.Spec.ResourceAllocation,
+		Hard: subnamespaceCopy.Spec.Workspace.ResourceAllocation,
 	}
 
 	if _, err := c.kubeclientset.CoreV1().ResourceQuotas(childName).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{}); err != nil {
@@ -586,7 +583,7 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 				return false
 			} else {
 				childResourceQuotaCopy := childResourceQuota.DeepCopy()
-				childResourceQuotaCopy.Spec.Hard = subnamespaceCopy.Spec.ResourceAllocation
+				childResourceQuotaCopy.Spec.Hard = subnamespaceCopy.Spec.Workspace.ResourceAllocation
 				if _, err := c.kubeclientset.CoreV1().ResourceQuotas(childName).Update(context.TODO(), childResourceQuotaCopy, metav1.UpdateOptions{}); err != nil {
 					klog.V(4).Infoln(err)
 					return false
@@ -601,8 +598,8 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 
 func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespace, childNamespace string) bool {
 	done := true
-	if strings.ToLower(subnamespaceCopy.Spec.Mode) == "hierarchy" {
-		if roleRaw, err := c.kubeclientset.RbacV1().Roles(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Inheritance["rbac"] {
+	if subnamespaceCopy.Spec.Workspace != nil {
+		if roleRaw, err := c.kubeclientset.RbacV1().Roles(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["rbac"] {
 			for _, roleRow := range roleRaw.Items {
 				role := roleRow.DeepCopy()
 				role.SetNamespace(childNamespace)
@@ -612,7 +609,7 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				}
 			}
 		}
-		if roleBindingRaw, err := c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Inheritance["rbac"] {
+		if roleBindingRaw, err := c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["rbac"] {
 			for _, roleBindingRow := range roleBindingRaw.Items {
 				roleBinding := roleBindingRow.DeepCopy()
 				roleBinding.SetNamespace(childNamespace)
@@ -622,7 +619,7 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				}
 			}
 		}
-		if networkPolicyRaw, err := c.kubeclientset.NetworkingV1().NetworkPolicies(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Inheritance["networkpolicy"] {
+		if networkPolicyRaw, err := c.kubeclientset.NetworkingV1().NetworkPolicies(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["networkpolicy"] {
 			for _, networkPolicyRow := range networkPolicyRaw.Items {
 				networkPolicy := networkPolicyRow.DeepCopy()
 				networkPolicy.SetNamespace(childNamespace)
@@ -632,7 +629,7 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				}
 			}
 		}
-		if limitRangeRaw, err := c.kubeclientset.CoreV1().LimitRanges(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Inheritance["limitrange"] {
+		if limitRangeRaw, err := c.kubeclientset.CoreV1().LimitRanges(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["limitrange"] {
 			for _, limitRangeRow := range limitRangeRaw.Items {
 				limitRange := limitRangeRow.DeepCopy()
 				limitRange.SetNamespace(childNamespace)
@@ -642,7 +639,7 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				}
 			}
 		}
-		if secretRaw, err := c.kubeclientset.CoreV1().Secrets(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Inheritance["secret"] {
+		if secretRaw, err := c.kubeclientset.CoreV1().Secrets(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["secret"] {
 			for _, secretRow := range secretRaw.Items {
 				secret := secretRow.DeepCopy()
 				secret.SetNamespace(childNamespace)
@@ -652,7 +649,7 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				}
 			}
 		}
-		if configMapRaw, err := c.kubeclientset.CoreV1().ConfigMaps(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Inheritance["configmap"] {
+		if configMapRaw, err := c.kubeclientset.CoreV1().ConfigMaps(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["configmap"] {
 			for _, configMapRow := range configMapRaw.Items {
 				configMap := configMapRow.DeepCopy()
 				configMap.SetNamespace(childNamespace)
@@ -662,7 +659,7 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				}
 			}
 		}
-		if serviceAccountRaw, err := c.kubeclientset.CoreV1().ServiceAccounts(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Inheritance["serviceaccount"] {
+		if serviceAccountRaw, err := c.kubeclientset.CoreV1().ServiceAccounts(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["serviceaccount"] {
 			for _, serviceAccountRow := range serviceAccountRaw.Items {
 				serviceAccount := serviceAccountRow.DeepCopy()
 				serviceAccount.SetNamespace(childNamespace)

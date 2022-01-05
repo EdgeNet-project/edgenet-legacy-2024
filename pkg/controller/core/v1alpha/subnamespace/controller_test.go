@@ -37,7 +37,6 @@ type TestGroup struct {
 	subNamespaceObj  corev1alpha.SubNamespace
 }
 
-var controller *Controller
 var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
 
@@ -51,19 +50,21 @@ func TestMain(m *testing.M) {
 
 	stopCh := signals.SetupSignalHandler()
 
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
+
+	controller := NewController(kubeclientset,
+		edgenetclientset,
+		edgenetInformerFactory.Core().V1alpha().SubNamespaces())
+
+	edgenetInformerFactory.Start(stopCh)
+
 	go func() {
-		edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
-
-		newController := NewController(kubeclientset,
-			edgenetclientset,
-			edgenetInformerFactory.Core().V1alpha().SubNamespaces())
-
-		edgenetInformerFactory.Start(stopCh)
-		controller = newController
 		if err := controller.Run(2, stopCh); err != nil {
 			klog.Fatalf("Error running controller: %s", err.Error())
 		}
 	}()
+
+	time.Sleep(500 * time.Millisecond)
 
 	kubeSystemNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}}
 	kubeclientset.CoreV1().Namespaces().Create(context.TODO(), kubeSystemNamespace, metav1.CreateOptions{})
@@ -143,18 +144,20 @@ func (g *TestGroup) Init() {
 			Namespace: "edgenet",
 		},
 		Spec: corev1alpha.SubNamespaceSpec{
-			Mode: "hierarchy",
-			ResourceAllocation: map[corev1.ResourceName]resource.Quantity{
-				"cpu":    resource.MustParse("6000m"),
-				"memory": resource.MustParse("6Gi"),
-			},
-			Inheritance: map[string]bool{
-				"rbac":           true,
-				"networkpolicy":  true,
-				"limitrange":     false,
-				"configmap":      false,
-				"secret":         false,
-				"serviceaccount": false,
+			Workspace: &corev1alpha.Workspace{
+				ResourceAllocation: map[corev1.ResourceName]resource.Quantity{
+					"cpu":    resource.MustParse("6000m"),
+					"memory": resource.MustParse("6Gi"),
+				},
+				Inheritance: map[string]bool{
+					"rbac":           true,
+					"networkpolicy":  true,
+					"limitrange":     false,
+					"configmap":      false,
+					"secret":         false,
+					"serviceaccount": false,
+				},
+				Scope: "local",
 			},
 		},
 	}
@@ -194,7 +197,7 @@ func TestStartController(t *testing.T) {
 	_, err = edgenetclientset.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Create(context.TODO(), subNamespaceControllerTest, metav1.CreateOptions{})
 	util.OK(t, err)
 	// Wait for the status update of the created object
-	time.Sleep(450 * time.Millisecond)
+	time.Sleep(750 * time.Millisecond)
 	// Get the object and check the status
 	//aa, err := edgenetclientset.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Get(context.TODO(), subNamespaceControllerTest.GetName(), metav1.GetOptions{})
 	//log.Println(aa.Status)
@@ -206,9 +209,9 @@ func TestStartController(t *testing.T) {
 	tunedCoreQuotaCPU := tunedCoreResourceQuota.Spec.Hard.Cpu().Value()
 	tunedCoreQuotaMemory := tunedCoreResourceQuota.Spec.Hard.Memory().Value()
 
-	cpuResource := subNamespaceControllerTest.Spec.ResourceAllocation["cpu"]
+	cpuResource := subNamespaceControllerTest.Spec.Workspace.ResourceAllocation["cpu"]
 	cpuDemand := cpuResource.Value()
-	memoryResource := subNamespaceControllerTest.Spec.ResourceAllocation["memory"]
+	memoryResource := subNamespaceControllerTest.Spec.Workspace.ResourceAllocation["memory"]
 	memoryDemand := memoryResource.Value()
 
 	util.Equals(t, coreQuotaCPU-cpuDemand, tunedCoreQuotaCPU)
@@ -222,8 +225,8 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, int64(6442450944), subQuotaMemory)
 
 	subNamespaceControllerNestedTest := g.subNamespaceObj.DeepCopy()
-	subNamespaceControllerNestedTest.Spec.ResourceAllocation["cpu"] = resource.MustParse("1000m")
-	subNamespaceControllerNestedTest.Spec.ResourceAllocation["memory"] = resource.MustParse("1Gi")
+	subNamespaceControllerNestedTest.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
+	subNamespaceControllerNestedTest.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
 	subNamespaceControllerNestedTest.SetName("subnamespace-controller-nested")
 	subNamespaceControllerNestedTest.SetNamespace(fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subNamespaceControllerTest.GetName()))
 	_, err = edgenetclientset.CoreV1alpha().SubNamespaces(subNamespaceControllerNestedTest.GetNamespace()).Create(context.TODO(), subNamespaceControllerNestedTest, metav1.CreateOptions{})
@@ -271,27 +274,27 @@ func TestCreate(t *testing.T) {
 
 	subnamespace1 := g.subNamespaceObj.DeepCopy()
 	subnamespace1.SetName("all")
-	subnamespace1.Spec.ResourceAllocation["cpu"] = resource.MustParse("2000m")
-	subnamespace1.Spec.ResourceAllocation["memory"] = resource.MustParse("2Gi")
+	subnamespace1.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("2000m")
+	subnamespace1.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("2Gi")
 	subnamespace1nested := g.subNamespaceObj.DeepCopy()
 	subnamespace1nested.SetName("all-nested")
-	subnamespace1nested.Spec.ResourceAllocation["cpu"] = resource.MustParse("1000m")
-	subnamespace1nested.Spec.ResourceAllocation["memory"] = resource.MustParse("1Gi")
+	subnamespace1nested.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
+	subnamespace1nested.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
 	subnamespace1nested.SetNamespace(fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subnamespace1.GetName()))
 	subnamespace2 := g.subNamespaceObj.DeepCopy()
 	subnamespace2.SetName("rbac")
-	subnamespace2.Spec.Inheritance["networkpolicy"] = false
-	subnamespace2.Spec.ResourceAllocation["cpu"] = resource.MustParse("1000m")
-	subnamespace2.Spec.ResourceAllocation["memory"] = resource.MustParse("1Gi")
+	subnamespace2.Spec.Workspace.Inheritance["networkpolicy"] = false
+	subnamespace2.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
+	subnamespace2.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
 	subnamespace3 := g.subNamespaceObj.DeepCopy()
 	subnamespace3.SetName("networkpolicy")
-	subnamespace3.Spec.Inheritance["rbac"] = false
-	subnamespace3.Spec.ResourceAllocation["cpu"] = resource.MustParse("1000m")
-	subnamespace3.Spec.ResourceAllocation["memory"] = resource.MustParse("1Gi")
+	subnamespace3.Spec.Workspace.Inheritance["rbac"] = false
+	subnamespace3.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
+	subnamespace3.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
 	subnamespace4 := g.subNamespaceObj.DeepCopy()
 	subnamespace4.SetName("expiry")
-	subnamespace4.Spec.ResourceAllocation["cpu"] = resource.MustParse("1000m")
-	subnamespace4.Spec.ResourceAllocation["memory"] = resource.MustParse("1Gi")
+	subnamespace4.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
+	subnamespace4.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
 
 	t.Run("inherit all without expiry date", func(t *testing.T) {
 		defer edgenetclientset.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Delete(context.TODO(), subnamespace1.GetName(), metav1.DeleteOptions{})
@@ -356,19 +359,19 @@ func TestCreate(t *testing.T) {
 		time.Sleep(450 * time.Millisecond)
 		childNamespace, err := kubeclientset.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subnamespace2.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
-		if roleRaw, err := kubeclientset.RbacV1().Roles(subnamespace2.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace2.Spec.Inheritance["rbac"] {
+		if roleRaw, err := kubeclientset.RbacV1().Roles(subnamespace2.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace2.Spec.Workspace.Inheritance["rbac"] {
 			for _, roleRow := range roleRaw.Items {
 				_, err := kubeclientset.RbacV1().Roles(childNamespace.GetName()).Get(context.TODO(), roleRow.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
 			}
 		}
-		if roleBindingRaw, err := kubeclientset.RbacV1().RoleBindings(subnamespace2.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace2.Spec.Inheritance["rbac"] {
+		if roleBindingRaw, err := kubeclientset.RbacV1().RoleBindings(subnamespace2.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace2.Spec.Workspace.Inheritance["rbac"] {
 			for _, roleBindingRow := range roleBindingRaw.Items {
 				_, err := kubeclientset.RbacV1().RoleBindings(childNamespace.GetName()).Get(context.TODO(), roleBindingRow.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
 			}
 		}
-		if networkPolicyRaw, err := kubeclientset.NetworkingV1().NetworkPolicies(subnamespace2.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace2.Spec.Inheritance["networkpolicy"] {
+		if networkPolicyRaw, err := kubeclientset.NetworkingV1().NetworkPolicies(subnamespace2.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace2.Spec.Workspace.Inheritance["networkpolicy"] {
 			for _, networkPolicyRow := range networkPolicyRaw.Items {
 				_, err := kubeclientset.NetworkingV1().NetworkPolicies(childNamespace.GetName()).Get(context.TODO(), networkPolicyRow.GetName(), metav1.GetOptions{})
 				util.Equals(t, true, errors.IsNotFound(err))
@@ -383,19 +386,19 @@ func TestCreate(t *testing.T) {
 		time.Sleep(450 * time.Millisecond)
 		childNamespace, err := kubeclientset.CoreV1().Namespaces().Get(context.TODO(), fmt.Sprintf("%s-%s", g.tenantObj.GetName(), subnamespace3.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
-		if roleRaw, err := kubeclientset.RbacV1().Roles(subnamespace3.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace3.Spec.Inheritance["rbac"] {
+		if roleRaw, err := kubeclientset.RbacV1().Roles(subnamespace3.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace3.Spec.Workspace.Inheritance["rbac"] {
 			for _, roleRow := range roleRaw.Items {
 				_, err := kubeclientset.RbacV1().Roles(childNamespace.GetName()).Get(context.TODO(), roleRow.GetName(), metav1.GetOptions{})
 				util.Equals(t, true, errors.IsNotFound(err))
 			}
 		}
-		if roleBindingRaw, err := kubeclientset.RbacV1().RoleBindings(subnamespace3.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace3.Spec.Inheritance["rbac"] {
+		if roleBindingRaw, err := kubeclientset.RbacV1().RoleBindings(subnamespace3.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace3.Spec.Workspace.Inheritance["rbac"] {
 			for _, roleBindingRow := range roleBindingRaw.Items {
 				_, err := kubeclientset.RbacV1().RoleBindings(childNamespace.GetName()).Get(context.TODO(), roleBindingRow.GetName(), metav1.GetOptions{})
 				util.Equals(t, true, errors.IsNotFound(err))
 			}
 		}
-		if networkPolicyRaw, err := kubeclientset.NetworkingV1().NetworkPolicies(subnamespace3.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace3.Spec.Inheritance["networkpolicy"] {
+		if networkPolicyRaw, err := kubeclientset.NetworkingV1().NetworkPolicies(subnamespace3.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespace3.Spec.Workspace.Inheritance["networkpolicy"] {
 			for _, networkPolicyRow := range networkPolicyRaw.Items {
 				_, err := kubeclientset.NetworkingV1().NetworkPolicies(childNamespace.GetName()).Get(context.TODO(), networkPolicyRow.GetName(), metav1.GetOptions{})
 				util.OK(t, err)
@@ -425,10 +428,10 @@ func TestQuota(t *testing.T) {
 	subnamespace1.SetName("all")
 	subnamespace2 := g.subNamespaceObj.DeepCopy()
 	subnamespace2.SetName("rbac")
-	subnamespace2.Spec.Inheritance["networkpolicy"] = false
+	subnamespace2.Spec.Workspace.Inheritance["networkpolicy"] = false
 	subnamespace3 := g.subNamespaceObj.DeepCopy()
 	subnamespace3.SetName("networkpolicy")
-	subnamespace3.Spec.Inheritance["rbac"] = false
+	subnamespace3.Spec.Workspace.Inheritance["rbac"] = false
 
 	_, err := edgenetclientset.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Create(context.TODO(), subnamespace1, metav1.CreateOptions{})
 	util.OK(t, err)
