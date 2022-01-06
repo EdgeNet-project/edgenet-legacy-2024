@@ -64,10 +64,10 @@ func TestMain(m *testing.M) {
 		}
 	}()
 
-	time.Sleep(500 * time.Millisecond)
-
 	kubeSystemNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}}
 	kubeclientset.CoreV1().Namespaces().Create(context.TODO(), kubeSystemNamespace, metav1.CreateOptions{})
+
+	time.Sleep(500 * time.Millisecond)
 
 	os.Exit(m.Run())
 	<-stopCh

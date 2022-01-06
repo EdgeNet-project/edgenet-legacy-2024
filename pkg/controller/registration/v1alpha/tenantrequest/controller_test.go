@@ -32,7 +32,6 @@ type TestGroup struct {
 	tenantRequestObj registrationv1alpha.TenantRequest
 }
 
-var controller *Controller
 var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
 
@@ -47,16 +46,15 @@ func TestMain(m *testing.M) {
 
 	stopCh := signals.SetupSignalHandler()
 
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
+
+	controller := NewController(kubeclientset,
+		edgenetclientset,
+		edgenetInformerFactory.Registration().V1alpha().TenantRequests())
+
+	edgenetInformerFactory.Start(stopCh)
+
 	go func() {
-
-		edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
-
-		newController := NewController(kubeclientset,
-			edgenetclientset,
-			edgenetInformerFactory.Registration().V1alpha().TenantRequests())
-
-		edgenetInformerFactory.Start(stopCh)
-		controller = newController
 		if err := controller.Run(2, stopCh); err != nil {
 			klog.Fatalf("Error running controller: %s", err.Error())
 		}
@@ -66,6 +64,8 @@ func TestMain(m *testing.M) {
 	access.CreateClusterRoles()
 	kubeSystemNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}}
 	kubeclientset.CoreV1().Namespaces().Create(context.TODO(), kubeSystemNamespace, metav1.CreateOptions{})
+
+	time.Sleep(500 * time.Millisecond)
 
 	os.Exit(m.Run())
 	<-stopCh

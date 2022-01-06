@@ -34,7 +34,6 @@ type TestGroup struct {
 	acceptableUsePolicyObj corev1alpha.AcceptableUsePolicy
 }
 
-var controller *Controller
 var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
 
@@ -49,19 +48,21 @@ func TestMain(m *testing.M) {
 
 	stopCh := signals.SetupSignalHandler()
 
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
+
+	controller := NewController(kubeclientset,
+		edgenetclientset,
+		edgenetInformerFactory.Core().V1alpha().AcceptableUsePolicies())
+
+	edgenetInformerFactory.Start(stopCh)
+
 	go func() {
-		edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
-
-		newController := NewController(kubeclientset,
-			edgenetclientset,
-			edgenetInformerFactory.Core().V1alpha().AcceptableUsePolicies())
-
-		edgenetInformerFactory.Start(stopCh)
-		controller = newController
 		if err := controller.Run(2, stopCh); err != nil {
 			klog.Fatalf("Error running controller: %s", err.Error())
 		}
 	}()
+
+	time.Sleep(500 * time.Millisecond)
 
 	os.Exit(m.Run())
 	<-stopCh
