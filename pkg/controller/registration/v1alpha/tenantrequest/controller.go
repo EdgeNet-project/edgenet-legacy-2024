@@ -22,13 +22,10 @@ import (
 	"net/mail"
 	"reflect"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
-	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
-	acceptableusepolicyv1alpha "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/acceptableusepolicy"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
@@ -55,22 +52,14 @@ const controllerAgentName = "tenantrequest-controller"
 const (
 	successSynced               = "Synced"
 	messageResourceSynced       = "Tenant Request synced successfully"
-	successUpdated              = "Updated"
-	messageResourceUpdated      = "Label referring to Acceptable Use Policy of Tenant Request updated successfully"
 	warningNotApproved          = "Not Approved"
 	messageNotApproved          = "Waiting for Requested Tenant to be approved"
 	successApproved             = "Approved"
 	messageRoleApproved         = "Requested Tenant approved successfully"
-	warningAUP                  = "Not Agreed"
-	messageAUPNotAgreed         = "Waiting for the Acceptable Use Policy to be agreed"
-	failureAUP                  = "Creation Failed"
-	messageAUPFailed            = "Acceptable Use Policy creation failed"
 	failureTenantCreation       = "Creation Failed"
 	messageTenantCreationFailed = "Tenant creation failed"
 	failureTenantExists         = "Conflicting"
 	messageTenantExists         = "Tenant already exists"
-	failureBinding              = "Binding Failed"
-	messageBindingFailed        = "Role binding failed"
 	failure                     = "Failure"
 	pending                     = "Pending"
 	approved                    = "Approved"
@@ -299,128 +288,61 @@ func (c *Controller) processTenantRequest(tenantRequestCopy *registrationv1alpha
 		return
 	}
 
-	// Every user carries a unique acceptable use policy object in the cluster that they need to agree with to start using the platform.
-	// Following code scans acceptable use policies to check if it is agreed already. If there is no acceptable use policy associated with the user,
-	// below creates one accordingly.
-	policyAgreed := c.checkForAcceptableUsePolicy(tenantRequestCopy, string(systemNamespace.GetUID()))
-	tenantRequestCopy.Status.PolicyAgreed = &policyAgreed
-	if !policyAgreed {
-		c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, warningAUP, messageAUPNotAgreed)
+	if !tenantRequestCopy.Spec.Approved {
+		if tenantRequestCopy.Status.State == pending && tenantRequestCopy.Status.Message == messageNotApproved {
+			return
+		}
+		c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, warningNotApproved, messageNotApproved)
 		tenantRequestCopy.Status.State = pending
-		tenantRequestCopy.Status.Message = messageAUPNotAgreed
-		return
-	} else if policyAgreed {
-		if !tenantRequestCopy.Spec.Approved {
-			if tenantRequestCopy.Status.State == pending && tenantRequestCopy.Status.Message == messageNotApproved {
-				return
-			}
-			c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, warningNotApproved, messageNotApproved)
-			tenantRequestCopy.Status.State = pending
-			tenantRequestCopy.Status.Message = messageNotApproved
+		tenantRequestCopy.Status.Message = messageNotApproved
 
-			// The function in a goroutine below notifies those who have the right to approve this tenant request.
-			// As tenant requests are cluster-wide resources, we check the permissions granted by Cluster Role Binding following a pattern to avoid overhead.
-			// Furthermore, only those to which the system has granted permission, by attaching the "edge-net.io/generated=true" label, receive a notification email.
-			go func() {
-				emailList := []string{}
-				if clusterRoleBindingRaw, err := c.kubeclientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
-					r, _ := regexp.Compile("(.*)(edgenet:clusteradministration)(.*)(admin|manager|deputy)(.*)")
-					for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
-						if match := r.MatchString(clusterRoleBindingRow.GetName()); !match {
-							continue
-						}
-						for _, subjectRow := range clusterRoleBindingRow.Subjects {
-							if subjectRow.Kind == "User" {
-								_, err := mail.ParseAddress(subjectRow.Name)
-								if err == nil {
-									subjectAccessReview := new(authorizationv1.SubjectAccessReview)
-									subjectAccessReview.Spec.ResourceAttributes.Resource = "tenantrequests"
-									subjectAccessReview.Spec.ResourceAttributes.Verb = "UPDATE"
-									subjectAccessReview.Spec.ResourceAttributes.Name = tenantRequestCopy.GetName()
-									if subjectAccessReviewResult, err := c.kubeclientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), subjectAccessReview, metav1.CreateOptions{}); err == nil {
-										if subjectAccessReviewResult.Status.Allowed {
-											emailList = append(emailList, subjectRow.Name)
-										}
+		// The function in a goroutine below notifies those who have the right to approve this tenant request.
+		// As tenant requests are cluster-wide resources, we check the permissions granted by Cluster Role Binding following a pattern to avoid overhead.
+		// Furthermore, only those to which the system has granted permission, by attaching the "edge-net.io/generated=true" label, receive a notification email.
+		go func() {
+			emailList := []string{}
+			if clusterRoleBindingRaw, err := c.kubeclientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
+				r, _ := regexp.Compile("(.*)(edgenet:clusteradministration)(.*)(admin|manager|deputy)(.*)")
+				for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
+					if match := r.MatchString(clusterRoleBindingRow.GetName()); !match {
+						continue
+					}
+					for _, subjectRow := range clusterRoleBindingRow.Subjects {
+						if subjectRow.Kind == "User" {
+							_, err := mail.ParseAddress(subjectRow.Name)
+							if err == nil {
+								subjectAccessReview := new(authorizationv1.SubjectAccessReview)
+								subjectAccessReview.Spec.ResourceAttributes.Resource = "tenantrequests"
+								subjectAccessReview.Spec.ResourceAttributes.Verb = "UPDATE"
+								subjectAccessReview.Spec.ResourceAttributes.Name = tenantRequestCopy.GetName()
+								if subjectAccessReviewResult, err := c.kubeclientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), subjectAccessReview, metav1.CreateOptions{}); err == nil {
+									if subjectAccessReviewResult.Status.Allowed {
+										emailList = append(emailList, subjectRow.Name)
 									}
 								}
 							}
 						}
 					}
 				}
-				if len(emailList) > 0 {
-					access.SendEmailForTenantRequest(tenantRequestCopy, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
-						string(systemNamespace.GetUID()), emailList)
-				}
-			}()
-		} else {
+			}
+			if len(emailList) > 0 {
+				access.SendEmailForTenantRequest(tenantRequestCopy, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
+					string(systemNamespace.GetUID()), emailList)
+			}
+		}()
+	} else {
+		c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
+		tenantRequestCopy.Status.State = approved
+		tenantRequestCopy.Status.Message = messageRoleApproved
+
+		if err := access.CreateTenant(tenantRequestCopy); err == nil {
 			c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
-			tenantRequestCopy.Status.State = approved
-			tenantRequestCopy.Status.Message = messageRoleApproved
-
-			if err := access.CreateTenant(tenantRequestCopy); err == nil {
-				c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
-				access.SendEmailForTenantRequest(tenantRequestCopy, "tenant-request-approved", "[EdgeNet] Tenant request approved",
-					string(systemNamespace.GetUID()), []string{tenantRequestCopy.Spec.Contact.Email})
-			} else {
-				c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureTenantCreation, messageTenantCreationFailed)
-				tenantRequestCopy.Status.State = failure
-				tenantRequestCopy.Status.Message = messageTenantCreationFailed
-			}
-		}
-	}
-}
-
-func (c *Controller) checkForAcceptableUsePolicy(tenantRequestCopy *registrationv1alpha.TenantRequest, clusterUID string) bool {
-	ownerReferences := tenantRequestCopy.GetOwnerReferences()
-	for _, ownerReference := range ownerReferences {
-		if ownerReference.Kind == "AcceptableUsePolicy" {
-			if acceptableUsePolicy, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), ownerReference.Name, metav1.GetOptions{}); err == nil {
-				if acceptableUsePolicy.Spec.Email == tenantRequestCopy.Spec.Contact.Email {
-					return acceptableUsePolicy.Spec.Accepted
-				}
-			}
-		}
-	}
-	if name, hash, err := acceptableusepolicyv1alpha.GetNameHash(tenantRequestCopy.Spec.Contact.Email); err == nil {
-		aupName := strings.Join([]string{name, hash}, "-")
-		// Comment here
-		var makeAcceptableUsePolicyOwner = func(acceptableUsePolicyCopy *corev1alpha.AcceptableUsePolicy) {
-			ownerReferences = acceptableusepolicyv1alpha.SetAsOwnerReference(acceptableUsePolicyCopy.DeepCopy())
-			tenantRequestCopy.SetOwnerReferences(ownerReferences)
-			roleRequestLabels := map[string]string{"edge-net.io/acceptable-use-policy": acceptableUsePolicyCopy.GetName()}
-			tenantRequestCopy.SetLabels(roleRequestLabels)
-			if tenantRequestUpdated, err := c.edgenetclientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequestCopy, metav1.UpdateOptions{}); err == nil {
-				tenantRequestCopy = tenantRequestUpdated.DeepCopy()
-				c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successUpdated, messageResourceUpdated)
-			} else {
-				klog.V(4).Infoln(err)
-			}
-		}
-		if acceptableUsePolicy, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), aupName, metav1.GetOptions{}); err == nil {
-			if acceptableUsePolicy.Spec.Email == tenantRequestCopy.Spec.Contact.Email {
-				acceptableUsePolicyCopy := acceptableUsePolicy.DeepCopy()
-				makeAcceptableUsePolicyOwner(acceptableUsePolicyCopy)
-				return acceptableUsePolicyCopy.Spec.Accepted
-			} else {
-				return false
-			}
-		}
-
-		acceptableUsePolicy := new(corev1alpha.AcceptableUsePolicy)
-		acceptableUsePolicy.SetName(aupName)
-		acceptableUsePolicy.Spec.Email = tenantRequestCopy.Spec.Contact.Email
-		acceptableUsePolicy.Spec.Accepted = false
-		aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/cluster-uid": clusterUID, "edge-net.io/email-hash": hash}
-		acceptableUsePolicy.SetLabels(aupLabels)
-		if acceptableUsePolicyCreated, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), acceptableUsePolicy, metav1.CreateOptions{}); err == nil {
-			acceptableUsePolicyCopy := acceptableUsePolicyCreated.DeepCopy()
-			makeAcceptableUsePolicyOwner(acceptableUsePolicyCopy)
+			access.SendEmailForTenantRequest(tenantRequestCopy, "tenant-request-approved", "[EdgeNet] Tenant request approved",
+				string(systemNamespace.GetUID()), []string{tenantRequestCopy.Spec.Contact.Email})
 		} else {
-			c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureAUP, messageAUPFailed)
+			c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureTenantCreation, messageTenantCreationFailed)
 			tenantRequestCopy.Status.State = failure
-			tenantRequestCopy.Status.Message = messageAUPFailed
-			klog.V(4).Infoln(err)
+			tenantRequestCopy.Status.Message = messageTenantCreationFailed
 		}
 	}
-	return false
 }

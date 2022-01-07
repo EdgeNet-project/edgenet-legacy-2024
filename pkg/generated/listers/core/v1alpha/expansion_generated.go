@@ -18,10 +18,6 @@ limitations under the License.
 
 package v1alpha
 
-// AcceptableUsePolicyListerExpansion allows custom methods to be added to
-// AcceptableUsePolicyLister.
-type AcceptableUsePolicyListerExpansion interface{}
-
 // NodeContributionListerExpansion allows custom methods to be added to
 // NodeContributionLister.
 type NodeContributionListerExpansion interface{}

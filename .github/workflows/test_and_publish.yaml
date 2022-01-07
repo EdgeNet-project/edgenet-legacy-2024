@@ -50,13 +50,13 @@ jobs:
     strategy:
       matrix:
         image:
-          - acceptableusepolicy
           - nodecontribution
           - nodelabeler
           - selectivedeployment
           - subnamespace
           - tenant
-          - tenantregistrationrequest
+          - tenantrequest
+          - rolerequest
           - tenantresourcequota
           - vpnpeer
     steps:

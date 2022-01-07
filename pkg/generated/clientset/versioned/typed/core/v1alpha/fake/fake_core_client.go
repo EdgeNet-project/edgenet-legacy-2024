@@ -28,10 +28,6 @@ type FakeCoreV1alpha struct {
 	*testing.Fake
 }
 
-func (c *FakeCoreV1alpha) AcceptableUsePolicies() v1alpha.AcceptableUsePolicyInterface {
-	return &FakeAcceptableUsePolicies{c}
-}
-
 func (c *FakeCoreV1alpha) NodeContributions() v1alpha.NodeContributionInterface {
 	return &FakeNodeContributions{c}
 }

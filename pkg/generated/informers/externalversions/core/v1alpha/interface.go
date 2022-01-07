@@ -24,8 +24,6 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// AcceptableUsePolicies returns a AcceptableUsePolicyInformer.
-	AcceptableUsePolicies() AcceptableUsePolicyInformer
 	// NodeContributions returns a NodeContributionInformer.
 	NodeContributions() NodeContributionInformer
 	// SubNamespaces returns a SubNamespaceInformer.
@@ -45,11 +43,6 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
-}
-
-// AcceptableUsePolicies returns a AcceptableUsePolicyInformer.
-func (v *version) AcceptableUsePolicies() AcceptableUsePolicyInformer {
-	return &acceptableUsePolicyInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // NodeContributions returns a NodeContributionInformer.

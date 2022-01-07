@@ -18,8 +18,6 @@ limitations under the License.
 
 package v1alpha
 
-type AcceptableUsePolicyExpansion interface{}
-
 type NodeContributionExpansion interface{}
 
 type SubNamespaceExpansion interface{}

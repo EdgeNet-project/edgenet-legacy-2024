@@ -128,24 +128,8 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, expected.Year(), tenantRequest.Status.Expiry.Year())
 
 	util.Equals(t, pending, tenantRequest.Status.State)
-	util.Equals(t, messageAUPNotAgreed, tenantRequest.Status.Message)
+	util.Equals(t, messageNotApproved, tenantRequest.Status.Message)
 
-	tenantRequest.Spec.Contact.Email = "different-email@edge-net.org"
-	edgenetclientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
-	time.Sleep(250 * time.Millisecond)
-	tenantRequest, err = edgenetclientset.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
-	util.OK(t, err)
-	util.Equals(t, pending, tenantRequest.Status.State)
-	util.Equals(t, messageAUPNotAgreed, tenantRequest.Status.Message)
-	// Approve a tenant request
-	if acceptableUsePolicyRaw, err := edgenetclientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{}); err == nil {
-		for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-			if acceptableUsePolicyRow.Spec.Email == tenantRequest.Spec.Contact.Email {
-				acceptableUsePolicyRow.Spec.Accepted = true
-				edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), &acceptableUsePolicyRow, metav1.UpdateOptions{})
-			}
-		}
-	}
 	tenantRequest.Spec.Approved = true
 	edgenetclientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
 	time.Sleep(250 * time.Millisecond)
@@ -194,15 +178,6 @@ func TestUpdate(t *testing.T) {
 	time.Sleep(250 * time.Millisecond)
 
 	t.Run("approval", func(t *testing.T) {
-		// Updating tenant request status to approved
-		if acceptableUsePolicyRaw, err := edgenetclientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{}); err == nil {
-			for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-				if acceptableUsePolicyRow.Spec.Email == tenantRequestTest.Spec.Contact.Email {
-					acceptableUsePolicyRow.Spec.Accepted = true
-					edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), &acceptableUsePolicyRow, metav1.UpdateOptions{})
-				}
-			}
-		}
 		tenantRequestTest.Spec.Approved = true
 		edgenetclientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequestTest, metav1.UpdateOptions{})
 		// Requesting server to update internal representation of tenant request object and transition it to tenant

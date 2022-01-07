@@ -20,12 +20,10 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
-	acceptableusepolicyv1alpha "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/acceptableusepolicy"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
@@ -283,36 +281,28 @@ func (c *Controller) ProcessTenant(tenantCopy *corev1alpha.Tenant) {
 			if err != nil && !errors.IsAlreadyExists(err) {
 				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureNetworkPolicy, messageNetworkPolicyFailed)
 			}
-			// Check For Acceptable Use Policy
-			policyAgreed, initialHandle := c.checkForAcceptableUsePolicy(tenantCopy, string(systemNamespace.GetUID()))
-			if !policyAgreed {
-				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, warningAUP, messageAUPNotAgreed)
-				tenantCopy.Status.State = pending
-				tenantCopy.Status.Message = messageAUPNotAgreed
-				return
+
+			// Cluster role binding
+			if err := access.CreateObjectSpecificClusterRoleBinding(tenantOwnerClusterRole, tenantCopy.Spec.Contact.Handle, tenantCopy.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{}); err != nil {
+				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureRoleBindingCreation, messageRoleBindingCreationFailed)
+			}
+			// Role binding
+			clusterRoleName := "edgenet:tenant-owner"
+			roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRoleName}
+			rbSubjects := []rbacv1.Subject{{Kind: "User", Name: tenantCopy.Spec.Contact.Email, APIGroup: "rbac.authorization.k8s.io"}}
+			roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRoleName, Namespace: tenantCopy.GetName()},
+				Subjects: rbSubjects, RoleRef: roleRef}
+			roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
+			roleBind.SetLabels(roleBindLabels)
+			if _, err := c.kubeclientset.RbacV1().RoleBindings(tenantCopy.GetName()).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
+				tenantCopy.Status.State = failure
+				tenantCopy.Status.Message = messageBindingFailed
+				klog.V(4).Infoln(err)
 			} else {
-				// Cluster role binding
-				if err := access.CreateObjectSpecificClusterRoleBinding(tenantOwnerClusterRole, initialHandle, tenantCopy.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{}); err != nil {
-					c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureRoleBindingCreation, messageRoleBindingCreationFailed)
-				}
-				// Role binding
-				clusterRoleName := "edgenet:tenant-owner"
-				roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRoleName}
-				rbSubjects := []rbacv1.Subject{{Kind: "User", Name: tenantCopy.Spec.Contact.Email, APIGroup: "rbac.authorization.k8s.io"}}
-				roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRoleName, Namespace: tenantCopy.GetName()},
-					Subjects: rbSubjects, RoleRef: roleRef}
-				roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
-				roleBind.SetLabels(roleBindLabels)
-				if _, err := c.kubeclientset.RbacV1().RoleBindings(tenantCopy.GetName()).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-					c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
-					tenantCopy.Status.State = failure
-					tenantCopy.Status.Message = messageBindingFailed
-					klog.V(4).Infoln(err)
-				} else {
-					c.recorder.Event(tenantCopy, corev1.EventTypeNormal, successEstablished, messageEstablished)
-					tenantCopy.Status.State = established
-					tenantCopy.Status.Message = successEstablished
-				}
+				c.recorder.Event(tenantCopy, corev1.EventTypeNormal, successEstablished, messageEstablished)
+				tenantCopy.Status.State = established
+				tenantCopy.Status.Message = successEstablished
 			}
 		}
 	} else {
@@ -394,34 +384,6 @@ func (c *Controller) applyNetworkPolicy(namespace, tenantUID, clusterUID string)
 	}
 	_, err := c.kubeclientset.NetworkingV1().NetworkPolicies(namespace).Create(context.TODO(), networkPolicy, metav1.CreateOptions{})
 	return err
-}
-
-func (c *Controller) checkForAcceptableUsePolicy(tenantCopy *corev1alpha.Tenant, clusterUID string) (bool, string) {
-	if name, hash, err := acceptableusepolicyv1alpha.GetNameHash(tenantCopy.Spec.Contact.Email); err == nil {
-		aupName := strings.Join([]string{name, hash}, "-")
-		if acceptableUsePolicy, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Get(context.TODO(), aupName, metav1.GetOptions{}); err == nil {
-			if acceptableUsePolicy.Spec.Email == tenantCopy.Spec.Contact.Email {
-				acceptableUsePolicyCopy := acceptableUsePolicy.DeepCopy()
-				return acceptableUsePolicyCopy.Spec.Accepted, acceptableUsePolicyCopy.GetName()
-			} else {
-				return false, ""
-			}
-		}
-		acceptableUsePolicy := new(corev1alpha.AcceptableUsePolicy)
-		acceptableUsePolicy.SetName(aupName)
-		acceptableUsePolicy.Spec.Email = tenantCopy.Spec.Contact.Email
-		acceptableUsePolicy.Spec.Accepted = false
-		aupLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/cluster-uid": clusterUID, "edge-net.io/email-hash": hash}
-		acceptableUsePolicy.SetLabels(aupLabels)
-		if _, err := c.edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Create(context.TODO(), acceptableUsePolicy, metav1.CreateOptions{}); err != nil {
-			c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureAUP, messageAUPFailed)
-			tenantCopy.Status.State = failure
-			tenantCopy.Status.Message = messageAUPFailed
-			klog.V(4).Infoln(err)
-		}
-	}
-
-	return false, ""
 }
 
 // SetAsOwnerReference returns the tenant as owner

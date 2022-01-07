@@ -52,8 +52,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&Tenant{},
 		&TenantList{},
-		&AcceptableUsePolicy{},
-		&AcceptableUsePolicyList{},
 		&NodeContribution{},
 		&NodeContributionList{},
 		&TenantResourceQuota{},

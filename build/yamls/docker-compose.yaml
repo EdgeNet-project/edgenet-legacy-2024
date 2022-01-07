@@ -28,40 +28,22 @@ services:
     image: tenant:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-  tenantregistrationrequest:
-    container_name: tenantregistrationrequest
+  tenantrequest:
+    container_name: tenantrequest
     restart: always
     build:
       context: ../../
-      dockerfile: ./build/images/tenantregistrationrequest/Dockerfile
-    image: tenantregistrationrequest:v1.0.0
+      dockerfile: ./build/images/tenantrequest/Dockerfile
+    image: tenantrequest:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
-  userregistrationrequest:
-    container_name: userregistrationrequest
+  rolerequest:
+    container_name: rolerequest
     restart: always
     build:
       context: ../../
-      dockerfile: ./build/images/userregistrationrequest/Dockerfile
-    image: userregistrationrequest:v1.0.0
-    volumes:
-      - ~/.kube/:/root/.kube/
-  acceptableusepolicy:
-    container_name: acceptableusepolicy
-    restart: always
-    build:
-      context: ../../
-      dockerfile: ./build/images/acceptableusepolicy/Dockerfile
-    image: acceptableusepolicy:v1.0.0
-    volumes:
-      - ~/.kube/:/root/.kube/
-  emailverification:
-    container_name: emailverification
-    restart: always
-    build:
-      context: ../../
-      dockerfile: ./build/images/emailverification/Dockerfile
-    image: emailverification:v1.0.0
+      dockerfile: ./build/images/rolerequest/Dockerfile
+    image: rolerequest:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
   nodecontribution:

@@ -8,16 +8,16 @@ RUN apk update && \
 ADD . "$GOPATH/src/github.com/EdgeNet-project/edgenet"
 
 RUN cd "$GOPATH/src/github.com/EdgeNet-project/edgenet" && \
-    CGO_ENABLED=0 go build -a -o /go/bin/userregistrationrequest ./cmd/userregistrationrequest/
+    CGO_ENABLED=0 go build -a -o /go/bin/rolerequest ./cmd/rolerequest/
 
 
 
 FROM alpine:latest
 
-WORKDIR /root/cmd/userregistrationrequest/
+WORKDIR /root/cmd/rolerequest/
 
 COPY ./assets/templates/ /root/assets/templates/
 COPY ./assets/certs/ /root/assets/certs/
-COPY --from=builder /go/bin/userregistrationrequest .
+COPY --from=builder /go/bin/rolerequest .
 
-CMD ["./userregistrationrequest"]
+CMD ["./rolerequest"]

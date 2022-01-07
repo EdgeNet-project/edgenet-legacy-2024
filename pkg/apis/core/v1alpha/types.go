@@ -72,9 +72,8 @@ type Contact struct {
 
 // TenantStatus is the status for a Tenant resource
 type TenantStatus struct {
-	PolicyAgreed map[string]bool `json:"policyagreed"`
-	State        string          `json:"state"`
-	Message      string          `json:"message"`
+	State   string `json:"state"`
+	Message string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -162,45 +161,6 @@ func (s SubNamespace) RetrieveQuantityValue(key corev1.ResourceName) int64 {
 	}
 
 	return value
-}
-
-// +genclient
-// +genclient:nonNamespaced
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// AcceptableUsePolicy describes a AcceptableUsePolicy resource
-type AcceptableUsePolicy struct {
-	// TypeMeta is the metadata for the resource, like kind and apiversion
-	metav1.TypeMeta `json:",inline"`
-	// ObjectMeta contains the metadata for the particular object, including
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	// Spec is the acceptableusepolicy resource spec
-	Spec AcceptableUsePolicySpec `json:"spec"`
-	// Status is the acceptableusepolicy resource status
-	Status AcceptableUsePolicyStatus `json:"status,omitempty"`
-}
-
-// AcceptableUsePolicySpec is the spec for a AcceptableUsePolicy resource
-type AcceptableUsePolicySpec struct {
-	Email    string `json:"email"`
-	Accepted bool   `json:"accepted"`
-}
-
-// AcceptableUsePolicyStatus is the status for a AcceptableUsePolicy resource
-type AcceptableUsePolicyStatus struct {
-	State   string `json:"state"`
-	Message string `json:"message"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// AcceptableUsePolicyList is a list of AcceptableUsePolicy resources
-type AcceptableUsePolicyList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
-
-	Items []AcceptableUsePolicy `json:"items"`
 }
 
 // +genclient

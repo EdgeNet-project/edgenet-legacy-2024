@@ -26,7 +26,6 @@ import (
 
 type CoreV1alphaInterface interface {
 	RESTClient() rest.Interface
-	AcceptableUsePoliciesGetter
 	NodeContributionsGetter
 	SubNamespacesGetter
 	TenantsGetter
@@ -36,10 +35,6 @@ type CoreV1alphaInterface interface {
 // CoreV1alphaClient is used to interact with features provided by the core.edgenet.io group.
 type CoreV1alphaClient struct {
 	restClient rest.Interface
-}
-
-func (c *CoreV1alphaClient) AcceptableUsePolicies() AcceptableUsePolicyInterface {
-	return newAcceptableUsePolicies(c)
 }
 
 func (c *CoreV1alphaClient) NodeContributions() NodeContributionInterface {

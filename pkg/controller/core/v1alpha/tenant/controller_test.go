@@ -140,31 +140,8 @@ func TestCreate(t *testing.T) {
 	t.Run("owner role configuration", func(t *testing.T) {
 		tenant, err := edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), tenant.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
-
-		var acceptableUsePolicy *corev1alpha.AcceptableUsePolicy
-		if acceptableUsePolicyRaw, err := edgenetclientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{}); err == nil {
-			for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-				if acceptableUsePolicyRow.Spec.Email == tenant.Spec.Contact.Email {
-					acceptableUsePolicy = acceptableUsePolicyRow.DeepCopy()
-
-					acceptableUsePolicy.Spec.Accepted = true
-					edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), acceptableUsePolicy, metav1.UpdateOptions{})
-				}
-			}
-		}
-		if acceptableUsePolicy == nil {
-			t.Fail()
-			return
-		}
-		if tenant.Status.PolicyAgreed == nil {
-			tenant.Status.PolicyAgreed = make(map[string]bool)
-		}
-		tenant.Status.PolicyAgreed[acceptableUsePolicy.GetName()] = true
-		edgenetclientset.CoreV1alpha().Tenants().UpdateStatus(context.TODO(), tenant, metav1.UpdateOptions{})
-		time.Sleep(250 * time.Millisecond)
-
 		t.Run("cluster role binding", func(t *testing.T) {
-			_, err := kubeclientset.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner-%s", tenant.GetName(), tenant.GetName(), acceptableUsePolicy.GetName()), metav1.GetOptions{})
+			_, err := kubeclientset.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner-%s", tenant.GetName(), tenant.GetName(), tenant.Spec.Contact.Handle), metav1.GetOptions{})
 			util.OK(t, err)
 		})
 		t.Run("role binding", func(t *testing.T) {

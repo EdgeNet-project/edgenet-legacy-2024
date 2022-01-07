@@ -151,28 +151,13 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, expected.Year(), roleRequest.Status.Expiry.Year())
 
 	util.Equals(t, pending, roleRequest.Status.State)
-	util.Equals(t, messageAUPNotAgreed, roleRequest.Status.Message)
+	util.Equals(t, messageRoleNotApproved, roleRequest.Status.Message)
 
-	roleRequest.Spec.Email = "different-email@edge-net.org"
-	edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestTest.GetNamespace()).Update(context.TODO(), roleRequest, metav1.UpdateOptions{})
-	time.Sleep(time.Millisecond * 500)
-	roleRequest, err = edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestTest.GetNamespace()).Get(context.TODO(), roleRequestTest.GetName(), metav1.GetOptions{})
-	util.OK(t, err)
-	util.Equals(t, pending, roleRequest.Status.State)
-	util.Equals(t, messageAUPNotAgreed, roleRequest.Status.Message)
-	// Approve a role request
-	if acceptableUsePolicyRaw, err := edgenetclientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{}); err == nil {
-		for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-			if acceptableUsePolicyRow.Spec.Email == roleRequest.Spec.Email {
-				acceptableUsePolicyRow.Spec.Accepted = true
-				edgenetclientset.CoreV1alpha().AcceptableUsePolicies().Update(context.TODO(), &acceptableUsePolicyRow, metav1.UpdateOptions{})
-			}
-		}
-	}
 	roleRequest.Spec.Approved = true
 	edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestTest.GetNamespace()).Update(context.TODO(), roleRequest, metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
 	roleRequest, err = edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestTest.GetNamespace()).Get(context.TODO(), roleRequestTest.GetName(), metav1.GetOptions{})
+
 	util.OK(t, err)
 	util.Equals(t, approved, roleRequest.Status.State)
 	util.Equals(t, messageRoleApproved, roleRequest.Status.Message)
