@@ -38,6 +38,7 @@ import (
 	"github.com/google/uuid"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -45,8 +46,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	networkinginformers "k8s.io/client-go/informers/networking/v1"
+	rbacinformers "k8s.io/client-go/informers/rbac/v1"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
+	networkinglisters "k8s.io/client-go/listers/networking/v1"
+	rbaclisters "k8s.io/client-go/listers/rbac/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -97,6 +104,21 @@ type Controller struct {
 	subnamespacesLister listers.SubNamespaceLister
 	subnamespacesSynced cache.InformerSynced
 
+	rolesLister           rbaclisters.RoleLister
+	rolesSynced           cache.InformerSynced
+	rolebindingsLister    rbaclisters.RoleBindingLister
+	rolebindingsSynced    cache.InformerSynced
+	networkpoliciesLister networkinglisters.NetworkPolicyLister
+	networkpoliciesSynced cache.InformerSynced
+	limitrangesLister     corelisters.LimitRangeLister
+	limitrangesSynced     cache.InformerSynced
+	secretsLister         corelisters.SecretLister
+	secretsSynced         cache.InformerSynced
+	configmapsLister      corelisters.ConfigMapLister
+	configmapsSynced      cache.InformerSynced
+	serviceaccountsLister corelisters.ServiceAccountLister
+	serviceaccountsSynced cache.InformerSynced
+
 	// workqueue is a rate limited work queue. This is used to queue work to be
 	// processed instead of performing it as soon as a change happens. This
 	// means we can ensure we only process a fixed amount of resources at a
@@ -112,6 +134,13 @@ type Controller struct {
 func NewController(
 	kubeclientset kubernetes.Interface,
 	edgenetclientset clientset.Interface,
+	roleInformer rbacinformers.RoleInformer,
+	rolebindingInformer rbacinformers.RoleBindingInformer,
+	networkpolicyInformer networkinginformers.NetworkPolicyInformer,
+	limitrangeInformer coreinformers.LimitRangeInformer,
+	secretInformer coreinformers.SecretInformer,
+	configmapInformer coreinformers.ConfigMapInformer,
+	serviceaccountInformer coreinformers.ServiceAccountInformer,
 	subnamespaceInformer informers.SubNamespaceInformer) *Controller {
 
 	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
@@ -122,12 +151,26 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeclientset:       kubeclientset,
-		edgenetclientset:    edgenetclientset,
-		subnamespacesLister: subnamespaceInformer.Lister(),
-		subnamespacesSynced: subnamespaceInformer.Informer().HasSynced,
-		workqueue:           workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "SubNamespaces"),
-		recorder:            recorder,
+		kubeclientset:         kubeclientset,
+		edgenetclientset:      edgenetclientset,
+		rolesLister:           roleInformer.Lister(),
+		rolesSynced:           roleInformer.Informer().HasSynced,
+		rolebindingsLister:    rolebindingInformer.Lister(),
+		rolebindingsSynced:    roleInformer.Informer().HasSynced,
+		networkpoliciesLister: networkpolicyInformer.Lister(),
+		networkpoliciesSynced: networkpolicyInformer.Informer().HasSynced,
+		limitrangesLister:     limitrangeInformer.Lister(),
+		limitrangesSynced:     limitrangeInformer.Informer().HasSynced,
+		secretsLister:         secretInformer.Lister(),
+		secretsSynced:         secretInformer.Informer().HasSynced,
+		configmapsLister:      configmapInformer.Lister(),
+		configmapsSynced:      configmapInformer.Informer().HasSynced,
+		serviceaccountsLister: serviceaccountInformer.Lister(),
+		serviceaccountsSynced: serviceaccountInformer.Informer().HasSynced,
+		subnamespacesLister:   subnamespaceInformer.Lister(),
+		subnamespacesSynced:   subnamespaceInformer.Informer().HasSynced,
+		workqueue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "SubNamespaces"),
+		recorder:              recorder,
 	}
 
 	klog.V(4).Infoln("Setting up event handlers")
@@ -179,6 +222,91 @@ func NewController(
 				}
 			}
 		},
+	})
+
+	roleInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*rbacv1.Role)
+			oldObj := old.(*rbacv1.Role)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
+	rolebindingInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*rbacv1.RoleBinding)
+			oldObj := old.(*rbacv1.RoleBinding)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
+	networkpolicyInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*networkingv1.NetworkPolicy)
+			oldObj := old.(*networkingv1.NetworkPolicy)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
+	limitrangeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*corev1.LimitRange)
+			oldObj := old.(*corev1.LimitRange)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
+	secretInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*corev1.Secret)
+			oldObj := old.(*corev1.Secret)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
+	configmapInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*corev1.ConfigMap)
+			oldObj := old.(*corev1.ConfigMap)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
+	serviceaccountInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*corev1.ServiceAccount)
+			oldObj := old.(*corev1.ServiceAccount)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
 	})
 
 	return controller
@@ -305,6 +433,48 @@ func (c *Controller) enqueueSubNamespaceAfter(obj interface{}, after time.Durati
 		return
 	}
 	c.workqueue.AddAfter(key, after)
+}
+
+// handleObject will take any resource implementing metav1.Object and attempt
+// to find the SubNamespace resource that 'owns' its namespace. It does this by
+// looking at the objects metadata.ownerReferences field for an appropriate OwnerReference.
+// It then enqueues that SubNamespace resource to be processed. If the object does not
+// have an appropriate OwnerReference, it will simply be skipped.
+func (c *Controller) handleObject(obj interface{}) {
+	var object metav1.Object
+	var ok bool
+	if object, ok = obj.(metav1.Object); !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
+			return
+		}
+		object, ok = tombstone.Obj.(metav1.Object)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
+			return
+		}
+		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
+	}
+	klog.V(4).Infof("Processing object: %s", object.GetName())
+	namespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), object.GetNamespace(), metav1.GetOptions{})
+	if err != nil {
+		return
+	}
+	if ownerRef := metav1.GetControllerOf(namespace); ownerRef != nil {
+		if ownerRef.Kind != "SubNamespace" {
+			return
+		}
+
+		subnamespace, err := c.subnamespacesLister.SubNamespaces(object.GetNamespace()).Get(ownerRef.Name)
+		if err != nil {
+			klog.V(4).Infof("ignoring orphaned object '%s' of subnamespace '%s'", object.GetSelfLink(), ownerRef.Name)
+			return
+		}
+
+		c.enqueueSubNamespace(subnamespace)
+		return
+	}
 }
 
 func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamespace) {

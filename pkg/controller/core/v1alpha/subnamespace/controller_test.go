@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/klog"
@@ -50,10 +51,18 @@ func TestMain(m *testing.M) {
 
 	stopCh := signals.SetupSignalHandler()
 
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, 0)
 	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
 
 	controller := NewController(kubeclientset,
 		edgenetclientset,
+		kubeInformerFactory.Rbac().V1().Roles(),
+		kubeInformerFactory.Rbac().V1().RoleBindings(),
+		kubeInformerFactory.Networking().V1().NetworkPolicies(),
+		kubeInformerFactory.Core().V1().LimitRanges(),
+		kubeInformerFactory.Core().V1().Secrets(),
+		kubeInformerFactory.Core().V1().ConfigMaps(),
+		kubeInformerFactory.Core().V1().ServiceAccounts(),
 		edgenetInformerFactory.Core().V1alpha().SubNamespaces())
 
 	edgenetInformerFactory.Start(stopCh)
