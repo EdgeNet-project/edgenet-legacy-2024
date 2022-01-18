@@ -114,7 +114,7 @@ type Workspace struct {
 	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
 	Inheritance        map[string]bool                           `json:"inheritance"`
 	Scope              string                                    `json:"scope"`
-	Sync               *bool                                     `json:"sync"`
+	Sync               bool                                      `json:"sync"`
 	Owner              *Contact                                  `json:"owner"`
 }
 

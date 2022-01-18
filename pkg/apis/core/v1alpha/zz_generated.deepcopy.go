@@ -597,11 +597,6 @@ func (in *Workspace) DeepCopyInto(out *Workspace) {
 			(*out)[key] = val
 		}
 	}
-	if in.Sync != nil {
-		in, out := &in.Sync, &out.Sync
-		*out = new(bool)
-		**out = **in
-	}
 	if in.Owner != nil {
 		in, out := &in.Owner, &out.Owner
 		*out = new(Contact)

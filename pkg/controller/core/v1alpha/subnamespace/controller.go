@@ -19,7 +19,6 @@ package subnamespace
 import (
 	"context"
 	"fmt"
-	"log"
 	"reflect"
 	"strings"
 	"time"
@@ -43,6 +42,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -456,29 +456,43 @@ func (c *Controller) handleObject(obj interface{}) {
 		}
 		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 	}
+	objectLabels := object.GetLabels()
+	if objectLabels["edge-net.io/generated"] != "true" {
+		return
+	}
 	klog.V(4).Infof("Processing object: %s", object.GetName())
-	namespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), object.GetNamespace(), metav1.GetOptions{})
+
+	childnamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), object.GetNamespace(), metav1.GetOptions{})
 	if err != nil {
 		return
 	}
-	if ownerRef := metav1.GetControllerOf(namespace); ownerRef != nil {
-		if ownerRef.Kind != "SubNamespace" {
+	if ownerRef := metav1.GetControllerOf(childnamespace); ownerRef != nil {
+		if ownerRef.Kind != "Namespace" {
 			return
 		}
 
-		subnamespace, err := c.subnamespacesLister.SubNamespaces(object.GetNamespace()).Get(ownerRef.Name)
+		subnamespaceRaw, err := c.subnamespacesLister.SubNamespaces(ownerRef.Name).List(labels.Everything())
 		if err != nil {
 			klog.V(4).Infof("ignoring orphaned object '%s' of subnamespace '%s'", object.GetSelfLink(), ownerRef.Name)
 			return
 		}
+		for _, subnamespaceRow := range subnamespaceRaw {
+			if subnamespaceRow.Status.Child.Kind == objectLabels["edge-net.io/kind"] && subnamespaceRow.Status.Child.Name == object.GetName() {
+				c.enqueueSubNamespace(subnamespaceRow)
+			}
+		}
 
-		c.enqueueSubNamespace(subnamespace)
+		subnamespaceRaw, err = c.subnamespacesLister.SubNamespaces(object.GetNamespace()).List(labels.Everything())
+		if err == nil {
+			for _, subnamespaceRow := range subnamespaceRaw {
+				c.enqueueSubNamespaceAfter(subnamespaceRow, 30*time.Second)
+			}
+		}
 		return
 	}
 }
 
 func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamespace) {
-	log.Println("HELLOHELLO12345")
 	if subnamespaceCopy.Spec.Expiry != nil && time.Until(subnamespaceCopy.Spec.Expiry.Time) <= 0 {
 		c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, successExpired, messageExpired)
 		c.edgenetclientset.CoreV1alpha().SubNamespaces(subnamespaceCopy.GetNamespace()).Delete(context.TODO(), subnamespaceCopy.GetName(), metav1.DeleteOptions{})
@@ -776,6 +790,10 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				role.SetUID(types.UID(uuid.New().String()))
 				if _, err := c.kubeclientset.RbacV1().Roles(childNamespace).Create(context.TODO(), role, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
+				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
+					// TODO: Solve sync by updating below
+					c.kubeclientset.RbacV1().Roles(childNamespace).Delete(context.TODO(), role.GetName(), metav1.DeleteOptions{})
+					c.kubeclientset.RbacV1().Roles(childNamespace).Create(context.TODO(), role, metav1.CreateOptions{})
 				}
 			}
 		}
@@ -786,6 +804,10 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				roleBinding.SetUID(types.UID(uuid.New().String()))
 				if _, err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).Create(context.TODO(), roleBinding, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
+				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
+					// TODO: Solve sync by updating below
+					c.kubeclientset.RbacV1().RoleBindings(childNamespace).Delete(context.TODO(), roleBinding.GetName(), metav1.DeleteOptions{})
+					c.kubeclientset.RbacV1().RoleBindings(childNamespace).Create(context.TODO(), roleBinding, metav1.CreateOptions{})
 				}
 			}
 		}
@@ -796,6 +818,10 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				networkPolicy.SetUID(types.UID(uuid.New().String()))
 				if _, err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Create(context.TODO(), networkPolicy, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
+				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
+					// TODO: Solve sync by updating below
+					c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Delete(context.TODO(), networkPolicy.GetName(), metav1.DeleteOptions{})
+					c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Create(context.TODO(), networkPolicy, metav1.CreateOptions{})
 				}
 			}
 		}
@@ -806,6 +832,10 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				limitRange.SetUID(types.UID(uuid.New().String()))
 				if _, err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).Create(context.TODO(), limitRange, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
+				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
+					// TODO: Solve sync by updating below
+					c.kubeclientset.CoreV1().LimitRanges(childNamespace).Delete(context.TODO(), limitRange.GetName(), metav1.DeleteOptions{})
+					c.kubeclientset.CoreV1().LimitRanges(childNamespace).Create(context.TODO(), limitRange, metav1.CreateOptions{})
 				}
 			}
 		}
@@ -816,6 +846,10 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				secret.SetUID(types.UID(uuid.New().String()))
 				if _, err := c.kubeclientset.CoreV1().Secrets(childNamespace).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
+				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
+					// TODO: Solve sync by updating below
+					c.kubeclientset.CoreV1().Secrets(childNamespace).Delete(context.TODO(), secret.GetName(), metav1.DeleteOptions{})
+					c.kubeclientset.CoreV1().Secrets(childNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
 				}
 			}
 		}
@@ -826,6 +860,10 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				configMap.SetUID(types.UID(uuid.New().String()))
 				if _, err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
+				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
+					// TODO: Solve sync by updating below
+					c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Delete(context.TODO(), configMap.GetName(), metav1.DeleteOptions{})
+					c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
 				}
 			}
 		}
@@ -836,6 +874,10 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				serviceAccount.SetUID(types.UID(uuid.New().String()))
 				if _, err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Create(context.TODO(), serviceAccount, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
+				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
+					// TODO: Solve sync by updating below
+					c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Delete(context.TODO(), serviceAccount.GetName(), metav1.DeleteOptions{})
+					c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Create(context.TODO(), serviceAccount, metav1.CreateOptions{})
 				}
 			}
 		}
