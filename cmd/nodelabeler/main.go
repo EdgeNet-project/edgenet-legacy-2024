@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/apps/v1/nodelabeler"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1/nodelabeler"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/klog"
