@@ -19,9 +19,7 @@ package rolerequest
 import (
 	"context"
 	"fmt"
-	"net/mail"
 	"reflect"
-	"regexp"
 	"strings"
 	"time"
 
@@ -33,7 +31,6 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/registration/v1alpha"
 
-	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -286,11 +283,13 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
 	if err != nil {
 		klog.V(4).Infoln(err)
+		c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestCopy.GetNamespace()).Delete(context.TODO(), roleRequestCopy.GetName(), metav1.DeleteOptions{})
 		return
 	}
 	namespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), roleRequestCopy.GetNamespace(), metav1.GetOptions{})
 	if err != nil {
 		klog.V(4).Infoln(err)
+		c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestCopy.GetNamespace()).Delete(context.TODO(), roleRequestCopy.GetName(), metav1.DeleteOptions{})
 		return
 	}
 	namespaceLabels := namespace.GetLabels()
@@ -300,6 +299,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 		tenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), strings.ToLower(namespaceLabels["edge-net.io/tenant"]), metav1.GetOptions{})
 		if err != nil {
 			klog.V(4).Infoln(err)
+			c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestCopy.GetNamespace()).Delete(context.TODO(), roleRequestCopy.GetName(), metav1.DeleteOptions{})
 			return
 		}
 		if tenant.GetUID() == types.UID(namespaceLabels["edge-net.io/tenant-uid"]) && tenant.Spec.Enabled {
@@ -322,43 +322,6 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 			c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, warningApproved, messageRoleNotApproved)
 			roleRequestCopy.Status.State = pending
 			roleRequestCopy.Status.Message = messageRoleNotApproved
-
-			// The function in a goroutine below notifies those who have the right to approve this role request.
-			// As role requests run on the layer of namespaces, we here ignore the permissions granted by Cluster Role Binding to avoid email floods.
-			// Furthermore, only those to which the system has granted permission, by attaching the "edge-net.io/generated=true" label, receive a notification email.
-			go func() {
-				emailList := []string{}
-				if roleBindingRaw, err := c.kubeclientset.RbacV1().RoleBindings(roleRequestCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
-					r, _ := regexp.Compile("(.*)(owner|admin|manager|deputy)(.*)")
-					for _, roleBindingRow := range roleBindingRaw.Items {
-						if match := r.MatchString(roleBindingRow.GetName()); !match {
-							continue
-						}
-						for _, subjectRow := range roleBindingRow.Subjects {
-							if subjectRow.Kind == "User" {
-								_, err := mail.ParseAddress(subjectRow.Name)
-								if err == nil {
-									subjectAccessReview := new(authorizationv1.SubjectAccessReview)
-									subjectAccessReview.Spec.ResourceAttributes = new(authorizationv1.ResourceAttributes)
-									subjectAccessReview.Spec.ResourceAttributes.Resource = "rolerequests"
-									subjectAccessReview.Spec.ResourceAttributes.Namespace = roleRequestCopy.GetNamespace()
-									subjectAccessReview.Spec.ResourceAttributes.Verb = "UPDATE"
-									subjectAccessReview.Spec.ResourceAttributes.Name = roleRequestCopy.GetName()
-									if subjectAccessReviewResult, err := c.kubeclientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), subjectAccessReview, metav1.CreateOptions{}); err == nil {
-										if subjectAccessReviewResult.Status.Allowed {
-											emailList = append(emailList, subjectRow.Name)
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-				if len(emailList) > 0 {
-					access.SendEmailForRoleRequest(roleRequestCopy, "role-request-made", "[EdgeNet] A role request made",
-						string(systemNamespace.GetUID()), emailList)
-				}
-			}()
 		} else {
 			c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
 			roleRequestCopy.Status.State = approved
@@ -388,9 +351,6 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 								roleRequestCopy.Status.State = failure
 								roleRequestCopy.Status.Message = messageBindingFailed
 								klog.V(4).Infoln(err)
-							} else {
-								access.SendEmailForRoleRequest(roleRequestCopy, "role-request-approved", "[EdgeNet] Role request approved",
-									string(systemNamespace.GetUID()), []string{roleRequestCopy.Spec.Email})
 							}
 							break
 						}
@@ -409,14 +369,10 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 						roleRequestCopy.Status.State = failure
 						roleRequestCopy.Status.Message = messageBindingFailed
 						klog.V(4).Infoln(err)
-					} else {
-						access.SendEmailForRoleRequest(roleRequestCopy, "role-request-approved", "[EdgeNet] Role request approved",
-							string(systemNamespace.GetUID()), []string{roleRequestCopy.Spec.Email})
 					}
 				}
 			}
 		}
-
 	} else {
 		c.edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequestCopy.GetNamespace()).Delete(context.TODO(), roleRequestCopy.GetName(), metav1.DeleteOptions{})
 	}

@@ -19,9 +19,7 @@ package tenantrequest
 import (
 	"context"
 	"fmt"
-	"net/mail"
 	"reflect"
-	"regexp"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
@@ -32,7 +30,6 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/registration/v1alpha"
 
-	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -282,9 +279,10 @@ func (c *Controller) processTenantRequest(tenantRequestCopy *registrationv1alpha
 	}
 	defer statusUpdate()
 
-	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
+	_, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
 	if err != nil {
 		klog.V(4).Infoln(err)
+		c.edgenetclientset.RegistrationV1alpha().TenantRequests().Delete(context.TODO(), tenantRequestCopy.GetName(), metav1.DeleteOptions{})
 		return
 	}
 
@@ -295,41 +293,6 @@ func (c *Controller) processTenantRequest(tenantRequestCopy *registrationv1alpha
 		c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, warningNotApproved, messageNotApproved)
 		tenantRequestCopy.Status.State = pending
 		tenantRequestCopy.Status.Message = messageNotApproved
-
-		// The function in a goroutine below notifies those who have the right to approve this tenant request.
-		// As tenant requests are cluster-wide resources, we check the permissions granted by Cluster Role Binding following a pattern to avoid overhead.
-		// Furthermore, only those to which the system has granted permission, by attaching the "edge-net.io/generated=true" label, receive a notification email.
-		go func() {
-			emailList := []string{}
-			if clusterRoleBindingRaw, err := c.kubeclientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
-				r, _ := regexp.Compile("(.*)(edgenet:clusteradministration)(.*)(admin|manager|deputy)(.*)")
-				for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
-					if match := r.MatchString(clusterRoleBindingRow.GetName()); !match {
-						continue
-					}
-					for _, subjectRow := range clusterRoleBindingRow.Subjects {
-						if subjectRow.Kind == "User" {
-							_, err := mail.ParseAddress(subjectRow.Name)
-							if err == nil {
-								subjectAccessReview := new(authorizationv1.SubjectAccessReview)
-								subjectAccessReview.Spec.ResourceAttributes.Resource = "tenantrequests"
-								subjectAccessReview.Spec.ResourceAttributes.Verb = "UPDATE"
-								subjectAccessReview.Spec.ResourceAttributes.Name = tenantRequestCopy.GetName()
-								if subjectAccessReviewResult, err := c.kubeclientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), subjectAccessReview, metav1.CreateOptions{}); err == nil {
-									if subjectAccessReviewResult.Status.Allowed {
-										emailList = append(emailList, subjectRow.Name)
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-			if len(emailList) > 0 {
-				access.SendEmailForTenantRequest(tenantRequestCopy, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
-					string(systemNamespace.GetUID()), emailList)
-			}
-		}()
 	} else {
 		c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
 		tenantRequestCopy.Status.State = approved
@@ -337,8 +300,6 @@ func (c *Controller) processTenantRequest(tenantRequestCopy *registrationv1alpha
 
 		if err := access.CreateTenant(tenantRequestCopy); err == nil {
 			c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
-			access.SendEmailForTenantRequest(tenantRequestCopy, "tenant-request-approved", "[EdgeNet] Tenant request approved",
-				string(systemNamespace.GetUID()), []string{tenantRequestCopy.Spec.Contact.Email})
 		} else {
 			c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureTenantCreation, messageTenantCreationFailed)
 			tenantRequestCopy.Status.State = failure
