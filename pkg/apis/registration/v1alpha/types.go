@@ -142,7 +142,7 @@ type RoleRequestList struct {
 	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ListMeta `json:"metadata"`
-	// RoleRequestList is a list of RoleRequests. This element contains
+	// RoleRequestList is a list of RoleRequest resources. This element contains
 	// RoleRequest resources.
 	Items []RoleRequest `json:"items"`
 }
