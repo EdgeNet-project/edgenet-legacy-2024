@@ -34,7 +34,6 @@ type TenantRequest struct {
 	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-
 	// Spec is the tenantrequest resource spec
 	Spec TenantRequestSpec `json:"spec"`
 	// Status is the tenantrequest resource status
@@ -43,31 +42,46 @@ type TenantRequest struct {
 
 // TenantRequestSpec is the spec for a TenantRequest resource
 type TenantRequestSpec struct {
-	FullName             string                                    `json:"fullname"`
-	ShortName            string                                    `json:"shortname"`
-	URL                  string                                    `json:"url"`
-	Address              corev1alpha.Address                       `json:"address"`
-	Contact              corev1alpha.Contact                       `json:"contact"`
-	ClusterNetworkPolicy bool                                      `json:"clusternetworkpolicy"`
-	ResourceAllocation   map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
-	Approved             bool                                      `json:"approved"`
+	// Full name of the tenant.
+	FullName string `json:"fullname"`
+	// Shortened name of the tenant.
+	ShortName string `json:"shortname"`
+	// Website of the tenant.
+	URL string `json:"url"`
+	// Open address of the tenant, this includes country, city, and street information.
+	Address corev1alpha.Address `json:"address"`
+	// Contact information of the tenant.
+	Contact corev1alpha.Contact `json:"contact"`
+
+	ClusterNetworkPolicy bool `json:"clusternetworkpolicy"`
+	// Requested allocation of certain resource types. Resource types are
+	// kubernetes default resource types.
+	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
+	// If the tenant is approved or not by the EdgeNet administrators.
+	Approved bool `json:"approved"`
 }
 
 // TenantRequestStatus is the status for a TenantRequest resource
 type TenantRequestStatus struct {
-	PolicyAgreed *bool        `json:"policyagreed"`
-	Expiry       *metav1.Time `json:"expiry"`
-	State        string       `json:"state"`
-	Message      string       `json:"message"`
+	// True if the policy agreed false if not.
+	PolicyAgreed *bool `json:"policyagreed"`
+	// Expiration date of the policy.
+	Expiry *metav1.Time `json:"expiry"`
+	// Current state of the policy. This can be 'Failure', 'Pending', or 'Approved'.
+	State string `json:"state"`
+	// Description for additional information.
+	Message string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // TenantRequestList is a list of TenantRequest resources
 type TenantRequestList struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
 	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ListMeta `json:"metadata"`
-
+	// Tenants can declare requests. This list contains their requests.
 	Items []TenantRequest `json:"items"`
 }
 
@@ -80,7 +94,6 @@ type RoleRequest struct {
 	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-
 	// Spec is the rolerequest resource spec
 	Spec RoleRequestSpec `json:"spec"`
 	// Status is the rolerequest resource status
@@ -89,33 +102,47 @@ type RoleRequest struct {
 
 // RoleRequestSpec is the spec for a RoleRequest resource
 type RoleRequestSpec struct {
-	FirstName string      `json:"firstname"`
-	LastName  string      `json:"lastname"`
-	Email     string      `json:"email"`
-	RoleRef   RoleRefSpec `json:"roleref"`
-	Approved  bool        `json:"approved"`
+	// First name of the person requesting the role.
+	FirstName string `json:"firstname"`
+	// Last name of the person requesting the role.
+	LastName string `json:"lastname"`
+	// Email of the person requesting the role.
+	Email string `json:"email"`
+	// RoleRefSpec indicates the requested Role or ClusterRole
+	RoleRef RoleRefSpec `json:"roleref"`
+	// True if this role request is approved false if not.
+	Approved bool `json:"approved"`
 }
 
 // RoleRefSpec indicates the requested Role / ClusterRole
 type RoleRefSpec struct {
+	// The kind of the RoleRefSpec, this can be 'ClusterRole', or 'Role'.
 	Kind string `json:"kind"`
+	// Name of the owner of this request.
 	Name string `json:"name"`
 }
 
 // RoleRequestStatus is the status for a RoleRequest resource
 type RoleRequestStatus struct {
-	PolicyAgreed *bool        `json:"policyagreed"`
-	Expiry       *metav1.Time `json:"expiry"`
-	State        string       `json:"state"`
-	Message      string       `json:"message"`
+	// True if agreed to the policy false if not.
+	PolicyAgreed *bool `json:"policyagreed"`
+	// Expiration date of the policy.
+	Expiry *metav1.Time `json:"expiry"`
+	// Current state of the policy. This can be 'Failure', 'Pending', or 'Approved'.
+	State string `json:"state"`
+	// Description for additional information.
+	Message string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // RoleRequestList is a list of RoleRequest resources
 type RoleRequestList struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
 	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ListMeta `json:"metadata"`
-
+	// RoleRequestList is a list of RoleRequests. This element contains
+	// RoleRequest resources.
 	Items []RoleRequest `json:"items"`
 }
