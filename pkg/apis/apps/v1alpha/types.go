@@ -39,22 +39,20 @@ type SelectiveDeployment struct {
 	Status SelectiveDeploymentStatus `json:"status,omitempty"`
 }
 
-// SelectiveDeploymentSpec is the spec for a SelectiveDeployment resource
-// The controller indicates the name and type of controller desired to configure
-// Workloads: deployment, daemonset, and statefulsets
-// The type is for defining which kind of selectivedeployment it is, you could find the list of active types below.
-// Types of selector: city, state, country, continent, and polygon
-// The value represents the desired filter and it must be compatible with the type of selectivedeployment
+// SelectiveDeploymentSpec is the spec for a SelectiveDeployment resource.
+// Selectors filter the nodes to be used for specified workloads.
 type SelectiveDeploymentSpec struct {
-	// Workload can be Deployment, Deamonset, or StatefulSet.
+	// Workload can be Deployment, Deamonset, StatefulSet, Job, or CronJob.
 	Workloads Workloads `json:"workloads"`
-	// The selectors as a list.
+	// List of Selector resources. Each selector filters the nodes with the
+	// requested method.
 	Selector []Selector `json:"selector"`
-	// If the recovery spec is true then persist on deployment of the workload.
+	// If true, selective deployment tries to find another suitable
+	// node to run the workload in case of a node goes down.
 	Recovery bool `json:"recovery"`
 }
 
-// Workloads indicates deployments, daemonsets or statefulsets
+// Workloads indicates deployments, daemonsets, statefulsets, jobs, or cronjobs.
 type Workloads struct {
 	// Workload can have a list of Deployments.
 	Deployment []appsv1.Deployment `json:"deployment"`
@@ -74,11 +72,11 @@ type Selector struct {
 	Name string `json:"name"`
 	// Value of the selector. For example; if the name of the selector is 'City'
 	// then the value can be the city name. For example; if the name of
-	// the selector is 'Polygon' then the value can be the wkt representation of the polygon.
+	// the selector is 'Polygon' then the value can be the GeoJSON representation of the polygon.
 	Value []string `json:"value"`
 	// Operator means basic mathematical operators such as 'In', 'NotIn', 'Exists', 'NotExsists' etc...
 	Operator corev1.NodeSelectorOperator `json:"operator"`
-	// Quantity represents number of workloads to be run by this selector.
+	// Quantity represents number of nodes on which the workloads will be running.
 	Quantity int `json:"quantity"`
 }
 
