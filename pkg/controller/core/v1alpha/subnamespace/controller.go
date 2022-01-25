@@ -791,9 +791,18 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				if _, err := c.kubeclientset.RbacV1().Roles(childNamespace).Create(context.TODO(), role, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
 				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					// TODO: Solve sync by updating below
-					c.kubeclientset.RbacV1().Roles(childNamespace).Delete(context.TODO(), role.GetName(), metav1.DeleteOptions{})
-					c.kubeclientset.RbacV1().Roles(childNamespace).Create(context.TODO(), role, metav1.CreateOptions{})
+					if existingRole, err := c.kubeclientset.RbacV1().Roles(childNamespace).Get(context.TODO(), role.GetName(), metav1.GetOptions{}); err != nil {
+						done = false
+					} else {
+						if !reflect.DeepEqual(role.Rules, existingRole.Rules) || !reflect.DeepEqual(role.GetLabels(), existingRole.GetLabels()) {
+							existingRole.Rules = role.Rules
+							existingRole.SetLabels(role.GetLabels())
+							if _, err := c.kubeclientset.RbacV1().Roles(childNamespace).Update(context.TODO(), existingRole, metav1.UpdateOptions{}); err != nil {
+								done = false
+								klog.V(4).Infoln(err)
+							}
+						}
+					}
 				}
 			}
 		}
@@ -805,9 +814,19 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				if _, err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).Create(context.TODO(), roleBinding, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
 				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					// TODO: Solve sync by updating below
-					c.kubeclientset.RbacV1().RoleBindings(childNamespace).Delete(context.TODO(), roleBinding.GetName(), metav1.DeleteOptions{})
-					c.kubeclientset.RbacV1().RoleBindings(childNamespace).Create(context.TODO(), roleBinding, metav1.CreateOptions{})
+					if existingRoleBinding, err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).Get(context.TODO(), roleBinding.GetName(), metav1.GetOptions{}); err != nil {
+						done = false
+					} else {
+						if !reflect.DeepEqual(roleBinding.RoleRef, existingRoleBinding.RoleRef) || !reflect.DeepEqual(roleBinding.Subjects, existingRoleBinding.Subjects) || !reflect.DeepEqual(roleBinding.GetLabels(), existingRoleBinding.GetLabels()) {
+							existingRoleBinding.RoleRef = roleBinding.RoleRef
+							existingRoleBinding.Subjects = roleBinding.Subjects
+							existingRoleBinding.SetLabels(roleBinding.GetLabels())
+							if _, err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).Update(context.TODO(), existingRoleBinding, metav1.UpdateOptions{}); err != nil {
+								done = false
+								klog.V(4).Infoln(err)
+							}
+						}
+					}
 				}
 			}
 		}
@@ -819,9 +838,18 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				if _, err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Create(context.TODO(), networkPolicy, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
 				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					// TODO: Solve sync by updating below
-					c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Delete(context.TODO(), networkPolicy.GetName(), metav1.DeleteOptions{})
-					c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Create(context.TODO(), networkPolicy, metav1.CreateOptions{})
+					if existingNetworkPolicy, err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Get(context.TODO(), networkPolicy.GetName(), metav1.GetOptions{}); err != nil {
+						done = false
+					} else {
+						if !reflect.DeepEqual(networkPolicy.Spec, existingNetworkPolicy.Spec) || !reflect.DeepEqual(networkPolicy.GetLabels(), existingNetworkPolicy.GetLabels()) {
+							existingNetworkPolicy.Spec = networkPolicy.Spec
+							existingNetworkPolicy.SetLabels(networkPolicy.GetLabels())
+							if _, err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Update(context.TODO(), existingNetworkPolicy, metav1.UpdateOptions{}); err != nil {
+								done = false
+								klog.V(4).Infoln(err)
+							}
+						}
+					}
 				}
 			}
 		}
@@ -833,9 +861,18 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				if _, err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).Create(context.TODO(), limitRange, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
 				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					// TODO: Solve sync by updating below
-					c.kubeclientset.CoreV1().LimitRanges(childNamespace).Delete(context.TODO(), limitRange.GetName(), metav1.DeleteOptions{})
-					c.kubeclientset.CoreV1().LimitRanges(childNamespace).Create(context.TODO(), limitRange, metav1.CreateOptions{})
+					if existingLimitRange, err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).Get(context.TODO(), limitRange.GetName(), metav1.GetOptions{}); err != nil {
+						done = false
+					} else {
+						if !reflect.DeepEqual(limitRange.Spec, existingLimitRange.Spec) || !reflect.DeepEqual(limitRange.GetLabels(), existingLimitRange.GetLabels()) {
+							existingLimitRange.Spec = limitRange.Spec
+							existingLimitRange.SetLabels(limitRange.GetLabels())
+							if _, err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).Update(context.TODO(), existingLimitRange, metav1.UpdateOptions{}); err != nil {
+								done = false
+								klog.V(4).Infoln(err)
+							}
+						}
+					}
 				}
 			}
 		}
@@ -847,9 +884,21 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				if _, err := c.kubeclientset.CoreV1().Secrets(childNamespace).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
 				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					// TODO: Solve sync by updating below
-					c.kubeclientset.CoreV1().Secrets(childNamespace).Delete(context.TODO(), secret.GetName(), metav1.DeleteOptions{})
-					c.kubeclientset.CoreV1().Secrets(childNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+					if existingSecret, err := c.kubeclientset.CoreV1().Secrets(childNamespace).Get(context.TODO(), secret.GetName(), metav1.GetOptions{}); err != nil {
+						done = false
+					} else {
+						if !reflect.DeepEqual(secret.Type, existingSecret.Type) || !reflect.DeepEqual(secret.Data, existingSecret.Data) || !reflect.DeepEqual(secret.StringData, existingSecret.StringData) || !reflect.DeepEqual(secret.Immutable, existingSecret.Immutable) || !reflect.DeepEqual(secret.GetLabels(), existingSecret.GetLabels()) {
+							existingSecret.Type = secret.Type
+							existingSecret.Data = secret.Data
+							existingSecret.StringData = secret.StringData
+							existingSecret.Immutable = secret.Immutable
+							existingSecret.SetLabels(secret.GetLabels())
+							if _, err := c.kubeclientset.CoreV1().Secrets(childNamespace).Update(context.TODO(), existingSecret, metav1.UpdateOptions{}); err != nil {
+								done = false
+								klog.V(4).Infoln(err)
+							}
+						}
+					}
 				}
 			}
 		}
@@ -861,9 +910,20 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				if _, err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
 				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					// TODO: Solve sync by updating below
-					c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Delete(context.TODO(), configMap.GetName(), metav1.DeleteOptions{})
-					c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+					if existingConfigMap, err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Get(context.TODO(), configMap.GetName(), metav1.GetOptions{}); err != nil {
+						done = false
+					} else {
+						if !reflect.DeepEqual(configMap.BinaryData, existingConfigMap.BinaryData) || !reflect.DeepEqual(configMap.Data, existingConfigMap.Data) || !reflect.DeepEqual(configMap.Immutable, existingConfigMap.Immutable) || !reflect.DeepEqual(configMap.GetLabels(), existingConfigMap.GetLabels()) {
+							existingConfigMap.BinaryData = configMap.BinaryData
+							existingConfigMap.Data = configMap.Data
+							existingConfigMap.Immutable = configMap.Immutable
+							existingConfigMap.SetLabels(configMap.GetLabels())
+							if _, err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Update(context.TODO(), existingConfigMap, metav1.UpdateOptions{}); err != nil {
+								done = false
+								klog.V(4).Infoln(err)
+							}
+						}
+					}
 				}
 			}
 		}
@@ -875,9 +935,20 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 				if _, err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Create(context.TODO(), serviceAccount, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					done = false
 				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					// TODO: Solve sync by updating below
-					c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Delete(context.TODO(), serviceAccount.GetName(), metav1.DeleteOptions{})
-					c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Create(context.TODO(), serviceAccount, metav1.CreateOptions{})
+					if existingServiceAccount, err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Get(context.TODO(), serviceAccount.GetName(), metav1.GetOptions{}); err != nil {
+						done = false
+					} else {
+						if !reflect.DeepEqual(serviceAccount.AutomountServiceAccountToken, existingServiceAccount.AutomountServiceAccountToken) || !reflect.DeepEqual(serviceAccount.ImagePullSecrets, existingServiceAccount.ImagePullSecrets) || !reflect.DeepEqual(serviceAccount.Secrets, existingServiceAccount.Secrets) || !reflect.DeepEqual(serviceAccount.GetLabels(), existingServiceAccount.GetLabels()) {
+							existingServiceAccount.AutomountServiceAccountToken = serviceAccount.AutomountServiceAccountToken
+							existingServiceAccount.ImagePullSecrets = serviceAccount.ImagePullSecrets
+							existingServiceAccount.Secrets = serviceAccount.Secrets
+							existingServiceAccount.SetLabels(serviceAccount.GetLabels())
+							if _, err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Update(context.TODO(), existingServiceAccount, metav1.UpdateOptions{}); err != nil {
+								done = false
+								klog.V(4).Infoln(err)
+							}
+						}
+					}
 				}
 			}
 		}
