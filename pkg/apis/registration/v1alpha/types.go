@@ -52,12 +52,13 @@ type TenantRequestSpec struct {
 	Address corev1alpha.Address `json:"address"`
 	// Contact information of the tenant.
 	Contact corev1alpha.Contact `json:"contact"`
-
+	// Whether cluster-level network policies will be applied to tenant namespaces
+	// for security purposes.
 	ClusterNetworkPolicy bool `json:"clusternetworkpolicy"`
 	// Requested allocation of certain resource types. Resource types are
 	// kubernetes default resource types.
 	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
-	// If the tenant is approved or not by the EdgeNet administrators.
+	// If the tenant is approved or not by the administrators.
 	Approved bool `json:"approved"`
 }
 
@@ -65,7 +66,7 @@ type TenantRequestSpec struct {
 type TenantRequestStatus struct {
 	// True if the policy agreed false if not.
 	PolicyAgreed *bool `json:"policyagreed"`
-	// Expiration date of the policy.
+	// Expiration date of the request.
 	Expiry *metav1.Time `json:"expiry"`
 	// Current state of the policy. This can be 'Failure', 'Pending', or 'Approved'.
 	State string `json:"state"`
@@ -81,7 +82,8 @@ type TenantRequestList struct {
 	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ListMeta `json:"metadata"`
-	// Tenants can declare requests. This list contains their requests.
+	// TenantRequestList is a list of TenantRequest resources. This element contains
+	// TenantRequest resources.
 	Items []TenantRequest `json:"items"`
 }
 
@@ -118,7 +120,7 @@ type RoleRequestSpec struct {
 type RoleRefSpec struct {
 	// The kind of the RoleRefSpec, this can be 'ClusterRole', or 'Role'.
 	Kind string `json:"kind"`
-	// Name of the owner of this request.
+	// Name of the role.
 	Name string `json:"name"`
 }
 
@@ -126,7 +128,7 @@ type RoleRefSpec struct {
 type RoleRequestStatus struct {
 	// True if agreed to the policy false if not.
 	PolicyAgreed *bool `json:"policyagreed"`
-	// Expiration date of the policy.
+	// Expiration date of the request.
 	Expiry *metav1.Time `json:"expiry"`
 	// Current state of the policy. This can be 'Failure', 'Pending', or 'Approved'.
 	State string `json:"state"`
