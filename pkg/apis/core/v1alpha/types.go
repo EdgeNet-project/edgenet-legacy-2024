@@ -52,7 +52,8 @@ type TenantSpec struct {
 	Address Address `json:"address"`
 	// Contact information of the tenant.
 	Contact Contact `json:"contact"`
-
+	// Whether cluster-level network policies will be applied to tenant namespaces
+	// for security purposes.
 	ClusterNetworkPolicy bool `json:"clusternetworkpolicy"`
 	// If the tenant is active then this field is true.
 	Enabled bool `json:"enabled"`
@@ -74,7 +75,7 @@ type Address struct {
 
 // Contact contains handle, personal information, and role
 type Contact struct {
-	// Handle is the shortened name of the tenant.
+	// Identifier of the person.
 	Handle string `json:"handle"`
 	// First name.
 	FirstName string `json:"firstname"`
@@ -122,24 +123,25 @@ type SubNamespace struct {
 }
 
 // SubNamespaceSpec is the spec for a SubNamespace resource
-// RBAC, NetworkPolicies, Limit Ranges, Secrets, Config Maps, Service Accounts
 type SubNamespaceSpec struct {
-	// Workspace of the SubNamespace.
+	// Workspace creates a child namespace within the namespace hierarchy, which fulfills
+	// the organizational needs.
 	Workspace *Workspace `json:"workspace"`
-	// Each SubNamespace is linked to a subtenant.
+	// Subnamespace creates the subnamespace in form of subtenant, where all
+	// information is hidden from it's parent.
 	Subtenant *Subtenant `json:"subtenant"`
 	// Expiration date of the subnamespace.
 	Expiry *metav1.Time `json:"expiry"`
 }
 
-// Workspace contains possible resources such as cpu time and memory, which attributes to
+// Workspace contains possible resources such as cpu units or memory, which attributes to
 // inherit, scope, and owner.
 type Workspace struct {
 	// Represents maximum resources to be used.
 	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
 	// Which services are going to be available to the this workspace thus subnamespace.
 	Inheritance map[string]bool `json:"inheritance"`
-
+	// Scope can be 'federated', or 'local'
 	Scope string `json:"scope"`
 	// If the workspace in sync.
 	Sync bool `json:"sync"`
@@ -166,6 +168,7 @@ type SubNamespaceStatus struct {
 	Child *Child `json:"child"`
 }
 
+// Representation of Child's information. It contains it's type and name.
 type Child struct {
 	// The kind of the Child, this can be 'Tenant', or 'Namespace'.
 	Kind string `json:"kind"`
@@ -221,17 +224,18 @@ type NodeContribution struct {
 	Status NodeContributionStatus `json:"status,omitempty"`
 }
 
-// NodeContributionSpec is the spec for a NodeContribution resource
+// NodeContributionSpec is the spec for a NodeContribution resource.
 type NodeContributionSpec struct {
-	// Tenant resource of the contributor.
+	// Tenant resource of the contributor. This is to award the tenant
+	// who contributes to the cluster with the node.
 	Tenant *string `json:"tenant"`
 	// Name of the host.
 	Host string `json:"host"`
-	// Port of the node contribution.
+	// SSH port.
 	Port int `json:"port"`
-	// Username of the node contributor.
+	// SSH username.
 	User string `json:"user"`
-	// True if the contrubution is validated and enabled. False otherwise.
+	// If the scheduling is enabled on the contributed node.
 	Enabled bool `json:"enabled"`
 	// Each contribution can have none or many limitations. This field denotese these
 	// limitations.
@@ -285,16 +289,17 @@ type TenantResourceQuota struct {
 
 // TenantResourceQuotaSpec is the spec for a tenant resouce quota resource
 type TenantResourceQuotaSpec struct {
-	// Resource tunes to add.
+	// To increase the overall quota.
 	Claim map[string]ResourceTuning `json:"claim"`
-	// Resource tunes to remove.
+	// To decrease the overall quota.
 	Drop map[string]ResourceTuning `json:"drop"`
 }
 
-// ResourceTuning indicates resources to add or remove, and how long they will remain
-// CPU, Memory, Local Storage, Ephemeral Storage, and Bandwidth
+// ResourceTuning indicates resources to add or remove, and how long they will remain.
+// The supported resources are: CPU, Memory, Local Storage, Ephemeral Storage, and
+// Bandwidth.
 type ResourceTuning struct {
-	// This denotes which resources are going to be added or removed.
+	// This denotes which resources to be included.
 	ResourceList map[corev1.ResourceName]resource.Quantity `json:"resourceList"`
 	// Expiration date of the ResourceTuning. This can be nil if no expiration date is specified.
 	Expiry *metav1.Time `json:"expiry"`
@@ -329,7 +334,8 @@ type TenantResourceQuotaList struct {
 	Items []TenantResourceQuota `json:"items"`
 }
 
-// Fetches adaquate resources.
+// Fetches the net value of the resources. For example, 1Gb memory is claimed and 100 milliCPU
+// are dropped. Then the function returns the net resources as '+1Gb', '-100m'.
 func (t TenantResourceQuota) Fetch() (map[corev1.ResourceName]int64, map[corev1.ResourceName]resource.Quantity) {
 	// TODO: Remove the assignedQuotaValue map
 	assignedQuotaValue := make(map[corev1.ResourceName]int64)
