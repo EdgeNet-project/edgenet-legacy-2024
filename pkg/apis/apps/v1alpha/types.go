@@ -33,46 +33,63 @@ type SelectiveDeployment struct {
 	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-
 	// Spec is the selectivedeployment resource spec
 	Spec SelectiveDeploymentSpec `json:"spec"`
 	// Status is the selectivedeployment resource status
 	Status SelectiveDeploymentStatus `json:"status,omitempty"`
 }
 
-// SelectiveDeploymentSpec is the spec for a SelectiveDeployment resource
+// SelectiveDeploymentSpec is the spec for a SelectiveDeployment resource.
+// Selectors filter the nodes to be used for specified workloads.
 type SelectiveDeploymentSpec struct {
-	// The controller indicates the name and type of controller desired to configure
-	// Workloads: deployment, daemonset, and statefulsets
-	// The type is for defining which kind of selectivedeployment it is, you could find the list of active types below.
-	// Types of selector: city, state, country, continent, and polygon
-	// The value represents the desired filter and it must be compatible with the type of selectivedeployment
-	Workloads Workloads  `json:"workloads"`
-	Selector  []Selector `json:"selector"`
-	Recovery  bool       `json:"recovery"`
+	// Workload can be Deployment, Deamonset, StatefulSet, Job, or CronJob.
+	Workloads Workloads `json:"workloads"`
+	// List of Selector resources. Each selector filters the nodes with the
+	// requested method.
+	Selector []Selector `json:"selector"`
+	// If true, selective deployment tries to find another suitable
+	// node to run the workload in case of a node goes down.
+	Recovery bool `json:"recovery"`
 }
 
-// Workloads indicates deployments, daemonsets or statefulsets
+// Workloads indicates deployments, daemonsets, statefulsets, jobs, or cronjobs.
 type Workloads struct {
-	Deployment  []appsv1.Deployment   `json:"deployment"`
-	DaemonSet   []appsv1.DaemonSet    `json:"daemonset"`
-	StatefulSet []appsv1.StatefulSet  `json:"statefulset"`
-	Job         []batchv1.Job         `json:"job"`
-	CronJob     []batchv1beta.CronJob `json:"cronjob"`
+	// Workload can have a list of Deployments.
+	Deployment []appsv1.Deployment `json:"deployment"`
+	// Workload can have a list of DaemonSets.
+	DaemonSet []appsv1.DaemonSet `json:"daemonset"`
+	// Workload can have a list of StatefulSets.
+	StatefulSet []appsv1.StatefulSet `json:"statefulset"`
+	// Workload can have a list of Jobs.
+	Job []batchv1.Job `json:"job"`
+	// Workload can have a list of CronJobs.
+	CronJob []batchv1beta.CronJob `json:"cronjob"`
 }
 
 // Selector to define desired node filtering parameters
 type Selector struct {
-	Name     string                      `json:"name"`
-	Value    []string                    `json:"value"`
+	// Name of the selector. This can be City, State, Country, Continent, or Polygon
+	Name string `json:"name"`
+	// Value of the selector. For example; if the name of the selector is 'City'
+	// then the value can be the city name. For example; if the name of
+	// the selector is 'Polygon' then the value can be the GeoJSON representation of the polygon.
+	Value []string `json:"value"`
+	// Operator means basic mathematical operators such as 'In', 'NotIn', 'Exists', 'NotExsists' etc...
 	Operator corev1.NodeSelectorOperator `json:"operator"`
-	Quantity int                         `json:"quantity"`
+	// Quantity represents number of nodes on which the workloads will be running.
+	Quantity int `json:"quantity"`
 }
 
 // SelectiveDeploymentStatus is the status for a SelectiveDeployment resource
 type SelectiveDeploymentStatus struct {
-	Ready   string   `json:"ready"`
-	State   string   `json:"state"`
+	// Ready string denotes number of workloads running filtered by the SelectiveDeployments.
+	// The string is 'x/y' if x instances are running and y instances are requested.
+	Ready string `json:"ready"`
+	// Represents state of the selective deployment. This can be 'Failure' if none
+	// of the workloads are deployed. 'Partial' if some of the the workloads
+	// are deployed. 'Success' if all of the workloads are deployed.
+	State string `json:"state"`
+	// There can be multiple display messages for state description.
 	Message []string `json:"message"`
 }
 
@@ -80,8 +97,11 @@ type SelectiveDeploymentStatus struct {
 
 // SelectiveDeploymentList is a list of SelectiveDeployment resources
 type SelectiveDeploymentList struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
 	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ListMeta `json:"metadata"`
-
+	// SelectiveDeploymentList is a list of SelectiveDeployment resources thus,
+	// SelectiveDeployments are contained here.
 	Items []SelectiveDeployment `json:"items"`
 }

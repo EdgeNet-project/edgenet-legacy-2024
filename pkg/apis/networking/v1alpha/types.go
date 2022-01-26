@@ -30,26 +30,32 @@ type VPNPeer struct {
 	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-
 	// Spec is the vpnpeer resource spec
 	Spec VPNPeerSpec `json:"spec"`
 }
 
 // VPNPeerSpec is the spec for a VPNPeer resource
 type VPNPeerSpec struct {
-	AddressV4       string  `json:"addressV4"`
-	AddressV6       string  `json:"addressV6"`
+	// IPv4 address of VPN peer.
+	AddressV4 string `json:"addressV4"`
+	// IPv6 address of VPN peer.
+	AddressV6 string `json:"addressV6"`
+	// Endpoint address of the VPN tunnel.
 	EndpointAddress *string `json:"endpointAddress"`
-	EndpointPort    *int    `json:"endpointPort"`
-	PublicKey       string  `json:"publicKey"`
+	// Endpoint port of the VPN tunnel.
+	EndpointPort *int `json:"endpointPort"`
+	// VPN public key of the peer.
+	PublicKey string `json:"publicKey"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // VPNPeerList is a list of VPNPeer resources
 type VPNPeerList struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
 	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ListMeta `json:"metadata"`
-
+	// VPNPeerList is a list of VPNPeer resources thus, VPNPeers are contained here.
 	Items []VPNPeer `json:"items"`
 }

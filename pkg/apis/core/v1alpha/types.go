@@ -34,7 +34,6 @@ type Tenant struct {
 	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-
 	// Spec is the tenant resource spec
 	Spec TenantSpec `json:"spec"`
 	// Status is the tenant resource status
@@ -43,36 +42,56 @@ type Tenant struct {
 
 // TenantSpec is the spec for a Tenant resource
 type TenantSpec struct {
-	FullName             string  `json:"fullname"`
-	ShortName            string  `json:"shortname"`
-	URL                  string  `json:"url"`
-	Address              Address `json:"address"`
-	Contact              Contact `json:"contact"`
-	ClusterNetworkPolicy bool    `json:"clusternetworkpolicy"`
-	Enabled              bool    `json:"enabled"`
+	// Full name of the tenant.
+	FullName string `json:"fullname"`
+	// Shortened name of the tenant.
+	ShortName string `json:"shortname"`
+	// Website of the tenant.
+	URL string `json:"url"`
+	// Open address of the tenant, this includes country, city, and street information.
+	Address Address `json:"address"`
+	// Contact information of the tenant.
+	Contact Contact `json:"contact"`
+	// Whether cluster-level network policies will be applied to tenant namespaces
+	// for security purposes.
+	ClusterNetworkPolicy bool `json:"clusternetworkpolicy"`
+	// If the tenant is active then this field is true.
+	Enabled bool `json:"enabled"`
 }
 
 // Address describes postal address of tenant
 type Address struct {
-	Street  string `json:"street"`
-	ZIP     string `json:"zip"`
-	City    string `json:"city"`
-	Region  string `json:"region"`
+	// Street name.
+	Street string `json:"street"`
+	// ZIP code.
+	ZIP string `json:"zip"`
+	// City name.
+	City string `json:"city"`
+	// Region name.
+	Region string `json:"region"`
+	// County name.
 	Country string `json:"country"`
 }
 
 // Contact contains handle, personal information, and role
 type Contact struct {
-	Handle    string `json:"handle"`
+	// Identifier of the person.
+	Handle string `json:"handle"`
+	// First name.
 	FirstName string `json:"firstname"`
-	LastName  string `json:"lastname"`
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
+	// Last name.
+	LastName string `json:"lastname"`
+	// Email address of the contact.
+	Email string `json:"email"`
+	// Phone number of the contact.
+	Phone string `json:"phone"`
 }
 
 // TenantStatus is the status for a Tenant resource
 type TenantStatus struct {
-	State   string `json:"state"`
+	// The state can be 'Established' or 'Failure'.
+	State string `json:"state"`
+	// Additional description can be located here.
 	Message string `json:"message"`
 }
 
@@ -80,9 +99,11 @@ type TenantStatus struct {
 
 // TenantList is a list of Tenant resources
 type TenantList struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
 	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ListMeta `json:"metadata"`
-
+	// TenantList is a list of Tenant resources. This field contains Tenants.
 	Items []Tenant `json:"items"`
 }
 
@@ -95,7 +116,6 @@ type SubNamespace struct {
 	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-
 	// Spec is the subsidiary namespace resource spec
 	Spec SubNamespaceSpec `json:"spec"`
 	// Status is the subsidiary namespace resource status
@@ -103,35 +123,56 @@ type SubNamespace struct {
 }
 
 // SubNamespaceSpec is the spec for a SubNamespace resource
-// RBAC, NetworkPolicies, Limit Ranges, Secrets, Config Maps, Service Accounts
 type SubNamespaceSpec struct {
-	Workspace *Workspace   `json:"workspace"`
-	Subtenant *Subtenant   `json:"subtenant"`
-	Expiry    *metav1.Time `json:"expiry"`
+	// Workspace creates a child namespace within the namespace hierarchy, which fulfills
+	// the organizational needs.
+	Workspace *Workspace `json:"workspace"`
+	// Subnamespace creates the subnamespace in form of subtenant, where all
+	// information is hidden from it's parent.
+	Subtenant *Subtenant `json:"subtenant"`
+	// Expiration date of the subnamespace.
+	Expiry *metav1.Time `json:"expiry"`
 }
 
+// Workspace contains possible resources such as cpu units or memory, which attributes to
+// inherit, scope, and owner.
 type Workspace struct {
+	// Represents maximum resources to be used.
 	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
-	Inheritance        map[string]bool                           `json:"inheritance"`
-	Scope              string                                    `json:"scope"`
-	Sync               bool                                      `json:"sync"`
-	Owner              *Contact                                  `json:"owner"`
+	// Which services are going to be available to the this workspace thus subnamespace.
+	Inheritance map[string]bool `json:"inheritance"`
+	// Scope can be 'federated', or 'local'
+	Scope string `json:"scope"`
+	// If the workspace in sync.
+	Sync bool `json:"sync"`
+	// Owner of the workspace.
+	Owner *Contact `json:"owner"`
 }
 
+// Subtenant resource represents a tenant under another tenant.
 type Subtenant struct {
+	// Current allocation of certain resource types. Resource types are
+	// kubernetes default resource types.
 	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
-	Owner              Contact                                   `json:"owner"`
+	// Owner of the Subtenant.
+	Owner Contact `json:"owner"`
 }
 
 // SubNamespaceStatus is the status for a SubNamespace resource
 type SubNamespaceStatus struct {
-	State   string `json:"state"`
+	// Denotes the state of the SubNamespace. This can be 'Failure', or 'Established'.
+	State string `json:"state"`
+	// Message contains additional information.
 	Message string `json:"message"`
-	Child   *Child `json:"child"`
+	// Child represents the child
+	Child *Child `json:"child"`
 }
 
+// Representation of Child's information. It contains it's type and name.
 type Child struct {
+	// The kind of the Child, this can be 'Tenant', or 'Namespace'.
 	Kind string `json:"kind"`
+	// Name of the owner of this request.
 	Name string `json:"name"`
 }
 
@@ -139,14 +180,18 @@ type Child struct {
 
 // SubNamespaceList is a list of SubNamespace resources
 type SubNamespaceList struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
 	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ListMeta `json:"metadata"`
-
+	// SubNamespaceList is a list of SubNamespace resources. This element contains
+	// SubNamespace resources.
 	Items []SubNamespace `json:"items"`
 }
 
-// TODO: Remove this function when using int64 is deprecated
+// Retrieves quantity value from given resource name.
 func (s SubNamespace) RetrieveQuantityValue(key corev1.ResourceName) int64 {
+	// TODO: Remove this function when using int64 is deprecated
 	var value int64
 	if s.Spec.Workspace != nil {
 		if _, elementExists := s.Spec.Workspace.ResourceAllocation[key]; elementExists {
@@ -173,32 +218,43 @@ type NodeContribution struct {
 	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-
 	// Spec is the nodecontribution resource spec
 	Spec NodeContributionSpec `json:"spec"`
 	// Status is the nodecontribution resource status
 	Status NodeContributionStatus `json:"status,omitempty"`
 }
 
-// NodeContributionSpec is the spec for a NodeContribution resource
+// NodeContributionSpec is the spec for a NodeContribution resource.
 type NodeContributionSpec struct {
-	Tenant      *string       `json:"tenant"`
-	Host        string        `json:"host"`
-	Port        int           `json:"port"`
-	User        string        `json:"user"`
-	Enabled     bool          `json:"enabled"`
+	// Tenant resource of the contributor. This is to award the tenant
+	// who contributes to the cluster with the node.
+	Tenant *string `json:"tenant"`
+	// Name of the host.
+	Host string `json:"host"`
+	// SSH port.
+	Port int `json:"port"`
+	// SSH username.
+	User string `json:"user"`
+	// If the scheduling is enabled on the contributed node.
+	Enabled bool `json:"enabled"`
+	// Each contribution can have none or many limitations. This field denotese these
+	// limitations.
 	Limitations []Limitations `json:"limitations"`
 }
 
 // Limitations describes which tenants and namespaces can make use of node
 type Limitations struct {
-	Kind        string `json:"kind"`
+	// Kind of the limitation.
+	Kind string `json:"kind"`
+	// Identifier of the limitator.
 	Indentifier string `json:"identifier"`
 }
 
 // NodeContributionStatus is the status for a node contribution
 type NodeContributionStatus struct {
-	State   string   `json:"state"`
+	// This can be 'InQueue', 'Failure', 'Success', 'Incomplete', or 'InProgress'.
+	State string `json:"state"`
+	// Message contains additional information.
 	Message []string `json:"message"`
 }
 
@@ -206,9 +262,12 @@ type NodeContributionStatus struct {
 
 // NodeContributionList is a list of NodeContribution resources
 type NodeContributionList struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
 	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ListMeta `json:"metadata"`
-
+	// NodeContributionList is a list of NodeContribution resources. This element contains
+	// NodeContribution resources.
 	Items []NodeContribution `json:"items"`
 }
 
@@ -222,7 +281,6 @@ type TenantResourceQuota struct {
 	metav1.TypeMeta `json:",inline"`
 	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-
 	// Spec is the tenantresourcequota resource spec
 	Spec TenantResourceQuotaSpec `json:"spec"`
 	// Status is the tenantresourcequota resource status
@@ -231,26 +289,35 @@ type TenantResourceQuota struct {
 
 // TenantResourceQuotaSpec is the spec for a tenant resouce quota resource
 type TenantResourceQuotaSpec struct {
+	// To increase the overall quota.
 	Claim map[string]ResourceTuning `json:"claim"`
-	Drop  map[string]ResourceTuning `json:"drop"`
+	// To decrease the overall quota.
+	Drop map[string]ResourceTuning `json:"drop"`
 }
 
-// ResourceTuning indicates resources to add or remove, and how long they will remain
-// CPU, Memory, Local Storage, Ephemeral Storage, and Bandwidth
+// ResourceTuning indicates resources to add or remove, and how long they will remain.
+// The supported resources are: CPU, Memory, Local Storage, Ephemeral Storage, and
+// Bandwidth.
 type ResourceTuning struct {
+	// This denotes which resources to be included.
 	ResourceList map[corev1.ResourceName]resource.Quantity `json:"resourceList"`
-	Expiry       *metav1.Time                              `json:"expiry"`
+	// Expiration date of the ResourceTuning. This can be nil if no expiration date is specified.
+	Expiry *metav1.Time `json:"expiry"`
 }
 
 // TenantResourceQuotaStatus is the status for a tenant resouce quota resource
 type TenantResourceQuotaStatus struct {
-	State   string `json:"state"`
+	// Denotes the state of the TenantResourceQuota. This can be 'Failure', or 'Success'.
+	State string `json:"state"`
+	// Message contains additional information.
 	Message string `json:"message"`
 }
 
 // Resources presents the usage of tenant resource quota
 type Resources struct {
-	CPU    string `json:"cpu"`
+	// CPU resource usage.
+	CPU string `json:"cpu"`
+	// Memory resource usage.
 	Memory string `json:"memory"`
 }
 
@@ -258,12 +325,17 @@ type Resources struct {
 
 // TenantResourceQuotaList is a list of tenant resouce quota resources
 type TenantResourceQuotaList struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
 	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
 	metav1.ListMeta `json:"metadata"`
-
+	// TenantResourceQuotaList is a list of TenantResourceQuota resources. This element contains
+	// TenantResourceQuota resources.
 	Items []TenantResourceQuota `json:"items"`
 }
 
+// Fetches the net value of the resources. For example, 1Gb memory is claimed and 100 milliCPU
+// are dropped. Then the function returns the net resources as '+1Gb', '-100m'.
 func (t TenantResourceQuota) Fetch() (map[corev1.ResourceName]int64, map[corev1.ResourceName]resource.Quantity) {
 	// TODO: Remove the assignedQuotaValue map
 	assignedQuotaValue := make(map[corev1.ResourceName]int64)
@@ -307,6 +379,7 @@ func (t TenantResourceQuota) Fetch() (map[corev1.ResourceName]int64, map[corev1.
 	return assignedQuotaValue, assignedQuota
 }
 
+// Removes the resource tunings if they are expired.
 func (t TenantResourceQuota) DropExpiredItems() bool {
 	remove := func(objects ...map[string]ResourceTuning) bool {
 		expired := false
