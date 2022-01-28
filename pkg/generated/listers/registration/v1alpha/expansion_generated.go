@@ -18,6 +18,10 @@ limitations under the License.
 
 package v1alpha
 
+// ClusterRoleRequestListerExpansion allows custom methods to be added to
+// ClusterRoleRequestLister.
+type ClusterRoleRequestListerExpansion interface{}
+
 // RoleRequestListerExpansion allows custom methods to be added to
 // RoleRequestLister.
 type RoleRequestListerExpansion interface{}

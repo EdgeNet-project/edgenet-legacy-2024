@@ -1,5 +1,5 @@
 /*
-Copyright 2021 Contributors to the EdgeNet project.
+Copyright 2022 Contributors to the EdgeNet project.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -64,8 +64,6 @@ type TenantRequestSpec struct {
 
 // TenantRequestStatus is the status for a TenantRequest resource
 type TenantRequestStatus struct {
-	// True if the policy agreed false if not.
-	PolicyAgreed *bool `json:"policyagreed"`
 	// Expiration date of the request.
 	Expiry *metav1.Time `json:"expiry"`
 	// Current state of the policy. This can be 'Failure', 'Pending', or 'Approved'.
@@ -85,6 +83,60 @@ type TenantRequestList struct {
 	// TenantRequestList is a list of TenantRequest resources. This element contains
 	// TenantRequest resources.
 	Items []TenantRequest `json:"items"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ClusterRoleRequest describes a RoleRequest resource
+type ClusterRoleRequest struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is the clusterrolerequest resource spec
+	Spec ClusterRoleRequestSpec `json:"spec"`
+	// Status is the clusterrolerequest resource status
+	Status ClusterRoleRequestStatus `json:"status,omitempty"`
+}
+
+// ClusterRoleRequestSpec is the spec for a ClusterRoleRequest resource
+type ClusterRoleRequestSpec struct {
+	// First name of the person requesting the cluster role.
+	FirstName string `json:"firstname"`
+	// Last name of the person requesting the cluster role.
+	LastName string `json:"lastname"`
+	// Email of the person requesting the cluster role.
+	Email string `json:"email"`
+	// Name of the cluster role to bind
+	RoleName string `json:"rolename"`
+	// True if this role request is approved false if not.
+	Approved bool `json:"approved"`
+}
+
+// ClusterRoleRequestStatus is the status for a ClusterRoleRequest resource
+type ClusterRoleRequestStatus struct {
+	// Expiration date of the request.
+	Expiry *metav1.Time `json:"expiry"`
+	// Current state of the policy. This can be 'Failure', 'Pending', or 'Approved'.
+	State string `json:"state"`
+	// Description for additional information.
+	Message string `json:"message"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ClusterRoleRequestList is a list of ClusterRoleRequest resources
+type ClusterRoleRequestList struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	metav1.ListMeta `json:"metadata"`
+	// ClusterRoleRequestList is a list of ClusterRoleRequest resources. This element contains
+	// ClusterRoleRequest resources.
+	Items []ClusterRoleRequest `json:"items"`
 }
 
 // +genclient
@@ -126,8 +178,6 @@ type RoleRefSpec struct {
 
 // RoleRequestStatus is the status for a RoleRequest resource
 type RoleRequestStatus struct {
-	// True if agreed to the policy false if not.
-	PolicyAgreed *bool `json:"policyagreed"`
 	// Expiration date of the request.
 	Expiry *metav1.Time `json:"expiry"`
 	// Current state of the policy. This can be 'Failure', 'Pending', or 'Approved'.

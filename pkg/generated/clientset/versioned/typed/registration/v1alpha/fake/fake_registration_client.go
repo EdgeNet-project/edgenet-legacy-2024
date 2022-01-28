@@ -28,6 +28,10 @@ type FakeRegistrationV1alpha struct {
 	*testing.Fake
 }
 
+func (c *FakeRegistrationV1alpha) ClusterRoleRequests() v1alpha.ClusterRoleRequestInterface {
+	return &FakeClusterRoleRequests{c}
+}
+
 func (c *FakeRegistrationV1alpha) RoleRequests(namespace string) v1alpha.RoleRequestInterface {
 	return &FakeRoleRequests{c, namespace}
 }

@@ -52,8 +52,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&TenantRequest{},
 		&TenantRequestList{},
-		&RoleRequest{},
-		&RoleRequestList{},
+		&ClusterRoleRequest{},
+		&ClusterRoleRequestList{},
 		&RoleRequest{},
 		&RoleRequestList{},
 	)

@@ -26,6 +26,7 @@ import (
 
 type RegistrationV1alphaInterface interface {
 	RESTClient() rest.Interface
+	ClusterRoleRequestsGetter
 	RoleRequestsGetter
 	TenantRequestsGetter
 }
@@ -33,6 +34,10 @@ type RegistrationV1alphaInterface interface {
 // RegistrationV1alphaClient is used to interact with features provided by the registration.edgenet.io group.
 type RegistrationV1alphaClient struct {
 	restClient rest.Interface
+}
+
+func (c *RegistrationV1alphaClient) ClusterRoleRequests() ClusterRoleRequestInterface {
+	return newClusterRoleRequests(c)
 }
 
 func (c *RegistrationV1alphaClient) RoleRequests(namespace string) RoleRequestInterface {

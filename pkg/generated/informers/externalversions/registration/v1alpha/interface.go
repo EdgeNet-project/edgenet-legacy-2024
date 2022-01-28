@@ -24,6 +24,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// ClusterRoleRequests returns a ClusterRoleRequestInformer.
+	ClusterRoleRequests() ClusterRoleRequestInformer
 	// RoleRequests returns a RoleRequestInformer.
 	RoleRequests() RoleRequestInformer
 	// TenantRequests returns a TenantRequestInformer.
@@ -39,6 +41,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// ClusterRoleRequests returns a ClusterRoleRequestInformer.
+func (v *version) ClusterRoleRequests() ClusterRoleRequestInformer {
+	return &clusterRoleRequestInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // RoleRequests returns a RoleRequestInformer.

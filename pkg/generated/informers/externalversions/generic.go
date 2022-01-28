@@ -74,6 +74,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Networking().V1alpha().VPNPeers().Informer()}, nil
 
 		// Group=registration.edgenet.io, Version=v1alpha
+	case registrationv1alpha.SchemeGroupVersion.WithResource("clusterrolerequests"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Registration().V1alpha().ClusterRoleRequests().Informer()}, nil
 	case registrationv1alpha.SchemeGroupVersion.WithResource("rolerequests"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Registration().V1alpha().RoleRequests().Informer()}, nil
 	case registrationv1alpha.SchemeGroupVersion.WithResource("tenantrequests"):
