@@ -18,12 +18,15 @@ package util
 
 import (
 	"fmt"
+	"hash/adler32"
 	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -319,5 +322,15 @@ func EqualsMultipleExp(tb testing.TB, exp interface{}, act interface{}) {
 		}
 	} else {
 		Equals(tb, exp, act)
+	}
+}
+
+func Hash(strs ...string) (string, error) {
+	str := strings.Join(strs, "-")
+	hasher := adler32.New()
+	if hash, err := hasher.Write([]byte(str)); err == nil {
+		return strconv.Itoa(hash), nil
+	} else {
+		return "", err
 	}
 }

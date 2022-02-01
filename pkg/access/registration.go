@@ -45,6 +45,9 @@ func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) error {
 	tenant.Spec.ShortName = tenantRequest.Spec.ShortName
 	tenant.Spec.URL = tenantRequest.Spec.URL
 	tenant.Spec.Enabled = true
+	if tenantRequest.GetOwnerReferences() != nil {
+		tenant.SetOwnerReferences(tenantRequest.GetOwnerReferences())
+	}
 
 	if _, err := EdgenetClientset.CoreV1alpha().Tenants().Create(context.TODO(), tenant, metav1.CreateOptions{}); err != nil {
 		klog.V(4).Infof("Couldn't create tenant %s: %s", tenant.GetName(), err)
@@ -56,7 +59,7 @@ func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) error {
 		claim := corev1alpha.ResourceTuning{
 			ResourceList: tenantRequest.Spec.ResourceAllocation,
 		}
-		err := CreateTenantResourceQuota(tenantRequest.GetName(), nil, claim)
+		err := ApplyTenantResourceQuota(tenantRequest.GetName(), nil, claim)
 		if err != nil {
 			klog.V(4).Infof("Couldn't create tenant resource quota %s: %s", tenantRequest.GetName(), err)
 		}
@@ -65,58 +68,28 @@ func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) error {
 	return nil
 }
 
-// CreateTenantResourceQuota generates a tenant resource quota with the name provided
-func CreateTenantResourceQuota(name string, ownerReferences []metav1.OwnerReference, claim corev1alpha.ResourceTuning) error {
+// ApplyTenantResourceQuota generates a tenant resource quota with the name provided
+func ApplyTenantResourceQuota(name string, ownerReferences []metav1.OwnerReference, claim corev1alpha.ResourceTuning) error {
 	// Set a tenant resource quota
-	tenantResourceQuota := new(corev1alpha.TenantResourceQuota)
-	tenantResourceQuota.SetName(name)
-	tenantResourceQuota.SetOwnerReferences(ownerReferences)
-	tenantResourceQuota.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
-	tenantResourceQuota.Spec.Claim["initial"] = claim
-	_, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{})
-	return err
-}
-
-// SendEmail to send notification to tenant admins and authorized users about email verification
-/*func SendEmailVerificationNotification(subject, tenant, username, fullname, email, code string) {
-	// Set the HTML template variables
-	var contentData interface{}
-
-	collective := mailer.CommonContentData{}
-	collective.CommonData.Tenant = tenant
-	collective.CommonData.Username = username
-	collective.CommonData.Name = fullname
-	collective.CommonData.Email = []string{}
-	if subject == "tenant-email-verification" || subject == "user-email-verification-update" ||
-		subject == "user-email-verification" {
-		collective.CommonData.Email = []string{email}
-		verifyContent := mailer.VerifyContentData{}
-		verifyContent.Code = code
-		verifyContent.CommonData = collective.CommonData
-		contentData = verifyContent
-	} else if subject == "user-email-verified-alert" {
-		// Put the email addresses of the tenant admins and authorized users in the email to be sent list
-		tenant, _ := EdgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenant, metav1.GetOptions{})
-
-		if acceptableUsePolicyRaw, err := EdgenetClientset.CoreV1alpha().AcceptableUsePolicies().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/generated=true,edge-net.io/tenant=%s,edge-net.io/identity=true", tenant.GetName())}); err == nil {
-			for _, acceptableUsePolicyRow := range acceptableUsePolicyRaw.Items {
-				aupLabels := acceptableUsePolicyRow.GetLabels()
-				if aupLabels != nil && aupLabels["edge-net.io/username"] != "" && aupLabels["edge-net.io/firstname"] != "" && aupLabels["edge-net.io/lastname"] != "" {
-					authorized := CheckAuthorization("", acceptableUsePolicyRow.Spec.Email, "userrequests", username, "cluster")
-					if authorized {
-						collective.CommonData.Email = append(collective.CommonData.Email, acceptableUsePolicyRow.Spec.Email)
-					}
-				}
-			}
+	if tenantResourceQuota, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), name, metav1.GetOptions{}); err == nil {
+		tenantResourceQuota.Spec.Claim["initial"] = claim
+		if _, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.UpdateOptions{}); err != nil {
+			return err
 		}
-		contentData = collective
 	} else {
-		collective.CommonData.Email = []string{email}
-		contentData = collective
+		tenantResourceQuota := new(corev1alpha.TenantResourceQuota)
+		tenantResourceQuota.SetName(name)
+		if ownerReferences != nil {
+			tenantResourceQuota.SetOwnerReferences(ownerReferences)
+		}
+		tenantResourceQuota.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
+		tenantResourceQuota.Spec.Claim["initial"] = claim
+		if _, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{}); err != nil {
+			return err
+		}
 	}
-
-	mailer.Send(subject, contentData)
-}*/
+	return nil
+}
 
 func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha.RoleRequest, purpose, subject, clusterUID string, recipient []string) {
 	email := new(mailer.Content)

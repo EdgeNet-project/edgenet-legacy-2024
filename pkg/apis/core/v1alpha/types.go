@@ -17,8 +17,10 @@ limitations under the License.
 package v1alpha
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/EdgeNet-project/edgenet/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -124,6 +126,7 @@ type SubNamespace struct {
 
 // SubNamespaceSpec is the spec for a SubNamespace resource
 type SubNamespaceSpec struct {
+	// The mode of subnamespace, Workspace or Subtenant, cannot be changed after creation.
 	// Workspace creates a child namespace within the namespace hierarchy, which fulfills
 	// the organizational needs.
 	Workspace *Workspace `json:"workspace"`
@@ -141,9 +144,11 @@ type Workspace struct {
 	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
 	// Which services are going to be available to the this workspace thus subnamespace.
 	Inheritance map[string]bool `json:"inheritance"`
-	// Scope can be 'federated', or 'local'
+	// Scope can be 'federated', or 'local'. It cannot be changed after creation.
 	Scope string `json:"scope"`
 	// If the workspace in sync.
+	// The supported resources are: RBAC, NetworkPolicies, Limit Ranges, Secrets, Config Maps, and
+	// Service Accounts.
 	Sync bool `json:"sync"`
 	// Owner of the workspace.
 	Owner *Contact `json:"owner"`
@@ -164,16 +169,6 @@ type SubNamespaceStatus struct {
 	State string `json:"state"`
 	// Message contains additional information.
 	Message string `json:"message"`
-	// Child represents the child
-	Child *Child `json:"child"`
-}
-
-// Representation of Child's information. It contains it's type and name.
-type Child struct {
-	// The kind of the Child, this can be 'Tenant', or 'Namespace'.
-	Kind string `json:"kind"`
-	// Name of the owner of this request.
-	Name string `json:"name"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -208,6 +203,26 @@ func (s SubNamespace) RetrieveQuantityValue(key corev1.ResourceName) int64 {
 	return value
 }
 
+// GenerateChildName forms a name for child according to the mode, Workspace or Subtenant.
+func (s SubNamespace) GenerateChildName(clusterUID string) (string, error) {
+	childName := s.GetName()
+	if s.Spec.Workspace != nil && s.Spec.Workspace.Scope != "local" {
+		childName = fmt.Sprintf("%s-%s", clusterUID, childName)
+	}
+
+	childNameHashed, err := util.Hash(s.GetNamespace(), childName)
+	return childNameHashed, err
+}
+
+// GetMode return the mode as workspace or subtenant.
+func (s SubNamespace) GetMode() string {
+	if s.Spec.Workspace != nil {
+		return "workspace"
+	} else {
+		return "subtenant"
+	}
+}
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -235,7 +250,7 @@ type NodeContributionSpec struct {
 	Port int `json:"port"`
 	// SSH username.
 	User string `json:"user"`
-	// If the scheduling is enabled on the contributed node.
+	// To enable/disable scheduling on the contributed node.
 	Enabled bool `json:"enabled"`
 	// Each contribution can have none or many limitations. This field denotese these
 	// limitations.
@@ -311,14 +326,6 @@ type TenantResourceQuotaStatus struct {
 	State string `json:"state"`
 	// Message contains additional information.
 	Message string `json:"message"`
-}
-
-// Resources presents the usage of tenant resource quota
-type Resources struct {
-	// CPU resource usage.
-	CPU string `json:"cpu"`
-	// Memory resource usage.
-	Memory string `json:"memory"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

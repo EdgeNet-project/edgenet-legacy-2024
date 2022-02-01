@@ -120,7 +120,7 @@ func (g *TestGroup) Init() {
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
 	Clientset = g.client
 	EdgenetClientset = g.edgenetclient
-	g.namespace = corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s", g.tenant.GetName())}}
+	g.namespace = corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: g.tenant.GetName()}}
 	g.client.CoreV1().Namespaces().Create(context.TODO(), &g.namespace, metav1.CreateOptions{})
 }
 
@@ -322,7 +322,7 @@ func TestPermissionSystem(t *testing.T) {
 	}
 }
 
-func TestCreateTenantResourceQuota(t *testing.T) {
+func TestApplyTenantResourceQuota(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 
@@ -334,7 +334,7 @@ func TestCreateTenantResourceQuota(t *testing.T) {
 			"memory": resource.MustParse("6Gi"),
 		},
 	}
-	CreateTenantResourceQuota(g.tenantResourceQuotaObj.GetName(), nil, claim)
+	ApplyTenantResourceQuota(g.tenantResourceQuotaObj.GetName(), nil, claim)
 	_, err = EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 }
