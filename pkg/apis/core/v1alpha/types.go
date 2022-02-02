@@ -77,8 +77,6 @@ type Address struct {
 
 // Contact contains handle, personal information, and role
 type Contact struct {
-	// Identifier of the person.
-	Handle string `json:"handle"`
 	// First name.
 	FirstName string `json:"firstname"`
 	// Last name.
@@ -142,13 +140,14 @@ type SubNamespaceSpec struct {
 type Workspace struct {
 	// Represents maximum resources to be used.
 	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
-	// Which services are going to be available to the this workspace thus subnamespace.
+	// Which services are going to be inherited from the parent namespace to the this workspace thus
+	// subnamespace.
+	// The supported resources are: RBAC, NetworkPolicies, Limit Ranges, Secrets, Config Maps, and
+	// Service Accounts.
 	Inheritance map[string]bool `json:"inheritance"`
 	// Scope can be 'federated', or 'local'. It cannot be changed after creation.
 	Scope string `json:"scope"`
-	// If the workspace in sync.
-	// The supported resources are: RBAC, NetworkPolicies, Limit Ranges, Secrets, Config Maps, and
-	// Service Accounts.
+	// Denote the workspace in sync with its parent.
 	Sync bool `json:"sync"`
 	// Owner of the workspace.
 	Owner *Contact `json:"owner"`

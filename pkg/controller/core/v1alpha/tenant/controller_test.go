@@ -96,7 +96,6 @@ func (g *TestGroup) Init() {
 				FirstName: "John",
 				LastName:  "Doe",
 				Phone:     "+33NUMBER",
-				Handle:    "johndoe",
 			},
 			Enabled: true,
 		},
@@ -124,8 +123,8 @@ func TestStartController(t *testing.T) {
 	tenant.Spec.Enabled = false
 	edgenetclientset.CoreV1alpha().Tenants().Update(context.TODO(), tenant, metav1.UpdateOptions{})
 	time.Sleep(250 * time.Millisecond)
-	_, err = kubeclientset.RbacV1().Roles(tenant.GetName()).Get(context.TODO(), fmt.Sprintf("edgenet:tenant-owner-%s", tenant.Spec.Contact.Handle), metav1.GetOptions{})
-	util.Equals(t, "roles.rbac.authorization.k8s.io \"edgenet:tenant-owner-johndoe\" not found", err.Error())
+	_, err = kubeclientset.RbacV1().Roles(tenant.GetName()).Get(context.TODO(), "edgenet:tenant-owner", metav1.GetOptions{})
+	util.Equals(t, "roles.rbac.authorization.k8s.io \"edgenet:tenant-owner\" not found", err.Error())
 }
 
 func TestCreate(t *testing.T) {
@@ -141,7 +140,7 @@ func TestCreate(t *testing.T) {
 		tenant, err := edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), tenant.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
 		t.Run("cluster role binding", func(t *testing.T) {
-			_, err := kubeclientset.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner-%s", tenant.GetName(), tenant.GetName(), tenant.Spec.Contact.Handle), metav1.GetOptions{})
+			_, err := kubeclientset.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner", tenant.GetName(), tenant.GetName()), metav1.GetOptions{})
 			util.OK(t, err)
 		})
 		t.Run("role binding", func(t *testing.T) {

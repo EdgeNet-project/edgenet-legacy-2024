@@ -283,7 +283,7 @@ func (c *Controller) ProcessTenant(tenantCopy *corev1alpha.Tenant) {
 			}
 
 			// Cluster role binding
-			if err := access.CreateObjectSpecificClusterRoleBinding(tenantOwnerClusterRole, tenantCopy.Spec.Contact.Handle, tenantCopy.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{}); err != nil {
+			if err := access.CreateObjectSpecificClusterRoleBinding(tenantOwnerClusterRole, tenantCopy.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{}); err != nil {
 				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureRoleBindingCreation, messageRoleBindingCreationFailed)
 			}
 			// Role binding
