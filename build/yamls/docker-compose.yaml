@@ -87,3 +87,21 @@ services:
     network_mode: host
     cap_add:
       - NET_ADMIN
+  notifier:
+    container_name: notifier
+    restart: always
+    build:
+      context: ../../
+      dockerfile: ./build/images/notifier/Dockerfile
+    image: notifier:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+  clusterrolerequest:
+    container_name: clusterrolerequest
+    restart: always
+    build:
+      context: ../../
+      dockerfile: ./build/images/clusterrolerequest/Dockerfile
+    image: clusterrolerequest:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
