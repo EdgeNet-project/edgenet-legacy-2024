@@ -489,7 +489,7 @@ type SliceClaimSpec struct {
 	// A selector for nodes to reserve.
 	NodeSelector NodeSelector `json:"nodeSelector"`
 	// Expiration date of the slice.
-	Expiry *metav1.Time `json:"expiry"`
+	SliceExpiry *metav1.Time `json:"expiry"`
 }
 
 // SliceClaimStatus is the status for a slice claim resource
