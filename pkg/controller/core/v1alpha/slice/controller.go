@@ -136,16 +136,17 @@ func NewController(
 		},
 		DeleteFunc: func(obj interface{}) {
 			slice := obj.(*corev1alpha.Slice)
-			for _, node := range slice.Status.Node {
-				patch := []byte(`"metadata": {"labels": {"edge-net.io~access": "private", "edge-net.io~slice":  "none"}}`)
-				// Patch the node
-				_, err := controller.kubeclientset.CoreV1().Nodes().Patch(context.TODO(), node, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
-				if err != nil {
-					log.Println(err.Error())
-					panic(err.Error())
+			if nodeRaw, err := controller.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/slice=%s", slice.GetName())}); err != nil {
+				for _, nodeRow := range nodeRaw.Items {
+					patch := []byte(`"metadata": {"labels": {"edge-net.io~access": "private", "edge-net.io~slice":  "none"}}`)
+					// Patch the node
+					_, err := controller.kubeclientset.CoreV1().Nodes().Patch(context.TODO(), nodeRow.GetName(), types.StrategicMergePatchType, patch, metav1.PatchOptions{})
+					if err != nil {
+						log.Println(err.Error())
+						panic(err.Error())
+					}
 				}
 			}
-
 			controller.edgenetclientset.CoreV1alpha().SliceClaims(slice.Spec.ClaimRef.Namespace).Delete(context.TODO(), slice.Spec.ClaimRef.Name, metav1.DeleteOptions{})
 		},
 	})
@@ -411,7 +412,6 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 						log.Println(err.Error())
 						panic(err.Error())
 					}
-					sliceCopy.Status.Node = append(sliceCopy.Status.Node, nodeRow.GetName())
 				}
 
 				if nodeCount >= sliceCopy.Spec.NodeSelector.Count {

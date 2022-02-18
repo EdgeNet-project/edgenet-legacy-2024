@@ -448,8 +448,6 @@ type SliceStatus struct {
 	State string `json:"state"`
 	// Message contains additional information.
 	Message string `json:"message"`
-	// Lists sliced nodes.
-	Node []string `json:"node"`
 	// Expiration date of the slice.
 	Expiry *metav1.Time `json:"expiry"`
 }
