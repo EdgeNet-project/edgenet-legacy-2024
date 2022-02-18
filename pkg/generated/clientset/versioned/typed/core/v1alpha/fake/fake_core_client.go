@@ -32,6 +32,14 @@ func (c *FakeCoreV1alpha) NodeContributions() v1alpha.NodeContributionInterface 
 	return &FakeNodeContributions{c}
 }
 
+func (c *FakeCoreV1alpha) Slices() v1alpha.SliceInterface {
+	return &FakeSlices{c}
+}
+
+func (c *FakeCoreV1alpha) SliceClaims(namespace string) v1alpha.SliceClaimInterface {
+	return &FakeSliceClaims{c, namespace}
+}
+
 func (c *FakeCoreV1alpha) SubNamespaces(namespace string) v1alpha.SubNamespaceInterface {
 	return &FakeSubNamespaces{c, namespace}
 }

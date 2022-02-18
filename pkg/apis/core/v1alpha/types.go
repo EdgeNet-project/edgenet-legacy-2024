@@ -151,6 +151,8 @@ type Workspace struct {
 	Sync bool `json:"sync"`
 	// Owner of the workspace.
 	Owner *Contact `json:"owner"`
+	// SliceClaim is the name of a SliceClaim in the same namespace as the workspace using this slice.
+	SliceClaim *string
 }
 
 // Subtenant resource represents a tenant under another tenant.
@@ -160,6 +162,8 @@ type Subtenant struct {
 	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
 	// Owner of the Subtenant.
 	Owner Contact `json:"owner"`
+	// SliceClaim is the name of a SliceClaim in the same namespace as the subtenant using this slice.
+	SliceClaim *string
 }
 
 // SubNamespaceStatus is the status for a SubNamespace resource
@@ -400,4 +404,113 @@ func (t TenantResourceQuota) DropExpiredItems() bool {
 		return expired
 	}
 	return remove(t.Spec.Claim, t.Spec.Drop)
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Slice describes a slice resource
+type Slice struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Spec is the slice resource spec
+	Spec SliceSpec `json:"spec"`
+	// Status is the slice resource status
+	Status SliceStatus `json:"status,omitempty"`
+}
+
+// SliceSpec is the spec for a slice resource
+type SliceSpec struct {
+	// Name of the SliceClass required by the claim. This can be 'Node', or 'Resource'.
+	SliceClassName string `json:"sliceClassName"`
+	// ClaimRef is part of a bi-directional binding between Slice and SliceClaim.
+	// Expected to be non-nil when bound.
+	ClaimRef *corev1.ObjectReference `json:"claimRef"`
+	// A selector for nodes to reserve.
+	NodeSelector NodeSelector `json:"nodeSelector"`
+}
+
+type NodeSelector struct {
+	// A label query over nodes to consider for choosing.
+	Selector corev1.NodeSelector `json:"selector"`
+	// Number of nodes to pick up for each match case
+	Count int `json:"nodeCount"`
+	// Resources represents the minimum resources each selected node should have.
+	Resources corev1.ResourceRequirements `json:"resources"`
+}
+
+// SliceStatus is the status for a slice resource
+type SliceStatus struct {
+	// Denotes the state of the Slice. This can be 'Failure', or 'Success'.
+	State string `json:"state"`
+	// Message contains additional information.
+	Message string `json:"message"`
+	// Lists sliced nodes.
+	Node []string `json:"node"`
+	// Expiration date of the slice.
+	Expiry *metav1.Time `json:"expiry"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SliceList is a list of slice resources
+type SliceList struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	metav1.ListMeta `json:"metadata"`
+	// SliceList is a list of Slice resources. This element contains
+	// Slice resources.
+	Items []Slice `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SliceClaim describes a slice claim resource
+type SliceClaim struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Spec is the slice claim resource spec
+	Spec SliceClaimSpec `json:"spec"`
+	// Status is the slice claim resource status
+	Status SliceClaimStatus `json:"status,omitempty"`
+}
+
+// SliceClaimSpec is the spec for a slice claim resource
+type SliceClaimSpec struct {
+	// Name of the SliceClass required by the claim. This can be 'Node', or 'Resource'.
+	SliceClassName string `json:"sliceClassName"`
+	// SliceName is the binding reference to the Slice backing this claim.
+	SliceName string `json:"sliceName"`
+	// A selector for nodes to reserve.
+	NodeSelector NodeSelector `json:"nodeSelector"`
+	// Expiration date of the slice.
+	Expiry *metav1.Time `json:"expiry"`
+}
+
+// SliceClaimStatus is the status for a slice claim resource
+type SliceClaimStatus struct {
+	// Denotes the state of the SliceClaim. This can be 'Failure', or 'Success'.
+	State string `json:"state"`
+	// Message contains additional information.
+	Message string `json:"message"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SliceClaimList is a list of slice claim resources
+type SliceClaimList struct {
+	// TypeMeta is the metadata for the resource, like kind and apiversion
+	metav1.TypeMeta `json:",inline"`
+	// ObjectMeta contains the metadata for the particular object, including
+	metav1.ListMeta `json:"metadata"`
+	// SliceClaimList is a list of SliceClaim resources. This element contains
+	// SliceClaim resources.
+	Items []SliceClaim `json:"items"`
 }

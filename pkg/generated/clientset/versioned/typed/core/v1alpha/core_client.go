@@ -27,6 +27,8 @@ import (
 type CoreV1alphaInterface interface {
 	RESTClient() rest.Interface
 	NodeContributionsGetter
+	SlicesGetter
+	SliceClaimsGetter
 	SubNamespacesGetter
 	TenantsGetter
 	TenantResourceQuotasGetter
@@ -39,6 +41,14 @@ type CoreV1alphaClient struct {
 
 func (c *CoreV1alphaClient) NodeContributions() NodeContributionInterface {
 	return newNodeContributions(c)
+}
+
+func (c *CoreV1alphaClient) Slices() SliceInterface {
+	return newSlices(c)
+}
+
+func (c *CoreV1alphaClient) SliceClaims(namespace string) SliceClaimInterface {
+	return newSliceClaims(c, namespace)
 }
 
 func (c *CoreV1alphaClient) SubNamespaces(namespace string) SubNamespaceInterface {

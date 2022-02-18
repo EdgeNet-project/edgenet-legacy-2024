@@ -26,6 +26,10 @@ import (
 type Interface interface {
 	// NodeContributions returns a NodeContributionInformer.
 	NodeContributions() NodeContributionInformer
+	// Slices returns a SliceInformer.
+	Slices() SliceInformer
+	// SliceClaims returns a SliceClaimInformer.
+	SliceClaims() SliceClaimInformer
 	// SubNamespaces returns a SubNamespaceInformer.
 	SubNamespaces() SubNamespaceInformer
 	// Tenants returns a TenantInformer.
@@ -48,6 +52,16 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // NodeContributions returns a NodeContributionInformer.
 func (v *version) NodeContributions() NodeContributionInformer {
 	return &nodeContributionInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// Slices returns a SliceInformer.
+func (v *version) Slices() SliceInformer {
+	return &sliceInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// SliceClaims returns a SliceClaimInformer.
+func (v *version) SliceClaims() SliceClaimInformer {
+	return &sliceClaimInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // SubNamespaces returns a SubNamespaceInformer.

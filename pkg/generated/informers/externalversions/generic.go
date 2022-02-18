@@ -62,6 +62,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		// Group=core.edgenet.io, Version=v1alpha
 	case corev1alpha.SchemeGroupVersion.WithResource("nodecontributions"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().NodeContributions().Informer()}, nil
+	case corev1alpha.SchemeGroupVersion.WithResource("slices"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().Slices().Informer()}, nil
+	case corev1alpha.SchemeGroupVersion.WithResource("sliceclaims"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().SliceClaims().Informer()}, nil
 	case corev1alpha.SchemeGroupVersion.WithResource("subnamespaces"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().SubNamespaces().Informer()}, nil
 	case corev1alpha.SchemeGroupVersion.WithResource("tenants"):

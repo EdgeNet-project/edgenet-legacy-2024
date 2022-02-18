@@ -20,6 +20,10 @@ package v1alpha
 
 type NodeContributionExpansion interface{}
 
+type SliceExpansion interface{}
+
+type SliceClaimExpansion interface{}
+
 type SubNamespaceExpansion interface{}
 
 type TenantExpansion interface{}

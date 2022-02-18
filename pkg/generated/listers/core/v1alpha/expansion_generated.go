@@ -22,6 +22,18 @@ package v1alpha
 // NodeContributionLister.
 type NodeContributionListerExpansion interface{}
 
+// SliceListerExpansion allows custom methods to be added to
+// SliceLister.
+type SliceListerExpansion interface{}
+
+// SliceClaimListerExpansion allows custom methods to be added to
+// SliceClaimLister.
+type SliceClaimListerExpansion interface{}
+
+// SliceClaimNamespaceListerExpansion allows custom methods to be added to
+// SliceClaimNamespaceLister.
+type SliceClaimNamespaceListerExpansion interface{}
+
 // SubNamespaceListerExpansion allows custom methods to be added to
 // SubNamespaceLister.
 type SubNamespaceListerExpansion interface{}
