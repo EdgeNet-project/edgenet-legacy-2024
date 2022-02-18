@@ -48,37 +48,27 @@ const controllerAgentName = "sliceclaim-controller"
 
 // Definitions of the state of the sliceclaim resource
 const (
-	successSynced          = "Synced"
-	messageResourceSynced  = "Subsidiary namespace synced successfully"
-	successFormed          = "Formed"
-	messageFormed          = "Subsidiary namespace formed successfully"
-	successExpired         = "Expired"
-	messageExpired         = "Subsidiary namespace deleted successfully"
-	successApplied         = "Applied"
-	messageApplied         = "Child quota applied successfully"
-	successQuotaCheck      = "Checked"
-	messageQuotaCheck      = "The parent has sufficient quota"
-	failureQuotaShortage   = "Shortage"
-	messageQuotaShortage   = "Insufficient quota at the parent"
-	failureUpdate          = "Not Updated"
-	messageUpdateFail      = "Parent quota cannot be updated"
-	failureApplied         = "Not Applied"
-	messageApplyFail       = "Child quota cannot be applied"
-	failureCreation        = "Not Created"
-	messageCreationFail    = "Subsidiary namespace cannot be created"
-	failureInheritance     = "Not Inherited"
-	messageInheritanceFail = "Inheritance from parent to child failed"
-	failureBinding         = "Binding Failed"
-	messageBindingFailed   = "Role binding failed"
-	failureHashing         = "Hashing Failed"
-	messageHashingFailed   = "Hash generation as suffix failed"
-	failureCollision       = "Name Collision"
-	messageCollision       = "Name is not available. Please choose another one."
-	failure                = "Failure"
-	established            = "Established"
+	successSynced         = "Synced"
+	messageResourceSynced = "Slice claimsynced successfully"
+	successBound          = "Bound"
+	messageBound          = "Slice is bound successfully"
+	successQuotaCheck     = "Checked"
+	messageQuotaCheck     = "The parent has sufficient quota"
+	failureQuotaShortage  = "Shortage"
+	messageQuotaShortage  = "Insufficient quota at the parent"
+	failureUpdate         = "Not Updated"
+	messageUpdateFail     = "Parent quota cannot be updated"
+	failureBound          = "Already Bound"
+	messageBoundAlready   = "Slice is bound to another claim already"
+	failureBinding        = "Binding Failed"
+	messageBindingFailed  = "Slice binding failed"
+	dynamic               = "Dynamic"
+	manual                = "Manual"
+	failure               = "Failure"
+	bound                 = "Bound"
 )
 
-// Controller is the controller implementation for Subsidiary Namespace resources
+// Controller is the controller implementation for Slice Claimresources
 type Controller struct {
 	// kubeclientset is a standard kubernetes clientset
 	kubeclientset kubernetes.Interface
@@ -124,18 +114,36 @@ func NewController(
 	}
 
 	klog.V(4).Infoln("Setting up event handlers")
-	// Set up an event handler for when Subsidiary Namespace resources change
+	// Set up an event handler for when Slice Claimresources change
 	sliceclaimInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueSliceClaim,
 		UpdateFunc: func(old, new interface{}) {
 			controller.enqueueSliceClaim(new)
+		}, DeleteFunc: func(obj interface{}) {
+			sliceclaim := obj.(*corev1alpha.SliceClaim)
+			if sliceclaim.Status.State == bound {
+				namespace, err := controller.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), sliceclaim.GetNamespace(), metav1.GetOptions{})
+				if err != nil {
+					klog.V(4).Infoln(err)
+					return
+				}
+				namespaceLabels := namespace.GetLabels()
+				if parentResourceQuota, err := controller.kubeclientset.CoreV1().ResourceQuotas(sliceclaim.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
+					parentResourceQuotaCopy := parentResourceQuota.DeepCopy()
+					for key, value := range parentResourceQuotaCopy.Spec.Hard {
+						value.Add(sliceclaim.Spec.NodeSelector.Resources.Limits[key])
+						parentResourceQuotaCopy.Spec.Hard[key] = *resource.NewQuantity(value.Value(), parentResourceQuota.Spec.Hard[key].Format)
+					}
+					controller.kubeclientset.CoreV1().ResourceQuotas(parentResourceQuota.GetNamespace()).Update(context.TODO(), parentResourceQuotaCopy, metav1.UpdateOptions{})
+				}
+			}
 		},
 	})
 
 	return controller
 }
 
-// Run will set up the event handlers for the types of subsidiary namespace and node, as well
+// Run will set up the event handlers for the types of slice claim and node, as well
 // as syncing informer caches and starting workers. It will block until stopCh
 // is closed, at which point it will shutdown the workqueue and wait for
 // workers to finish processing their current work items.
@@ -143,7 +151,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
-	klog.V(4).Infoln("Starting Subsidiary Namespace controller")
+	klog.V(4).Infoln("Starting Slice Claimcontroller")
 
 	klog.V(4).Infoln("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh,
@@ -208,7 +216,7 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 // syncHandler compares the actual state with the desired, and attempts to
-// converge the two. It then updates the Status block of the Subsidiary Namespace
+// converge the two. It then updates the Status block of the Slice Claim
 // resource with the current status of the resource.
 func (c *Controller) syncHandler(key string) error {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -232,9 +240,9 @@ func (c *Controller) syncHandler(key string) error {
 	return nil
 }
 
-// enqueueSliceClaim takes a Subsidiary Namespace resource and converts it into a namespace/name
+// enqueueSliceClaim takes a Slice Claimresource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than Subsidiary Namespace.
+// passed resources of any type other than Slice Claim.
 func (c *Controller) enqueueSliceClaim(obj interface{}) {
 	var key string
 	var err error
@@ -243,19 +251,6 @@ func (c *Controller) enqueueSliceClaim(obj interface{}) {
 		return
 	}
 	c.workqueue.Add(key)
-}
-
-// enqueueSliceClaimAfter takes a Subsidiary Namespace resource and converts it into a namespace/name
-// string which is then put onto the work queue after the expiry date to be deleted.
-// This method should *not* be passed resources of any type other than TenantResourceQuota.
-func (c *Controller) enqueueSliceClaimAfter(obj interface{}, after time.Duration) {
-	var key string
-	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		utilruntime.HandleError(err)
-		return
-	}
-	c.workqueue.AddAfter(key, after)
 }
 
 func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
@@ -274,55 +269,48 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 		klog.V(4).Infoln(err)
 		return
 	}
+
+	var remainingQuota map[corev1.ResourceName]resource.Quantity
+	sufficientQuota := false
 	namespaceLabels := namespace.GetLabels()
-	if parentResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(sliceclaimCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
-		if sufficientQuota := c.tuneParentResourceQuota(sliceclaimCopy, parentResourceQuota); !sufficientQuota {
-			// TO-DO: Add quota message
+	parentResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(sliceclaimCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{})
+	if err == nil {
+		remainingQuota, sufficientQuota = c.checkParentResourceQuota(sliceclaimCopy, parentResourceQuota)
+		if !sufficientQuota {
 			return
 		}
 	}
 
 	if slice, err := c.edgenetclientset.CoreV1alpha().Slices().Get(context.TODO(), sliceclaimCopy.Spec.SliceName, metav1.GetOptions{}); err == nil {
-		if slice.Spec.ClaimRef == nil && slice.Status.State != "bound" {
+		if slice.Spec.ClaimRef == nil && slice.Status.State != bound {
 			sliceCopy := slice.DeepCopy()
-			objectReference := corev1.ObjectReference{}
-			objectReference.APIVersion = sliceclaimCopy.APIVersion
-			objectReference.Kind = sliceclaimCopy.Kind
-			objectReference.Name = sliceclaimCopy.GetName()
-			objectReference.Namespace = sliceclaimCopy.GetNamespace()
-			objectReference.UID = sliceclaimCopy.GetUID()
+			objectReference := getObjectReference(sliceclaimCopy)
 			sliceCopy.Spec.ClaimRef = objectReference.DeepCopy()
-			c.edgenetclientset.CoreV1alpha().Slices().Update(context.TODO(), sliceCopy, metav1.UpdateOptions{})
+			if _, err := c.edgenetclientset.CoreV1alpha().Slices().Update(context.TODO(), sliceCopy, metav1.UpdateOptions{}); err != nil {
+				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
+				sliceclaimCopy.Status.State = failure
+				sliceclaimCopy.Status.Message = messageBindingFailed
+				return
+			}
 		} else {
-			// TO-DO: Slice already bound
+			c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBound, messageBoundAlready)
+			sliceclaimCopy.Status.State = failure
+			sliceclaimCopy.Status.Message = messageBoundAlready
+			return
 		}
 	} else {
-		if strings.ToLower(c.provisioning) == "dynamic" {
+		if strings.ToLower(c.provisioning) == dynamic {
 			slice = new(corev1alpha.Slice)
-			objectReference := corev1.ObjectReference{}
-			objectReference.APIVersion = sliceclaimCopy.APIVersion
-			objectReference.Kind = sliceclaimCopy.Kind
-			objectReference.Name = sliceclaimCopy.GetName()
-			objectReference.Namespace = sliceclaimCopy.GetNamespace()
-			objectReference.UID = sliceclaimCopy.GetUID()
+			objectReference := getObjectReference(sliceclaimCopy)
 			slice.Spec.ClaimRef = objectReference.DeepCopy()
 			slice.Status.Expiry = sliceclaimCopy.Spec.SliceExpiry
 			slice.Spec.SliceClassName = sliceclaimCopy.Spec.SliceClassName
 			slice.Spec.NodeSelector = sliceclaimCopy.Spec.NodeSelector
-			c.edgenetclientset.CoreV1alpha().Slices().Create(context.TODO(), slice, metav1.CreateOptions{})
-		}
-	}
-}
-
-func (c *Controller) tuneParentResourceQuota(sliceclaimCopy *corev1alpha.SliceClaim, parentResourceQuota *corev1.ResourceQuota) bool {
-	remainingQuota := make(map[corev1.ResourceName]resource.Quantity)
-	for key, value := range parentResourceQuota.Spec.Hard {
-		if _, elementExists := sliceclaimCopy.Spec.NodeSelector.Resources.Limits[key]; elementExists {
-			if value.Cmp(sliceclaimCopy.Spec.NodeSelector.Resources.Limits[key]) == -1 {
-				return false
-			} else {
-				value.Sub(sliceclaimCopy.Spec.NodeSelector.Resources.Limits[key])
-				remainingQuota[key] = *resource.NewQuantity(value.Value(), parentResourceQuota.Spec.Hard[key].Format)
+			if _, err := c.edgenetclientset.CoreV1alpha().Slices().Create(context.TODO(), slice, metav1.CreateOptions{}); err != nil {
+				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
+				sliceclaimCopy.Status.State = failure
+				sliceclaimCopy.Status.Message = messageBindingFailed
+				return
 			}
 		}
 	}
@@ -330,10 +318,43 @@ func (c *Controller) tuneParentResourceQuota(sliceclaimCopy *corev1alpha.SliceCl
 	parentResourceQuotaCopy := parentResourceQuota.DeepCopy()
 	parentResourceQuotaCopy.Spec.Hard = remainingQuota
 	if _, err := c.kubeclientset.CoreV1().ResourceQuotas(parentResourceQuota.GetNamespace()).Update(context.TODO(), parentResourceQuotaCopy, metav1.UpdateOptions{}); err != nil {
-		// c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureUpdate, messageUpdateFail)
-		// subnamespaceCopy.Status.State = failure
-		// subnamespaceCopy.Status.Message = messageUpdateFail
-		return false
+		c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureUpdate, messageUpdateFail)
+		sliceclaimCopy.Status.State = failure
+		sliceclaimCopy.Status.Message = messageUpdateFail
+		return
 	}
-	return true
+
+	c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successBound, messageBound)
+	sliceclaimCopy.Status.State = bound
+	sliceclaimCopy.Status.Message = messageBound
+}
+
+func (c *Controller) checkParentResourceQuota(sliceclaimCopy *corev1alpha.SliceClaim, parentResourceQuota *corev1.ResourceQuota) (map[corev1.ResourceName]resource.Quantity, bool) {
+	remainingQuota := make(map[corev1.ResourceName]resource.Quantity)
+	for key, value := range parentResourceQuota.Spec.Hard {
+		if _, elementExists := sliceclaimCopy.Spec.NodeSelector.Resources.Limits[key]; elementExists {
+			if value.Cmp(sliceclaimCopy.Spec.NodeSelector.Resources.Limits[key]) == -1 {
+				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureQuotaShortage, messageQuotaShortage)
+				sliceclaimCopy.Status.State = failure
+				sliceclaimCopy.Status.Message = messageQuotaShortage
+				return nil, false
+			} else {
+				value.Sub(sliceclaimCopy.Spec.NodeSelector.Resources.Limits[key])
+				remainingQuota[key] = *resource.NewQuantity(value.Value(), parentResourceQuota.Spec.Hard[key].Format)
+			}
+		}
+	}
+
+	c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successQuotaCheck, messageQuotaCheck)
+	return remainingQuota, true
+}
+
+func getObjectReference(sliceclaimCopy *corev1alpha.SliceClaim) corev1.ObjectReference {
+	objectReference := corev1.ObjectReference{}
+	objectReference.APIVersion = sliceclaimCopy.APIVersion
+	objectReference.Kind = sliceclaimCopy.Kind
+	objectReference.Name = sliceclaimCopy.GetName()
+	objectReference.Namespace = sliceclaimCopy.GetNamespace()
+	objectReference.UID = sliceclaimCopy.GetUID()
+	return objectReference
 }
