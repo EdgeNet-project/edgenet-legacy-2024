@@ -43,7 +43,7 @@ func main() {
 	kubeInformerFactory.Start(stopCh)
 	edgenetInformerFactory.Start(stopCh)
 
-	if err = controller.Run(5, stopCh); err != nil {
+	if err = controller.Run(10, stopCh); err != nil {
 		klog.Fatalf("Error running controller: %s", err.Error())
 	}
 }
