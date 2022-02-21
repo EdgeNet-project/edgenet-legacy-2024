@@ -155,7 +155,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 
 	klog.V(4).Infoln("Starting workers")
 	for i := 0; i < threadiness; i++ {
-		go wait.Until(c.runWorker, time.Second, stopCh)
+		go wait.Until(c.runWorker, 500*time.Millisecond, stopCh)
 	}
 
 	klog.V(4).Infoln("Started workers")
