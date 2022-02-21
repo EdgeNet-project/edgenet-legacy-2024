@@ -394,13 +394,9 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 				}
 
 				match := true
-				for sliceResource, sliceValue := range sliceCopy.Spec.NodeSelector.Resources.Limits {
-					for nodeResource, nodeValue := range nodeRow.Status.Capacity {
-						if sliceResource == nodeResource {
-							if sliceValue.Cmp(nodeValue) == 1 {
-								match = false
-							}
-						}
+				for key, value := range sliceCopy.Spec.NodeSelector.Resources.Limits {
+					if value.Cmp(nodeRow.Status.Capacity[key]) == 1 || value.Cmp(nodeRow.Status.Capacity[key]) == 0 {
+						match = false
 					}
 				}
 				if match {
