@@ -334,6 +334,11 @@ func (c *Controller) createCoreNamespace(tenantCopy *corev1alpha.Tenant, ownerRe
 	namespaceLabels := map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenantCopy.GetName(),
 		"edge-net.io/tenant-uid": string(tenantCopy.GetUID()), "edge-net.io/cluster-uid": clusterUID}
 	coreNamespace.SetLabels(namespaceLabels)
+	if tenantCopy.GetAnnotations() != nil {
+		coreNamespace.SetAnnotations(tenantCopy.GetAnnotations())
+	} else {
+		coreNamespace.SetAnnotations(map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"})
+	}
 	_, err := c.kubeclientset.CoreV1().Namespaces().Create(context.TODO(), coreNamespace, metav1.CreateOptions{})
 	if err != nil && !errors.IsAlreadyExists(err) {
 		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureCreation, messageCreationFailed)

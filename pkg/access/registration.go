@@ -45,6 +45,7 @@ func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) error {
 	tenant.Spec.ShortName = tenantRequest.Spec.ShortName
 	tenant.Spec.URL = tenantRequest.Spec.URL
 	tenant.Spec.Enabled = true
+	tenant.SetAnnotations(tenantRequest.GetAnnotations())
 	if tenantRequest.GetOwnerReferences() != nil {
 		tenant.SetOwnerReferences(tenantRequest.GetOwnerReferences())
 	}

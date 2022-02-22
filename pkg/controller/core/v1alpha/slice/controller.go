@@ -410,10 +410,14 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 					}
 				}
 
-				if nodeCount >= sliceCopy.Spec.NodeSelector.Count {
+				if nodeCount == sliceCopy.Spec.NodeSelector.Count {
 					break
 				}
 			}
+		}
+
+		if nodeCount < sliceCopy.Spec.NodeSelector.Count {
+			// TO-DO: Update status
 		}
 
 	}

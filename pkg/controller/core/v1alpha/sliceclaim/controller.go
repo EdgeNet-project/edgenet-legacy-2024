@@ -253,6 +253,19 @@ func (c *Controller) enqueueSliceClaim(obj interface{}) {
 	c.workqueue.Add(key)
 }
 
+// enqueueSliceClaimAfter takes a Slice Claim resource and converts it into a namespace/name
+// string which is then put onto the work queue after the expiry date.
+// This method should *not* be passed resources of any type other than Slice Claim.
+func (c *Controller) enqueueSliceAfter(obj interface{}, after time.Duration) {
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.workqueue.AddAfter(key, after)
+}
+
 func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 	oldStatus := sliceclaimCopy.Status
 	statusUpdate := func() {
@@ -270,26 +283,19 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 		return
 	}
 
-	var remainingQuota map[corev1.ResourceName]resource.Quantity
-	sufficientQuota := false
-	namespaceLabels := namespace.GetLabels()
-	parentResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(sliceclaimCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{})
-	if err == nil {
-		remainingQuota, sufficientQuota = c.checkParentResourceQuota(sliceclaimCopy, parentResourceQuota)
-		if !sufficientQuota {
-			return
-		}
-	}
-
 	if slice, err := c.edgenetclientset.CoreV1alpha().Slices().Get(context.TODO(), sliceclaimCopy.Spec.SliceName, metav1.GetOptions{}); err == nil {
 		if slice.Spec.ClaimRef == nil && slice.Status.State != bound {
-			sliceCopy := slice.DeepCopy()
-			objectReference := getObjectReference(sliceclaimCopy)
-			sliceCopy.Spec.ClaimRef = objectReference.DeepCopy()
-			if _, err := c.edgenetclientset.CoreV1alpha().Slices().Update(context.TODO(), sliceCopy, metav1.UpdateOptions{}); err != nil {
-				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
-				sliceclaimCopy.Status.State = failure
-				sliceclaimCopy.Status.Message = messageBindingFailed
+			if slice.Spec.SliceClassName == sliceclaimCopy.Spec.SliceClassName && reflect.DeepEqual(slice.Spec.NodeSelector, sliceclaimCopy.Spec.NodeSelector) {
+				sliceCopy := slice.DeepCopy()
+				objectReference := getObjectReference(sliceclaimCopy)
+				sliceCopy.Spec.ClaimRef = objectReference.DeepCopy()
+				if _, err := c.edgenetclientset.CoreV1alpha().Slices().Update(context.TODO(), sliceCopy, metav1.UpdateOptions{}); err != nil {
+					c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
+					sliceclaimCopy.Status.State = failure
+					sliceclaimCopy.Status.Message = messageBindingFailed
+					return
+				}
+			} else {
 				return
 			}
 		} else {
@@ -312,6 +318,21 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 				sliceclaimCopy.Status.Message = messageBindingFailed
 				return
 			}
+		} else {
+			return
+		}
+	}
+
+	// TO-DO: Watch Slice to complete its task
+
+	var remainingQuota map[corev1.ResourceName]resource.Quantity
+	sufficientQuota := false
+	namespaceLabels := namespace.GetLabels()
+	parentResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(sliceclaimCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{})
+	if err == nil {
+		remainingQuota, sufficientQuota = c.tuneParentResourceQuota(sliceclaimCopy, parentResourceQuota)
+		if !sufficientQuota {
+			return
 		}
 	}
 
@@ -329,7 +350,7 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 	sliceclaimCopy.Status.Message = messageBound
 }
 
-func (c *Controller) checkParentResourceQuota(sliceclaimCopy *corev1alpha.SliceClaim, parentResourceQuota *corev1.ResourceQuota) (map[corev1.ResourceName]resource.Quantity, bool) {
+func (c *Controller) tuneParentResourceQuota(sliceclaimCopy *corev1alpha.SliceClaim, parentResourceQuota *corev1.ResourceQuota) (map[corev1.ResourceName]resource.Quantity, bool) {
 	remainingQuota := make(map[corev1.ResourceName]resource.Quantity)
 	for key, value := range parentResourceQuota.Spec.Hard {
 		if _, elementExists := sliceclaimCopy.Spec.NodeSelector.Resources.Limits[key]; elementExists {
