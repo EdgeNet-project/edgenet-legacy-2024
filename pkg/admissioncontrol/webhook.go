@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
@@ -21,6 +22,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
+)
+
+const (
+	reserved = "Reserved"
+	bound    = "Bound"
 )
 
 type Webhook struct {
@@ -42,7 +48,7 @@ func (wh *Webhook) RunServer() {
 	http.HandleFunc("/validate/cluster-role-request", wh.validateClusterRoleRequest)
 	http.HandleFunc("/validate/role-request", wh.validateRoleRequest)
 	http.HandleFunc("/validate/subnamespace", wh.validateSubNamespace)
-	//http.HandleFunc("/validate/slice", wh.validateSlice)
+	http.HandleFunc("/validate/slice", wh.validateSlice)
 
 	server := http.Server{
 		Addr: ":443",
@@ -471,6 +477,86 @@ func (wh *Webhook) validateSubNamespace(w http.ResponseWriter, r *http.Request) 
 	resp, err := json.Marshal(admissionReviewResponse)
 	if err != nil {
 		klog.Errorf("subnamespace decode error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(resp)
+}
+
+func (wh *Webhook) validateSlice(w http.ResponseWriter, r *http.Request) {
+	klog.Infoln("Slice: message on validate received")
+	deserializer := wh.Codecs.UniversalDeserializer()
+	admissionReviewRequest, err := admissionReviewFromRequest(r, deserializer)
+	if err != nil {
+		klog.Errorf("Slice admission review error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	sliceResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "slices"}
+	if admissionReviewRequest.Request.Resource != sliceResource {
+		err := fmt.Errorf("slice wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
+		klog.Error(err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	rawRequest := admissionReviewRequest.Request.Object.Raw
+	slice := new(corev1alpha.Slice)
+	if _, _, err := deserializer.Decode(rawRequest, nil, slice); err != nil {
+		klog.Errorf("slice decode error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	admissionResponse := new(admissionv1.AdmissionResponse)
+	admissionResponse.Allowed = true
+
+	if admissionReviewRequest.Request.Operation == "UPDATE" || admissionReviewRequest.Request.Operation == "PATCH" {
+		oldObjectRaw := admissionReviewRequest.Request.OldObject.Raw
+		oldSlice := new(corev1alpha.Slice)
+		if _, _, err := deserializer.Decode(oldObjectRaw, nil, oldSlice); err != nil {
+			klog.Errorf("old slice decode error: %v", err)
+			w.WriteHeader(400)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		if oldSlice.Status.State == reserved || oldSlice.Status.State == bound {
+			if oldSlice.Spec.SliceClassName != slice.Spec.SliceClassName {
+				admissionResponse.Allowed = false
+				admissionResponse.Result = &metav1.Status{
+					Message: "slice class name cannot be changed after nodes are reserved",
+				}
+			}
+			if reflect.DeepEqual(oldSlice.Spec.NodeSelector, slice.Spec.NodeSelector) {
+				admissionResponse.Allowed = false
+				admissionResponse.Result = &metav1.Status{
+					Message: "node selector cannot be changed after nodes are reserved",
+				}
+			}
+			if oldSlice.Spec.ClaimRef != slice.Spec.ClaimRef && oldSlice.Status.State == bound {
+				admissionResponse.Allowed = false
+				admissionResponse.Result = &metav1.Status{
+					Message: "slice claim cannot be changed after slice is bound",
+				}
+			}
+		}
+	}
+
+	var admissionReviewResponse admissionv1.AdmissionReview
+	admissionReviewResponse.Response = admissionResponse
+	admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
+	admissionReviewResponse.Response.UID = admissionReviewRequest.Request.UID
+
+	resp, err := json.Marshal(admissionReviewResponse)
+	if err != nil {
+		klog.Errorf("slice decode error: %v", err)
 		w.WriteHeader(400)
 		w.Write([]byte(err.Error()))
 		return
