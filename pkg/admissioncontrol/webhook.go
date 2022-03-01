@@ -39,7 +39,7 @@ func (wh *Webhook) RunServer() {
 	http.HandleFunc("/validate/pod", wh.validatePod)
 	http.HandleFunc("/validate/tenant-request", wh.validateTenantRequest)
 	http.HandleFunc("/validate/cluster-role-request", wh.validateClusterRoleRequest)
-	//http.HandleFunc("/validate/role-request", wh.validateRoleRequest)
+	http.HandleFunc("/validate/role-request", wh.validateRoleRequest)
 	//http.HandleFunc("/validate/subnamespace", wh.validateSubNamespace)
 	//http.HandleFunc("/validate/slice", wh.validateSlice)
 
@@ -276,7 +276,7 @@ func (wh *Webhook) validateTenantRequest(w http.ResponseWriter, r *http.Request)
 	if admissionReviewRequest.Request.Operation == "CREATE" && tenantrequest.Spec.Approved {
 		admissionResponse.Allowed = false
 		admissionResponse.Result = &metav1.Status{
-			Message: "tenant request cannot hold approved status at creation",
+			Message: "tenant request cannot be approved at creation",
 		}
 	}
 
@@ -331,7 +331,7 @@ func (wh *Webhook) validateClusterRoleRequest(w http.ResponseWriter, r *http.Req
 	if admissionReviewRequest.Request.Operation == "CREATE" && clusterrolerequest.Spec.Approved {
 		admissionResponse.Allowed = false
 		admissionResponse.Result = &metav1.Status{
-			Message: "tenant request cannot hold approved status at creation",
+			Message: "cluster role request cannot be approved at creation",
 		}
 	}
 
@@ -343,6 +343,61 @@ func (wh *Webhook) validateClusterRoleRequest(w http.ResponseWriter, r *http.Req
 	resp, err := json.Marshal(admissionReviewResponse)
 	if err != nil {
 		klog.Errorf("clusterrolerequest decode error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(resp)
+}
+
+func (wh *Webhook) validateRoleRequest(w http.ResponseWriter, r *http.Request) {
+	klog.Infoln("RoleRequest: message on validate received")
+	deserializer := wh.Codecs.UniversalDeserializer()
+	admissionReviewRequest, err := admissionReviewFromRequest(r, deserializer)
+	if err != nil {
+		klog.Errorf("RoleRequest admission review error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	rolerequestResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "rolerequests"}
+	if admissionReviewRequest.Request.Resource != rolerequestResource {
+		err := fmt.Errorf("rolerequest wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
+		klog.Error(err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	rawRequest := admissionReviewRequest.Request.Object.Raw
+	rolerequest := new(registrationv1alpha.RoleRequest)
+	if _, _, err := deserializer.Decode(rawRequest, nil, rolerequest); err != nil {
+		klog.Errorf("rolerequest decode error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	admissionResponse := new(admissionv1.AdmissionResponse)
+	admissionResponse.Allowed = true
+
+	if admissionReviewRequest.Request.Operation == "CREATE" && rolerequest.Spec.Approved {
+		admissionResponse.Allowed = false
+		admissionResponse.Result = &metav1.Status{
+			Message: "role request cannot be approved at creation",
+		}
+	}
+
+	var admissionReviewResponse admissionv1.AdmissionReview
+	admissionReviewResponse.Response = admissionResponse
+	admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
+	admissionReviewResponse.Response.UID = admissionReviewRequest.Request.UID
+
+	resp, err := json.Marshal(admissionReviewResponse)
+	if err != nil {
+		klog.Errorf("rolerequest decode error: %v", err)
 		w.WriteHeader(400)
 		w.Write([]byte(err.Error()))
 		return
