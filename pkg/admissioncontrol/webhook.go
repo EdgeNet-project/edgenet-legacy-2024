@@ -565,6 +565,86 @@ func (wh *Webhook) validateSlice(w http.ResponseWriter, r *http.Request) {
 	w.Write(resp)
 }
 
+func (wh *Webhook) validateSliceClaim(w http.ResponseWriter, r *http.Request) {
+	klog.Infoln("SliceClaim: message on validate received")
+	deserializer := wh.Codecs.UniversalDeserializer()
+	admissionReviewRequest, err := admissionReviewFromRequest(r, deserializer)
+	if err != nil {
+		klog.Errorf("SliceClaim admission review error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	sliceclaimResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "sliceclaims"}
+	if admissionReviewRequest.Request.Resource != sliceclaimResource {
+		err := fmt.Errorf("sliceclaim wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
+		klog.Error(err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	rawRequest := admissionReviewRequest.Request.Object.Raw
+	sliceclaim := new(corev1alpha.SliceClaim)
+	if _, _, err := deserializer.Decode(rawRequest, nil, sliceclaim); err != nil {
+		klog.Errorf("sliceclaim decode error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	admissionResponse := new(admissionv1.AdmissionResponse)
+	admissionResponse.Allowed = true
+
+	if admissionReviewRequest.Request.Operation == "UPDATE" || admissionReviewRequest.Request.Operation == "PATCH" {
+		oldObjectRaw := admissionReviewRequest.Request.OldObject.Raw
+		oldSliceClaim := new(corev1alpha.SliceClaim)
+		if _, _, err := deserializer.Decode(oldObjectRaw, nil, oldSliceClaim); err != nil {
+			klog.Errorf("old sliceclaim decode error: %v", err)
+			w.WriteHeader(400)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		if oldSliceClaim.Status.State == bound {
+			if oldSliceClaim.Spec.SliceClassName != sliceclaim.Spec.SliceClassName {
+				admissionResponse.Allowed = false
+				admissionResponse.Result = &metav1.Status{
+					Message: "slice class name cannot be changed after slice claim is bound",
+				}
+			}
+			if reflect.DeepEqual(oldSliceClaim.Spec.NodeSelector, sliceclaim.Spec.NodeSelector) {
+				admissionResponse.Allowed = false
+				admissionResponse.Result = &metav1.Status{
+					Message: "node selector cannot be changed after slice claim is bound",
+				}
+			}
+			if oldSliceClaim.Spec.SliceName != sliceclaim.Spec.SliceName && oldSliceClaim.Status.State == bound {
+				admissionResponse.Allowed = false
+				admissionResponse.Result = &metav1.Status{
+					Message: "slice name cannot be changed after slice claim is bound",
+				}
+			}
+		}
+	}
+
+	var admissionReviewResponse admissionv1.AdmissionReview
+	admissionReviewResponse.Response = admissionResponse
+	admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
+	admissionReviewResponse.Response.UID = admissionReviewRequest.Request.UID
+
+	resp, err := json.Marshal(admissionReviewResponse)
+	if err != nil {
+		klog.Errorf("sliceclaim decode error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(resp)
+}
+
 func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (*admissionv1.AdmissionReview, error) {
 	if r.Header.Get("Content-Type") != "application/json" {
 		return nil, errors.New("expected content-type is application/json")
