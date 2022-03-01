@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 
+	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
+
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -35,7 +37,7 @@ func (wh *Webhook) RunServer() {
 
 	http.HandleFunc("/mutate/pod", wh.mutatePod)
 	http.HandleFunc("/validate/pod", wh.validatePod)
-	//http.HandleFunc("/validate/tenant-request", validateTenantRequest)
+	http.HandleFunc("/validate/tenant-request", wh.validateTenantRequest)
 	//http.HandleFunc("/validate/cluster-role-request", validateClusterRoleRequest)
 	//http.HandleFunc("/validate/role-request", validateRoleRequest)
 	//http.HandleFunc("/validate/subnamespace", validateSubNamespace)
@@ -231,6 +233,61 @@ func (wh *Webhook) validatePod(w http.ResponseWriter, r *http.Request) {
 	resp, err := json.Marshal(admissionReviewResponse)
 	if err != nil {
 		klog.Errorf("pod decode error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(resp)
+}
+
+func (wh *Webhook) validateTenantRequest(w http.ResponseWriter, r *http.Request) {
+	klog.Infoln("TenantRequest: message on validate received")
+	deserializer := wh.Codecs.UniversalDeserializer()
+	admissionReviewRequest, err := admissionReviewFromRequest(r, deserializer)
+	if err != nil {
+		klog.Errorf("TenantRequest admission review error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	tenantrequestResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "tenantrequests"}
+	if admissionReviewRequest.Request.Resource != tenantrequestResource {
+		err := fmt.Errorf("tenantrequest wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
+		klog.Error(err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	rawRequest := admissionReviewRequest.Request.Object.Raw
+	tenantrequest := new(registrationv1alpha.TenantRequest)
+	if _, _, err := deserializer.Decode(rawRequest, nil, tenantrequest); err != nil {
+		klog.Errorf("tenantrequest decode error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	admissionResponse := new(admissionv1.AdmissionResponse)
+	admissionResponse.Allowed = true
+
+	if admissionReviewRequest.Request.Operation == "CREATE" && tenantrequest.Spec.Approved {
+		admissionResponse.Allowed = false
+		admissionResponse.Result = &metav1.Status{
+			Message: "tenant request cannot hold approved status at creation",
+		}
+	}
+
+	var admissionReviewResponse admissionv1.AdmissionReview
+	admissionReviewResponse.Response = admissionResponse
+	admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
+	admissionReviewResponse.Response.UID = admissionReviewRequest.Request.UID
+
+	resp, err := json.Marshal(admissionReviewResponse)
+	if err != nil {
+		klog.Errorf("tenantrequest decode error: %v", err)
 		w.WriteHeader(400)
 		w.Write([]byte(err.Error()))
 		return
