@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -40,7 +41,7 @@ func (wh *Webhook) RunServer() {
 	http.HandleFunc("/validate/tenant-request", wh.validateTenantRequest)
 	http.HandleFunc("/validate/cluster-role-request", wh.validateClusterRoleRequest)
 	http.HandleFunc("/validate/role-request", wh.validateRoleRequest)
-	//http.HandleFunc("/validate/subnamespace", wh.validateSubNamespace)
+	http.HandleFunc("/validate/subnamespace", wh.validateSubNamespace)
 	//http.HandleFunc("/validate/slice", wh.validateSlice)
 
 	server := http.Server{
@@ -398,6 +399,78 @@ func (wh *Webhook) validateRoleRequest(w http.ResponseWriter, r *http.Request) {
 	resp, err := json.Marshal(admissionReviewResponse)
 	if err != nil {
 		klog.Errorf("rolerequest decode error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(resp)
+}
+
+func (wh *Webhook) validateSubNamespace(w http.ResponseWriter, r *http.Request) {
+	klog.Infoln("SubNamespace: message on validate received")
+	deserializer := wh.Codecs.UniversalDeserializer()
+	admissionReviewRequest, err := admissionReviewFromRequest(r, deserializer)
+	if err != nil {
+		klog.Errorf("SubNamespace admission review error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	subnamespaceResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "subnamespaces"}
+	if admissionReviewRequest.Request.Resource != subnamespaceResource {
+		err := fmt.Errorf("subnamespace wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
+		klog.Error(err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	rawRequest := admissionReviewRequest.Request.Object.Raw
+	subnamespace := new(corev1alpha.SubNamespace)
+	if _, _, err := deserializer.Decode(rawRequest, nil, subnamespace); err != nil {
+		klog.Errorf("subnamespace decode error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	admissionResponse := new(admissionv1.AdmissionResponse)
+	admissionResponse.Allowed = true
+
+	if admissionReviewRequest.Request.Operation == "UPDATE" || admissionReviewRequest.Request.Operation == "PATCH" {
+		oldObjectRaw := admissionReviewRequest.Request.OldObject.Raw
+		oldSubnamespace := new(corev1alpha.SubNamespace)
+		if _, _, err := deserializer.Decode(oldObjectRaw, nil, oldSubnamespace); err != nil {
+			klog.Errorf("old subnamespace decode error: %v", err)
+			w.WriteHeader(400)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		if subnamespace.Spec.Workspace != nil && oldSubnamespace.Spec.Workspace.Scope != subnamespace.Spec.Workspace.Scope {
+			admissionResponse.Allowed = false
+			admissionResponse.Result = &metav1.Status{
+				Message: "subsidiary namespace scope cannot be changed after creation",
+			}
+		}
+		if (oldSubnamespace.Spec.Subtenant == nil && subnamespace.Spec.Subtenant != nil) || (oldSubnamespace.Spec.Workspace == nil && subnamespace.Spec.Workspace != nil) {
+			admissionResponse.Allowed = false
+			admissionResponse.Result = &metav1.Status{
+				Message: "subsidiary namespace mode cannot be changed after creation",
+			}
+		}
+	}
+
+	var admissionReviewResponse admissionv1.AdmissionReview
+	admissionReviewResponse.Response = admissionResponse
+	admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
+	admissionReviewResponse.Response.UID = admissionReviewRequest.Request.UID
+
+	resp, err := json.Marshal(admissionReviewResponse)
+	if err != nil {
+		klog.Errorf("subnamespace decode error: %v", err)
 		w.WriteHeader(400)
 		w.Write([]byte(err.Error()))
 		return
