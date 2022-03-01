@@ -34,7 +34,7 @@ func (wh *Webhook) RunServer() {
 	}
 
 	http.HandleFunc("/mutate/pod", wh.mutatePod)
-	//http.HandleFunc("/validate/pod", validatePod)
+	http.HandleFunc("/validate/pod", wh.validatePod)
 	//http.HandleFunc("/validate/tenant-request", validateTenantRequest)
 	//http.HandleFunc("/validate/cluster-role-request", validateClusterRoleRequest)
 	//http.HandleFunc("/validate/role-request", validateRoleRequest)
@@ -67,7 +67,7 @@ func (wh *Webhook) mutatePod(w http.ResponseWriter, r *http.Request) {
 
 	podResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
 	if admissionReviewRequest.Request.Resource != podResource {
-		err := errors.New(fmt.Sprintf("Pod wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource))
+		err := fmt.Errorf("pod wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
 		w.WriteHeader(400)
 		w.Write([]byte(err.Error()))
@@ -132,6 +132,96 @@ func (wh *Webhook) mutatePod(w http.ResponseWriter, r *http.Request) {
 	admissionResponse.Allowed = true
 	admissionResponse.PatchType = &patchType
 	admissionResponse.Patch = []byte(patch)
+
+	var admissionReviewResponse admissionv1.AdmissionReview
+	admissionReviewResponse.Response = admissionResponse
+	admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
+	admissionReviewResponse.Response.UID = admissionReviewRequest.Request.UID
+
+	resp, err := json.Marshal(admissionReviewResponse)
+	if err != nil {
+		klog.Errorf("pod decode error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(resp)
+}
+
+func (wh *Webhook) validatePod(w http.ResponseWriter, r *http.Request) {
+	klog.Infoln("Pod: message on validate received")
+	deserializer := wh.Codecs.UniversalDeserializer()
+	admissionReviewRequest, err := admissionReviewFromRequest(r, deserializer)
+	if err != nil {
+		klog.Errorf("Pod admission review error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	podResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+	if admissionReviewRequest.Request.Resource != podResource {
+		err := fmt.Errorf("pod wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
+		klog.Error(err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	rawRequest := admissionReviewRequest.Request.Object.Raw
+	pod := new(corev1.Pod)
+	if _, _, err := deserializer.Decode(rawRequest, nil, pod); err != nil {
+		klog.Errorf("pod decode error: %v", err)
+		w.WriteHeader(400)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	var ingressBandwidth resource.Quantity
+	var egressBandwidth resource.Quantity
+	for _, container := range pod.Spec.Containers {
+		if quantity, ok := container.Resources.Requests["edge-net.io/ingress-bandwidth"]; !ok {
+			ingressBandwidth.Add(quantity)
+		}
+		if quantity, ok := container.Resources.Requests["edge-net.io/egress-bandwidth"]; !ok {
+			egressBandwidth.Add(quantity)
+		}
+	}
+
+	admissionResponse := new(admissionv1.AdmissionResponse)
+	admissionResponse.Allowed = true
+
+	if !ingressBandwidth.IsZero() {
+		if actualIngressBandwidth, ok := pod.Annotations["kubernetes.io/ingress-bandwidth"]; !ok {
+			admissionResponse.Allowed = false
+			admissionResponse.Result = &metav1.Status{
+				Message: "missing annotation ingress-bandwidth",
+			}
+		} else {
+			if _, err := resource.ParseQuantity(actualIngressBandwidth); err != nil {
+				admissionResponse.Allowed = false
+				admissionResponse.Result = &metav1.Status{
+					Message: "parse ingress-bandwidth failed",
+				}
+			}
+		}
+	}
+	if !egressBandwidth.IsZero() {
+		if actualEgressBandwidth, ok := pod.Annotations["kubernetes.io/egress-bandwidth"]; !ok {
+			admissionResponse.Allowed = false
+			admissionResponse.Result = &metav1.Status{
+				Message: "missing annotation egress-bandwidth",
+			}
+		} else {
+			if _, err := resource.ParseQuantity(actualEgressBandwidth); err != nil {
+				admissionResponse.Allowed = false
+				admissionResponse.Result = &metav1.Status{
+					Message: "parse egress-bandwidth failed",
+				}
+			}
+		}
+	}
 
 	var admissionReviewResponse admissionv1.AdmissionReview
 	admissionReviewResponse.Response = admissionResponse
