@@ -49,6 +49,7 @@ func (wh *Webhook) RunServer() {
 	http.HandleFunc("/validate/role-request", wh.validateRoleRequest)
 	http.HandleFunc("/validate/subnamespace", wh.validateSubNamespace)
 	http.HandleFunc("/validate/slice", wh.validateSlice)
+	http.HandleFunc("/validate/slice-claim", wh.validateSliceClaim)
 
 	server := http.Server{
 		Addr: ":443",
@@ -95,52 +96,56 @@ func (wh *Webhook) mutatePod(w http.ResponseWriter, r *http.Request) {
 	var ingressBandwidth resource.Quantity
 	var egressBandwidth resource.Quantity
 	for _, container := range pod.Spec.Containers {
-		if quantity, ok := container.Resources.Requests["edge-net.io/ingress-bandwidth"]; !ok {
-			ingressBandwidth.Add(quantity)
-		}
-		if quantity, ok := container.Resources.Requests["edge-net.io/egress-bandwidth"]; !ok {
-			egressBandwidth.Add(quantity)
-		}
+		ingressBandwidth.Add(*container.Resources.Limits.Name("edge-net.io/ingress-bandwidth", resource.BinarySI))
+		egressBandwidth.Add(*container.Resources.Limits.Name("edge-net.io/egress-bandwidth", resource.BinarySI))
 	}
-	if ingressBandwidth.IsZero() && egressBandwidth.IsZero() {
-		klog.Infoln("Pod: no bandwidth requested")
-		return
-	}
-
-	var patchElement []string
+	patchOperation := map[string]string{}
 	if !ingressBandwidth.IsZero() {
 		if actualIngressBandwidth, ok := pod.Annotations["kubernetes.io/ingress-bandwidth"]; !ok {
-			patchElement = append(patchElement, fmt.Sprintf(`{"op":"add","path":"/metadata/annotations","value":{"kubernetes.io/ingress-bandwidth":%s}}`, ingressBandwidth.String()))
+			patchOperation["ingress"] = "add"
 		} else {
 			if actualQuantity, err := resource.ParseQuantity(actualIngressBandwidth); err != nil {
-				patchElement = append(patchElement, fmt.Sprintf(`{"op":"replace","path":"/metadata/annotations","value":{"kubernetes.io/ingress-bandwidth":%s}}`, ingressBandwidth.String()))
+				patchOperation["ingress"] = "replace"
 			} else {
 				if !ingressBandwidth.Equal(actualQuantity) {
-					patchElement = append(patchElement, fmt.Sprintf(`{"op":"replace","path":"/metadata/annotations","value":{"kubernetes.io/ingress-bandwidth":%s}}`, ingressBandwidth.String()))
+					patchOperation["ingress"] = "replace"
 				}
 			}
 		}
 	}
 	if !egressBandwidth.IsZero() {
 		if actualEgressBandwidth, ok := pod.Annotations["kubernetes.io/egress-bandwidth"]; !ok {
-			patchElement = append(patchElement, fmt.Sprintf(`{"op":"add","path":"/metadata/annotations","value":{"kubernetes.io/egress-bandwidth":%s}}`, egressBandwidth.String()))
+			patchOperation["egress"] = "add"
 		} else {
 			if actualQuantity, err := resource.ParseQuantity(actualEgressBandwidth); err != nil {
-				patchElement = append(patchElement, fmt.Sprintf(`{"op":"replace","path":"/metadata/annotations","value":{"kubernetes.io/egress-bandwidth":%s}}`, egressBandwidth.String()))
+				patchOperation["egress"] = "replace"
 			} else {
 				if !egressBandwidth.Equal(actualQuantity) {
-					patchElement = append(patchElement, fmt.Sprintf(`{"op":"replace","path":"/metadata/annotations","value":{"kubernetes.io/egress-bandwidth":%s}}`, egressBandwidth.String()))
+					patchOperation["egress"] = "replace"
 				}
 			}
 		}
 	}
 
-	patch := fmt.Sprintf(`[%s]`, strings.Join(patchElement, ","))
-	patchType := v1.PatchTypeJSONPatch
 	admissionResponse := new(admissionv1.AdmissionResponse)
 	admissionResponse.Allowed = true
-	admissionResponse.PatchType = &patchType
-	admissionResponse.Patch = []byte(patch)
+
+	if !ingressBandwidth.IsZero() || !egressBandwidth.IsZero() {
+		var patch string
+		if patchOperation["ingress"] == patchOperation["egress"] {
+			patch = fmt.Sprintf(`[{"op":"%s","path":"/metadata/annotations","value":{"kubernetes.io/ingress-bandwidth":"%s", "kubernetes.io/egress-bandwidth":"%s"}}]`, patchOperation["ingress"], ingressBandwidth.String(), egressBandwidth.String())
+		} else {
+			ingress := fmt.Sprintf(`{"op":"%s","path":"/metadata/annotations","value":{"kubernetes.io/ingress-bandwidth":"%s"}}`, patchOperation["ingress"], ingressBandwidth.String())
+			egress := fmt.Sprintf(`{"op":"%s","path":"/metadata/annotations","value":{"kubernetes.io/egress-bandwidth":"%s"}}`, patchOperation["egress"], egressBandwidth.String())
+			patch = fmt.Sprintf(`[%s]`, strings.Join([]string{ingress, egress}, ","))
+		}
+		klog.Infoln(patch)
+		patchType := v1.PatchTypeJSONPatch
+		admissionResponse.PatchType = &patchType
+		admissionResponse.Patch = []byte(patch)
+	} else {
+		klog.Infoln("Pod: no bandwidth requested")
+	}
 
 	var admissionReviewResponse admissionv1.AdmissionReview
 	admissionReviewResponse.Response = admissionResponse
@@ -190,12 +195,8 @@ func (wh *Webhook) validatePod(w http.ResponseWriter, r *http.Request) {
 	var ingressBandwidth resource.Quantity
 	var egressBandwidth resource.Quantity
 	for _, container := range pod.Spec.Containers {
-		if quantity, ok := container.Resources.Requests["edge-net.io/ingress-bandwidth"]; !ok {
-			ingressBandwidth.Add(quantity)
-		}
-		if quantity, ok := container.Resources.Requests["edge-net.io/egress-bandwidth"]; !ok {
-			egressBandwidth.Add(quantity)
-		}
+		ingressBandwidth.Add(*container.Resources.Limits.Name("edge-net.io/ingress-bandwidth", resource.BinarySI))
+		egressBandwidth.Add(*container.Resources.Limits.Name("edge-net.io/egress-bandwidth", resource.BinarySI))
 	}
 
 	admissionResponse := new(admissionv1.AdmissionResponse)
