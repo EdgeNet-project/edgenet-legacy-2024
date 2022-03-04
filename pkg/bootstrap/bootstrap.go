@@ -28,6 +28,7 @@ import (
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
+	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 	namecheap "github.com/billputer/go-namecheap"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -127,4 +128,36 @@ func CreateNamecheapClient() (*namecheap.Client, error) {
 	}
 	client := namecheap.NewClient(apiuser, apitoken, username)
 	return client, nil
+}
+
+// CreateAntreaClientset generates the clientset to interact with the Antrea resources
+func CreateAntreaClientset(by string) (*antrea.Clientset, error) {
+	var antreaclientset *antrea.Clientset
+	var generateClientset = func(config *rest.Config) *antrea.Clientset {
+		// Create the clientset
+		antreaclientset, err := antrea.NewForConfig(config)
+		if err != nil {
+			// TODO: Error handling
+			panic(err.Error())
+		}
+		return antreaclientset
+	}
+
+	if by == "kubeconfig" {
+		// Use the current context in kubeconfig
+		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			log.Println(err.Error())
+			panic(err.Error())
+		}
+		antreaclientset = generateClientset(config)
+	} else if by == "serviceaccount" {
+		// Creates the in-cluster config
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			panic(err.Error())
+		}
+		antreaclientset = generateClientset(config)
+	}
+	return antreaclientset, nil
 }

@@ -30,6 +30,9 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha"
 
+	antreav1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
+
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -54,10 +57,6 @@ const (
 	messageResourceSynced                   = "Tenant synced successfully"
 	successEstablished                      = "Established"
 	messageEstablished                      = "Tenant established successfully"
-	warningAUP                              = "Not Agreed"
-	messageAUPNotAgreed                     = "Waiting for the Acceptable Use Policy to be agreed"
-	failureAUP                              = "Creation Failed"
-	messageAUPFailed                        = "Acceptable Use Policy creation failed"
 	failureCreation                         = "Not Created"
 	messageCreationFailed                   = "Core namespace creation failed"
 	failureBinding                          = "Binding Failed"
@@ -85,6 +84,7 @@ type Controller struct {
 	kubeclientset kubernetes.Interface
 	// edgenetclientset is a clientset for the EdgeNet API groups
 	edgenetclientset clientset.Interface
+	antreaclientset  antrea.Interface
 
 	tenantsLister listers.TenantLister
 	tenantsSynced cache.InformerSynced
@@ -103,6 +103,7 @@ type Controller struct {
 func NewController(
 	kubeclientset kubernetes.Interface,
 	edgenetclientset clientset.Interface,
+	antreaclientset antrea.Interface,
 	tenantInformer informers.TenantInformer) *Controller {
 
 	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
@@ -277,7 +278,7 @@ func (c *Controller) ProcessTenant(tenantCopy *corev1alpha.Tenant) {
 		err = c.createCoreNamespace(tenantCopy, ownerReferences, string(systemNamespace.GetUID()))
 		if err == nil || errors.IsAlreadyExists(err) {
 			// Apply network policies
-			err = c.applyNetworkPolicy(tenantCopy.GetName(), string(tenantCopy.GetUID()), string(systemNamespace.GetUID()))
+			err = c.applyNetworkPolicy(tenantCopy.GetName(), string(tenantCopy.GetUID()), string(systemNamespace.GetUID()), tenantCopy.Spec.ClusterNetworkPolicy, ownerReferences)
 			if err != nil && !errors.IsAlreadyExists(err) {
 				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureNetworkPolicy, messageNetworkPolicyFailed)
 			}
@@ -348,29 +349,31 @@ func (c *Controller) createCoreNamespace(tenantCopy *corev1alpha.Tenant, ownerRe
 	return err
 }
 
-func (c *Controller) applyNetworkPolicy(namespace, tenantUID, clusterUID string) error {
+func (c *Controller) applyNetworkPolicy(tenant, tenantUID, clusterUID string, clusterNetworkPolicyEnabled bool, ownerReferences []metav1.OwnerReference) error {
 	// TODO: Apply a network policy to the core namespace according to spec
 	// Restricted only allows intra-tenant communication
 	// Baseline allows intra-tenant communication plus ingress from external traffic
 	// Privileged allows all kind of traffics
-	// TODO: ClusterNetworkPolicy
+
+	var err error
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"edge-net.io/subtenant":   "false",
+			"edge-net.io/tenant":      tenant,
+			"edge-net.io/tenant-uid":  tenantUID,
+			"edge-net.io/cluster-uid": clusterUID,
+		},
+	}
+	port := intstr.IntOrString{IntVal: 0}
+	endPort := int32(32768)
 	networkPolicy := new(networkingv1.NetworkPolicy)
 	networkPolicy.SetName("baseline")
 	networkPolicy.Spec.PolicyTypes = []networkingv1.PolicyType{"Ingress"}
-	port := intstr.IntOrString{IntVal: 30000}
-	endPort := int32(32768)
 	networkPolicy.Spec.Ingress = []networkingv1.NetworkPolicyIngressRule{
 		{
 			From: []networkingv1.NetworkPolicyPeer{
 				{
-					NamespaceSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"edge-net.io/subtenant":   "false",
-							"edge-net.io/tenant":      namespace,
-							"edge-net.io/tenant-uid":  tenantUID,
-							"edge-net.io/cluster-uid": clusterUID,
-						},
-					},
+					NamespaceSelector: &labelSelector,
 				},
 				{
 					IPBlock: &networkingv1.IPBlock{
@@ -387,7 +390,82 @@ func (c *Controller) applyNetworkPolicy(namespace, tenantUID, clusterUID string)
 			},
 		},
 	}
-	_, err := c.kubeclientset.NetworkingV1().NetworkPolicies(namespace).Create(context.TODO(), networkPolicy, metav1.CreateOptions{})
+	_, err = c.kubeclientset.NetworkingV1().NetworkPolicies(tenant).Create(context.TODO(), networkPolicy, metav1.CreateOptions{})
+
+	if clusterNetworkPolicyEnabled {
+		drop := antreav1alpha1.RuleActionDrop
+		allow := antreav1alpha1.RuleActionAllow
+		clusterNetworkPolicy := new(antreav1alpha1.ClusterNetworkPolicy)
+		clusterNetworkPolicy.SetName(tenant)
+		clusterNetworkPolicy.SetOwnerReferences(ownerReferences)
+		clusterNetworkPolicy.Spec.Ingress = []antreav1alpha1.Rule{
+			{
+				Action: &allow,
+				From: []antreav1alpha1.NetworkPolicyPeer{
+					{
+						NamespaceSelector: &labelSelector,
+					},
+				},
+				Ports: []antreav1alpha1.NetworkPolicyPort{
+					{
+						Port:    &port,
+						EndPort: &endPort,
+					},
+				},
+			},
+			{
+				Action: &drop,
+				From: []antreav1alpha1.NetworkPolicyPeer{
+					{
+						IPBlock: &antreav1alpha1.IPBlock{
+							CIDR: "10.0.0.0/8",
+						},
+					},
+					{
+						IPBlock: &antreav1alpha1.IPBlock{
+							CIDR: "172.16.0.0/12",
+						},
+					},
+					{
+						IPBlock: &antreav1alpha1.IPBlock{
+							CIDR: "192.168.0.0/16",
+						},
+					},
+				},
+				Ports: []antreav1alpha1.NetworkPolicyPort{
+					{
+						Port:    &port,
+						EndPort: &endPort,
+					},
+				},
+			},
+			{
+				Action: &allow,
+				From: []antreav1alpha1.NetworkPolicyPeer{
+					{
+						IPBlock: &antreav1alpha1.IPBlock{
+							CIDR: "0.0.0.0/0",
+						},
+					},
+				},
+				Ports: []antreav1alpha1.NetworkPolicyPort{
+					{
+						Port:    &port,
+						EndPort: &endPort,
+					},
+				},
+			},
+		}
+		clusterNetworkPolicy.Spec.AppliedTo = []antreav1alpha1.NetworkPolicyPeer{
+			{
+				NamespaceSelector: &labelSelector,
+			},
+		}
+
+		_, err = c.antreaclientset.CrdV1alpha1().ClusterNetworkPolicies().Create(context.TODO(), clusterNetworkPolicy, metav1.CreateOptions{})
+	} else {
+		c.antreaclientset.CrdV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), tenant, metav1.DeleteOptions{})
+	}
 	return err
 }
 
