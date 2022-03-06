@@ -34,6 +34,8 @@ type TestGroup struct {
 var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
 
+//var antreaclientset versioned.Interface = antreatestclient.NewSimpleClientset(nil)
+
 func TestMain(m *testing.M) {
 	klog.SetOutput(ioutil.Discard)
 	log.SetOutput(ioutil.Discard)
@@ -45,16 +47,16 @@ func TestMain(m *testing.M) {
 
 	stopCh := signals.SetupSignalHandler()
 
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
-	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, 0)
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
 
 	controller := NewController(kubeclientset,
 		edgenetclientset,
+		nil,
 		edgenetInformerFactory.Core().V1alpha().Tenants())
 
 	kubeInformerFactory.Start(stopCh)
 	edgenetInformerFactory.Start(stopCh)
-
 	go func() {
 		if err := controller.Run(2, stopCh); err != nil {
 			klog.Fatalf("Error running controller: %s", err.Error())
@@ -97,7 +99,8 @@ func (g *TestGroup) Init() {
 				LastName:  "Doe",
 				Phone:     "+33NUMBER",
 			},
-			Enabled: true,
+			Enabled:              true,
+			ClusterNetworkPolicy: false,
 		},
 	}
 	g.tenantObj = tenantObj

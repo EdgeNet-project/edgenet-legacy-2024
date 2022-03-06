@@ -512,3 +512,13 @@ type SliceClaimList struct {
 	// SliceClaim resources.
 	Items []SliceClaim `json:"items"`
 }
+
+func (sc SliceClaim) GetObjectReference() *corev1.ObjectReference {
+	objectReference := corev1.ObjectReference{}
+	objectReference.APIVersion = sc.APIVersion
+	objectReference.Kind = sc.Kind
+	objectReference.Name = sc.GetName()
+	objectReference.Namespace = sc.GetNamespace()
+	objectReference.UID = sc.GetUID()
+	return &objectReference
+}

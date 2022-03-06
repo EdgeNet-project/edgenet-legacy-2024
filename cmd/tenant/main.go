@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"log"
-	"time"
 
 	"k8s.io/klog"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
-	kubeinformers "k8s.io/client-go/informers"
 )
 
 func main() {
@@ -32,15 +30,20 @@ func main() {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
+	antreaclientset, err := bootstrap.CreateAntreaClientset("serviceaccount")
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+
 	// Start the controller to provide the functionalities of tenant resource
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
 	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
 
 	controller := tenant.NewController(kubeclientset,
 		edgenetclientset,
+		antreaclientset,
 		edgenetInformerFactory.Core().V1alpha().Tenants())
 
-	kubeInformerFactory.Start(stopCh)
 	edgenetInformerFactory.Start(stopCh)
 
 	if err = controller.Run(2, stopCh); err != nil {

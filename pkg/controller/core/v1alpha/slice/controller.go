@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"reflect"
 	"strings"
 	"time"
@@ -49,27 +50,19 @@ const controllerAgentName = "slice-controller"
 
 // Definitions of the state of the slice resource
 const (
-	successSynced           = "Synced"
-	messageResourceSynced   = "Slice synced successfully"
-	successApplied          = "Applied"
-	messageApplied          = "Slice applied successfully"
-	successTraversalStarted = "Started"
-	messageTraversalStarted = "Namespace traversal initiated successfully"
-	successTuned            = "Tuned"
-	messageTuned            = "Core resource quota tuned"
-	successDeleted          = "Deleted"
-	messageDeleted          = "Subnamespace created latest deleted to balance resource consumption"
-	successRemoved          = "Removed"
-	messageRemoved          = "Expired Claim / Drop removed smoothly"
-	warningNotRemoved       = "Not Removed"
-	messageNotRemoved       = "Expired Claim / Drop persists"
-	warningNotFound         = "Not Found"
-	messageNotFound         = "There is no resource quota in the core namespace"
-	success                 = "Applied"
-	failure                 = "Failure"
-	trueStr                 = "True"
-	falseStr                = "False"
-	unknownStr              = "Unknown"
+	successSynced         = "Synced"
+	messageResourceSynced = "Slice synced successfully"
+	successBound          = "Bound"
+	messageBound          = "Slice is bound successfully"
+	successReserved       = "Reserved"
+	messageReserved       = "Desired resources are reserved"
+	failureSlice          = "Slice Failed"
+	messageSliceFailed    = "There are no adequate resources to slice"
+	failurePatch          = "Patch Failed"
+	messagePatchFailed    = "Node patch operation has failed"
+	failure               = "Failure"
+	reserved              = "Reserved"
+	bound                 = "Bound"
 )
 
 // Controller is the controller implementation for Slice resources
@@ -337,20 +330,40 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 			c.edgenetclientset.CoreV1alpha().Slices().Delete(context.TODO(), sliceCopy.GetName(), metav1.DeleteOptions{})
 			return
 		} else {
+			isOwned := false
 			if ownerRef := metav1.GetControllerOf(sliceClaim); ownerRef != nil {
-				if ownerRef.Kind == "Slice" && ownerRef.UID != sliceCopy.GetUID() {
-					c.edgenetclientset.CoreV1alpha().Slices().Delete(context.TODO(), sliceCopy.GetName(), metav1.DeleteOptions{})
-					return
+				if ownerRef.Kind == "Slice" {
+					if ownerRef.UID != sliceCopy.GetUID() {
+						c.edgenetclientset.CoreV1alpha().Slices().Delete(context.TODO(), sliceCopy.GetName(), metav1.DeleteOptions{})
+						return
+					} else {
+						isOwned = true
+						if sliceCopy.Status.State == reserved {
+							c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messageBound)
+							sliceCopy.Status.State = bound
+							sliceCopy.Status.Message = messageBound
+							return
+						}
+					}
 				}
-			} else {
-				ownerReferences := SetAsOwnerReference(sliceCopy)
-				sliceClaimCopy := sliceClaim.DeepCopy()
-				sliceClaimCopy.SetOwnerReferences(ownerReferences)
-				c.edgenetclientset.CoreV1alpha().SliceClaims(sliceClaimCopy.GetNamespace()).Update(context.TODO(), sliceClaimCopy, metav1.UpdateOptions{})
+			}
+			if !isOwned {
+				defer func() {
+					ownerReferences := SetAsOwnerReference(sliceCopy)
+					sliceClaimCopy := sliceClaim.DeepCopy()
+					sliceClaimCopy.SetOwnerReferences(ownerReferences)
+					c.edgenetclientset.CoreV1alpha().SliceClaims(sliceClaimCopy.GetNamespace()).Update(context.TODO(), sliceClaimCopy, metav1.UpdateOptions{})
+				}()
 			}
 		}
 	}
 
+	if sliceCopy.Status.State != reserved && sliceCopy.Status.State != bound {
+		c.reserveNode(sliceCopy)
+	}
+}
+
+func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
 	for _, nodeSelectorTerm := range sliceCopy.Spec.NodeSelector.Selector.NodeSelectorTerms {
 		var labelSelector string
 		var fieldSelector string
@@ -385,7 +398,7 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 			}
 		}
 
-		nodeCount := 0
+		var nodeList []string
 		if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: fieldSelector}); err != nil {
 			for _, nodeRow := range nodeRaw.Items {
 				nodeLabels := nodeRow.GetLabels()
@@ -400,27 +413,57 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 					}
 				}
 				if match {
-					nodeCount++
-					patch := []byte(fmt.Sprintf(`"metadata": {"labels": {"edge-net.io~access": "private", "edge-net.io~slice":  %s}}`, sliceCopy.GetName()))
-					// Patch the node
-					_, err := c.kubeclientset.CoreV1().Nodes().Patch(context.TODO(), nodeRow.GetName(), types.StrategicMergePatchType, patch, metav1.PatchOptions{})
-					if err != nil {
-						log.Println(err.Error())
-						panic(err.Error())
-					}
-				}
-
-				if nodeCount == sliceCopy.Spec.NodeSelector.Count {
-					break
+					nodeList = append(nodeList, nodeRow.GetName())
 				}
 			}
 		}
 
-		if nodeCount < sliceCopy.Spec.NodeSelector.Count {
-			// TO-DO: Update status
+		if len(nodeList) < sliceCopy.Spec.NodeSelector.Count {
+			c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailed)
+			sliceCopy.Status.State = failure
+			sliceCopy.Status.Message = messageSliceFailed
+		} else {
+			var pickedNodeList []string
+			for i := 0; i < sliceCopy.Spec.NodeSelector.Count; i++ {
+				rand.Seed(time.Now().Unix())
+				pickedNodeList = append(pickedNodeList, nodeList[rand.Intn(len(nodeList))])
+			}
+			isPatched := true
+			for i := 0; i < len(pickedNodeList); i++ {
+				if err := c.patchNode("slice", sliceCopy.GetName(), pickedNodeList[i]); err != nil {
+					c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failurePatch, messagePatchFailed)
+					sliceCopy.Status.State = failure
+					sliceCopy.Status.Message = messagePatchFailed
+					isPatched = false
+					break
+				}
+			}
+			if !isPatched {
+				for i := 0; i < len(pickedNodeList); i++ {
+					if err := c.patchNode("return", sliceCopy.GetName(), pickedNodeList[i]); err != nil {
+						c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failurePatch, messagePatchFailed)
+					}
+				}
+				return
+			}
 		}
-
 	}
+	c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successReserved, messageReserved)
+	sliceCopy.Status.State = reserved
+	sliceCopy.Status.Message = messageReserved
+}
+
+func (c *Controller) patchNode(kind, slice, node string) error {
+	var err error
+	patch := []byte(fmt.Sprintf(`"metadata": {"labels": {"edge-net.io~access": "private", "edge-net.io~slice":  %s}}`, slice))
+	if kind == "return" {
+		patch = []byte(`"metadata": {"labels": {"edge-net.io~access": "public", "edge-net.io~slice":  "none"}}`)
+	}
+	_, err = c.kubeclientset.CoreV1().Nodes().Patch(context.TODO(), node, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
+	if err != nil {
+		klog.V(4).Infoln(err.Error())
+	}
+	return err
 }
 
 // SetAsOwnerReference returns the slice as owner

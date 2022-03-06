@@ -105,3 +105,10 @@ services:
     image: clusterrolerequest:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
+  admissioncontrol:
+    container_name: admissioncontrol
+    restart: always
+    build:
+      context: ../../
+      dockerfile: ./build/images/admissioncontrol/Dockerfile
+    image: admissioncontrol:v1.0.0
