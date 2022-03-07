@@ -446,6 +446,12 @@ func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
 				}
 				return
 			}
+			if podRaw, err := c.kubeclientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("spec.nodeName in (%s)", strings.Join(pickedNodeList, ","))}); err == nil {
+				for _, podRow := range podRaw.Items {
+					var zero int64 = 0
+					c.kubeclientset.CoreV1().Pods(podRow.GetNamespace()).Delete(context.TODO(), podRow.GetName(), metav1.DeleteOptions{GracePeriodSeconds: &zero})
+				}
+			}
 		}
 	}
 	c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successReserved, messageReserved)
