@@ -116,6 +116,7 @@ func NewController(
 	controller := &Controller{
 		kubeclientset:    kubeclientset,
 		edgenetclientset: edgenetclientset,
+		antreaclientset:  antreaclientset,
 		tenantsLister:    tenantInformer.Lister(),
 		tenantsSynced:    tenantInformer.Informer().HasSynced,
 		workqueue:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Tenants"),

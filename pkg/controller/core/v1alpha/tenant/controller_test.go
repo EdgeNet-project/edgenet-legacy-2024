@@ -19,6 +19,10 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 	"github.com/sirupsen/logrus"
 
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	antreaversioned "antrea.io/antrea/pkg/client/clientset/versioned"
+	antreatestclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeinformers "k8s.io/client-go/informers"
@@ -33,8 +37,14 @@ type TestGroup struct {
 
 var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
-
-//var antreaclientset versioned.Interface = antreatestclient.NewSimpleClientset(nil)
+var antreaclientset antreaversioned.Interface = antreatestclient.NewSimpleClientset(&crdv1alpha1.ClusterNetworkPolicy{
+	ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "test", UID: "test"},
+	Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+		Ingress: []crdv1alpha1.Rule{
+			{},
+		},
+	},
+})
 
 func TestMain(m *testing.M) {
 	klog.SetOutput(ioutil.Discard)
@@ -52,7 +62,7 @@ func TestMain(m *testing.M) {
 
 	controller := NewController(kubeclientset,
 		edgenetclientset,
-		nil,
+		antreaclientset,
 		edgenetInformerFactory.Core().V1alpha().Tenants())
 
 	kubeInformerFactory.Start(stopCh)
