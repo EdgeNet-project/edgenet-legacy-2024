@@ -60,6 +60,8 @@ jobs:
           - tenantresourcequota
           - vpnpeer
           - clusterrolerequest
+          - sliceclaim
+          - slice
           - notifier
     steps:
       - name: Check out the repo
