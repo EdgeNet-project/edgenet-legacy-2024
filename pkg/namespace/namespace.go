@@ -68,7 +68,7 @@ func GetNamespace(name string) (*corev1.Namespace, error) {
 func SetAsOwnerReference(namespace *corev1.Namespace) []metav1.OwnerReference {
 	// The section below makes namespace the owner
 	newNamespaceRef := *metav1.NewControllerRef(namespace, corev1.SchemeGroupVersion.WithKind("Namespace"))
-	takeControl := false
+	takeControl := true
 	newNamespaceRef.Controller = &takeControl
 	namespaceOwnerReferences := []metav1.OwnerReference{newNamespaceRef}
 	return namespaceOwnerReferences

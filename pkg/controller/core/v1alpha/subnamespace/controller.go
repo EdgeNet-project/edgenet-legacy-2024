@@ -26,7 +26,6 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
-	slicev1alpha "github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/slice"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
@@ -90,8 +89,11 @@ const (
 	messageHashingFailed   = "Hash generation as suffix failed"
 	failureCollision       = "Name Collision"
 	messageCollision       = "Name is not available. Please choose another one."
+	failureSlice           = "Slice Unready"
+	messageSlice           = "Slice is not ready to be used."
 	failure                = "Failure"
 	established            = "Established"
+	bound                  = "Bound"
 )
 
 // Controller is the controller implementation for Subsidiary Namespace resources
@@ -589,16 +591,13 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 		}
 
 		ownerReferences := namespacev1.SetAsOwnerReference(namespace)
-		sliceExists := false
+		sliceClaimExists := false
+		var sliceName string
 		switch subnamespaceCopy.GetMode() {
 		case "workspace":
 			if subnamespaceCopy.Spec.Workspace.SliceClaim != nil {
-				sliceExists = true
-				annotations = map[string]string{"scheduler.alpha.kubernetes.io/node-selector": fmt.Sprintf("edge-net.io/access=private,edge-net.io/slice=%s", *subnamespaceCopy.Spec.Workspace.SliceClaim)}
-				if slice, err := c.edgenetclientset.CoreV1alpha().Slices().Get(context.TODO(), *subnamespaceCopy.Spec.Workspace.SliceClaim, metav1.GetOptions{}); err == nil {
-					sliceOwnerReference := slicev1alpha.SetAsOwnerReference(slice)
-					ownerReferences = append(ownerReferences, sliceOwnerReference...)
-				}
+				sliceName = *subnamespaceCopy.Spec.Workspace.SliceClaim
+				sliceClaimExists = true
 			} else {
 				if subResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(childNameHashed).Get(context.TODO(), "sub-quota", metav1.GetOptions{}); err == nil {
 					childResourceQuota = subResourceQuota.Spec.Hard
@@ -608,12 +607,8 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 				"edge-net.io/owner": subnamespaceCopy.GetName(), "edge-net.io/parent-namespace": subnamespaceCopy.GetNamespace()}
 		case "subtenant":
 			if subnamespaceCopy.Spec.Subtenant.SliceClaim != nil {
-				sliceExists = true
-				annotations = map[string]string{"scheduler.alpha.kubernetes.io/node-selector": fmt.Sprintf("edge-net.io/access=private,edge-net.io/slice=%s", *subnamespaceCopy.Spec.Subtenant.SliceClaim)}
-				if slice, err := c.edgenetclientset.CoreV1alpha().Slices().Get(context.TODO(), *subnamespaceCopy.Spec.Subtenant.SliceClaim, metav1.GetOptions{}); err == nil {
-					sliceOwnerReference := slicev1alpha.SetAsOwnerReference(slice)
-					ownerReferences = append(ownerReferences, sliceOwnerReference...)
-				}
+				sliceName = *subnamespaceCopy.Spec.Workspace.SliceClaim
+				sliceClaimExists = true
 			} else {
 				if subtenantResourceQuota, err := c.edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), childNameHashed, metav1.GetOptions{}); err == nil {
 					_, assignedQuota := subtenantResourceQuota.Fetch()
@@ -622,12 +617,20 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 			}
 		}
 
-		if !sliceExists {
+		if !sliceClaimExists {
 			if parentResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(subnamespaceCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
 				if sufficientQuota := c.tuneParentResourceQuota(subnamespaceCopy, parentResourceQuota, childResourceQuota); !sufficientQuota {
 					return
 				}
 			}
+		} else {
+			if isBound := c.checkSliceClaim(subnamespaceCopy.GetNamespace(), sliceName); !isBound {
+				c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureSlice, messageSlice)
+				subnamespaceCopy.Status.State = failure
+				subnamespaceCopy.Status.Message = failureSlice
+				return
+			}
+			annotations = map[string]string{"scheduler.alpha.kubernetes.io/node-selector": fmt.Sprintf("edge-net.io/access=private,edge-net.io/slice=%s", *subnamespaceCopy.Spec.Workspace.SliceClaim)}
 		}
 
 		childInitiated := c.constructSubsidiaryNamespace(subnamespaceCopy, childNameHashed, childExist, annotations, labels, ownerReferences)
@@ -639,6 +642,17 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 		subnamespaceCopy.Status.Message = messageFormed
 		c.recorder.Event(subnamespaceCopy, corev1.EventTypeNormal, successFormed, messageFormed)
 	}
+}
+
+func (c *Controller) checkSliceClaim(namespace, name string) bool {
+	if sliceClaim, err := c.edgenetclientset.CoreV1alpha().SliceClaims(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+		if sliceClaim.Status.State != bound {
+			return false
+		}
+	} else {
+		return false
+	}
+	return true
 }
 
 func (c *Controller) validateChildOwnership(parentNamespace *corev1.Namespace, childName string) (bool, bool) {

@@ -465,6 +465,17 @@ type SliceList struct {
 	Items []Slice `json:"items"`
 }
 
+func (s Slice) MakeOwnerReference() metav1.OwnerReference {
+	ownerReference := metav1.OwnerReference{}
+	ownerReference.APIVersion = s.APIVersion
+	ownerReference.Kind = s.Kind
+	ownerReference.Name = s.GetName()
+	ownerReference.UID = s.GetUID()
+	takeControl := true
+	ownerReference.Controller = &takeControl
+	return ownerReference
+}
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -513,7 +524,7 @@ type SliceClaimList struct {
 	Items []SliceClaim `json:"items"`
 }
 
-func (sc SliceClaim) GetObjectReference() *corev1.ObjectReference {
+func (sc SliceClaim) MakeObjectReference() *corev1.ObjectReference {
 	objectReference := corev1.ObjectReference{}
 	objectReference.APIVersion = sc.APIVersion
 	objectReference.Kind = sc.Kind
@@ -521,4 +532,15 @@ func (sc SliceClaim) GetObjectReference() *corev1.ObjectReference {
 	objectReference.Namespace = sc.GetNamespace()
 	objectReference.UID = sc.GetUID()
 	return &objectReference
+}
+
+func (sc SliceClaim) MakeOwnerReference() metav1.OwnerReference {
+	ownerReference := metav1.OwnerReference{}
+	ownerReference.APIVersion = sc.APIVersion
+	ownerReference.Kind = sc.Kind
+	ownerReference.Name = sc.GetName()
+	ownerReference.UID = sc.GetUID()
+	takeControl := true
+	ownerReference.Controller = &takeControl
+	return ownerReference
 }

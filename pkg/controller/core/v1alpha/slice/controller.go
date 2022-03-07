@@ -140,7 +140,6 @@ func NewController(
 					}
 				}
 			}
-			controller.edgenetclientset.CoreV1alpha().SliceClaims(slice.Spec.ClaimRef.Namespace).Delete(context.TODO(), slice.Spec.ClaimRef.Name, metav1.DeleteOptions{})
 		},
 	})
 
@@ -349,9 +348,8 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 			}
 			if !isOwned {
 				defer func() {
-					ownerReferences := SetAsOwnerReference(sliceCopy)
 					sliceClaimCopy := sliceClaim.DeepCopy()
-					sliceClaimCopy.SetOwnerReferences(ownerReferences)
+					sliceClaimCopy.SetOwnerReferences([]metav1.OwnerReference{sliceCopy.MakeOwnerReference()})
 					c.edgenetclientset.CoreV1alpha().SliceClaims(sliceClaimCopy.GetNamespace()).Update(context.TODO(), sliceClaimCopy, metav1.UpdateOptions{})
 				}()
 			}
@@ -417,7 +415,6 @@ func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
 				}
 			}
 		}
-
 		if len(nodeList) < sliceCopy.Spec.NodeSelector.Count {
 			c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailed)
 			sliceCopy.Status.State = failure
@@ -470,15 +467,4 @@ func (c *Controller) patchNode(kind, slice, node string) error {
 		klog.V(4).Infoln(err.Error())
 	}
 	return err
-}
-
-// SetAsOwnerReference returns the slice as owner
-func SetAsOwnerReference(slice *corev1alpha.Slice) []metav1.OwnerReference {
-	// The following section makes slice become the owner
-	ownerReferences := []metav1.OwnerReference{}
-	newRef := *metav1.NewControllerRef(slice, corev1alpha.SchemeGroupVersion.WithKind("Slice"))
-	takeControl := true
-	newRef.Controller = &takeControl
-	ownerReferences = append(ownerReferences, newRef)
-	return ownerReferences
 }
