@@ -318,7 +318,7 @@ type TenantResourceQuotaSpec struct {
 // Bandwidth.
 type ResourceTuning struct {
 	// This denotes which resources to be included.
-	ResourceList map[corev1.ResourceName]resource.Quantity `json:"resourceList"`
+	ResourceList map[corev1.ResourceName]resource.Quantity `json:"resourcelist"`
 	// Expiration date of the ResourceTuning. This can be nil if no expiration date is specified.
 	Expiry *metav1.Time `json:"expiry"`
 }
@@ -389,7 +389,7 @@ func (t TenantResourceQuota) Fetch() (map[corev1.ResourceName]int64, map[corev1.
 	return assignedQuotaValue, assignedQuota
 }
 
-// Removes the resource tunings if they are expired.
+// DropExpiredItems removes the resource tunings if they are expired.
 func (t TenantResourceQuota) DropExpiredItems() bool {
 	remove := func(objects ...map[string]ResourceTuning) bool {
 		expired := false
@@ -425,19 +425,19 @@ type Slice struct {
 // SliceSpec is the spec for a slice resource
 type SliceSpec struct {
 	// Name of the SliceClass required by the claim. This can be 'Node', or 'Resource'.
-	SliceClassName string `json:"sliceClassName"`
+	SliceClassName string `json:"sliceclassname"`
 	// ClaimRef is part of a bi-directional binding between Slice and SliceClaim.
 	// Expected to be non-nil when bound.
-	ClaimRef *corev1.ObjectReference `json:"claimRef"`
+	ClaimRef *corev1.ObjectReference `json:"claimref"`
 	// A selector for nodes to reserve.
-	NodeSelector NodeSelector `json:"nodeSelector"`
+	NodeSelector NodeSelector `json:"nodeselector"`
 }
 
 type NodeSelector struct {
 	// A label query over nodes to consider for choosing.
 	Selector corev1.NodeSelector `json:"selector"`
 	// Number of nodes to pick up for each match case
-	Count int `json:"nodeCount"`
+	Count int `json:"nodecount"`
 	// Resources represents the minimum resources each selected node should have.
 	Resources corev1.ResourceRequirements `json:"resources"`
 }
@@ -494,11 +494,11 @@ type SliceClaim struct {
 // SliceClaimSpec is the spec for a slice claim resource
 type SliceClaimSpec struct {
 	// Name of the SliceClass required by the claim. This can be 'Node', or 'Resource'.
-	SliceClassName string `json:"sliceClassName"`
+	SliceClassName string `json:"sliceclassname"`
 	// SliceName is the binding reference to the Slice backing this claim.
-	SliceName string `json:"sliceName"`
+	SliceName string `json:"slicename"`
 	// A selector for nodes to reserve.
-	NodeSelector NodeSelector `json:"nodeSelector"`
+	NodeSelector NodeSelector `json:"nodeselector"`
 	// Expiration date of the slice.
 	SliceExpiry *metav1.Time `json:"expiry"`
 }
