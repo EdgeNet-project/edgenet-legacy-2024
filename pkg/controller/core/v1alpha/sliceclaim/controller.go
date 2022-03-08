@@ -427,16 +427,19 @@ func (c *Controller) setAsOwnerReference(sliceclaimCopy *corev1alpha.SliceClaim)
 
 	if subnamespaceRaw, err := c.edgenetclientset.CoreV1alpha().SubNamespaces(sliceclaimCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 		for _, subnamespaceRow := range subnamespaceRaw.Items {
-			if subnamespaceRow.Spec.Workspace != nil {
-				if subnamespaceRow.Spec.Workspace.SliceClaim != nil && *subnamespaceRow.Spec.Workspace.SliceClaim == sliceclaimCopy.GetName() {
-					if isOwned := checkOwnerReferences(&subnamespaceRow); !isOwned {
-						subnamespaceRow.SetOwnerReferences([]metav1.OwnerReference{sliceclaimCopy.MakeOwnerReference()})
+			subnamespaceCopy := subnamespaceRow.DeepCopy()
+			if subnamespaceCopy.Spec.Workspace != nil {
+				if subnamespaceCopy.Spec.Workspace.SliceClaim != nil && *subnamespaceCopy.Spec.Workspace.SliceClaim == sliceclaimCopy.GetName() {
+					if isOwned := checkOwnerReferences(subnamespaceCopy); !isOwned {
+						subnamespaceCopy.SetOwnerReferences([]metav1.OwnerReference{sliceclaimCopy.MakeOwnerReference()})
+						c.edgenetclientset.CoreV1alpha().SubNamespaces(subnamespaceCopy.GetNamespace()).Update(context.TODO(), subnamespaceCopy, metav1.UpdateOptions{})
 					}
 				}
 			} else {
-				if subnamespaceRow.Spec.Subtenant.SliceClaim != nil && *subnamespaceRow.Spec.Subtenant.SliceClaim == sliceclaimCopy.GetName() {
-					if isOwned := checkOwnerReferences(&subnamespaceRow); !isOwned {
-						subnamespaceRow.SetOwnerReferences([]metav1.OwnerReference{sliceclaimCopy.MakeOwnerReference()})
+				if subnamespaceCopy.Spec.Subtenant.SliceClaim != nil && *subnamespaceCopy.Spec.Subtenant.SliceClaim == sliceclaimCopy.GetName() {
+					if isOwned := checkOwnerReferences(subnamespaceCopy); !isOwned {
+						subnamespaceCopy.SetOwnerReferences([]metav1.OwnerReference{sliceclaimCopy.MakeOwnerReference()})
+						c.edgenetclientset.CoreV1alpha().SubNamespaces(subnamespaceCopy.GetNamespace()).Update(context.TODO(), subnamespaceCopy, metav1.UpdateOptions{})
 					}
 				}
 			}
