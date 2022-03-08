@@ -152,7 +152,7 @@ type Workspace struct {
 	// Owner of the workspace.
 	Owner *Contact `json:"owner"`
 	// SliceClaim is the name of a SliceClaim in the same namespace as the workspace using this slice.
-	SliceClaim *string
+	SliceClaim *string `json:"sliceclaim"`
 }
 
 // Subtenant resource represents a tenant under another tenant.
@@ -163,7 +163,7 @@ type Subtenant struct {
 	// Owner of the Subtenant.
 	Owner Contact `json:"owner"`
 	// SliceClaim is the name of a SliceClaim in the same namespace as the subtenant using this slice.
-	SliceClaim *string
+	SliceClaim *string `json:"sliceclaim"`
 }
 
 // SubNamespaceStatus is the status for a SubNamespace resource
