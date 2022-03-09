@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -325,12 +324,8 @@ func EqualsMultipleExp(tb testing.TB, exp interface{}, act interface{}) {
 	}
 }
 
-func Hash(strs ...string) (string, error) {
+func Hash(strs ...string) string {
 	str := strings.Join(strs, "-")
-	hasher := adler32.New()
-	if hash, err := hasher.Write([]byte(str)); err == nil {
-		return strconv.Itoa(hash), nil
-	} else {
-		return "", err
-	}
+	adler32 := adler32.Checksum([]byte(str))
+	return fmt.Sprintf("%x", adler32)
 }

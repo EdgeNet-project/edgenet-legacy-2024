@@ -269,7 +269,7 @@ func (c *Controller) ProcessTenant(tenantCopy *corev1alpha.Tenant) {
 
 	if tenantCopy.Spec.Enabled {
 		// When a tenant is deleted, the owner references feature drives the namespace to be automatically removed
-		ownerReferences := SetAsOwnerReference(tenantCopy)
+		ownerReferences := []metav1.OwnerReference{tenantCopy.MakeOwnerReference()}
 		// Create the cluster roles
 		tenantOwnerClusterRole, err := access.CreateObjectSpecificClusterRole(tenantCopy.GetName(), "core.edgenet.io", "tenants", tenantCopy.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences)
 		if err != nil && !errors.IsAlreadyExists(err) {
@@ -365,7 +365,7 @@ func (c *Controller) applyNetworkPolicy(tenant, tenantUID, clusterUID string, cl
 			"edge-net.io/cluster-uid": clusterUID,
 		},
 	}
-	port := intstr.IntOrString{IntVal: 0}
+	port := intstr.IntOrString{IntVal: 1}
 	endPort := int32(32768)
 	networkPolicy := new(networkingv1.NetworkPolicy)
 	networkPolicy.SetName("baseline")
@@ -392,13 +392,15 @@ func (c *Controller) applyNetworkPolicy(tenant, tenantUID, clusterUID string, cl
 		},
 	}
 	_, err = c.kubeclientset.NetworkingV1().NetworkPolicies(tenant).Create(context.TODO(), networkPolicy, metav1.CreateOptions{})
-
+	klog.V(4).Infoln(err)
 	if clusterNetworkPolicyEnabled {
 		drop := antreav1alpha1.RuleActionDrop
 		allow := antreav1alpha1.RuleActionAllow
 		clusterNetworkPolicy := new(antreav1alpha1.ClusterNetworkPolicy)
 		clusterNetworkPolicy.SetName(tenant)
 		clusterNetworkPolicy.SetOwnerReferences(ownerReferences)
+		clusterNetworkPolicy.Spec.Tier = "tenant"
+		clusterNetworkPolicy.Spec.Priority = 5
 		clusterNetworkPolicy.Spec.Ingress = []antreav1alpha1.Rule{
 			{
 				Action: &allow,
@@ -464,19 +466,9 @@ func (c *Controller) applyNetworkPolicy(tenant, tenantUID, clusterUID string, cl
 		}
 
 		_, err = c.antreaclientset.CrdV1alpha1().ClusterNetworkPolicies().Create(context.TODO(), clusterNetworkPolicy, metav1.CreateOptions{})
+		klog.V(4).Infoln(err)
 	} else {
 		c.antreaclientset.CrdV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), tenant, metav1.DeleteOptions{})
 	}
 	return err
-}
-
-// SetAsOwnerReference returns the tenant as owner
-func SetAsOwnerReference(tenant *corev1alpha.Tenant) []metav1.OwnerReference {
-	// The following section makes tenant become the owner
-	ownerReferences := []metav1.OwnerReference{}
-	newTenantRef := *metav1.NewControllerRef(tenant, corev1alpha.SchemeGroupVersion.WithKind("Tenant"))
-	takeControl := true
-	newTenantRef.Controller = &takeControl
-	ownerReferences = append(ownerReferences, newTenantRef)
-	return ownerReferences
 }

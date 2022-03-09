@@ -30,7 +30,6 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenant"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha"
@@ -548,7 +547,7 @@ nodeSetupLoop:
 			if nodecontributionUpdated.Spec.Tenant != nil {
 				contributorTenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), *nodecontributionUpdated.Spec.Tenant, metav1.GetOptions{})
 				if err == nil {
-					ownerReferences = append(ownerReferences, tenant.SetAsOwnerReference(contributorTenant)...)
+					ownerReferences = append(ownerReferences, contributorTenant.MakeOwnerReference())
 				}
 			}
 			err = node.SetOwnerReferences(nodeName, ownerReferences)

@@ -18,6 +18,7 @@ package v1alpha
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/util"
@@ -105,6 +106,10 @@ type TenantList struct {
 	metav1.ListMeta `json:"metadata"`
 	// TenantList is a list of Tenant resources. This field contains Tenants.
 	Items []Tenant `json:"items"`
+}
+
+func (t Tenant) MakeOwnerReference() metav1.OwnerReference {
+	return *metav1.NewControllerRef(&t.ObjectMeta, SchemeGroupVersion.WithKind("Tenant"))
 }
 
 // +genclient
@@ -207,14 +212,15 @@ func (s SubNamespace) RetrieveQuantityValue(key corev1.ResourceName) int64 {
 }
 
 // GenerateChildName forms a name for child according to the mode, Workspace or Subtenant.
-func (s SubNamespace) GenerateChildName(clusterUID string) (string, error) {
+func (s SubNamespace) GenerateChildName(clusterUID string) string {
 	childName := s.GetName()
 	if s.Spec.Workspace != nil && s.Spec.Workspace.Scope != "local" {
 		childName = fmt.Sprintf("%s-%s", clusterUID, childName)
 	}
 
-	childNameHashed, err := util.Hash(s.GetNamespace(), childName)
-	return childNameHashed, err
+	childNameHashed := util.Hash(s.GetNamespace(), childName)
+	childName = strings.Join([]string{childName, childNameHashed}, "-")
+	return childName
 }
 
 // GetMode return the mode as workspace or subtenant.
@@ -466,14 +472,7 @@ type SliceList struct {
 }
 
 func (s Slice) MakeOwnerReference() metav1.OwnerReference {
-	ownerReference := metav1.OwnerReference{}
-	ownerReference.APIVersion = s.APIVersion
-	ownerReference.Kind = s.Kind
-	ownerReference.Name = s.GetName()
-	ownerReference.UID = s.GetUID()
-	takeControl := true
-	ownerReference.Controller = &takeControl
-	return ownerReference
+	return *metav1.NewControllerRef(&s.ObjectMeta, SchemeGroupVersion.WithKind("Slice"))
 }
 
 // +genclient
@@ -535,12 +534,5 @@ func (sc SliceClaim) MakeObjectReference() *corev1.ObjectReference {
 }
 
 func (sc SliceClaim) MakeOwnerReference() metav1.OwnerReference {
-	ownerReference := metav1.OwnerReference{}
-	ownerReference.APIVersion = sc.APIVersion
-	ownerReference.Kind = sc.Kind
-	ownerReference.Name = sc.GetName()
-	ownerReference.UID = sc.GetUID()
-	takeControl := true
-	ownerReference.Controller = &takeControl
-	return ownerReference
+	return *metav1.NewControllerRef(&sc.ObjectMeta, SchemeGroupVersion.WithKind("SliceClaim"))
 }
