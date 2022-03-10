@@ -202,7 +202,7 @@ func TestStartController(t *testing.T) {
 	// Create a subnamespace
 	subNamespaceControllerTest := g.subNamespaceObj.DeepCopy()
 	subNamespaceControllerTest.SetName("subnamespace-controller")
-	childName, _ := subNamespaceControllerTest.GenerateChildName("")
+	childName := subNamespaceControllerTest.GenerateChildName("")
 	_, err = edgenetclientset.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Create(context.TODO(), subNamespaceControllerTest, metav1.CreateOptions{})
 	util.OK(t, err)
 	// Wait for the status update of the created object
@@ -239,7 +239,7 @@ func TestStartController(t *testing.T) {
 	subNamespaceControllerNestedTest.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
 	subNamespaceControllerNestedTest.SetName("subnamespace-controller-nested")
 	subNamespaceControllerNestedTest.SetNamespace(childName)
-	nestedChildName, _ := subNamespaceControllerNestedTest.GenerateChildName("")
+	nestedChildName := subNamespaceControllerNestedTest.GenerateChildName("")
 	_, err = edgenetclientset.CoreV1alpha().SubNamespaces(subNamespaceControllerNestedTest.GetNamespace()).Create(context.TODO(), subNamespaceControllerNestedTest, metav1.CreateOptions{})
 	util.OK(t, err)
 	// Wait for the status update of the created object
@@ -287,30 +287,30 @@ func TestCreate(t *testing.T) {
 	subnamespace1.SetName("all")
 	subnamespace1.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("2000m")
 	subnamespace1.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("2Gi")
-	childName1, _ := subnamespace1.GenerateChildName("")
+	childName1 := subnamespace1.GenerateChildName("")
 	subnamespace1nested := g.subNamespaceObj.DeepCopy()
 	subnamespace1nested.SetName("all-nested")
 	subnamespace1nested.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
 	subnamespace1nested.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
 	subnamespace1nested.SetNamespace(childName1)
-	childName1nested, _ := subnamespace1nested.GenerateChildName("")
+	childName1nested := subnamespace1nested.GenerateChildName("")
 	subnamespace2 := g.subNamespaceObj.DeepCopy()
 	subnamespace2.SetName("rbac")
 	subnamespace2.Spec.Workspace.Inheritance["networkpolicy"] = false
 	subnamespace2.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
 	subnamespace2.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
-	childName2, _ := subnamespace2.GenerateChildName("")
+	childName2 := subnamespace2.GenerateChildName("")
 	subnamespace3 := g.subNamespaceObj.DeepCopy()
 	subnamespace3.SetName("networkpolicy")
 	subnamespace3.Spec.Workspace.Inheritance["rbac"] = false
 	subnamespace3.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
 	subnamespace3.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
-	childName3, _ := subnamespace3.GenerateChildName("")
+	childName3 := subnamespace3.GenerateChildName("")
 	subnamespace4 := g.subNamespaceObj.DeepCopy()
 	subnamespace4.SetName("expiry")
 	subnamespace4.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
 	subnamespace4.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
-	childName4, _ := subnamespace4.GenerateChildName("")
+	childName4 := subnamespace4.GenerateChildName("")
 
 	t.Run("inherit all without expiry date", func(t *testing.T) {
 		defer edgenetclientset.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Delete(context.TODO(), subnamespace1.GetName(), metav1.DeleteOptions{})
@@ -442,15 +442,15 @@ func TestQuota(t *testing.T) {
 
 	subnamespace1 := g.subNamespaceObj.DeepCopy()
 	subnamespace1.SetName("all")
-	childName1, _ := subnamespace1.GenerateChildName("")
+	childName1 := subnamespace1.GenerateChildName("")
 	subnamespace2 := g.subNamespaceObj.DeepCopy()
 	subnamespace2.SetName("rbac")
 	subnamespace2.Spec.Workspace.Inheritance["networkpolicy"] = false
-	childName2, _ := subnamespace2.GenerateChildName("")
+	childName2 := subnamespace2.GenerateChildName("")
 	subnamespace3 := g.subNamespaceObj.DeepCopy()
 	subnamespace3.SetName("networkpolicy")
 	subnamespace3.Spec.Workspace.Inheritance["rbac"] = false
-	childName3, _ := subnamespace3.GenerateChildName("")
+	childName3 := subnamespace3.GenerateChildName("")
 
 	_, err := edgenetclientset.CoreV1alpha().SubNamespaces(g.tenantObj.GetName()).Create(context.TODO(), subnamespace1, metav1.CreateOptions{})
 	util.OK(t, err)
