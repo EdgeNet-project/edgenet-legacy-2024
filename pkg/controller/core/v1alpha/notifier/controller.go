@@ -297,10 +297,14 @@ func (c *Controller) processTenantRequest(tenantrequest *registrationv1alpha.Ten
 		if len(emailList) > 0 {
 			access.SendEmailForTenantRequest(tenantrequest, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
 				string(systemNamespace.GetUID()), emailList)
+			access.SendSlackNotificationForTenantRequest(tenantrequest, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
+				string(systemNamespace.GetUID()))
 		}
 	} else {
 		access.SendEmailForTenantRequest(tenantrequest, "tenant-request-approved", "[EdgeNet] Tenant request approved",
 			string(systemNamespace.GetUID()), []string{tenantrequest.Spec.Contact.Email})
+		access.SendSlackNotificationForTenantRequest(tenantrequest, "tenant-request-approved", "[EdgeNet] Tenant request approved",
+			string(systemNamespace.GetUID()))
 	}
 }
 
@@ -347,9 +351,13 @@ func (c *Controller) processRoleRequest(rolerequest *registrationv1alpha.RoleReq
 		if len(emailList) > 0 {
 			access.SendEmailForRoleRequest(rolerequest, "role-request-made", "[EdgeNet] A role request made",
 				string(systemNamespace.GetUID()), emailList)
+			access.SendSlackNotificationForRoleRequest(rolerequest, "role-request-made", "[EdgeNet] A role request made",
+				string(systemNamespace.GetUID()))
 		}
 	} else {
 		access.SendEmailForRoleRequest(rolerequest, "role-request-approved", "[EdgeNet] Role request approved",
 			string(systemNamespace.GetUID()), []string{rolerequest.Spec.Email})
+		access.SendSlackNotificationForRoleRequest(rolerequest, "role-request-approved", "[EdgeNet] Role request approved",
+			string(systemNamespace.GetUID()))
 	}
 }
