@@ -335,8 +335,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 				roleBindingExists := false
 				roleBound := false
 				for _, roleBindingRow := range roleBindingRaw.Items {
-					if roleRequestCopy.Spec.RoleRef.Kind == "Role" && roleBindingRow.GetName() == fmt.Sprintf("edgenet:role:%s", roleRequestCopy.Spec.RoleRef.Name) ||
-						roleRequestCopy.Spec.RoleRef.Kind == "ClusterRole" && roleBindingRow.GetName() == fmt.Sprintf("edgenet:clusterrole:%s", roleRequestCopy.Spec.RoleRef.Name) {
+					if roleBindingRow.GetName() == roleRequestCopy.Spec.RoleRef.Name && roleBindingRow.RoleRef.Name == roleRequestCopy.Spec.RoleRef.Name && roleBindingRow.RoleRef.Kind == roleRequestCopy.Spec.RoleRef.Kind {
 						roleBindingExists = true
 						for _, subjectRow := range roleBindingRow.Subjects {
 							if subjectRow.Kind == "User" && subjectRow.Name == roleRequestCopy.Spec.Email {
@@ -357,10 +356,9 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha.Rol
 					}
 				}
 				if !roleBindingExists {
-					objectName := fmt.Sprintf("edgenet:%s:%s", strings.ToLower(roleRequestCopy.Spec.RoleRef.Kind), strings.ToLower(roleRequestCopy.Spec.RoleRef.Name))
 					roleRef := rbacv1.RoleRef{Kind: roleRequestCopy.Spec.RoleRef.Kind, Name: roleRequestCopy.Spec.RoleRef.Name}
 					rbSubjects := []rbacv1.Subject{{Kind: "User", Name: roleRequestCopy.Spec.Email, APIGroup: "rbac.authorization.k8s.io"}}
-					roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName, Namespace: roleRequestCopy.GetNamespace()},
+					roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: roleRequestCopy.Spec.RoleRef.Name, Namespace: roleRequestCopy.GetNamespace()},
 						Subjects: rbSubjects, RoleRef: roleRef}
 					roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
 					roleBind.SetLabels(roleBindLabels)

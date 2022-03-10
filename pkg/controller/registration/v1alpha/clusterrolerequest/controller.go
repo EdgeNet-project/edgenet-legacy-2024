@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
@@ -303,7 +302,7 @@ func (c *Controller) processClusterRoleRequest(clusterRoleRequestCopy *registrat
 			clusterRoleBindingExists := false
 			clusterRoleBound := false
 			for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
-				if clusterRoleBindingRow.GetName() == clusterRoleRequestCopy.Spec.RoleName {
+				if clusterRoleBindingRow.GetName() == clusterRoleRequestCopy.Spec.RoleName && clusterRoleBindingRow.RoleRef.Name == clusterRoleRequestCopy.Spec.RoleName {
 					clusterRoleBindingExists = true
 					for _, subjectRow := range clusterRoleBindingRow.Subjects {
 						if subjectRow.Kind == "User" && subjectRow.Name == clusterRoleRequestCopy.Spec.Email {
@@ -324,10 +323,9 @@ func (c *Controller) processClusterRoleRequest(clusterRoleRequestCopy *registrat
 				}
 			}
 			if !clusterRoleBindingExists {
-				objectName := fmt.Sprintf("edgenet:%s", strings.ToLower(clusterRoleRequestCopy.Spec.RoleName))
 				roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRoleRequestCopy.Spec.RoleName}
 				rbSubjects := []rbacv1.Subject{{Kind: "User", Name: clusterRoleRequestCopy.Spec.Email, APIGroup: "rbac.authorization.k8s.io"}}
-				clusterRoleBind := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName},
+				clusterRoleBind := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRoleRequestCopy.Spec.RoleName},
 					Subjects: rbSubjects, RoleRef: roleRef}
 				clusterRoleBindLabels := map[string]string{"edge-net.io/generated": "true"}
 				clusterRoleBind.SetLabels(clusterRoleBindLabels)

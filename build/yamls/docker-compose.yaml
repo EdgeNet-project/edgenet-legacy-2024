@@ -105,6 +105,24 @@ services:
     image: clusterrolerequest:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
+  sliceclaim:
+    container_name: sliceclaim
+    restart: always
+    build:
+      context: ../../
+      dockerfile: ./build/images/sliceclaim/Dockerfile
+    image: sliceclaim:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
+  slice:
+    container_name: slice
+    restart: always
+    build:
+      context: ../../
+      dockerfile: ./build/images/slice/Dockerfile
+    image: slice:v1.0.0
+    volumes:
+      - ~/.kube/:/root/.kube/
   admissioncontrol:
     container_name: admissioncontrol
     restart: always

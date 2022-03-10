@@ -18,6 +18,7 @@ package v1alpha
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/util"
@@ -107,6 +108,10 @@ type TenantList struct {
 	Items []Tenant `json:"items"`
 }
 
+func (t Tenant) MakeOwnerReference() metav1.OwnerReference {
+	return *metav1.NewControllerRef(&t.ObjectMeta, SchemeGroupVersion.WithKind("Tenant"))
+}
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -152,7 +157,7 @@ type Workspace struct {
 	// Owner of the workspace.
 	Owner *Contact `json:"owner"`
 	// SliceClaim is the name of a SliceClaim in the same namespace as the workspace using this slice.
-	SliceClaim *string
+	SliceClaim *string `json:"sliceclaim"`
 }
 
 // Subtenant resource represents a tenant under another tenant.
@@ -163,7 +168,7 @@ type Subtenant struct {
 	// Owner of the Subtenant.
 	Owner Contact `json:"owner"`
 	// SliceClaim is the name of a SliceClaim in the same namespace as the subtenant using this slice.
-	SliceClaim *string
+	SliceClaim *string `json:"sliceclaim"`
 }
 
 // SubNamespaceStatus is the status for a SubNamespace resource
@@ -207,14 +212,15 @@ func (s SubNamespace) RetrieveQuantityValue(key corev1.ResourceName) int64 {
 }
 
 // GenerateChildName forms a name for child according to the mode, Workspace or Subtenant.
-func (s SubNamespace) GenerateChildName(clusterUID string) (string, error) {
+func (s SubNamespace) GenerateChildName(clusterUID string) string {
 	childName := s.GetName()
 	if s.Spec.Workspace != nil && s.Spec.Workspace.Scope != "local" {
 		childName = fmt.Sprintf("%s-%s", clusterUID, childName)
 	}
 
-	childNameHashed, err := util.Hash(s.GetNamespace(), childName)
-	return childNameHashed, err
+	childNameHashed := util.Hash(s.GetNamespace(), childName)
+	childName = strings.Join([]string{childName, childNameHashed}, "-")
+	return childName
 }
 
 // GetMode return the mode as workspace or subtenant.
@@ -318,7 +324,7 @@ type TenantResourceQuotaSpec struct {
 // Bandwidth.
 type ResourceTuning struct {
 	// This denotes which resources to be included.
-	ResourceList map[corev1.ResourceName]resource.Quantity `json:"resourceList"`
+	ResourceList map[corev1.ResourceName]resource.Quantity `json:"resourcelist"`
 	// Expiration date of the ResourceTuning. This can be nil if no expiration date is specified.
 	Expiry *metav1.Time `json:"expiry"`
 }
@@ -389,7 +395,7 @@ func (t TenantResourceQuota) Fetch() (map[corev1.ResourceName]int64, map[corev1.
 	return assignedQuotaValue, assignedQuota
 }
 
-// Removes the resource tunings if they are expired.
+// DropExpiredItems removes the resource tunings if they are expired.
 func (t TenantResourceQuota) DropExpiredItems() bool {
 	remove := func(objects ...map[string]ResourceTuning) bool {
 		expired := false
@@ -425,19 +431,19 @@ type Slice struct {
 // SliceSpec is the spec for a slice resource
 type SliceSpec struct {
 	// Name of the SliceClass required by the claim. This can be 'Node', or 'Resource'.
-	SliceClassName string `json:"sliceClassName"`
+	SliceClassName string `json:"sliceclassname"`
 	// ClaimRef is part of a bi-directional binding between Slice and SliceClaim.
 	// Expected to be non-nil when bound.
-	ClaimRef *corev1.ObjectReference `json:"claimRef"`
+	ClaimRef *corev1.ObjectReference `json:"claimref"`
 	// A selector for nodes to reserve.
-	NodeSelector NodeSelector `json:"nodeSelector"`
+	NodeSelector NodeSelector `json:"nodeselector"`
 }
 
 type NodeSelector struct {
 	// A label query over nodes to consider for choosing.
 	Selector corev1.NodeSelector `json:"selector"`
 	// Number of nodes to pick up for each match case
-	Count int `json:"nodeCount"`
+	Count int `json:"nodecount"`
 	// Resources represents the minimum resources each selected node should have.
 	Resources corev1.ResourceRequirements `json:"resources"`
 }
@@ -465,6 +471,10 @@ type SliceList struct {
 	Items []Slice `json:"items"`
 }
 
+func (s Slice) MakeOwnerReference() metav1.OwnerReference {
+	return *metav1.NewControllerRef(&s.ObjectMeta, SchemeGroupVersion.WithKind("Slice"))
+}
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -483,11 +493,11 @@ type SliceClaim struct {
 // SliceClaimSpec is the spec for a slice claim resource
 type SliceClaimSpec struct {
 	// Name of the SliceClass required by the claim. This can be 'Node', or 'Resource'.
-	SliceClassName string `json:"sliceClassName"`
+	SliceClassName string `json:"sliceclassname"`
 	// SliceName is the binding reference to the Slice backing this claim.
-	SliceName string `json:"sliceName"`
+	SliceName string `json:"slicename"`
 	// A selector for nodes to reserve.
-	NodeSelector NodeSelector `json:"nodeSelector"`
+	NodeSelector NodeSelector `json:"nodeselector"`
 	// Expiration date of the slice.
 	SliceExpiry *metav1.Time `json:"expiry"`
 }
@@ -513,7 +523,7 @@ type SliceClaimList struct {
 	Items []SliceClaim `json:"items"`
 }
 
-func (sc SliceClaim) GetObjectReference() *corev1.ObjectReference {
+func (sc SliceClaim) MakeObjectReference() *corev1.ObjectReference {
 	objectReference := corev1.ObjectReference{}
 	objectReference.APIVersion = sc.APIVersion
 	objectReference.Kind = sc.Kind
@@ -521,4 +531,8 @@ func (sc SliceClaim) GetObjectReference() *corev1.ObjectReference {
 	objectReference.Namespace = sc.GetNamespace()
 	objectReference.UID = sc.GetUID()
 	return &objectReference
+}
+
+func (sc SliceClaim) MakeOwnerReference() metav1.OwnerReference {
+	return *metav1.NewControllerRef(&sc.ObjectMeta, SchemeGroupVersion.WithKind("SliceClaim"))
 }

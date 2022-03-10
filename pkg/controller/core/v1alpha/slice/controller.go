@@ -140,7 +140,6 @@ func NewController(
 					}
 				}
 			}
-			controller.edgenetclientset.CoreV1alpha().SliceClaims(slice.Spec.ClaimRef.Namespace).Delete(context.TODO(), slice.Spec.ClaimRef.Name, metav1.DeleteOptions{})
 		},
 	})
 
@@ -349,9 +348,8 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 			}
 			if !isOwned {
 				defer func() {
-					ownerReferences := SetAsOwnerReference(sliceCopy)
 					sliceClaimCopy := sliceClaim.DeepCopy()
-					sliceClaimCopy.SetOwnerReferences(ownerReferences)
+					sliceClaimCopy.SetOwnerReferences([]metav1.OwnerReference{sliceCopy.MakeOwnerReference()})
 					c.edgenetclientset.CoreV1alpha().SliceClaims(sliceClaimCopy.GetNamespace()).Update(context.TODO(), sliceClaimCopy, metav1.UpdateOptions{})
 				}()
 			}
@@ -417,7 +415,6 @@ func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
 				}
 			}
 		}
-
 		if len(nodeList) < sliceCopy.Spec.NodeSelector.Count {
 			c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailed)
 			sliceCopy.Status.State = failure
@@ -446,6 +443,12 @@ func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
 				}
 				return
 			}
+			if podRaw, err := c.kubeclientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("spec.nodeName in (%s)", strings.Join(pickedNodeList, ","))}); err == nil {
+				for _, podRow := range podRaw.Items {
+					var zero int64 = 0
+					c.kubeclientset.CoreV1().Pods(podRow.GetNamespace()).Delete(context.TODO(), podRow.GetName(), metav1.DeleteOptions{GracePeriodSeconds: &zero})
+				}
+			}
 		}
 	}
 	c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successReserved, messageReserved)
@@ -464,15 +467,4 @@ func (c *Controller) patchNode(kind, slice, node string) error {
 		klog.V(4).Infoln(err.Error())
 	}
 	return err
-}
-
-// SetAsOwnerReference returns the slice as owner
-func SetAsOwnerReference(slice *corev1alpha.Slice) []metav1.OwnerReference {
-	// The following section makes slice become the owner
-	ownerReferences := []metav1.OwnerReference{}
-	newRef := *metav1.NewControllerRef(slice, corev1alpha.SchemeGroupVersion.WithKind("Slice"))
-	takeControl := true
-	newRef.Controller = &takeControl
-	ownerReferences = append(ownerReferences, newRef)
-	return ownerReferences
 }

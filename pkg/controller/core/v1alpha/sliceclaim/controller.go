@@ -66,9 +66,10 @@ const (
 	messageCreationFailed = "Slice creation failed"
 	dynamic               = "Dynamic"
 	// manual                = "Manual"
-	failure  = "Failure"
-	reserved = "Reserved"
-	bound    = "Bound"
+	failure     = "Failure"
+	reserved    = "Reserved"
+	bound       = "Bound"
+	established = "Established"
 )
 
 // Controller is the controller implementation for Slice Claimresources
@@ -80,6 +81,9 @@ type Controller struct {
 
 	sliceclaimsLister listers.SliceClaimLister
 	sliceclaimsSynced cache.InformerSynced
+
+	subnamespacesLister listers.SubNamespaceLister
+	subnamespacesSynced cache.InformerSynced
 
 	provisioning string
 
@@ -98,6 +102,7 @@ type Controller struct {
 func NewController(
 	kubeclientset kubernetes.Interface,
 	edgenetclientset clientset.Interface,
+	subnamespaceInformer informers.SubNamespaceInformer,
 	sliceclaimInformer informers.SliceClaimInformer) *Controller {
 
 	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
@@ -108,12 +113,14 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeclientset:     kubeclientset,
-		edgenetclientset:  edgenetclientset,
-		sliceclaimsLister: sliceclaimInformer.Lister(),
-		sliceclaimsSynced: sliceclaimInformer.Informer().HasSynced,
-		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "SliceClaims"),
-		recorder:          recorder,
+		kubeclientset:       kubeclientset,
+		edgenetclientset:    edgenetclientset,
+		subnamespacesLister: subnamespaceInformer.Lister(),
+		subnamespacesSynced: subnamespaceInformer.Informer().HasSynced,
+		sliceclaimsLister:   sliceclaimInformer.Lister(),
+		sliceclaimsSynced:   sliceclaimInformer.Informer().HasSynced,
+		workqueue:           workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "SliceClaims"),
+		recorder:            recorder,
 	}
 
 	klog.V(4).Infoln("Setting up event handlers")
@@ -143,6 +150,18 @@ func NewController(
 		},
 	})
 
+	subnamespaceInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleSubNamespace,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*corev1.ServiceAccount)
+			oldObj := old.(*corev1.ServiceAccount)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleSubNamespace(new)
+		},
+	})
+
 	return controller
 }
 
@@ -158,6 +177,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 
 	klog.V(4).Infoln("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh,
+		c.subnamespacesSynced,
 		c.sliceclaimsSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
@@ -256,6 +276,56 @@ func (c *Controller) enqueueSliceClaim(obj interface{}) {
 	c.workqueue.Add(key)
 }
 
+// handleSubNamespace will take any resource implementing corev1alpha.SubNamespace and attempt
+// to find the SliceClaim resource that 'owns' it. It does this by looking at the
+// objects SliceClaimRef field. It then enqueues that SliceClaim resource to be processed.
+// If the object does not have an appropriate SliceClaimRef, it will simply be skipped.
+func (c *Controller) handleSubNamespace(obj interface{}) {
+	var subnamespace corev1alpha.SubNamespace
+	var ok bool
+	if subnamespace, ok = obj.(corev1alpha.SubNamespace); !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("error decoding subnamespace, invalid type"))
+			return
+		}
+		subnamespace, ok = tombstone.Obj.(corev1alpha.SubNamespace)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("error decoding subnamespace tombstone, invalid type"))
+			return
+		}
+		klog.V(4).Infof("Recovered deleted subnamespace '%s' from tombstone", subnamespace.GetName())
+	}
+	klog.V(4).Infof("Processing subnamespace: %s", subnamespace.GetName())
+	if ownerRef := metav1.GetControllerOf(&subnamespace.ObjectMeta); ownerRef != nil {
+		if ownerRef.Kind == "SliceClaim" {
+			return
+		}
+
+		if subnamespace.Status.State != established {
+			return
+		}
+		var putInQueue = func(namespace, name string) {
+			sliceclaim, err := c.sliceclaimsLister.SliceClaims(namespace).Get(name)
+			if err != nil {
+				klog.V(4).Infof("ignoring orphaned object '%s' of slice claim '%s'", subnamespace.GetSelfLink(), name)
+				return
+			}
+			c.enqueueSliceClaim(sliceclaim)
+		}
+		if subnamespace.Spec.Workspace != nil {
+			if subnamespace.Spec.Workspace.SliceClaim != nil {
+				putInQueue(subnamespace.GetNamespace(), *subnamespace.Spec.Workspace.SliceClaim)
+			}
+		} else {
+			if subnamespace.Spec.Subtenant.SliceClaim != nil {
+				putInQueue(subnamespace.GetNamespace(), *subnamespace.Spec.Subtenant.SliceClaim)
+			}
+		}
+		return
+	}
+}
+
 func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 	oldStatus := sliceclaimCopy.Status
 	statusUpdate := func() {
@@ -277,7 +347,7 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 		if slice.Spec.ClaimRef == nil && slice.Status.State != bound {
 			if slice.Status.State == reserved && slice.Spec.SliceClassName == sliceclaimCopy.Spec.SliceClassName && reflect.DeepEqual(slice.Spec.NodeSelector, sliceclaimCopy.Spec.NodeSelector) {
 				sliceCopy := slice.DeepCopy()
-				sliceCopy.Spec.ClaimRef = sliceclaimCopy.GetObjectReference()
+				sliceCopy.Spec.ClaimRef = sliceclaimCopy.MakeObjectReference()
 				if _, err := c.edgenetclientset.CoreV1alpha().Slices().Update(context.TODO(), sliceCopy, metav1.UpdateOptions{}); err != nil {
 					c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
 					sliceclaimCopy.Status.State = failure
@@ -291,7 +361,7 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 				return
 			}
 		} else {
-			if slice.Spec.ClaimRef != sliceclaimCopy.GetObjectReference() {
+			if slice.Spec.ClaimRef != sliceclaimCopy.MakeObjectReference() {
 				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBound, messageBoundAlready)
 				sliceclaimCopy.Status.State = failure
 				sliceclaimCopy.Status.Message = messageBoundAlready
@@ -301,7 +371,7 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 	} else {
 		if strings.ToLower(c.provisioning) == dynamic {
 			slice = new(corev1alpha.Slice)
-			slice.Spec.ClaimRef = sliceclaimCopy.GetObjectReference()
+			slice.Spec.ClaimRef = sliceclaimCopy.MakeObjectReference()
 			slice.Status.Expiry = sliceclaimCopy.Spec.SliceExpiry
 			slice.Spec.SliceClassName = sliceclaimCopy.Spec.SliceClassName
 			slice.Spec.NodeSelector = sliceclaimCopy.Spec.NodeSelector
@@ -310,10 +380,8 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 				sliceclaimCopy.Status.State = failure
 				sliceclaimCopy.Status.Message = messageCreationFailed
 			}
-			return
-		} else {
-			return
 		}
+		return
 	}
 
 	var remainingQuota map[corev1.ResourceName]resource.Quantity
@@ -336,9 +404,47 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 		return
 	}
 
+	c.setAsOwnerReference(sliceclaimCopy)
+
 	c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successBound, messageBound)
 	sliceclaimCopy.Status.State = bound
 	sliceclaimCopy.Status.Message = messageBound
+}
+
+func (c *Controller) setAsOwnerReference(sliceclaimCopy *corev1alpha.SliceClaim) {
+	var checkOwnerReferences = func(object metav1.Object) bool {
+		if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
+			if ownerRef.Kind != "SliceClaim" {
+				return false
+			}
+			if ownerRef.Name != sliceclaimCopy.GetName() {
+				return false
+			}
+			return true
+		}
+		return false
+	}
+
+	if subnamespaceRaw, err := c.edgenetclientset.CoreV1alpha().SubNamespaces(sliceclaimCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
+		for _, subnamespaceRow := range subnamespaceRaw.Items {
+			subnamespaceCopy := subnamespaceRow.DeepCopy()
+			if subnamespaceCopy.Spec.Workspace != nil {
+				if subnamespaceCopy.Spec.Workspace.SliceClaim != nil && *subnamespaceCopy.Spec.Workspace.SliceClaim == sliceclaimCopy.GetName() {
+					if isOwned := checkOwnerReferences(subnamespaceCopy); !isOwned {
+						subnamespaceCopy.SetOwnerReferences([]metav1.OwnerReference{sliceclaimCopy.MakeOwnerReference()})
+						c.edgenetclientset.CoreV1alpha().SubNamespaces(subnamespaceCopy.GetNamespace()).Update(context.TODO(), subnamespaceCopy, metav1.UpdateOptions{})
+					}
+				}
+			} else {
+				if subnamespaceCopy.Spec.Subtenant.SliceClaim != nil && *subnamespaceCopy.Spec.Subtenant.SliceClaim == sliceclaimCopy.GetName() {
+					if isOwned := checkOwnerReferences(subnamespaceCopy); !isOwned {
+						subnamespaceCopy.SetOwnerReferences([]metav1.OwnerReference{sliceclaimCopy.MakeOwnerReference()})
+						c.edgenetclientset.CoreV1alpha().SubNamespaces(subnamespaceCopy.GetNamespace()).Update(context.TODO(), subnamespaceCopy, metav1.UpdateOptions{})
+					}
+				}
+			}
+		}
+	}
 }
 
 func (c *Controller) tuneParentResourceQuota(sliceclaimCopy *corev1alpha.SliceClaim, parentResourceQuota *corev1.ResourceQuota) (map[corev1.ResourceName]resource.Quantity, bool) {

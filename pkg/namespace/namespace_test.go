@@ -61,7 +61,7 @@ func TestSetAsOwnerReference(t *testing.T) {
 		{
 			"test-1",
 			[]metav1.OwnerReference{
-				metav1.OwnerReference{
+				{
 					Kind:       "Namespace",
 					Name:       "test-1",
 					APIVersion: "v1",
@@ -71,7 +71,7 @@ func TestSetAsOwnerReference(t *testing.T) {
 		{
 			"test1",
 			[]metav1.OwnerReference{
-				metav1.OwnerReference{
+				{
 					Kind:       "Namespace",
 					Name:       "test1",
 					APIVersion: "v1",
@@ -81,7 +81,7 @@ func TestSetAsOwnerReference(t *testing.T) {
 		{
 			"test-2",
 			[]metav1.OwnerReference{
-				metav1.OwnerReference{
+				{
 					Kind:       "Namespace",
 					Name:       "test-2",
 					APIVersion: "v1",
