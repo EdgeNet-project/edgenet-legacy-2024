@@ -19,11 +19,13 @@ package access
 import (
 	"context"
 	"fmt"
+	"os"
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
 	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
+	slack "github.com/EdgeNet-project/edgenet/pkg/slack"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -147,4 +149,35 @@ func SendEmailForTenantRequest(tenantRequestCopy *registrationv1alpha.TenantRequ
 	email.TenantRequest = new(mailer.TenantRequest)
 	email.TenantRequest.Tenant = tenantRequestCopy.GetName()
 	email.Send(purpose)
+}
+
+// Send a slack notification for role request
+func SendSlackNotificationForRoleRequest(roleRequestCopy *registrationv1alpha.RoleRequest, purpose, subject, clusterUID string) {
+	slackNotification := new(slack.Content)
+	slackNotification.Cluster = clusterUID
+	slackNotification.User = roleRequestCopy.Spec.Email
+	slackNotification.FirstName = roleRequestCopy.Spec.FirstName
+	slackNotification.LastName = roleRequestCopy.Spec.LastName
+	slackNotification.Subject = subject
+	slackNotification.AuthToken = os.Getenv(slack.AUTH_TOKEN_IDENTIFIER)
+	slackNotification.ChannelId = os.Getenv(slack.CHANNEL_ID_IDENTIFIER)
+	slackNotification.RoleRequest = new(slack.RoleRequest)
+	slackNotification.RoleRequest.Name = roleRequestCopy.GetName()
+	slackNotification.RoleRequest.Namespace = roleRequestCopy.GetNamespace()
+	slackNotification.Send(purpose)
+}
+
+// Send a slack notification for tenant request
+func SendSlackNotificationForTenantRequest(tenantRequestCopy *registrationv1alpha.TenantRequest, purpose, subject, clusterUID string) {
+	slackNotification := new(slack.Content)
+	slackNotification.Cluster = clusterUID
+	slackNotification.User = tenantRequestCopy.Spec.Contact.Email
+	slackNotification.FirstName = tenantRequestCopy.Spec.Contact.FirstName
+	slackNotification.LastName = tenantRequestCopy.Spec.Contact.LastName
+	slackNotification.Subject = subject
+	slackNotification.AuthToken = os.Getenv(slack.AUTH_TOKEN_IDENTIFIER)
+	slackNotification.ChannelId = os.Getenv(slack.CHANNEL_ID_IDENTIFIER)
+	slackNotification.TenantRequest = new(slack.TenantRequest)
+	slackNotification.TenantRequest.Tenant = tenantRequestCopy.GetName()
+	slackNotification.Send(purpose)
 }
