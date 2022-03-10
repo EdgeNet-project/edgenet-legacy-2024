@@ -61,6 +61,7 @@ func TestMain(m *testing.M) {
 	}()
 
 	access.Clientset = kubeclientset
+	access.EdgenetClientset = edgenetclientset
 	access.CreateClusterRoles()
 	kubeSystemNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}}
 	kubeclientset.CoreV1().Namespaces().Create(context.TODO(), kubeSystemNamespace, metav1.CreateOptions{})
@@ -184,7 +185,8 @@ func TestUpdate(t *testing.T) {
 		// Checking if handler created tenant from request
 		_, err := edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
-
+		kubeclientset.CoreV1().Namespaces().Create(context.TODO(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: tenantRequestTest.GetName()}}, metav1.CreateOptions{})
+		time.Sleep(250 * time.Millisecond)
 		t.Run("tenant resource quota", func(t *testing.T) {
 			tenantResourceQuota, err := edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
 			util.OK(t, err)
