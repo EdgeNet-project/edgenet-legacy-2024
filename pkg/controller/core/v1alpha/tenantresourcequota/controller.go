@@ -14,12 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// TODO: Clean up the code
+
 package tenantresourcequota
 
 import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +39,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -173,7 +177,7 @@ func NewController(
 	// TODO: Contribution incentives should not be limited to CPU and Memory. It should cover any
 	// resource the node has.
 	// TODO: Be sure that the node is exactly unavailable before removing the quota increment.
-	var setIncentives = func(kind, nodeName string, ownerReferences []metav1.OwnerReference, cpuCapacity, memoryCapacity int64) {
+	var setIncentives = func(kind, nodeName string, ownerReferences []metav1.OwnerReference, cpuCapacity, memoryCapacity *resource.Quantity) {
 		for _, owner := range ownerReferences {
 			if owner.Kind == "Tenant" {
 				tenantResourceQuota, err := edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
@@ -181,21 +185,25 @@ func NewController(
 					tenantResourceQuotaCopy := tenantResourceQuota.DeepCopy()
 
 					if kind == "incentive" {
-						cpuAward := resource.NewQuantity(int64(float64(cpuCapacity)*1.5), resource.BinarySI).DeepCopy()
-						memoryAward := resource.NewQuantity(int64(float64(memoryCapacity)*1.3), resource.BinarySI).DeepCopy()
+						cpuCapacityCopy := cpuCapacity.DeepCopy()
+						memoryCapacityCopy := memoryCapacity.DeepCopy()
+						cpuAward := int64(float64(cpuCapacity.Value()) * 1.5)
+						cpuCapacityCopy.Set(cpuAward)
+						memoryAward := int64(float64(memoryCapacity.Value()) * 1.3)
+						memoryCapacityCopy.Set(memoryAward)
 
 						if _, elementExists := tenantResourceQuotaCopy.Spec.Claim[nodeName]; elementExists {
-							if tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["cpu"] != cpuAward ||
-								tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["memory"] != memoryAward {
-								tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["cpu"] = cpuAward
-								tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["memory"] = memoryAward
+							if tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["cpu"].Equal(cpuCapacityCopy) ||
+								tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["memory"].Equal(memoryCapacityCopy) {
+								tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["cpu"] = cpuCapacityCopy
+								tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["memory"] = memoryCapacityCopy
 								edgenetclientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuotaCopy, metav1.UpdateOptions{})
 							}
 						} else {
 							claim := corev1alpha.ResourceTuning{
 								ResourceList: corev1.ResourceList{
-									corev1.ResourceCPU:    cpuAward,
-									corev1.ResourceMemory: memoryAward,
+									corev1.ResourceCPU:    cpuCapacityCopy,
+									corev1.ResourceMemory: memoryCapacityCopy,
 								},
 							}
 							tenantResourceQuotaCopy.Spec.Claim[nodeName] = claim
@@ -207,7 +215,6 @@ func NewController(
 							edgenetclientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
 						}
 					}
-
 				}
 			}
 		}
@@ -223,7 +230,7 @@ func NewController(
 			}
 			ready := node.GetConditionReadyStatus(nodeObj)
 			if ready == trueStr {
-				setIncentives("incentive", nodeObj.GetName(), nodeObj.GetOwnerReferences(), nodeObj.Status.Capacity.Cpu().Value(), nodeObj.Status.Capacity.Memory().Value())
+				setIncentives("incentive", nodeObj.GetName(), nodeObj.GetOwnerReferences(), nodeObj.Status.Capacity.Cpu(), nodeObj.Status.Capacity.Memory())
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
@@ -233,17 +240,17 @@ func NewController(
 			newReady := node.GetConditionReadyStatus(newObj)
 			if (oldReady == falseStr && newReady == trueStr) ||
 				(oldReady == unknownStr && newReady == trueStr) {
-				setIncentives("incentive", newObj.GetName(), newObj.GetOwnerReferences(), newObj.Status.Capacity.Cpu().Value(), newObj.Status.Capacity.Memory().Value())
+				setIncentives("incentive", newObj.GetName(), newObj.GetOwnerReferences(), newObj.Status.Capacity.Cpu(), newObj.Status.Capacity.Memory())
 			} else if (oldReady == trueStr && newReady == falseStr) ||
 				(oldReady == trueStr && newReady == unknownStr) {
-				setIncentives("disincentive", newObj.GetName(), newObj.GetOwnerReferences(), 0, 0)
+				setIncentives("disincentive", newObj.GetName(), newObj.GetOwnerReferences(), nil, nil)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			nodeObj := obj.(*corev1.Node)
 			ready := node.GetConditionReadyStatus(nodeObj)
 			if ready == trueStr {
-				setIncentives("disincentive", nodeObj.GetName(), nodeObj.GetOwnerReferences(), 0, 0)
+				setIncentives("disincentive", nodeObj.GetName(), nodeObj.GetOwnerReferences(), nil, nil)
 			}
 		},
 	})
@@ -390,11 +397,32 @@ func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1a
 	}
 	defer statusUpdate()
 
-	if tenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantResourceQuotaCopy.GetName(), metav1.GetOptions{}); err != nil {
-		if errors.IsNotFound(err) {
-			c.edgenetclientset.CoreV1alpha().TenantResourceQuotas().Delete(context.TODO(), tenant.GetName(), metav1.DeleteOptions{})
-		}
+	permitted := false
+	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
+	if err != nil {
+		klog.Infoln(err)
+		return
+	}
+	namespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), tenantResourceQuotaCopy.GetName(), metav1.GetOptions{})
+	if err != nil {
+		klog.Infoln(err)
+		return
+	}
+	namespaceLabels := namespace.GetLabels()
+	if systemNamespace.GetUID() != types.UID(namespaceLabels["edge-net.io/cluster-uid"]) {
+		permitted = true
 	} else {
+		if tenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), strings.ToLower(namespaceLabels["edge-net.io/tenant"]), metav1.GetOptions{}); err == nil {
+			if tenant.GetUID() == types.UID(namespaceLabels["edge-net.io/tenant-uid"]) && tenant.Spec.Enabled {
+				permitted = true
+			}
+		} else {
+			klog.Infoln(err)
+			return
+		}
+	}
+
+	if permitted {
 		expired := tenantResourceQuotaCopy.DropExpiredItems()
 		if expired {
 			if tenantResourceQuotaUpdated, err := c.edgenetclientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuotaCopy, metav1.UpdateOptions{}); err == nil {
@@ -405,50 +433,47 @@ func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1a
 			}
 		}
 
-		if tenant.Spec.Enabled {
-			// A tenant resource quota can turn into the applied status provided that a resource quota has been created in the core namespace.
-			// The initial resource quota in the namespace is equal to the defined tenant resource quota.
-			if tenantResourceQuotaCopy.Status.State != success && tenantResourceQuotaCopy.Status.Message != messageApplied {
-				resourceQuota := corev1.ResourceQuota{}
-				resourceQuota.Name = "core-quota"
-				resourceQuota.Spec = corev1.ResourceQuotaSpec{
-					Hard: tenantResourceQuotaCopy.Spec.Claim["initial"].ResourceList,
-				}
-				if _, err := c.kubeclientset.CoreV1().ResourceQuotas(tenant.GetName()).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-					klog.V(4).Infof("Couldn't create resource quota in %s: %s", tenant.GetName(), err)
-				} else {
-					c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successApplied, messageApplied)
-					tenantResourceQuotaCopy.Status.State = success
-					tenantResourceQuotaCopy.Status.Message = messageApplied
-				}
+		// A tenant resource quota can turn into the applied status provided that a resource quota has been created in the core namespace.
+		// The initial resource quota in the namespace is equal to the defined tenant resource quota.
+		if tenantResourceQuotaCopy.Status.State != success && tenantResourceQuotaCopy.Status.Message != messageApplied {
+			resourceQuota := corev1.ResourceQuota{}
+			resourceQuota.Name = "core-quota"
+			resourceQuota.Spec = corev1.ResourceQuotaSpec{
+				Hard: tenantResourceQuotaCopy.Spec.Claim["initial"].ResourceList,
 			}
-
-			c.tuneResourceQuotaAcrossNamespaces(tenant.GetName(), tenantResourceQuotaCopy)
+			if _, err := c.kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuotaCopy.GetName()).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+				klog.V(4).Infof("Couldn't create resource quota in %s: %s", tenantResourceQuotaCopy.GetName(), err)
+			} else {
+				c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successApplied, messageApplied)
+				tenantResourceQuotaCopy.Status.State = success
+				tenantResourceQuotaCopy.Status.Message = messageApplied
+			}
 		}
+
+		c.tuneResourceQuotaAcrossNamespaces(tenantResourceQuotaCopy.GetName(), namespaceLabels["edge-net.io/cluster-uid"], tenantResourceQuotaCopy)
 	}
 }
 
-func (c *Controller) tuneResourceQuotaAcrossNamespaces(coreNamespace string, tenantResourceQuotaCopy *corev1alpha.TenantResourceQuota) {
+func (c *Controller) tuneResourceQuotaAcrossNamespaces(coreNamespace, clusterUID string, tenantResourceQuotaCopy *corev1alpha.TenantResourceQuota) {
 	c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successTraversalStarted, messageTraversalStarted)
-	aggregateQuota, lastInSubNamespace := c.NamespaceTraversal(coreNamespace)
-	assignedQuota, _ := tenantResourceQuotaCopy.Fetch()
+	aggregateQuota := make(map[corev1.ResourceName]resource.Quantity)
+	lastInSubNamespace := c.NamespaceTraversal(coreNamespace, clusterUID, aggregateQuota)
+	assignedQuota := tenantResourceQuotaCopy.Fetch()
 	if coreResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(coreNamespace).Get(context.TODO(), "core-quota", metav1.GetOptions{}); err == nil {
 		coreResourceQuotaCopy := coreResourceQuota.DeepCopy()
 		canEntirelyCompansate := true
-		for key, value := range coreResourceQuotaCopy.Spec.Hard {
-			if _, elementExists := aggregateQuota[key]; elementExists {
-				if _, elementExists := assignedQuota[key]; elementExists {
-					if *aggregateQuota[key] > assignedQuota[key] {
-						if value.Value() < (*aggregateQuota[key] - assignedQuota[key]) {
-							canEntirelyCompansate = false
-						} else {
-							coreResourceQuotaCopy.Spec.Hard[key] = *resource.NewQuantity(value.Value()-(*aggregateQuota[key]-assignedQuota[key]), coreResourceQuotaCopy.Spec.Hard[key].Format)
-						}
-					} else if *aggregateQuota[key] < assignedQuota[key] {
-						coreResourceQuotaCopy.Spec.Hard[key] = *resource.NewQuantity(value.Value()+(assignedQuota[key]-*aggregateQuota[key]), coreResourceQuotaCopy.Spec.Hard[key].Format)
+		for assignedResource, assignedQuantity := range assignedQuota {
+			if aggregateQuantity, elementExists := aggregateQuota[assignedResource]; elementExists {
+				if coreQuantity, elementExists := coreResourceQuotaCopy.Spec.Hard[assignedResource]; elementExists {
+					subnamespaceQuantity := aggregateQuantity
+					subnamespaceQuantity.Sub(coreQuantity)
+					if assignedQuantity.Cmp(subnamespaceQuantity) == -1 {
+						canEntirelyCompansate = false
+					} else {
+						assignedQuantity.Sub(subnamespaceQuantity)
+						coreResourceQuotaCopy.Spec.Hard[assignedResource] = assignedQuantity
 					}
 				}
-
 			}
 		}
 		if !reflect.DeepEqual(coreResourceQuota, coreResourceQuotaCopy) {
@@ -459,7 +484,7 @@ func (c *Controller) tuneResourceQuotaAcrossNamespaces(coreNamespace string, ten
 			c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successDeleted, messageDeleted)
 			c.edgenetclientset.CoreV1alpha().SubNamespaces(lastInSubNamespace.GetNamespace()).Delete(context.TODO(), lastInSubNamespace.GetName(), metav1.DeleteOptions{})
 			time.Sleep(200 * time.Millisecond)
-			defer c.tuneResourceQuotaAcrossNamespaces(coreNamespace, tenantResourceQuotaCopy)
+			defer c.tuneResourceQuotaAcrossNamespaces(coreNamespace, clusterUID, tenantResourceQuotaCopy)
 		}
 	} else {
 		c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeWarning, warningNotFound, messageNotFound)
@@ -468,15 +493,14 @@ func (c *Controller) tuneResourceQuotaAcrossNamespaces(coreNamespace string, ten
 	}
 }
 
-func (c *Controller) NamespaceTraversal(coreNamespace string) (map[corev1.ResourceName]*int64, *corev1alpha.SubNamespace) {
-	aggregateQuota := make(map[corev1.ResourceName]*int64)
+func (c *Controller) NamespaceTraversal(coreNamespace, clusterUID string, aggregateQuota map[corev1.ResourceName]resource.Quantity) *corev1alpha.SubNamespace {
 	var lastInDate metav1.Time
 	var lastInSubNamespace *corev1alpha.SubNamespace
-	c.traverse(coreNamespace, coreNamespace, aggregateQuota, lastInSubNamespace, &lastInDate)
-	return aggregateQuota, lastInSubNamespace
+	c.traverse(coreNamespace, coreNamespace, clusterUID, aggregateQuota, lastInSubNamespace, &lastInDate)
+	return lastInSubNamespace
 }
 
-func (c *Controller) traverse(coreNamespace, namespace string, aggregateQuota map[corev1.ResourceName]*int64, lastInSubNamespace *corev1alpha.SubNamespace, lastInDate *metav1.Time) {
+func (c *Controller) traverse(coreNamespace, namespace, clusterUID string, aggregateQuota map[corev1.ResourceName]resource.Quantity, lastInSubNamespace *corev1alpha.SubNamespace, lastInDate *metav1.Time) {
 	// This task becomes expensive when the hierarchy chain is gigantic with a substantial depth.
 	// So Goroutines come into play.
 	var wg sync.WaitGroup
@@ -489,44 +513,29 @@ func (c *Controller) traverse(coreNamespace, namespace string, aggregateQuota ma
 				lastInSubNamespace = subNamespaceRow.DeepCopy()
 				*lastInDate = subNamespaceRow.GetCreationTimestamp()
 			}
-			subNamespaceStr := fmt.Sprintf("%s-%s", coreNamespace, subNamespaceRow.GetName())
-			go func() {
+			go func(childName string) {
 				defer wg.Done()
-				c.traverse(coreNamespace, subNamespaceStr, aggregateQuota, lastInSubNamespace, lastInDate)
-			}()
+				c.traverse(coreNamespace, childName, clusterUID, aggregateQuota, lastInSubNamespace, lastInDate)
+			}(subNamespaceRow.GenerateChildName(clusterUID))
 		}
 		wg.Wait()
 	}
 }
 
 // accumulateQuota adds each resource quota to the total to its aggregation.
-func (c *Controller) accumulateQuota(namespace string, aggregateQuota map[corev1.ResourceName]*int64) {
+func (c *Controller) accumulateQuota(namespace string, aggregateQuota map[corev1.ResourceName]resource.Quantity) {
 	resourceQuotasRaw, _ := c.kubeclientset.CoreV1().ResourceQuotas(namespace).List(context.TODO(), metav1.ListOptions{})
 	if len(resourceQuotasRaw.Items) != 0 {
 		for _, resourceQuotasRow := range resourceQuotasRaw.Items {
 			for key, value := range resourceQuotasRow.Spec.Hard {
-				if _, elementExists := aggregateQuota[key]; elementExists {
-					*aggregateQuota[key] += value.Value()
+				if aggregateQuantity, elementExists := aggregateQuota[key]; elementExists {
+					aggregateQuantity.Add(value)
+					aggregateQuota[key] = aggregateQuantity
 				} else {
-					var quantityValue int64 = value.Value()
-					aggregateQuota[key] = &quantityValue
+					aggregateQuota[key] = value
 				}
+
 			}
 		}
 	}
 }
-
-// The following function removes the expired claims/drops from the tenant resource quota and updates the object.
-// So the controller can set resource quotas in all namespaces owned by the tenant in the following lines.
-/*func removeExpiredItems(objects ...map[string]corev1alpha.ResourceTuning) ([]map[string]corev1alpha.ResourceTuning, bool) {
-	expired := false
-	for _, obj := range objects {
-		for key, value := range obj {
-			if value.Expiry != nil && time.Until(value.Expiry.Time) <= 0 {
-				expired = true
-				delete(obj, key)
-			}
-		}
-	}
-	return objects, expired
-}*/

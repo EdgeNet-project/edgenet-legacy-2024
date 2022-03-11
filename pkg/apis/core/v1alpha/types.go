@@ -193,28 +193,24 @@ type SubNamespaceList struct {
 }
 
 // Retrieves quantity value from given resource name.
-func (s SubNamespace) RetrieveQuantityValue(key corev1.ResourceName) int64 {
-	// TODO: Remove this function when using int64 is deprecated
-	var value int64
+func (s SubNamespace) RetrieveQuantity(key corev1.ResourceName) resource.Quantity {
+	var quantity resource.Quantity
 	if s.Spec.Workspace != nil {
 		if _, elementExists := s.Spec.Workspace.ResourceAllocation[key]; elementExists {
-			quantity := s.Spec.Workspace.ResourceAllocation[key]
-			value = quantity.Value()
+			quantity = s.Spec.Workspace.ResourceAllocation[key]
 		}
 	} else {
 		if _, elementExists := s.Spec.Subtenant.ResourceAllocation[key]; elementExists {
-			quantity := s.Spec.Subtenant.ResourceAllocation[key]
-			value = quantity.Value()
+			quantity = s.Spec.Subtenant.ResourceAllocation[key]
 		}
 	}
-
-	return value
+	return quantity
 }
 
 // GenerateChildName forms a name for child according to the mode, Workspace or Subtenant.
 func (s SubNamespace) GenerateChildName(clusterUID string) string {
 	childName := s.GetName()
-	if s.Spec.Workspace != nil && s.Spec.Workspace.Scope != "local" {
+	if s.Spec.Workspace != nil && s.Spec.Workspace.Scope == "federation" {
 		childName = fmt.Sprintf("%s-%s", clusterUID, childName)
 	}
 
@@ -370,22 +366,16 @@ type TenantResourceQuotaList struct {
 
 // Fetches the net value of the resources. For example, 1Gb memory is claimed and 100 milliCPU
 // are dropped. Then the function returns the net resources as '+1Gb', '-100m'.
-func (t TenantResourceQuota) Fetch() (map[corev1.ResourceName]int64, map[corev1.ResourceName]resource.Quantity) {
-	// TODO: Remove the assignedQuotaValue map
-	assignedQuotaValue := make(map[corev1.ResourceName]int64)
+func (t TenantResourceQuota) Fetch() map[corev1.ResourceName]resource.Quantity {
 	assignedQuota := make(map[corev1.ResourceName]resource.Quantity)
-
 	if len(t.Spec.Claim) > 0 {
 		for _, claim := range t.Spec.Claim {
 			if claim.Expiry == nil || (claim.Expiry != nil && time.Until(claim.Expiry.Time) >= 0) {
 				for key, value := range claim.ResourceList {
-					if _, elementExists := assignedQuotaValue[key]; elementExists {
-						assignedQuotaValue[key] += value.Value()
-						quantity := assignedQuota[key]
-						quantity.Add(value)
-						assignedQuota[key] = quantity
+					if assignedQuantity, elementExists := assignedQuota[key]; elementExists {
+						assignedQuantity.Add(value)
+						assignedQuota[key] = assignedQuantity
 					} else {
-						assignedQuotaValue[key] = value.Value()
 						assignedQuota[key] = value
 					}
 				}
@@ -396,13 +386,10 @@ func (t TenantResourceQuota) Fetch() (map[corev1.ResourceName]int64, map[corev1.
 		for _, drop := range t.Spec.Drop {
 			if drop.Expiry == nil || (drop.Expiry != nil && time.Until(drop.Expiry.Time) >= 0) {
 				for key, value := range drop.ResourceList {
-					if _, elementExists := assignedQuotaValue[key]; elementExists {
-						assignedQuotaValue[key] -= value.Value()
-						quantity := assignedQuota[key]
-						quantity.Sub(value)
-						assignedQuota[key] = quantity
+					if assignedQuantity, elementExists := assignedQuota[key]; elementExists {
+						assignedQuantity.Sub(value)
+						assignedQuota[key] = assignedQuantity
 					} else {
-						assignedQuotaValue[key] = -value.Value()
 						value.Neg()
 						assignedQuota[key] = value
 					}
@@ -410,7 +397,7 @@ func (t TenantResourceQuota) Fetch() (map[corev1.ResourceName]int64, map[corev1.
 			}
 		}
 	}
-	return assignedQuotaValue, assignedQuota
+	return assignedQuota
 }
 
 // DropExpiredItems removes the resource tunings if they are expired.
