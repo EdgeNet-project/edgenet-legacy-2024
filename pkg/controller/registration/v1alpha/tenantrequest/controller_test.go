@@ -132,6 +132,7 @@ func TestStartController(t *testing.T) {
 
 	tenantRequest.Spec.Approved = true
 	edgenetclientset.RegistrationV1alpha().TenantRequests().Update(context.TODO(), tenantRequest, metav1.UpdateOptions{})
+	kubeclientset.CoreV1().Namespaces().Create(context.TODO(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: tenantRequest.GetName()}}, metav1.CreateOptions{})
 	time.Sleep(250 * time.Millisecond)
 	tenantRequest, err = edgenetclientset.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
