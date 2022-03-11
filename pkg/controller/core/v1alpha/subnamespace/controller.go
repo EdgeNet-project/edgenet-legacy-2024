@@ -822,9 +822,12 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 		} else {
 			if subtenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), childName, metav1.GetOptions{}); err == nil {
 				subtenantCopy := subtenant.DeepCopy()
-				subtenant.Spec.Contact = subnamespaceCopy.Spec.Subtenant.Owner
+				subtenantCopy.Spec.Contact = subnamespaceCopy.Spec.Subtenant.Owner
 				// TODO: Error handling
-				c.edgenetclientset.CoreV1alpha().Tenants().Update(context.TODO(), subtenantCopy, metav1.UpdateOptions{})
+				_, err = c.edgenetclientset.CoreV1alpha().Tenants().Update(context.TODO(), subtenantCopy, metav1.UpdateOptions{})
+				klog.Infoln(err)
+			} else {
+				klog.Infoln(err)
 			}
 		}
 	}

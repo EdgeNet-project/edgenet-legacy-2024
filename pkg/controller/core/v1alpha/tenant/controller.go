@@ -301,6 +301,14 @@ func (c *Controller) ProcessTenant(tenantCopy *corev1alpha.Tenant) {
 				tenantCopy.Status.State = failure
 				tenantCopy.Status.Message = messageBindingFailed
 				klog.V(4).Infoln(err)
+			} else if errors.IsAlreadyExists(err) {
+				if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(tenantCopy.GetName()).Get(context.TODO(), roleBind.GetName(), metav1.GetOptions{}); err == nil {
+					roleBindingCopy := roleBinding.DeepCopy()
+					roleBindingCopy.RoleRef = roleBind.RoleRef
+					roleBindingCopy.Subjects = roleBind.Subjects
+					roleBindingCopy.SetLabels(roleBind.GetLabels())
+					c.kubeclientset.RbacV1().RoleBindings(tenantCopy.GetName()).Update(context.TODO(), roleBindingCopy, metav1.UpdateOptions{})
+				}
 			} else {
 				c.recorder.Event(tenantCopy, corev1.EventTypeNormal, successEstablished, messageEstablished)
 				tenantCopy.Status.State = established
