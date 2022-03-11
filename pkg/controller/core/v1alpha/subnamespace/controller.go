@@ -733,7 +733,7 @@ func (c *Controller) tareChildResourceQuota(subnamespaceCopy *corev1alpha.SubNam
 	case "workspace":
 		if subResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(childNameHashed).Get(context.TODO(), "sub-quota", metav1.GetOptions{}); err == nil {
 			taredQuota := make(map[corev1.ResourceName]resource.Quantity)
-			for key, _ := range subResourceQuota.Spec.Hard {
+			for key := range subResourceQuota.Spec.Hard {
 				taredQuota[key] = *resource.NewQuantity(0, subResourceQuota.Spec.Hard[key].Format)
 			}
 			subResourceQuotaCopy := subResourceQuota.DeepCopy()
@@ -748,7 +748,7 @@ func (c *Controller) tareChildResourceQuota(subnamespaceCopy *corev1alpha.SubNam
 	case "subtenant":
 		if subtenantResourceQuota, err := c.edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), childNameHashed, metav1.GetOptions{}); err == nil {
 			taredQuota := make(map[corev1.ResourceName]resource.Quantity)
-			for key, _ := range subtenantResourceQuota.Spec.Claim["initial"].ResourceList {
+			for key := range subtenantResourceQuota.Spec.Claim["initial"].ResourceList {
 				taredQuota[key] = *resource.NewQuantity(0, subtenantResourceQuota.Spec.Claim["initial"].ResourceList[key].Format)
 			}
 			subtenantResourceQuotaCopy := subtenantResourceQuota.DeepCopy()
@@ -887,194 +887,463 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 }
 
 func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespace, childNamespace string) bool {
-	// TODO: What if deleted?
 	done := true
-	if subnamespaceCopy.Spec.Workspace != nil {
-		if roleRaw, err := c.kubeclientset.RbacV1().Roles(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["rbac"] {
-			for _, roleRow := range roleRaw.Items {
-				role := roleRow.DeepCopy()
-				role.SetNamespace(childNamespace)
-				role.SetUID(types.UID(uuid.New().String()))
-				role.ResourceVersion = ""
-				if _, err := c.kubeclientset.RbacV1().Roles(childNamespace).Create(context.TODO(), role, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-					done = false
-					klog.Infoln(err)
-				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					if existingRole, err := c.kubeclientset.RbacV1().Roles(childNamespace).Get(context.TODO(), role.GetName(), metav1.GetOptions{}); err != nil {
+	if subnamespaceCopy.Spec.Workspace.Inheritance["rbac"] {
+		if parentRaw, err := c.kubeclientset.RbacV1().Roles(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			var childItems []rbacv1.Role
+			if childRaw, err := c.kubeclientset.RbacV1().Roles(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
+				childItems = childRaw.Items
+			}
+			inheritance := Inheritance{}
+			inheritance.Child = make([]interface{}, len(childItems))
+			for k, v := range childItems {
+				inheritance.Child[k] = v.DeepCopy()
+			}
+			inheritance.Parent = make([]interface{}, len(parentRaw.Items))
+			for k, v := range parentRaw.Items {
+				inheritance.Parent[k] = v.DeepCopy()
+			}
+			createList, updateList, deleteList := inheritance.GetOperationList()
+			if len(createList) > 0 {
+				for _, obj := range createList {
+					role := obj.(*rbacv1.Role)
+					if _, err := c.kubeclientset.RbacV1().Roles(childNamespace).Create(context.TODO(), role, metav1.CreateOptions{}); err != nil {
+						if !errors.IsAlreadyExists(err) {
+							done = false
+							klog.Infoln(err)
+						} else {
+							// TODO: Warning
+						}
+					}
+				}
+			}
+			if len(updateList) > 0 {
+				for _, obj := range updateList {
+					childRole := obj.(*rbacv1.Role)
+					if _, err := c.kubeclientset.RbacV1().Roles(childNamespace).Update(context.TODO(), childRole, metav1.UpdateOptions{}); err != nil {
 						done = false
 						klog.Infoln(err)
-					} else {
-						if !reflect.DeepEqual(role.Rules, existingRole.Rules) || !reflect.DeepEqual(role.GetLabels(), existingRole.GetLabels()) {
-							existingRole.Rules = role.Rules
-							existingRole.SetLabels(role.GetLabels())
-							if _, err := c.kubeclientset.RbacV1().Roles(childNamespace).Update(context.TODO(), existingRole, metav1.UpdateOptions{}); err != nil {
-								done = false
-								klog.Infoln(err)
-							}
-						}
 					}
 				}
 			}
-		}
-		if roleBindingRaw, err := c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["rbac"] {
-			for _, roleBindingRow := range roleBindingRaw.Items {
-				roleBinding := roleBindingRow.DeepCopy()
-				roleBinding.SetNamespace(childNamespace)
-				roleBinding.SetUID(types.UID(uuid.New().String()))
-				roleBinding.ResourceVersion = ""
-				if _, err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).Create(context.TODO(), roleBinding, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-					done = false
-					klog.Infoln(err)
-				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					if existingRoleBinding, err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).Get(context.TODO(), roleBinding.GetName(), metav1.GetOptions{}); err != nil {
+			if len(deleteList) > 0 {
+				for objName := range deleteList {
+					if err := c.kubeclientset.RbacV1().Roles(childNamespace).Delete(context.TODO(), objName, metav1.DeleteOptions{}); err != nil {
 						done = false
 						klog.Infoln(err)
-					} else {
-						if !reflect.DeepEqual(roleBinding.RoleRef, existingRoleBinding.RoleRef) || !reflect.DeepEqual(roleBinding.Subjects, existingRoleBinding.Subjects) || !reflect.DeepEqual(roleBinding.GetLabels(), existingRoleBinding.GetLabels()) {
-							existingRoleBinding.RoleRef = roleBinding.RoleRef
-							existingRoleBinding.Subjects = roleBinding.Subjects
-							existingRoleBinding.SetLabels(roleBinding.GetLabels())
-							if _, err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).Update(context.TODO(), existingRoleBinding, metav1.UpdateOptions{}); err != nil {
-								done = false
-								klog.Infoln(err)
-							}
+					}
+				}
+			}
+
+		}
+		if parentRaw, err := c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			var childItems []rbacv1.RoleBinding
+			if childRaw, err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
+				childItems = childRaw.Items
+			}
+			inheritance := Inheritance{}
+			inheritance.Child = make([]interface{}, len(childItems))
+			for k, v := range childItems {
+				inheritance.Child[k] = v.DeepCopy()
+			}
+			inheritance.Parent = make([]interface{}, len(parentRaw.Items))
+			for k, v := range parentRaw.Items {
+				inheritance.Parent[k] = v.DeepCopy()
+			}
+			createList, updateList, deleteList := inheritance.GetOperationList()
+			if len(createList) > 0 {
+				for _, obj := range createList {
+					role := obj.(*rbacv1.RoleBinding)
+					if _, err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).Create(context.TODO(), role, metav1.CreateOptions{}); err != nil {
+						if !errors.IsAlreadyExists(err) {
+							done = false
+							klog.Infoln(err)
+						} else {
+							// TODO: Warning
 						}
 					}
 				}
 			}
-		}
-		if networkPolicyRaw, err := c.kubeclientset.NetworkingV1().NetworkPolicies(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["networkpolicy"] {
-			for _, networkPolicyRow := range networkPolicyRaw.Items {
-				networkPolicy := networkPolicyRow.DeepCopy()
-				networkPolicy.SetNamespace(childNamespace)
-				networkPolicy.SetUID(types.UID(uuid.New().String()))
-				networkPolicy.ResourceVersion = ""
-				if _, err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Create(context.TODO(), networkPolicy, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-					done = false
-				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					if existingNetworkPolicy, err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Get(context.TODO(), networkPolicy.GetName(), metav1.GetOptions{}); err != nil {
+			if len(updateList) > 0 {
+				for _, obj := range updateList {
+					childRole := obj.(*rbacv1.RoleBinding)
+					if _, err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).Update(context.TODO(), childRole, metav1.UpdateOptions{}); err != nil {
 						done = false
-					} else {
-						if !reflect.DeepEqual(networkPolicy.Spec, existingNetworkPolicy.Spec) || !reflect.DeepEqual(networkPolicy.GetLabels(), existingNetworkPolicy.GetLabels()) {
-							existingNetworkPolicy.Spec = networkPolicy.Spec
-							existingNetworkPolicy.SetLabels(networkPolicy.GetLabels())
-							if _, err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Update(context.TODO(), existingNetworkPolicy, metav1.UpdateOptions{}); err != nil {
-								done = false
-								klog.Infoln(err)
-							}
-						}
+						klog.Infoln(err)
 					}
 				}
 			}
-		}
-		if limitRangeRaw, err := c.kubeclientset.CoreV1().LimitRanges(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["limitrange"] {
-			for _, limitRangeRow := range limitRangeRaw.Items {
-				limitRange := limitRangeRow.DeepCopy()
-				limitRange.SetNamespace(childNamespace)
-				limitRange.SetUID(types.UID(uuid.New().String()))
-				limitRange.ResourceVersion = ""
-				if _, err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).Create(context.TODO(), limitRange, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-					done = false
-				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					if existingLimitRange, err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).Get(context.TODO(), limitRange.GetName(), metav1.GetOptions{}); err != nil {
+			if len(deleteList) > 0 {
+				for objName := range deleteList {
+					if err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).Delete(context.TODO(), objName, metav1.DeleteOptions{}); err != nil {
 						done = false
-					} else {
-						if !reflect.DeepEqual(limitRange.Spec, existingLimitRange.Spec) || !reflect.DeepEqual(limitRange.GetLabels(), existingLimitRange.GetLabels()) {
-							existingLimitRange.Spec = limitRange.Spec
-							existingLimitRange.SetLabels(limitRange.GetLabels())
-							if _, err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).Update(context.TODO(), existingLimitRange, metav1.UpdateOptions{}); err != nil {
-								done = false
-								klog.Infoln(err)
-							}
-						}
+						klog.Infoln(err)
 					}
 				}
 			}
 		}
-		if secretRaw, err := c.kubeclientset.CoreV1().Secrets(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["secret"] {
-			for _, secretRow := range secretRaw.Items {
-				secret := secretRow.DeepCopy()
-				secret.SetNamespace(childNamespace)
-				secret.SetUID(types.UID(uuid.New().String()))
-				secret.ResourceVersion = ""
-				if _, err := c.kubeclientset.CoreV1().Secrets(childNamespace).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-					done = false
-				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					if existingSecret, err := c.kubeclientset.CoreV1().Secrets(childNamespace).Get(context.TODO(), secret.GetName(), metav1.GetOptions{}); err != nil {
-						done = false
-					} else {
-						if !reflect.DeepEqual(secret.Type, existingSecret.Type) || !reflect.DeepEqual(secret.Data, existingSecret.Data) || !reflect.DeepEqual(secret.StringData, existingSecret.StringData) || !reflect.DeepEqual(secret.Immutable, existingSecret.Immutable) || !reflect.DeepEqual(secret.GetLabels(), existingSecret.GetLabels()) {
-							existingSecret.Type = secret.Type
-							existingSecret.Data = secret.Data
-							existingSecret.StringData = secret.StringData
-							existingSecret.Immutable = secret.Immutable
-							existingSecret.SetLabels(secret.GetLabels())
-							if _, err := c.kubeclientset.CoreV1().Secrets(childNamespace).Update(context.TODO(), existingSecret, metav1.UpdateOptions{}); err != nil {
-								done = false
-								klog.Infoln(err)
-							}
-						}
-					}
-				}
-			}
-		}
-		if configMapRaw, err := c.kubeclientset.CoreV1().ConfigMaps(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["configmap"] {
-			for _, configMapRow := range configMapRaw.Items {
-				configMap := configMapRow.DeepCopy()
-				configMap.SetNamespace(childNamespace)
-				configMap.SetUID(types.UID(uuid.New().String()))
-				configMap.ResourceVersion = ""
-				if _, err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-					done = false
-				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					if existingConfigMap, err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Get(context.TODO(), configMap.GetName(), metav1.GetOptions{}); err != nil {
-						done = false
-					} else {
-						if !reflect.DeepEqual(configMap.BinaryData, existingConfigMap.BinaryData) || !reflect.DeepEqual(configMap.Data, existingConfigMap.Data) || !reflect.DeepEqual(configMap.Immutable, existingConfigMap.Immutable) || !reflect.DeepEqual(configMap.GetLabels(), existingConfigMap.GetLabels()) {
-							existingConfigMap.BinaryData = configMap.BinaryData
-							existingConfigMap.Data = configMap.Data
-							existingConfigMap.Immutable = configMap.Immutable
-							existingConfigMap.SetLabels(configMap.GetLabels())
-							if _, err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Update(context.TODO(), existingConfigMap, metav1.UpdateOptions{}); err != nil {
-								done = false
-								klog.Infoln(err)
-							}
-						}
-					}
-				}
-			}
-		}
-		if serviceAccountRaw, err := c.kubeclientset.CoreV1().ServiceAccounts(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil && subnamespaceCopy.Spec.Workspace.Inheritance["serviceaccount"] {
-			for _, serviceAccountRow := range serviceAccountRaw.Items {
-				serviceAccount := serviceAccountRow.DeepCopy()
-				serviceAccount.SetNamespace(childNamespace)
-				serviceAccount.SetUID(types.UID(uuid.New().String()))
-				serviceAccount.ResourceVersion = ""
-				if _, err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Create(context.TODO(), serviceAccount, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-					done = false
-				} else if errors.IsAlreadyExists(err) && subnamespaceCopy.Spec.Workspace.Sync {
-					if existingServiceAccount, err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Get(context.TODO(), serviceAccount.GetName(), metav1.GetOptions{}); err != nil {
-						done = false
-					} else {
-						if !reflect.DeepEqual(serviceAccount.AutomountServiceAccountToken, existingServiceAccount.AutomountServiceAccountToken) || !reflect.DeepEqual(serviceAccount.ImagePullSecrets, existingServiceAccount.ImagePullSecrets) || !reflect.DeepEqual(serviceAccount.Secrets, existingServiceAccount.Secrets) || !reflect.DeepEqual(serviceAccount.GetLabels(), existingServiceAccount.GetLabels()) {
-							existingServiceAccount.AutomountServiceAccountToken = serviceAccount.AutomountServiceAccountToken
-							existingServiceAccount.ImagePullSecrets = serviceAccount.ImagePullSecrets
-							existingServiceAccount.Secrets = serviceAccount.Secrets
-							existingServiceAccount.SetLabels(serviceAccount.GetLabels())
-							if _, err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Update(context.TODO(), existingServiceAccount, metav1.UpdateOptions{}); err != nil {
-								done = false
-								klog.Infoln(err)
-							}
-						}
-					}
-				}
-			}
-		}
+	} else {
+		c.kubeclientset.RbacV1().Roles(childNamespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"})
+		c.kubeclientset.RbacV1().RoleBindings(childNamespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"})
 	}
+	if subnamespaceCopy.Spec.Workspace.Inheritance["networkpolicy"] {
+		if parentRaw, err := c.kubeclientset.NetworkingV1().NetworkPolicies(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			var childItems []networkingv1.NetworkPolicy
+			if childRaw, err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
+				childItems = childRaw.Items
+			}
+			inheritance := Inheritance{}
+			inheritance.Child = make([]interface{}, len(childItems))
+			for k, v := range childItems {
+				inheritance.Child[k] = v.DeepCopy()
+			}
+			inheritance.Parent = make([]interface{}, len(parentRaw.Items))
+			for k, v := range parentRaw.Items {
+				inheritance.Parent[k] = v.DeepCopy()
+			}
+			createList, updateList, deleteList := inheritance.GetOperationList()
+			if len(createList) > 0 {
+				for _, obj := range createList {
+					role := obj.(*networkingv1.NetworkPolicy)
+					if _, err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Create(context.TODO(), role, metav1.CreateOptions{}); err != nil {
+						if !errors.IsAlreadyExists(err) {
+							done = false
+							klog.Infoln(err)
+						} else {
+							// TODO: Warning
+						}
+					}
+				}
+			}
+			if len(updateList) > 0 {
+				for _, obj := range updateList {
+					childRole := obj.(*networkingv1.NetworkPolicy)
+					if _, err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Update(context.TODO(), childRole, metav1.UpdateOptions{}); err != nil {
+						done = false
+						klog.Infoln(err)
+					}
+				}
+			}
+			if len(deleteList) > 0 {
+				for objName := range deleteList {
+					if err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).Delete(context.TODO(), objName, metav1.DeleteOptions{}); err != nil {
+						done = false
+						klog.Infoln(err)
+					}
+				}
+			}
+		}
+	} else {
+		c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"})
+	}
+	if subnamespaceCopy.Spec.Workspace.Inheritance["limitrange"] {
+		if parentRaw, err := c.kubeclientset.CoreV1().LimitRanges(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			var childItems []corev1.LimitRange
+			if childRaw, err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
+				childItems = childRaw.Items
+			}
+			inheritance := Inheritance{}
+			inheritance.Child = make([]interface{}, len(childItems))
+			for k, v := range childItems {
+				inheritance.Child[k] = v.DeepCopy()
+			}
+			inheritance.Parent = make([]interface{}, len(parentRaw.Items))
+			for k, v := range parentRaw.Items {
+				inheritance.Parent[k] = v.DeepCopy()
+			}
+			createList, updateList, deleteList := inheritance.GetOperationList()
+			if len(createList) > 0 {
+				for _, obj := range createList {
+					role := obj.(*corev1.LimitRange)
+					if _, err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).Create(context.TODO(), role, metav1.CreateOptions{}); err != nil {
+						if !errors.IsAlreadyExists(err) {
+							done = false
+							klog.Infoln(err)
+						} else {
+							// TODO: Warning
+						}
+					}
+				}
+			}
+			if len(updateList) > 0 {
+				for _, obj := range updateList {
+					childRole := obj.(*corev1.LimitRange)
+					if _, err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).Update(context.TODO(), childRole, metav1.UpdateOptions{}); err != nil {
+						done = false
+						klog.Infoln(err)
+					}
+				}
+			}
+			if len(deleteList) > 0 {
+				for objName := range deleteList {
+					if err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).Delete(context.TODO(), objName, metav1.DeleteOptions{}); err != nil {
+						done = false
+						klog.Infoln(err)
+					}
+				}
+			}
+		}
+	} else {
+		c.kubeclientset.CoreV1().LimitRanges(childNamespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"})
+	}
+	if subnamespaceCopy.Spec.Workspace.Inheritance["secret"] {
+		if parentRaw, err := c.kubeclientset.CoreV1().Secrets(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			var childItems []corev1.Secret
+			if childRaw, err := c.kubeclientset.CoreV1().Secrets(childNamespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
+				childItems = childRaw.Items
+			}
+			inheritance := Inheritance{}
+			inheritance.Child = make([]interface{}, len(childItems))
+			for k, v := range childItems {
+				inheritance.Child[k] = v.DeepCopy()
+			}
+			inheritance.Parent = make([]interface{}, len(parentRaw.Items))
+			for k, v := range parentRaw.Items {
+				inheritance.Parent[k] = v.DeepCopy()
+			}
+			createList, updateList, deleteList := inheritance.GetOperationList()
+			if len(createList) > 0 {
+				for _, obj := range createList {
+					role := obj.(*corev1.Secret)
+					if _, err := c.kubeclientset.CoreV1().Secrets(childNamespace).Create(context.TODO(), role, metav1.CreateOptions{}); err != nil {
+						if !errors.IsAlreadyExists(err) {
+							done = false
+							klog.Infoln(err)
+						} else {
+							// TODO: Warning
+						}
+					}
+				}
+			}
+			if len(updateList) > 0 {
+				for _, obj := range updateList {
+					childRole := obj.(*corev1.Secret)
+					if _, err := c.kubeclientset.CoreV1().Secrets(childNamespace).Update(context.TODO(), childRole, metav1.UpdateOptions{}); err != nil {
+						done = false
+						klog.Infoln(err)
+					}
+				}
+			}
+			if len(deleteList) > 0 {
+				for objName := range deleteList {
+					if err := c.kubeclientset.CoreV1().Secrets(childNamespace).Delete(context.TODO(), objName, metav1.DeleteOptions{}); err != nil {
+						done = false
+						klog.Infoln(err)
+					}
+				}
+			}
+		}
+	} else {
+		c.kubeclientset.CoreV1().Secrets(childNamespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"})
+	}
+	if subnamespaceCopy.Spec.Workspace.Inheritance["configmap"] {
+		if parentRaw, err := c.kubeclientset.CoreV1().ConfigMaps(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			var childItems []corev1.ConfigMap
+			if childRaw, err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
+				childItems = childRaw.Items
+			}
+			inheritance := Inheritance{}
+			inheritance.Child = make([]interface{}, len(childItems))
+			for k, v := range childItems {
+				inheritance.Child[k] = v.DeepCopy()
+			}
+			inheritance.Parent = make([]interface{}, len(parentRaw.Items))
+			for k, v := range parentRaw.Items {
+				inheritance.Parent[k] = v.DeepCopy()
+			}
+			createList, updateList, deleteList := inheritance.GetOperationList()
+			if len(createList) > 0 {
+				for _, obj := range createList {
+					role := obj.(*corev1.ConfigMap)
+					if _, err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Create(context.TODO(), role, metav1.CreateOptions{}); err != nil {
+						if !errors.IsAlreadyExists(err) {
+							done = false
+							klog.Infoln(err)
+						} else {
+							// TODO: Warning
+						}
+					}
+				}
+			}
+			if len(updateList) > 0 {
+				for _, obj := range updateList {
+					childRole := obj.(*corev1.ConfigMap)
+					if _, err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Update(context.TODO(), childRole, metav1.UpdateOptions{}); err != nil {
+						done = false
+						klog.Infoln(err)
+					}
+				}
+			}
+			if len(deleteList) > 0 {
+				for objName := range deleteList {
+					if err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).Delete(context.TODO(), objName, metav1.DeleteOptions{}); err != nil {
+						done = false
+						klog.Infoln(err)
+					}
+				}
+			}
+		}
+	} else {
+		c.kubeclientset.CoreV1().ConfigMaps(childNamespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"})
+	}
+	if subnamespaceCopy.Spec.Workspace.Inheritance["serviceaccount"] {
+		if parentRaw, err := c.kubeclientset.CoreV1().ServiceAccounts(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			var childItems []corev1.ServiceAccount
+			if childRaw, err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
+				childItems = childRaw.Items
+			}
+			inheritance := Inheritance{}
+			inheritance.Child = make([]interface{}, len(childItems))
+			for k, v := range childItems {
+				inheritance.Child[k] = v.DeepCopy()
+			}
+			inheritance.Parent = make([]interface{}, len(parentRaw.Items))
+			for k, v := range parentRaw.Items {
+				inheritance.Parent[k] = v.DeepCopy()
+			}
+			createList, updateList, deleteList := inheritance.GetOperationList()
+			if len(createList) > 0 {
+				for _, obj := range createList {
+					role := obj.(*corev1.ServiceAccount)
+					if _, err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Create(context.TODO(), role, metav1.CreateOptions{}); err != nil {
+						if !errors.IsAlreadyExists(err) {
+							done = false
+							klog.Infoln(err)
+						} else {
+							// TODO: Warning
+						}
+					}
+				}
+			}
+			if len(updateList) > 0 {
+				for _, obj := range updateList {
+					childRole := obj.(*corev1.ServiceAccount)
+					if _, err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Update(context.TODO(), childRole, metav1.UpdateOptions{}); err != nil {
+						done = false
+						klog.Infoln(err)
+					}
+				}
+			}
+			if len(deleteList) > 0 {
+				for objName := range deleteList {
+					if err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).Delete(context.TODO(), objName, metav1.DeleteOptions{}); err != nil {
+						done = false
+						klog.Infoln(err)
+					}
+				}
+			}
+		}
+	} else {
+		c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"})
+	}
+
 	if !done {
 		c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureInheritance, messageInheritanceFail)
 		subnamespaceCopy.Status.State = failure
 		subnamespaceCopy.Status.Message = messageInheritanceFail
 	}
 	return done
+}
+
+type Inheritance struct {
+	Child          []interface{}
+	Parent         []interface{}
+	ChildNamespace string
+}
+
+func (i Inheritance) GetOperationList() ([]interface{}, []interface{}, map[string]interface{}) {
+	var createList []interface{}
+	var updateList []interface{}
+	comparisonSlice := make(map[string]interface{})
+	for _, childObj := range i.Child {
+		comparisonSlice[childObj.(metav1.Object).GetName()] = childObj
+	}
+	for _, parentObj := range i.Parent {
+		if _, ok := comparisonSlice[parentObj.(metav1.Object).GetName()]; ok {
+			childObj := i.prepareForUpdate(comparisonSlice[parentObj.(metav1.Object).GetName()], parentObj)
+			if childObj != nil {
+				updateList = append(updateList, childObj)
+			}
+			delete(comparisonSlice, parentObj.(metav1.Object).GetName())
+		} else {
+			childObj := i.prepareForCreate(parentObj)
+			createList = append(createList, childObj)
+		}
+	}
+	return createList, updateList, comparisonSlice
+}
+
+func (i Inheritance) prepareForCreate(obj interface{}) interface{} {
+	obj.(metav1.Object).SetNamespace(i.ChildNamespace)
+	obj.(metav1.Object).SetUID(types.UID(uuid.New().String()))
+	obj.(metav1.Object).SetResourceVersion("")
+	return obj
+}
+
+func (i Inheritance) prepareForUpdate(childObj, parentObj interface{}) interface{} {
+	var childForUpdate interface{}
+	switch parentObjectForUpdate := parentObj.(type) {
+	case *rbacv1.Role:
+		childRoleCopy := childObj.(*rbacv1.Role)
+		if !reflect.DeepEqual(childRoleCopy.Rules, parentObjectForUpdate.Rules) || !reflect.DeepEqual(childRoleCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
+			childRoleCopy.Rules = parentObjectForUpdate.Rules
+			childRoleCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childForUpdate = childRoleCopy
+		}
+	case *rbacv1.RoleBinding:
+		childRoleBindingCopy := childObj.(*rbacv1.RoleBinding)
+		if !reflect.DeepEqual(childRoleBindingCopy.RoleRef, parentObjectForUpdate.RoleRef) || !reflect.DeepEqual(childRoleBindingCopy.Subjects, parentObjectForUpdate.Subjects) || !reflect.DeepEqual(childRoleBindingCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
+			childRoleBindingCopy.RoleRef = parentObjectForUpdate.RoleRef
+			childRoleBindingCopy.Subjects = parentObjectForUpdate.Subjects
+			childRoleBindingCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childForUpdate = childRoleBindingCopy
+		}
+	case *networkingv1.NetworkPolicy:
+		childNetworkPolicyCopy := childObj.(*networkingv1.NetworkPolicy)
+		if !reflect.DeepEqual(childNetworkPolicyCopy.Spec, parentObjectForUpdate.Spec) || !reflect.DeepEqual(childNetworkPolicyCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
+			childNetworkPolicyCopy.Spec = parentObjectForUpdate.Spec
+			childNetworkPolicyCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childForUpdate = childNetworkPolicyCopy
+		}
+	case *corev1.LimitRange:
+		childLimitRangeCopy := childObj.(*corev1.LimitRange)
+		if !reflect.DeepEqual(childLimitRangeCopy.Spec, parentObjectForUpdate.Spec) || !reflect.DeepEqual(childLimitRangeCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
+			childLimitRangeCopy.Spec = parentObjectForUpdate.Spec
+			childLimitRangeCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childForUpdate = childLimitRangeCopy
+		}
+	case *corev1.Secret:
+		childSecretCopy := childObj.(*corev1.Secret)
+		if !reflect.DeepEqual(childSecretCopy.Type, parentObjectForUpdate.Type) || !reflect.DeepEqual(childSecretCopy.Data, parentObjectForUpdate.Data) ||
+			!reflect.DeepEqual(childSecretCopy.StringData, parentObjectForUpdate.StringData) || !reflect.DeepEqual(childSecretCopy.Immutable, parentObjectForUpdate.Immutable) ||
+			!reflect.DeepEqual(childSecretCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
+			childSecretCopy.Type = parentObjectForUpdate.Type
+			childSecretCopy.Data = parentObjectForUpdate.Data
+			childSecretCopy.StringData = parentObjectForUpdate.StringData
+			childSecretCopy.Immutable = parentObjectForUpdate.Immutable
+			childSecretCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childForUpdate = childSecretCopy
+		}
+	case corev1.ConfigMap:
+		childConfigMapCopy := childObj.(*corev1.ConfigMap)
+		if !reflect.DeepEqual(childConfigMapCopy.BinaryData, parentObjectForUpdate.BinaryData) || !reflect.DeepEqual(childConfigMapCopy.Data, parentObjectForUpdate.Data) ||
+			!reflect.DeepEqual(childConfigMapCopy.Immutable, parentObjectForUpdate.Immutable) || !reflect.DeepEqual(childConfigMapCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
+			childConfigMapCopy.BinaryData = parentObjectForUpdate.BinaryData
+			childConfigMapCopy.Data = parentObjectForUpdate.Data
+			childConfigMapCopy.Immutable = parentObjectForUpdate.Immutable
+			childConfigMapCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childForUpdate = childConfigMapCopy
+		}
+	case *corev1.ServiceAccount:
+		childServiceAccountCopy := childObj.(*corev1.ServiceAccount)
+		if !reflect.DeepEqual(childServiceAccountCopy.AutomountServiceAccountToken, parentObjectForUpdate.AutomountServiceAccountToken) || !reflect.DeepEqual(childServiceAccountCopy.ImagePullSecrets, parentObjectForUpdate.ImagePullSecrets) ||
+			!reflect.DeepEqual(childServiceAccountCopy.Secrets, parentObjectForUpdate.Secrets) || !reflect.DeepEqual(childServiceAccountCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
+			childServiceAccountCopy.AutomountServiceAccountToken = parentObjectForUpdate.AutomountServiceAccountToken
+			childServiceAccountCopy.ImagePullSecrets = parentObjectForUpdate.ImagePullSecrets
+			childServiceAccountCopy.Secrets = parentObjectForUpdate.Secrets
+			childServiceAccountCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childForUpdate = childServiceAccountCopy
+		}
+	}
+	return childForUpdate
 }
