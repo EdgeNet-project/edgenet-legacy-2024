@@ -207,7 +207,6 @@ func NewController(
 			namespaceLabels := namespace.GetLabels()
 
 			childNameHashed := subnamespace.GenerateChildName(namespaceLabels["edge-net.io/cluster-uid"])
-			sliceExists := false
 			switch subnamespace.GetMode() {
 			case "workspace":
 				if childExists, childOwned := controller.validateChildOwnership(namespace, subnamespace.GetMode(), childNameHashed); childExists && childOwned {
@@ -215,21 +214,15 @@ func NewController(
 				} else {
 					return
 				}
-				if subnamespace.Spec.Workspace.SliceClaim != nil {
-					sliceExists = true
-				}
 			case "subtenant":
 				if childExists, childOwned := controller.validateChildOwnership(namespace, subnamespace.GetMode(), childNameHashed); childExists && childOwned {
 					controller.edgenetclientset.CoreV1alpha().Tenants().Delete(context.TODO(), childNameHashed, metav1.DeleteOptions{})
 				} else {
 					return
 				}
-				if subnamespace.Spec.Subtenant.SliceClaim != nil {
-					sliceExists = true
-				}
 			}
 
-			if !sliceExists {
+			if subnamespace.GetSliceClaim() == nil {
 				if parentResourceQuota, err := controller.kubeclientset.CoreV1().ResourceQuotas(subnamespace.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
 					returnedQuota := make(map[corev1.ResourceName]resource.Quantity)
 					for key, value := range parentResourceQuota.Spec.Hard {
@@ -581,41 +574,28 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 			return
 		}
 
-		ownerReferences := namespacev1.SetAsOwnerReference(namespace)
-		sliceClaimExists := false
-		var sliceName string
-		switch subnamespaceCopy.GetMode() {
-		case "workspace":
-			if subnamespaceCopy.Spec.Workspace.SliceClaim != nil {
-				sliceName = *subnamespaceCopy.Spec.Workspace.SliceClaim
-				sliceClaimExists = true
-			} else {
+		if subnamespaceCopy.GetSliceClaim() == nil {
+			switch subnamespaceCopy.GetMode() {
+			case "workspace":
 				if subResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(childNameHashed).Get(context.TODO(), "sub-quota", metav1.GetOptions{}); err == nil {
 					childResourceQuota = subResourceQuota.Spec.Hard
 				}
-			}
-			labels = map[string]string{"edge-net.io/generated": "true", "edge-net.io/kind": "sub", "edge-net.io/tenant": namespaceLabels["edge-net.io/tenant"],
-				"edge-net.io/owner": subnamespaceCopy.GetName(), "edge-net.io/parent-namespace": subnamespaceCopy.GetNamespace()}
-		case "subtenant":
-			if subnamespaceCopy.Spec.Subtenant.SliceClaim != nil {
-				sliceName = *subnamespaceCopy.Spec.Workspace.SliceClaim
-				sliceClaimExists = true
-			} else {
+				labels = map[string]string{"edge-net.io/generated": "true", "edge-net.io/kind": "sub", "edge-net.io/tenant": namespaceLabels["edge-net.io/tenant"],
+					"edge-net.io/owner": subnamespaceCopy.GetName(), "edge-net.io/parent-namespace": subnamespaceCopy.GetNamespace()}
+			case "subtenant":
 				if subtenantResourceQuota, err := c.edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), childNameHashed, metav1.GetOptions{}); err == nil {
 					_, assignedQuota := subtenantResourceQuota.Fetch()
 					childResourceQuota = assignedQuota
 				}
 			}
-		}
 
-		if !sliceClaimExists {
 			if parentResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(subnamespaceCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
 				if sufficientQuota := c.tuneParentResourceQuota(subnamespaceCopy, parentResourceQuota, childResourceQuota); !sufficientQuota {
 					return
 				}
 			}
 		} else {
-			if isBound := c.checkSliceClaim(subnamespaceCopy.GetNamespace(), sliceName); !isBound {
+			if isBound := c.checkSliceClaim(subnamespaceCopy.GetNamespace(), *subnamespaceCopy.GetSliceClaim()); !isBound {
 				c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureSlice, messageSlice)
 				subnamespaceCopy.Status.State = failure
 				subnamespaceCopy.Status.Message = failureSlice
@@ -623,14 +603,30 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 			}
 			annotations = map[string]string{"scheduler.alpha.kubernetes.io/node-selector": fmt.Sprintf("edge-net.io/access=private,edge-net.io/slice=%s", *subnamespaceCopy.Spec.Workspace.SliceClaim)}
 		}
+
+		ownerReferences := namespacev1.SetAsOwnerReference(namespace)
 		childInitiated := c.constructSubsidiaryNamespace(subnamespaceCopy, childNameHashed, childExist, annotations, labels, ownerReferences)
 		if !childInitiated {
-			// TODO: Error handling
-			if parentResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(subnamespaceCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
-				c.returnParentResourceQuota(subnamespaceCopy, parentResourceQuota)
-			}
-			c.tareChildResourceQuota(subnamespaceCopy, childNameHashed)
 			return
+		}
+
+		if subnamespaceCopy.GetResourceAllocation() != nil {
+			quotaApplied := c.applyChildResourceQuota(subnamespaceCopy, childNameHashed, ownerReferences)
+			if !quotaApplied {
+				// TODO: Error handling
+				if parentResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(subnamespaceCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
+					c.returnParentResourceQuota(subnamespaceCopy, parentResourceQuota)
+				}
+				c.tareChildResourceQuota(subnamespaceCopy, childNameHashed)
+				return
+			}
+		}
+
+		if subnamespaceCopy.Spec.Workspace != nil {
+			done := c.handleInheritance(subnamespaceCopy, childNameHashed)
+			if !done {
+				return
+			}
 		}
 
 		subnamespaceCopy.Status.State = established
@@ -651,23 +647,21 @@ func (c *Controller) checkSliceClaim(namespace, name string) bool {
 }
 
 func (c *Controller) validateChildOwnership(parentNamespace *corev1.Namespace, mode, childName string) (bool, bool) {
+	var checkOwnerReferences = func(ownerReferences []metav1.OwnerReference) (bool, bool) {
+		for _, ownerReference := range ownerReferences {
+			if ownerReference.Kind == "Namespace" && ownerReference.UID == parentNamespace.GetUID() && ownerReference.Name == parentNamespace.GetName() {
+				return true, true
+			}
+		}
+		return true, false
+	}
 	if mode == "workspace" {
 		if childNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), childName, metav1.GetOptions{}); err == nil {
-			for _, ownerReference := range childNamespace.GetOwnerReferences() {
-				if ownerReference.Kind == "Namespace" && ownerReference.UID == parentNamespace.GetUID() && ownerReference.Name == parentNamespace.GetName() {
-					return true, true
-				}
-			}
-			return true, false
+			return checkOwnerReferences(childNamespace.GetOwnerReferences())
 		}
 	} else {
 		if subtenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), childName, metav1.GetOptions{}); err == nil {
-			for _, ownerReference := range subtenant.GetOwnerReferences() {
-				if ownerReference.Kind == "Namespace" && ownerReference.UID == parentNamespace.GetUID() && ownerReference.Name == parentNamespace.GetName() {
-					return true, true
-				}
-			}
-			return true, false
+			return checkOwnerReferences(subtenant.GetOwnerReferences())
 		}
 	}
 	return false, false
@@ -811,40 +805,19 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 				}
 			}
 		}
-
-		if subnamespaceCopy.Spec.Workspace.ResourceAllocation != nil {
-			quotaApplied := c.applyChildResourceQuota(subnamespaceCopy, childName, ownerReferences)
-			if !quotaApplied {
-				return false
-			}
-		}
-
-		done := c.handleInheritance(subnamespaceCopy, childName)
-		if !done {
-			return false
-		}
 	case "subtenant":
 		if !childExists {
-			// Separate tenant creation and tenant resource quota creation
 			tenantRequest := new(registrationv1alpha.TenantRequest)
 			tenantRequest.SetName(childName)
 			tenantRequest.SetAnnotations(annotations)
 			tenantRequest.SetLabels(labels)
 			tenantRequest.SetOwnerReferences(ownerReferences)
 			tenantRequest.Spec.Contact = subnamespaceCopy.Spec.Subtenant.Owner
-			tenantRequest.Spec.ResourceAllocation = subnamespaceCopy.Spec.Subtenant.ResourceAllocation
 			if err := access.CreateTenant(tenantRequest); err != nil {
 				c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureCreation, messageCreationFail)
 				subnamespaceCopy.Status.State = failure
 				subnamespaceCopy.Status.Message = messageCreationFail
 				return false
-			}
-		} else {
-			if subnamespaceCopy.Spec.Subtenant.ResourceAllocation != nil {
-				quotaApplied := c.applyChildResourceQuota(subnamespaceCopy, childName, ownerReferences)
-				if !quotaApplied {
-					return false
-				}
 			}
 		}
 	}
@@ -856,7 +829,7 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 	case "workspace":
 		if childResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(childName).Get(context.TODO(), "sub-quota", metav1.GetOptions{}); err == nil {
 			childResourceQuotaCopy := childResourceQuota.DeepCopy()
-			childResourceQuotaCopy.Spec.Hard = subnamespaceCopy.Spec.Workspace.ResourceAllocation
+			childResourceQuotaCopy.Spec.Hard = subnamespaceCopy.GetResourceAllocation()
 			if _, err := c.kubeclientset.CoreV1().ResourceQuotas(childName).Update(context.TODO(), childResourceQuotaCopy, metav1.UpdateOptions{}); err != nil {
 				klog.Infoln(err)
 				return false
@@ -865,7 +838,7 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 			resourceQuota := corev1.ResourceQuota{}
 			resourceQuota.Name = "sub-quota"
 			resourceQuota.Spec = corev1.ResourceQuotaSpec{
-				Hard: subnamespaceCopy.Spec.Workspace.ResourceAllocation,
+				Hard: subnamespaceCopy.GetResourceAllocation(),
 			}
 			if _, err := c.kubeclientset.CoreV1().ResourceQuotas(childName).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{}); err != nil {
 				c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureApplied, messageApplyFail)
@@ -877,7 +850,7 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 		}
 	case "subtenant":
 		claim := corev1alpha.ResourceTuning{
-			ResourceList: subnamespaceCopy.Spec.Subtenant.ResourceAllocation,
+			ResourceList: subnamespaceCopy.GetResourceAllocation(),
 		}
 		access.ApplyTenantResourceQuota(childName, nil, claim)
 	}
