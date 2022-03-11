@@ -232,6 +232,24 @@ func (s SubNamespace) GetMode() string {
 	}
 }
 
+// GetResourceAllocation return the allocated resources at workspace or subtenant.
+func (s SubNamespace) GetResourceAllocation() map[corev1.ResourceName]resource.Quantity {
+	if s.Spec.Workspace != nil {
+		return s.Spec.Workspace.ResourceAllocation
+	} else {
+		return s.Spec.Subtenant.ResourceAllocation
+	}
+}
+
+// GetSliceClaim return the assigned slice claim at workspace or subtenant.
+func (s SubNamespace) GetSliceClaim() *string {
+	if s.Spec.Workspace != nil {
+		return s.Spec.Workspace.SliceClaim
+	} else {
+		return s.Spec.Subtenant.SliceClaim
+	}
+}
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

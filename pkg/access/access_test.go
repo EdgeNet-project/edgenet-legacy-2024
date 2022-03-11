@@ -328,7 +328,9 @@ func TestApplyTenantResourceQuota(t *testing.T) {
 			"memory": resource.MustParse("6Gi"),
 		},
 	}
-	ApplyTenantResourceQuota(g.tenantResourceQuotaObj.GetName(), nil, claim)
+	applied := make(chan error)
+	ApplyTenantResourceQuota(g.tenantResourceQuotaObj.GetName(), nil, claim, applied)
+	util.OK(t, <-applied)
 	_, err = EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 }

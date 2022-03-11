@@ -18,6 +18,7 @@ package access
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
@@ -61,23 +62,25 @@ func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) error {
 			claim := corev1alpha.ResourceTuning{
 				ResourceList: tenantRequest.Spec.ResourceAllocation,
 			}
-			go ApplyTenantResourceQuota(tenant.GetName(), []metav1.OwnerReference{tenantCreated.MakeOwnerReference()}, claim)
+			applied := make(chan error, 1)
+			go ApplyTenantResourceQuota(tenant.GetName(), []metav1.OwnerReference{tenantCreated.MakeOwnerReference()}, claim, applied)
+			return <-applied
 		}
+		return nil
 	}
-	return nil
+
 }
 
 // ApplyTenantResourceQuota generates a tenant resource quota with the name provided
-func ApplyTenantResourceQuota(name string, ownerReferences []metav1.OwnerReference, claim corev1alpha.ResourceTuning) {
-	created := make(chan bool)
+func ApplyTenantResourceQuota(name string, ownerReferences []metav1.OwnerReference, claim corev1alpha.ResourceTuning, applied chan<- error) {
+	created := make(chan bool, 1)
 	go checkNamespaceCreation(name, created)
 	if <-created {
-		// TODO: Take tenant resource quota into account while error handling
-		// Set a tenant resource quota
 		if tenantResourceQuota, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), name, metav1.GetOptions{}); err == nil {
 			tenantResourceQuota.Spec.Claim["initial"] = claim
 			if _, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.UpdateOptions{}); err != nil {
 				klog.Infof("Couldn't update tenant resource quota %s: %s", name, err)
+				applied <- err
 			}
 		} else {
 			tenantResourceQuota := new(corev1alpha.TenantResourceQuota)
@@ -89,9 +92,14 @@ func ApplyTenantResourceQuota(name string, ownerReferences []metav1.OwnerReferen
 			tenantResourceQuota.Spec.Claim["initial"] = claim
 			if _, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{}); err != nil {
 				klog.Infof("Couldn't create tenant resource quota %s: %s", name, err)
+				applied <- err
 			}
 		}
+		close(applied)
+		return
 	}
+	applied <- errors.New("tenant namespace could not be created in 5 minutes")
+	close(applied)
 }
 
 func checkNamespaceCreation(tenant string, created chan<- bool) {

@@ -611,7 +611,7 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 		}
 
 		if subnamespaceCopy.GetResourceAllocation() != nil {
-			quotaApplied := c.applyChildResourceQuota(subnamespaceCopy, childNameHashed, ownerReferences)
+			quotaApplied := c.applyChildResourceQuota(subnamespaceCopy, childNameHashed)
 			if !quotaApplied {
 				// TODO: Error handling
 				if parentResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(subnamespaceCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
@@ -831,7 +831,7 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 	return true
 }
 
-func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNamespace, childName string, ownerReferences []metav1.OwnerReference) bool {
+func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNamespace, childName string) bool {
 	switch subnamespaceCopy.GetMode() {
 	case "workspace":
 		if childResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(childName).Get(context.TODO(), "sub-quota", metav1.GetOptions{}); err == nil {
@@ -856,10 +856,17 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 			}
 		}
 	case "subtenant":
-		claim := corev1alpha.ResourceTuning{
-			ResourceList: subnamespaceCopy.GetResourceAllocation(),
+		if subtenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), childName, metav1.GetOptions{}); err == nil {
+			claim := corev1alpha.ResourceTuning{
+				ResourceList: subnamespaceCopy.GetResourceAllocation(),
+			}
+			applied := make(chan error)
+			go access.ApplyTenantResourceQuota(childName, []metav1.OwnerReference{subtenant.MakeOwnerReference()}, claim, applied)
+			if err := <-applied; err != nil {
+				klog.Infoln(err)
+				return false
+			}
 		}
-		access.ApplyTenantResourceQuota(childName, nil, claim)
 	}
 
 	c.recorder.Event(subnamespaceCopy, corev1.EventTypeNormal, successApplied, messageApplied)
