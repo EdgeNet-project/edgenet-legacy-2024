@@ -819,6 +819,13 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 				subnamespaceCopy.Status.Message = messageCreationFail
 				return false
 			}
+		} else {
+			if subtenant, err := c.edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), childName, metav1.GetOptions{}); err == nil {
+				subtenantCopy := subtenant.DeepCopy()
+				subtenant.Spec.Contact = subnamespaceCopy.Spec.Subtenant.Owner
+				// TODO: Error handling
+				c.edgenetclientset.CoreV1alpha().Tenants().Update(context.TODO(), subtenantCopy, metav1.UpdateOptions{})
+			}
 		}
 	}
 	return true
