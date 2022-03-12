@@ -473,10 +473,6 @@ func (c *Controller) handleObject(obj interface{}) {
 		}
 		klog.Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 	}
-	objectLabels := object.GetLabels()
-	if objectLabels["edge-net.io/generated"] != "true" {
-		return
-	}
 	klog.Infof("Processing object: %s", object.GetName())
 
 	namespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), object.GetNamespace(), metav1.GetOptions{})
@@ -487,11 +483,14 @@ func (c *Controller) handleObject(obj interface{}) {
 	subnamespaceRaw, err := c.subnamespacesLister.SubNamespaces(object.GetNamespace()).List(labels.Everything())
 	if err == nil {
 		for _, subnamespaceRow := range subnamespaceRaw {
-			c.enqueueSubNamespaceAfter(subnamespaceRow, 30*time.Second)
+			if subnamespaceRow.Spec.Workspace != nil && subnamespaceRow.Spec.Workspace.Sync {
+				c.enqueueSubNamespaceAfter(subnamespaceRow, 30*time.Second)
+			}
 		}
 	}
 
-	if ownerRef := metav1.GetControllerOf(namespace); ownerRef != nil {
+	objectLabels := object.GetLabels()
+	if ownerRef := metav1.GetControllerOf(namespace); ownerRef != nil && objectLabels["edge-net.io/generated"] == "true" {
 		if ownerRef.Kind != "Namespace" {
 			return
 		}
@@ -507,9 +506,11 @@ func (c *Controller) handleObject(obj interface{}) {
 			klog.Infof("ignoring orphaned object '%s' of subnamespace '%s'", object.GetSelfLink(), ownerRef.Name)
 		} else {
 			for _, subnamespaceRow := range subnamespaceRaw {
-				childNameHashed := subnamespaceRow.GenerateChildName(parentnamespaceLabels["edge-net.io/cluster-uid"])
-				if childExist, childOwned := c.validateChildOwnership(parentnamespace, subnamespaceRow.GetMode(), childNameHashed); childExist && childOwned {
-					c.enqueueSubNamespace(subnamespaceRow)
+				if subnamespaceRow.Spec.Workspace != nil && subnamespaceRow.Spec.Workspace.Sync {
+					childNameHashed := subnamespaceRow.GenerateChildName(parentnamespaceLabels["edge-net.io/cluster-uid"])
+					if childExist, childOwned := c.validateChildOwnership(parentnamespace, subnamespaceRow.GetMode(), childNameHashed); childExist && childOwned {
+						c.enqueueSubNamespace(subnamespaceRow)
+					}
 				}
 			}
 		}
@@ -774,8 +775,8 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 			}
 		}
 
+		objectName := "edgenet:workspace:owner"
 		if subnamespaceCopy.Spec.Workspace.Owner != nil {
-			objectName := "edgenet:workspace:owner"
 			if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).Get(context.TODO(), objectName, metav1.GetOptions{}); err == nil {
 				roleBindingCopy := roleBinding.DeepCopy()
 				roleBindingCopy.Subjects = []rbacv1.Subject{{Kind: "User", Name: subnamespaceCopy.Spec.Workspace.Owner.Email, APIGroup: "rbac.authorization.k8s.io"}}
@@ -787,7 +788,7 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 					return false
 				}
 			} else {
-				roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: "edgenet:workspace:owner"}
+				roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: "edgenet:tenant-owner"}
 				rbSubjects := []rbacv1.Subject{{Kind: "User", Name: subnamespaceCopy.Spec.Workspace.Owner.Email, APIGroup: "rbac.authorization.k8s.io"}}
 				roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName, Namespace: subnamespaceCopy.GetNamespace()},
 					Subjects: rbSubjects, RoleRef: roleRef}
@@ -801,6 +802,8 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 					return false
 				}
 			}
+		} else {
+			c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).Delete(context.TODO(), objectName, metav1.DeleteOptions{})
 		}
 	case "subtenant":
 		if !childExists {
@@ -925,7 +928,7 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 		}
 		if parentRaw, err := c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 			var childItems []rbacv1.RoleBinding
-			if childRaw, err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			if childRaw, err := c.kubeclientset.RbacV1().RoleBindings(childNamespace).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
 				childItems = childRaw.Items
 			}
 			inheritance := Inheritance{}
@@ -976,7 +979,7 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 	if subnamespaceCopy.Spec.Workspace.Inheritance["networkpolicy"] {
 		if parentRaw, err := c.kubeclientset.NetworkingV1().NetworkPolicies(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 			var childItems []networkingv1.NetworkPolicy
-			if childRaw, err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			if childRaw, err := c.kubeclientset.NetworkingV1().NetworkPolicies(childNamespace).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
 				childItems = childRaw.Items
 			}
 			inheritance := Inheritance{}
@@ -1026,7 +1029,7 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 	if subnamespaceCopy.Spec.Workspace.Inheritance["limitrange"] {
 		if parentRaw, err := c.kubeclientset.CoreV1().LimitRanges(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 			var childItems []corev1.LimitRange
-			if childRaw, err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			if childRaw, err := c.kubeclientset.CoreV1().LimitRanges(childNamespace).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
 				childItems = childRaw.Items
 			}
 			inheritance := Inheritance{}
@@ -1076,7 +1079,7 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 	if subnamespaceCopy.Spec.Workspace.Inheritance["secret"] {
 		if parentRaw, err := c.kubeclientset.CoreV1().Secrets(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 			var childItems []corev1.Secret
-			if childRaw, err := c.kubeclientset.CoreV1().Secrets(childNamespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			if childRaw, err := c.kubeclientset.CoreV1().Secrets(childNamespace).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
 				childItems = childRaw.Items
 			}
 			inheritance := Inheritance{}
@@ -1126,7 +1129,7 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 	if subnamespaceCopy.Spec.Workspace.Inheritance["configmap"] {
 		if parentRaw, err := c.kubeclientset.CoreV1().ConfigMaps(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 			var childItems []corev1.ConfigMap
-			if childRaw, err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			if childRaw, err := c.kubeclientset.CoreV1().ConfigMaps(childNamespace).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
 				childItems = childRaw.Items
 			}
 			inheritance := Inheritance{}
@@ -1176,7 +1179,7 @@ func (c *Controller) handleInheritance(subnamespaceCopy *corev1alpha.SubNamespac
 	if subnamespaceCopy.Spec.Workspace.Inheritance["serviceaccount"] {
 		if parentRaw, err := c.kubeclientset.CoreV1().ServiceAccounts(subnamespaceCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 			var childItems []corev1.ServiceAccount
-			if childRaw, err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			if childRaw, err := c.kubeclientset.CoreV1().ServiceAccounts(childNamespace).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
 				childItems = childRaw.Items
 			}
 			inheritance := Inheritance{}
@@ -1264,6 +1267,7 @@ func (i Inheritance) prepareForCreate(obj interface{}) interface{} {
 	obj.(metav1.Object).SetNamespace(i.ChildNamespace)
 	obj.(metav1.Object).SetUID(types.UID(uuid.New().String()))
 	obj.(metav1.Object).SetResourceVersion("")
+	obj.(metav1.Object).SetLabels(map[string]string{"edge-net.io/generated": "true"})
 	return obj
 }
 
@@ -1272,35 +1276,60 @@ func (i Inheritance) prepareForUpdate(childObj, parentObj interface{}) interface
 	switch parentObjectForUpdate := parentObj.(type) {
 	case *rbacv1.Role:
 		childRoleCopy := childObj.(*rbacv1.Role)
+		parentLabels := parentObjectForUpdate.GetLabels()
+		if parentLabels == nil {
+			parentLabels = make(map[string]string)
+		}
+		parentLabels["edge-net.io/generated"] = "true"
 		if !reflect.DeepEqual(childRoleCopy.Rules, parentObjectForUpdate.Rules) || !reflect.DeepEqual(childRoleCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
 			childRoleCopy.Rules = parentObjectForUpdate.Rules
-			childRoleCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childRoleCopy.SetLabels(parentLabels)
 			childForUpdate = childRoleCopy
 		}
 	case *rbacv1.RoleBinding:
 		childRoleBindingCopy := childObj.(*rbacv1.RoleBinding)
+		parentLabels := parentObjectForUpdate.GetLabels()
+		if parentLabels == nil {
+			parentLabels = make(map[string]string)
+		}
+		parentLabels["edge-net.io/generated"] = "true"
 		if !reflect.DeepEqual(childRoleBindingCopy.RoleRef, parentObjectForUpdate.RoleRef) || !reflect.DeepEqual(childRoleBindingCopy.Subjects, parentObjectForUpdate.Subjects) || !reflect.DeepEqual(childRoleBindingCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
 			childRoleBindingCopy.RoleRef = parentObjectForUpdate.RoleRef
 			childRoleBindingCopy.Subjects = parentObjectForUpdate.Subjects
-			childRoleBindingCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childRoleBindingCopy.SetLabels(parentLabels)
 			childForUpdate = childRoleBindingCopy
 		}
 	case *networkingv1.NetworkPolicy:
 		childNetworkPolicyCopy := childObj.(*networkingv1.NetworkPolicy)
+		parentLabels := parentObjectForUpdate.GetLabels()
+		if parentLabels == nil {
+			parentLabels = make(map[string]string)
+		}
+		parentLabels["edge-net.io/generated"] = "true"
 		if !reflect.DeepEqual(childNetworkPolicyCopy.Spec, parentObjectForUpdate.Spec) || !reflect.DeepEqual(childNetworkPolicyCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
 			childNetworkPolicyCopy.Spec = parentObjectForUpdate.Spec
-			childNetworkPolicyCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childNetworkPolicyCopy.SetLabels(parentLabels)
 			childForUpdate = childNetworkPolicyCopy
 		}
 	case *corev1.LimitRange:
 		childLimitRangeCopy := childObj.(*corev1.LimitRange)
+		parentLabels := parentObjectForUpdate.GetLabels()
+		if parentLabels == nil {
+			parentLabels = make(map[string]string)
+		}
+		parentLabels["edge-net.io/generated"] = "true"
 		if !reflect.DeepEqual(childLimitRangeCopy.Spec, parentObjectForUpdate.Spec) || !reflect.DeepEqual(childLimitRangeCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
 			childLimitRangeCopy.Spec = parentObjectForUpdate.Spec
-			childLimitRangeCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childLimitRangeCopy.SetLabels(parentLabels)
 			childForUpdate = childLimitRangeCopy
 		}
 	case *corev1.Secret:
 		childSecretCopy := childObj.(*corev1.Secret)
+		parentLabels := parentObjectForUpdate.GetLabels()
+		if parentLabels == nil {
+			parentLabels = make(map[string]string)
+		}
+		parentLabels["edge-net.io/generated"] = "true"
 		if !reflect.DeepEqual(childSecretCopy.Type, parentObjectForUpdate.Type) || !reflect.DeepEqual(childSecretCopy.Data, parentObjectForUpdate.Data) ||
 			!reflect.DeepEqual(childSecretCopy.StringData, parentObjectForUpdate.StringData) || !reflect.DeepEqual(childSecretCopy.Immutable, parentObjectForUpdate.Immutable) ||
 			!reflect.DeepEqual(childSecretCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
@@ -1308,27 +1337,37 @@ func (i Inheritance) prepareForUpdate(childObj, parentObj interface{}) interface
 			childSecretCopy.Data = parentObjectForUpdate.Data
 			childSecretCopy.StringData = parentObjectForUpdate.StringData
 			childSecretCopy.Immutable = parentObjectForUpdate.Immutable
-			childSecretCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childSecretCopy.SetLabels(parentLabels)
 			childForUpdate = childSecretCopy
 		}
 	case corev1.ConfigMap:
 		childConfigMapCopy := childObj.(*corev1.ConfigMap)
+		parentLabels := parentObjectForUpdate.GetLabels()
+		if parentLabels == nil {
+			parentLabels = make(map[string]string)
+		}
+		parentLabels["edge-net.io/generated"] = "true"
 		if !reflect.DeepEqual(childConfigMapCopy.BinaryData, parentObjectForUpdate.BinaryData) || !reflect.DeepEqual(childConfigMapCopy.Data, parentObjectForUpdate.Data) ||
 			!reflect.DeepEqual(childConfigMapCopy.Immutable, parentObjectForUpdate.Immutable) || !reflect.DeepEqual(childConfigMapCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
 			childConfigMapCopy.BinaryData = parentObjectForUpdate.BinaryData
 			childConfigMapCopy.Data = parentObjectForUpdate.Data
 			childConfigMapCopy.Immutable = parentObjectForUpdate.Immutable
-			childConfigMapCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childConfigMapCopy.SetLabels(parentLabels)
 			childForUpdate = childConfigMapCopy
 		}
 	case *corev1.ServiceAccount:
 		childServiceAccountCopy := childObj.(*corev1.ServiceAccount)
+		parentLabels := parentObjectForUpdate.GetLabels()
+		if parentLabels == nil {
+			parentLabels = make(map[string]string)
+		}
+		parentLabels["edge-net.io/generated"] = "true"
 		if !reflect.DeepEqual(childServiceAccountCopy.AutomountServiceAccountToken, parentObjectForUpdate.AutomountServiceAccountToken) || !reflect.DeepEqual(childServiceAccountCopy.ImagePullSecrets, parentObjectForUpdate.ImagePullSecrets) ||
 			!reflect.DeepEqual(childServiceAccountCopy.Secrets, parentObjectForUpdate.Secrets) || !reflect.DeepEqual(childServiceAccountCopy.GetLabels(), parentObjectForUpdate.GetLabels()) {
 			childServiceAccountCopy.AutomountServiceAccountToken = parentObjectForUpdate.AutomountServiceAccountToken
 			childServiceAccountCopy.ImagePullSecrets = parentObjectForUpdate.ImagePullSecrets
 			childServiceAccountCopy.Secrets = parentObjectForUpdate.Secrets
-			childServiceAccountCopy.SetLabels(parentObjectForUpdate.GetLabels())
+			childServiceAccountCopy.SetLabels(parentLabels)
 			childForUpdate = childServiceAccountCopy
 		}
 	}
