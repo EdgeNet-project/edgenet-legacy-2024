@@ -777,10 +777,10 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 
 		objectName := "edgenet:workspace:owner"
 		if subnamespaceCopy.Spec.Workspace.Owner != nil {
-			if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).Get(context.TODO(), objectName, metav1.GetOptions{}); err == nil {
+			if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(childName).Get(context.TODO(), objectName, metav1.GetOptions{}); err == nil {
 				roleBindingCopy := roleBinding.DeepCopy()
 				roleBindingCopy.Subjects = []rbacv1.Subject{{Kind: "User", Name: subnamespaceCopy.Spec.Workspace.Owner.Email, APIGroup: "rbac.authorization.k8s.io"}}
-				if _, err := c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).Update(context.TODO(), roleBindingCopy, metav1.UpdateOptions{}); err != nil {
+				if _, err := c.kubeclientset.RbacV1().RoleBindings(childName).Update(context.TODO(), roleBindingCopy, metav1.UpdateOptions{}); err != nil {
 					c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
 					subnamespaceCopy.Status.State = failure
 					subnamespaceCopy.Status.Message = messageBindingFailed
@@ -790,11 +790,9 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 			} else {
 				roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: "edgenet:tenant-owner"}
 				rbSubjects := []rbacv1.Subject{{Kind: "User", Name: subnamespaceCopy.Spec.Workspace.Owner.Email, APIGroup: "rbac.authorization.k8s.io"}}
-				roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName, Namespace: subnamespaceCopy.GetNamespace()},
+				roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName, Namespace: childName},
 					Subjects: rbSubjects, RoleRef: roleRef}
-				roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
-				roleBind.SetLabels(roleBindLabels)
-				if _, err := c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
+				if _, err := c.kubeclientset.RbacV1().RoleBindings(childName).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
 					c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
 					subnamespaceCopy.Status.State = failure
 					subnamespaceCopy.Status.Message = messageBindingFailed
@@ -803,7 +801,7 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 				}
 			}
 		} else {
-			c.kubeclientset.RbacV1().RoleBindings(subnamespaceCopy.GetNamespace()).Delete(context.TODO(), objectName, metav1.DeleteOptions{})
+			c.kubeclientset.RbacV1().RoleBindings(childName).Delete(context.TODO(), objectName, metav1.DeleteOptions{})
 		}
 	case "subtenant":
 		if !childExists {
