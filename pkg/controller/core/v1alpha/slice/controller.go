@@ -18,8 +18,8 @@ package slice
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -97,7 +97,7 @@ func NewController(
 	sliceInformer informers.SliceInformer) *Controller {
 
 	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
-	klog.V(4).Info("Creating event broadcaster")
+	klog.Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartStructuredLogging(0)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
@@ -114,7 +114,7 @@ func NewController(
 		recorder:          recorder,
 	}
 
-	klog.V(4).Infoln("Setting up event handlers")
+	klog.Infoln("Setting up event handlers")
 	// Set up an event handler for when Slice resources change
 	sliceInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueSlice,
@@ -122,21 +122,18 @@ func NewController(
 			newSlice := new.(*corev1alpha.Slice)
 			oldSlice := old.(*corev1alpha.Slice)
 			if (oldSlice.Status.Expiry == nil && newSlice.Status.Expiry != nil) ||
-				!oldSlice.Status.Expiry.Time.Equal(newSlice.Status.Expiry.Time) {
+				((oldSlice.Status.Expiry != nil && newSlice.Status.Expiry != nil) && !oldSlice.Status.Expiry.Time.Equal(newSlice.Status.Expiry.Time)) {
 				controller.enqueueSliceAfter(newSlice, time.Until(newSlice.Status.Expiry.Time))
 			}
 			controller.enqueueSlice(new)
 		},
 		DeleteFunc: func(obj interface{}) {
-			slice := obj.(*corev1alpha.Slice)
-			if nodeRaw, err := controller.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/slice=%s", slice.GetName())}); err != nil {
-				for _, nodeRow := range nodeRaw.Items {
-					patch := []byte(`"metadata": {"labels": {"edge-net.io~access": "private", "edge-net.io~slice":  "none"}}`)
-					// Patch the node
-					_, err := controller.kubeclientset.CoreV1().Nodes().Patch(context.TODO(), nodeRow.GetName(), types.StrategicMergePatchType, patch, metav1.PatchOptions{})
-					if err != nil {
-						log.Println(err.Error())
-						panic(err.Error())
+			sliceCopy := obj.(*corev1alpha.Slice).DeepCopy()
+			if sliceCopy.Status.State == reserved || sliceCopy.Status.State == bound {
+				if nodeRaw, err := controller.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/slice=%s", sliceCopy.GetName())}); err == nil {
+					for _, nodeRow := range nodeRaw.Items {
+						klog.Info("Patch Node")
+						controller.patchNode("return", sliceCopy.GetName(), nodeRow.GetName())
 					}
 				}
 			}
@@ -158,23 +155,23 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
-	klog.V(4).Infoln("Starting Slice controller")
+	klog.Infoln("Starting Slice controller")
 
-	klog.V(4).Infoln("Waiting for informer caches to sync")
+	klog.Infoln("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh,
 		c.sliceClaimsSynced,
 		c.slicesSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
-	klog.V(4).Infoln("Starting workers")
+	klog.Infoln("Starting workers")
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
 
-	klog.V(4).Infoln("Started workers")
+	klog.Infoln("Started workers")
 	<-stopCh
-	klog.V(4).Infoln("Shutting down workers")
+	klog.Infoln("Shutting down workers")
 
 	return nil
 }
@@ -211,7 +208,7 @@ func (c *Controller) processNextWorkItem() bool {
 			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
 		}
 		c.workqueue.Forget(obj)
-		klog.V(4).Infof("Successfully synced '%s'", key)
+		klog.Infof("Successfully synced '%s'", key)
 		return nil
 	}(obj)
 
@@ -242,7 +239,6 @@ func (c *Controller) syncHandler(key string) error {
 
 		return err
 	}
-
 	c.processSlice(slice.DeepCopy())
 
 	c.recorder.Event(slice, corev1.EventTypeNormal, successSynced, messageResourceSynced)
@@ -294,9 +290,9 @@ func (c *Controller) handleObject(obj interface{}) {
 			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
 			return
 		}
-		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
+		klog.Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 	}
-	klog.V(4).Infof("Processing object: %s", object.GetName())
+	klog.Infof("Processing object: %s", object.GetName())
 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
 		if ownerRef.Kind != "Slice" {
 			return
@@ -304,7 +300,7 @@ func (c *Controller) handleObject(obj interface{}) {
 
 		slice, err := c.slicesLister.Get(ownerRef.Name)
 		if err != nil {
-			klog.V(4).Infof("ignoring orphaned object '%s' of slice '%s'", object.GetSelfLink(), ownerRef.Name)
+			klog.Infof("ignoring orphaned object '%s' of slice '%s'", object.GetSelfLink(), ownerRef.Name)
 			return
 		}
 
@@ -318,17 +314,17 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 	statusUpdate := func() {
 		if !reflect.DeepEqual(oldStatus, sliceCopy.Status) {
 			if _, err := c.edgenetclientset.CoreV1alpha().Slices().UpdateStatus(context.TODO(), sliceCopy, metav1.UpdateOptions{}); err != nil {
-				klog.V(4).Infoln(err)
+				klog.Infoln(err)
 			}
 		}
 	}
-	defer statusUpdate()
 
 	if sliceCopy.Spec.ClaimRef != nil {
-		if sliceClaim, err := c.edgenetclientset.CoreV1alpha().SliceClaims(sliceCopy.Spec.ClaimRef.Namespace).Get(context.TODO(), sliceCopy.Spec.ClaimRef.Name, metav1.GetOptions{}); err != nil && errors.IsGone(err) {
+		if sliceClaim, err := c.edgenetclientset.CoreV1alpha().SliceClaims(sliceCopy.Spec.ClaimRef.Namespace).Get(context.TODO(), sliceCopy.Spec.ClaimRef.Name, metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
 			c.edgenetclientset.CoreV1alpha().Slices().Delete(context.TODO(), sliceCopy.GetName(), metav1.DeleteOptions{})
 			return
 		} else {
+			klog.Infoln(err)
 			isOwned := false
 			if ownerRef := metav1.GetControllerOf(sliceClaim); ownerRef != nil {
 				if ownerRef.Kind == "Slice" {
@@ -337,12 +333,7 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 						return
 					} else {
 						isOwned = true
-						if sliceCopy.Status.State == reserved {
-							c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messageBound)
-							sliceCopy.Status.State = bound
-							sliceCopy.Status.Message = messageBound
-							return
-						}
+						c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messageBound)
 					}
 				}
 			}
@@ -350,12 +341,16 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 				defer func() {
 					sliceClaimCopy := sliceClaim.DeepCopy()
 					sliceClaimCopy.SetOwnerReferences([]metav1.OwnerReference{sliceCopy.MakeOwnerReference()})
-					c.edgenetclientset.CoreV1alpha().SliceClaims(sliceClaimCopy.GetNamespace()).Update(context.TODO(), sliceClaimCopy, metav1.UpdateOptions{})
+					_, err := c.edgenetclientset.CoreV1alpha().SliceClaims(sliceClaimCopy.GetNamespace()).Update(context.TODO(), sliceClaimCopy, metav1.UpdateOptions{})
+					klog.Infoln(err)
+					// TODO: Record event
 				}()
 			}
 		}
 	}
+	defer statusUpdate()
 
+	// TODO: If reserved, return the nodes/resources back and then reserve them accordingly.
 	if sliceCopy.Status.State != reserved && sliceCopy.Status.State != bound {
 		c.reserveNode(sliceCopy)
 	}
@@ -397,33 +392,55 @@ func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
 		}
 
 		var nodeList []string
-		if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: fieldSelector}); err != nil {
+		if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: fieldSelector}); err == nil {
 			for _, nodeRow := range nodeRaw.Items {
 				nodeLabels := nodeRow.GetLabels()
-				if nodeLabels["edge-net.io/access"] != "private" || nodeLabels["edge-net.io/slice"] != "none" {
+				if nodeLabels["edge-net.io/access"] == "private" || nodeLabels["edge-net.io/slice"] != "none" {
+					klog.Infoln("Node is not OK to slice")
 					continue
 				}
 
-				match := true
-				for key, value := range sliceCopy.Spec.NodeSelector.Resources.Limits {
-					if value.Cmp(nodeRow.Status.Capacity[key]) == 1 || value.Cmp(nodeRow.Status.Capacity[key]) == 0 {
+				match := false
+				for key, value := range sliceCopy.Spec.NodeSelector.Resources.Requests {
+					if value.Cmp(nodeRow.Status.Capacity[key]) == 1 {
 						match = false
+						break
+					} else {
+						match = true
 					}
 				}
+				klog.Infoln(match)
 				if match {
-					nodeList = append(nodeList, nodeRow.GetName())
+					for key, value := range sliceCopy.Spec.NodeSelector.Resources.Limits {
+						if value.Cmp(nodeRow.Status.Capacity[key]) == -1 {
+							match = false
+							break
+						} else {
+							match = true
+						}
+					}
+					klog.Infoln(match)
+					if match {
+						nodeList = append(nodeList, nodeRow.GetName())
+					}
 				}
 			}
+		} else {
+			klog.Infoln(err)
 		}
 		if len(nodeList) < sliceCopy.Spec.NodeSelector.Count {
 			c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailed)
 			sliceCopy.Status.State = failure
 			sliceCopy.Status.Message = messageSliceFailed
+			return
 		} else {
 			var pickedNodeList []string
 			for i := 0; i < sliceCopy.Spec.NodeSelector.Count; i++ {
-				rand.Seed(time.Now().Unix())
-				pickedNodeList = append(pickedNodeList, nodeList[rand.Intn(len(nodeList))])
+				rand.Seed(time.Now().UnixNano())
+				randomSelect := rand.Intn(len(nodeList))
+				pickedNodeList = append(pickedNodeList, nodeList[randomSelect])
+				nodeList[randomSelect] = nodeList[len(nodeList)-1]
+				nodeList = nodeList[:len(nodeList)-1]
 			}
 			isPatched := true
 			for i := 0; i < len(pickedNodeList); i++ {
@@ -458,13 +475,36 @@ func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
 
 func (c *Controller) patchNode(kind, slice, node string) error {
 	var err error
-	patch := []byte(fmt.Sprintf(`"metadata": {"labels": {"edge-net.io~access": "private", "edge-net.io~slice":  %s}}`, slice))
-	if kind == "return" {
-		patch = []byte(`"metadata": {"labels": {"edge-net.io~access": "public", "edge-net.io~slice":  "none"}}`)
+	type patchStringValue struct {
+		Op    string `json:"op"`
+		Path  string `json:"path"`
+		Value string `json:"value"`
 	}
-	_, err = c.kubeclientset.CoreV1().Nodes().Patch(context.TODO(), node, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
+	labels := map[string]string{
+		"edge-net.io~1access": "private",
+		"edge-net.io~1slice":  slice,
+	}
+	if kind == "return" {
+		labels["edge-net.io~1access"] = "public"
+		labels["edge-net.io~1slice"] = "none"
+	}
+	// Create a patch slice and initialize it to the label size
+	patchArr := make([]patchStringValue, len(labels))
+	patch := patchStringValue{}
+	row := 0
+	// Append the data existing in the label map to the slice
+	for label, value := range labels {
+		patch.Op = "add"
+		patch.Path = fmt.Sprintf("/metadata/labels/%s", label)
+		patch.Value = value
+		patchArr[row] = patch
+		row++
+	}
+	bytes, _ := json.Marshal(patchArr)
+
+	_, err = c.kubeclientset.CoreV1().Nodes().Patch(context.TODO(), node, types.JSONPatchType, bytes, metav1.PatchOptions{})
 	if err != nil {
-		klog.V(4).Infoln(err.Error())
+		klog.Infoln(err.Error())
 	}
 	return err
 }

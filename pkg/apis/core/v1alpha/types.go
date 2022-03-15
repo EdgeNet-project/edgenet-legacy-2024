@@ -530,8 +530,9 @@ type SliceClaimList struct {
 
 func (sc SliceClaim) MakeObjectReference() *corev1.ObjectReference {
 	objectReference := corev1.ObjectReference{}
-	objectReference.APIVersion = sc.APIVersion
-	objectReference.Kind = sc.Kind
+	groupVersionKind := SchemeGroupVersion.WithKind("SliceClaim")
+	objectReference.APIVersion = groupVersionKind.GroupVersion().String()
+	objectReference.Kind = groupVersionKind.Kind
 	objectReference.Name = sc.GetName()
 	objectReference.Namespace = sc.GetNamespace()
 	objectReference.UID = sc.GetUID()

@@ -14,6 +14,7 @@ import (
 
 func main() {
 	klog.InitFlags(nil)
+	provisioning := flag.String("provisioning", "Dynamic", "Working mode to automate slice creation")
 	flag.Parse()
 
 	stopCh := signals.SetupSignalHandler()
@@ -35,7 +36,8 @@ func main() {
 	controller := sliceclaim.NewController(kubeclientset,
 		edgenetclientset,
 		edgenetInformerFactory.Core().V1alpha().SubNamespaces(),
-		edgenetInformerFactory.Core().V1alpha().SliceClaims())
+		edgenetInformerFactory.Core().V1alpha().SliceClaims(),
+		*provisioning)
 
 	edgenetInformerFactory.Start(stopCh)
 
