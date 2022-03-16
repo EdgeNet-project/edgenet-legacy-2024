@@ -527,7 +527,6 @@ func (wh *Webhook) validateSlice(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(err.Error()))
 			return
 		}
-
 		if oldSlice.Status.State == reserved || oldSlice.Status.State == bound {
 			if oldSlice.Spec.SliceClassName != slice.Spec.SliceClassName {
 				admissionResponse.Allowed = false
@@ -535,7 +534,7 @@ func (wh *Webhook) validateSlice(w http.ResponseWriter, r *http.Request) {
 					Message: "slice class name cannot be changed after nodes are reserved",
 				}
 			}
-			if reflect.DeepEqual(oldSlice.Spec.NodeSelector, slice.Spec.NodeSelector) {
+			if !reflect.DeepEqual(oldSlice.Spec.NodeSelector, slice.Spec.NodeSelector) {
 				admissionResponse.Allowed = false
 				admissionResponse.Result = &metav1.Status{
 					Message: "node selector cannot be changed after nodes are reserved",
@@ -608,24 +607,22 @@ func (wh *Webhook) validateSliceClaim(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if oldSliceClaim.Status.State == bound {
-			if oldSliceClaim.Spec.SliceClassName != sliceclaim.Spec.SliceClassName {
-				admissionResponse.Allowed = false
-				admissionResponse.Result = &metav1.Status{
-					Message: "slice class name cannot be changed after slice claim is bound",
-				}
+		if oldSliceClaim.Spec.SliceClassName != sliceclaim.Spec.SliceClassName {
+			admissionResponse.Allowed = false
+			admissionResponse.Result = &metav1.Status{
+				Message: "slice class name cannot be changed after creation",
 			}
-			if reflect.DeepEqual(oldSliceClaim.Spec.NodeSelector, sliceclaim.Spec.NodeSelector) {
-				admissionResponse.Allowed = false
-				admissionResponse.Result = &metav1.Status{
-					Message: "node selector cannot be changed after slice claim is bound",
-				}
+		}
+		if !reflect.DeepEqual(oldSliceClaim.Spec.NodeSelector, sliceclaim.Spec.NodeSelector) {
+			admissionResponse.Allowed = false
+			admissionResponse.Result = &metav1.Status{
+				Message: "node selector cannot be changed after creation",
 			}
-			if oldSliceClaim.Spec.SliceName != sliceclaim.Spec.SliceName && oldSliceClaim.Status.State == bound {
-				admissionResponse.Allowed = false
-				admissionResponse.Result = &metav1.Status{
-					Message: "slice name cannot be changed after slice claim is bound",
-				}
+		}
+		if oldSliceClaim.Spec.SliceName != sliceclaim.Spec.SliceName {
+			admissionResponse.Allowed = false
+			admissionResponse.Result = &metav1.Status{
+				Message: "slice name cannot be changed after creation",
 			}
 		}
 	}
