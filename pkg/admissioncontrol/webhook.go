@@ -260,7 +260,7 @@ func (wh *Webhook) validateTenantRequest(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	tenantrequestResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "tenantrequests"}
+	tenantrequestResource := metav1.GroupVersionResource{Group: "registration.edgenet.io", Version: "v1alpha", Resource: "tenantrequests"}
 	if admissionReviewRequest.Request.Resource != tenantrequestResource {
 		err := fmt.Errorf("tenantrequest wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
@@ -315,7 +315,7 @@ func (wh *Webhook) validateClusterRoleRequest(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	clusterrolerequestResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "clusterrolerequests"}
+	clusterrolerequestResource := metav1.GroupVersionResource{Group: "registration.edgenet.io", Version: "v1alpha", Resource: "clusterrolerequests"}
 	if admissionReviewRequest.Request.Resource != clusterrolerequestResource {
 		err := fmt.Errorf("clusterrolerequest wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
@@ -370,7 +370,7 @@ func (wh *Webhook) validateRoleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rolerequestResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "rolerequests"}
+	rolerequestResource := metav1.GroupVersionResource{Group: "registration.edgenet.io", Version: "v1alpha", Resource: "rolerequests"}
 	if admissionReviewRequest.Request.Resource != rolerequestResource {
 		err := fmt.Errorf("rolerequest wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
@@ -425,7 +425,7 @@ func (wh *Webhook) validateSubNamespace(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	subnamespaceResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "subnamespaces"}
+	subnamespaceResource := metav1.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha", Resource: "subnamespaces"}
 	if admissionReviewRequest.Request.Resource != subnamespaceResource {
 		err := fmt.Errorf("subnamespace wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
@@ -497,7 +497,7 @@ func (wh *Webhook) validateSlice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sliceResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "slices"}
+	sliceResource := metav1.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha", Resource: "slices"}
 	if admissionReviewRequest.Request.Resource != sliceResource {
 		err := fmt.Errorf("slice wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
@@ -577,7 +577,7 @@ func (wh *Webhook) validateSliceClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sliceclaimResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "sliceclaims"}
+	sliceclaimResource := metav1.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha", Resource: "sliceclaims"}
 	if admissionReviewRequest.Request.Resource != sliceclaimResource {
 		err := fmt.Errorf("sliceclaim wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
