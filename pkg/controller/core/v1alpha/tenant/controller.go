@@ -341,21 +341,30 @@ func (c *Controller) createCoreNamespace(tenantCopy *corev1alpha.Tenant, ownerRe
 	// Core namespace has the same name as the tenant
 	coreNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: tenantCopy.GetName(), OwnerReferences: ownerReferences}}
 	// Namespace labels indicate this namespace created by a tenant, not by a team or slice
-	namespaceLabels := map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenantCopy.GetName(),
+	labels := map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenantCopy.GetName(),
 		"edge-net.io/tenant-uid": string(tenantCopy.GetUID()), "edge-net.io/cluster-uid": clusterUID}
-	coreNamespace.SetLabels(namespaceLabels)
-	if tenantCopy.GetAnnotations() != nil {
-		coreNamespace.SetAnnotations(tenantCopy.GetAnnotations())
-	} else {
-		coreNamespace.SetAnnotations(map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"})
+	coreNamespace.SetLabels(labels)
+	annotations := map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"}
+	if nodeSelector, elementExists := tenantCopy.GetAnnotations()["scheduler.alpha.kubernetes.io/node-selector"]; elementExists {
+		annotations["scheduler.alpha.kubernetes.io/node-selector"] = nodeSelector
 	}
+	coreNamespace.SetAnnotations(annotations)
 	_, err := c.kubeclientset.CoreV1().Namespaces().Create(context.TODO(), coreNamespace, metav1.CreateOptions{})
 	if err != nil && !errors.IsAlreadyExists(err) {
 		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureCreation, messageCreationFailed)
 		tenantCopy.Status.State = failure
 		tenantCopy.Status.Message = messageCreationFailed
+		return err
+	} else if errors.IsAlreadyExists(err) {
+		if namespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), coreNamespace.GetName(), metav1.GetOptions{}); err == nil {
+			namespace.SetLabels(labels)
+			namespace.SetAnnotations(annotations)
+			c.kubeclientset.CoreV1().Namespaces().Update(context.TODO(), namespace, metav1.UpdateOptions{})
+		}
+		return nil
+	} else {
+		return nil
 	}
-	return err
 }
 
 func (c *Controller) applyNetworkPolicy(tenant, tenantUID, clusterUID string, clusterNetworkPolicyEnabled bool, ownerReferences []metav1.OwnerReference) error {
