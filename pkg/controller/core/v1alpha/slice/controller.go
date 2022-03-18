@@ -56,6 +56,8 @@ const (
 	messageBound          = "Slice is bound successfully"
 	successReserved       = "Reserved"
 	messageReserved       = "Desired resources are reserved"
+	successExpired        = "Expired"
+	messageExpired        = "Slice deleted successfully"
 	failureSlice          = "Slice Failed"
 	messageSliceFailed    = "There are no adequate resources to slice"
 	failurePatch          = "Patch Failed"
@@ -63,6 +65,8 @@ const (
 	failure               = "Failure"
 	reserved              = "Reserved"
 	bound                 = "Bound"
+	provisioned           = "Provisioned"
+	applied               = "Applied"
 )
 
 // Controller is the controller implementation for Slice resources
@@ -132,8 +136,14 @@ func NewController(
 			if sliceCopy.Status.State == reserved || sliceCopy.Status.State == bound {
 				if nodeRaw, err := controller.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/slice=%s", sliceCopy.GetName())}); err == nil {
 					for _, nodeRow := range nodeRaw.Items {
-						klog.Info("Patch Node")
-						controller.patchNode("return", sliceCopy.GetName(), nodeRow.GetName())
+						controller.patchNode("return", "", nodeRow.GetName())
+					}
+				}
+			}
+			if sliceCopy.Status.State == provisioned {
+				if nodeRaw, err := controller.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/pre-reservation=%s", sliceCopy.GetName())}); err == nil {
+					for _, nodeRow := range nodeRaw.Items {
+						controller.patchNode("return", "", nodeRow.GetName())
 					}
 				}
 			}
@@ -141,6 +151,14 @@ func NewController(
 	})
 
 	sliceClaimInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newSliceClaim := new.(*corev1alpha.SliceClaim)
+			oldSliceClaim := old.(*corev1alpha.SliceClaim)
+			if newSliceClaim.ResourceVersion != oldSliceClaim.ResourceVersion {
+				controller.enqueueSlice(new)
+			}
+		},
 		DeleteFunc: controller.handleObject,
 	})
 
@@ -310,6 +328,11 @@ func (c *Controller) handleObject(obj interface{}) {
 }
 
 func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
+	if sliceCopy.Status.Expiry != nil && time.Until(sliceCopy.Status.Expiry.Time) <= 0 {
+		c.recorder.Event(sliceCopy, corev1.EventTypeWarning, successExpired, messageExpired)
+		c.edgenetclientset.CoreV1alpha().Slices().Delete(context.TODO(), sliceCopy.GetName(), metav1.DeleteOptions{})
+		return
+	}
 	oldStatus := sliceCopy.Status
 	statusUpdate := func() {
 		if !reflect.DeepEqual(oldStatus, sliceCopy.Status) {
@@ -318,14 +341,14 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 			}
 		}
 	}
+	defer statusUpdate()
 
+	isOwned := false
 	if sliceCopy.Spec.ClaimRef != nil {
 		if sliceClaim, err := c.edgenetclientset.CoreV1alpha().SliceClaims(sliceCopy.Spec.ClaimRef.Namespace).Get(context.TODO(), sliceCopy.Spec.ClaimRef.Name, metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
 			c.edgenetclientset.CoreV1alpha().Slices().Delete(context.TODO(), sliceCopy.GetName(), metav1.DeleteOptions{})
 			return
 		} else {
-			klog.Infoln(err)
-			isOwned := false
 			if ownerRef := metav1.GetControllerOf(sliceClaim); ownerRef != nil {
 				if ownerRef.Kind == "Slice" {
 					if ownerRef.UID != sliceCopy.GetUID() {
@@ -334,6 +357,8 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 					} else {
 						isOwned = true
 						c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messageBound)
+						sliceCopy.Status.State = bound
+						sliceCopy.Status.Message = messageBound
 					}
 				}
 			}
@@ -345,18 +370,33 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha.Slice) {
 					klog.Infoln(err)
 					// TODO: Record event
 				}()
+			} else {
+				if sliceClaim.Status.State == applied {
+					c.provisionSlice(sliceCopy)
+				}
 			}
 		}
 	}
-	defer statusUpdate()
 
-	// TODO: If reserved, return the nodes/resources back and then reserve them accordingly.
-	if sliceCopy.Status.State != reserved && sliceCopy.Status.State != bound {
-		c.reserveNode(sliceCopy)
+	if sliceCopy.Status.State != reserved && sliceCopy.Status.State != bound && sliceCopy.Status.State != provisioned {
+		c.reserveNodes(sliceCopy)
 	}
+
 }
 
-func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
+func (c *Controller) provisionSlice(sliceCopy *corev1alpha.Slice) {
+	if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/pre-reservation=%s", sliceCopy.GetName())}); err == nil {
+		for _, nodeRow := range nodeRaw.Items {
+			c.patchNode("slice", sliceCopy.GetName(), nodeRow.GetName())
+		}
+		// c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messagePr)
+		sliceCopy.Status.State = provisioned
+		// sliceCopy.Status.Message = messageReserved
+	}
+
+}
+
+func (c *Controller) reserveNodes(sliceCopy *corev1alpha.Slice) {
 	for _, nodeSelectorTerm := range sliceCopy.Spec.NodeSelector.Selector.NodeSelectorTerms {
 		var labelSelector string
 		var fieldSelector string
@@ -395,8 +435,7 @@ func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
 		if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: fieldSelector}); err == nil {
 			for _, nodeRow := range nodeRaw.Items {
 				nodeLabels := nodeRow.GetLabels()
-				if nodeLabels["edge-net.io/access"] == "private" || nodeLabels["edge-net.io/slice"] != "none" {
-					klog.Infoln("Node is not OK to slice")
+				if nodeLabels["edge-net.io/access"] == "private" || nodeLabels["edge-net.io/slice"] != "none" || nodeLabels["edge-net.io/pre-reservation"] != "none" {
 					continue
 				}
 
@@ -409,7 +448,6 @@ func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
 						match = true
 					}
 				}
-				klog.Infoln(match)
 				if match {
 					for key, value := range sliceCopy.Spec.NodeSelector.Resources.Limits {
 						if value.Cmp(nodeRow.Status.Capacity[key]) == -1 {
@@ -419,14 +457,11 @@ func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
 							match = true
 						}
 					}
-					klog.Infoln(match)
 					if match {
 						nodeList = append(nodeList, nodeRow.GetName())
 					}
 				}
 			}
-		} else {
-			klog.Infoln(err)
 		}
 		if len(nodeList) < sliceCopy.Spec.NodeSelector.Count {
 			c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailed)
@@ -444,7 +479,7 @@ func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
 			}
 			isPatched := true
 			for i := 0; i < len(pickedNodeList); i++ {
-				if err := c.patchNode("slice", sliceCopy.GetName(), pickedNodeList[i]); err != nil {
+				if err := c.patchNode("reservation", sliceCopy.GetName(), pickedNodeList[i]); err != nil {
 					c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failurePatch, messagePatchFailed)
 					sliceCopy.Status.State = failure
 					sliceCopy.Status.Message = messagePatchFailed
@@ -454,7 +489,7 @@ func (c *Controller) reserveNode(sliceCopy *corev1alpha.Slice) {
 			}
 			if !isPatched {
 				for i := 0; i < len(pickedNodeList); i++ {
-					if err := c.patchNode("return", sliceCopy.GetName(), pickedNodeList[i]); err != nil {
+					if err := c.patchNode("return", "", pickedNodeList[i]); err != nil {
 						c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failurePatch, messagePatchFailed)
 					}
 				}
@@ -480,13 +515,19 @@ func (c *Controller) patchNode(kind, slice, node string) error {
 		Path  string `json:"path"`
 		Value string `json:"value"`
 	}
-	labels := map[string]string{
-		"edge-net.io~1access": "private",
-		"edge-net.io~1slice":  slice,
-	}
+	labels := make(map[string]string)
 	if kind == "return" {
 		labels["edge-net.io~1access"] = "public"
 		labels["edge-net.io~1slice"] = "none"
+		labels["edge-net.io~1pre-reservation"] = "none"
+	} else if kind == "reservation" {
+		labels["edge-net.io~1access"] = "public"
+		labels["edge-net.io~1slice"] = "none"
+		labels["edge-net.io~1pre-reservation"] = slice
+	} else {
+		labels["edge-net.io~1access"] = "private"
+		labels["edge-net.io~1slice"] = slice
+		labels["edge-net.io~1pre-reservation"] = slice
 	}
 	// Create a patch slice and initialize it to the label size
 	patchArr := make([]patchStringValue, len(labels))
