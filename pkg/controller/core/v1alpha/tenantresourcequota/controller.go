@@ -459,32 +459,41 @@ func (c *Controller) tuneResourceQuotaAcrossNamespaces(coreNamespace, clusterUID
 	aggregateQuota := make(map[corev1.ResourceName]resource.Quantity)
 	lastInSubNamespace := c.NamespaceTraversal(coreNamespace, clusterUID, aggregateQuota)
 	assignedQuota := tenantResourceQuotaCopy.Fetch()
-	if coreResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(coreNamespace).Get(context.TODO(), "core-quota", metav1.GetOptions{}); err == nil {
-		coreResourceQuotaCopy := coreResourceQuota.DeepCopy()
+	if resourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(coreNamespace).Get(context.TODO(), "core-quota", metav1.GetOptions{}); err == nil {
+		var coreResourceQuota = make(corev1.ResourceList)
 		canEntirelyCompansate := true
 		for assignedResource, assignedQuantity := range assignedQuota {
 			if aggregateQuantity, elementExists := aggregateQuota[assignedResource]; elementExists {
-				if coreQuantity, elementExists := coreResourceQuotaCopy.Spec.Hard[assignedResource]; elementExists {
-					subnamespaceQuantity := aggregateQuantity
+				subnamespaceQuantity := aggregateQuantity
+				if coreQuantity, elementExists := resourceQuota.Spec.Hard[assignedResource]; elementExists {
 					subnamespaceQuantity.Sub(coreQuantity)
-					if assignedQuantity.Cmp(subnamespaceQuantity) == -1 {
-						canEntirelyCompansate = false
-					} else {
-						assignedQuantity.Sub(subnamespaceQuantity)
-						coreResourceQuotaCopy.Spec.Hard[assignedResource] = assignedQuantity
-					}
 				}
+				if assignedQuantity.Cmp(subnamespaceQuantity) == -1 {
+					canEntirelyCompansate = false
+					break
+				} else {
+					assignedQuantity.Sub(subnamespaceQuantity)
+					coreResourceQuota[assignedResource] = assignedQuantity
+				}
+			} else {
+				coreResourceQuota[assignedResource] = assignedQuantity
 			}
 		}
-		if !reflect.DeepEqual(coreResourceQuota, coreResourceQuotaCopy) {
-			c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successTuned, messageTuned)
-			c.kubeclientset.CoreV1().ResourceQuotas(coreNamespace).Update(context.TODO(), coreResourceQuotaCopy, metav1.UpdateOptions{})
-		}
-		if !canEntirelyCompansate && lastInSubNamespace != nil {
-			c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successDeleted, messageDeleted)
-			c.edgenetclientset.CoreV1alpha().SubNamespaces(lastInSubNamespace.GetNamespace()).Delete(context.TODO(), lastInSubNamespace.GetName(), metav1.DeleteOptions{})
-			time.Sleep(200 * time.Millisecond)
-			defer c.tuneResourceQuotaAcrossNamespaces(coreNamespace, clusterUID, tenantResourceQuotaCopy)
+		if canEntirelyCompansate {
+			if !reflect.DeepEqual(resourceQuota.Spec.Hard, coreResourceQuota) {
+				resourceQuotaCopy := resourceQuota.DeepCopy()
+				resourceQuotaCopy.Spec.Hard = coreResourceQuota
+				c.kubeclientset.CoreV1().ResourceQuotas(coreNamespace).Update(context.TODO(), resourceQuotaCopy, metav1.UpdateOptions{})
+				c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successTuned, messageTuned)
+			}
+		} else {
+			if lastInSubNamespace != nil {
+				c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successDeleted, messageDeleted)
+				c.edgenetclientset.CoreV1alpha().SubNamespaces(lastInSubNamespace.GetNamespace()).Delete(context.TODO(), lastInSubNamespace.GetName(), metav1.DeleteOptions{})
+				time.Sleep(200 * time.Millisecond)
+				defer c.tuneResourceQuotaAcrossNamespaces(coreNamespace, clusterUID, tenantResourceQuotaCopy)
+			}
+			// TODO: Fill in the else branch
 		}
 	} else {
 		c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeWarning, warningNotFound, messageNotFound)
@@ -534,7 +543,6 @@ func (c *Controller) accumulateQuota(namespace string, aggregateQuota map[corev1
 				} else {
 					aggregateQuota[key] = value
 				}
-
 			}
 		}
 	}
