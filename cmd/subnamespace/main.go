@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"log"
-	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/subnamespace"
@@ -32,7 +31,7 @@ func main() {
 		panic(err.Error())
 	}
 	// Start the controller to provide the functionalities of subnamespace resource
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(kubeclientset, 0)
 	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
 
 	controller := subnamespace.NewController(kubeclientset,

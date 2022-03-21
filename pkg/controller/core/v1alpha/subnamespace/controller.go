@@ -201,122 +201,126 @@ func NewController(
 			}
 		}, DeleteFunc: func(obj interface{}) {
 			subnamespace := obj.(*corev1alpha.SubNamespace)
-			namespace, err := controller.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), subnamespace.GetNamespace(), metav1.GetOptions{})
-			if err != nil {
-				klog.Infoln(err)
-				return
-			}
-			namespaceLabels := namespace.GetLabels()
-
-			childNameHashed := subnamespace.GenerateChildName(namespaceLabels["edge-net.io/cluster-uid"])
-			if childExists, childOwned := controller.validateChildOwnership(namespace, subnamespace.GetMode(), childNameHashed); childExists && childOwned {
-				switch subnamespace.GetMode() {
-				case "workspace":
-					controller.kubeclientset.CoreV1().Namespaces().Delete(context.TODO(), childNameHashed, metav1.DeleteOptions{})
-				case "subtenant":
-					controller.edgenetclientset.CoreV1alpha().Tenants().Delete(context.TODO(), childNameHashed, metav1.DeleteOptions{})
+			if subnamespace.Status.State == established {
+				namespace, err := controller.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), subnamespace.GetNamespace(), metav1.GetOptions{})
+				if err != nil {
+					klog.Infoln(err)
+					return
 				}
-			} else {
-				return
-			}
-			if parentResourceQuota, err := controller.kubeclientset.CoreV1().ResourceQuotas(subnamespace.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
-				returnedQuota := make(map[corev1.ResourceName]resource.Quantity)
-				for key, value := range parentResourceQuota.Spec.Hard {
-					remainingQuota := value.DeepCopy()
-					remainingQuota.Add(subnamespace.RetrieveQuantity(key))
-					returnedQuota[key] = remainingQuota
+				namespaceLabels := namespace.GetLabels()
+
+				childNameHashed := subnamespace.GenerateChildName(namespaceLabels["edge-net.io/cluster-uid"])
+				if childExists, childOwned := controller.validateChildOwnership(namespace, subnamespace.GetMode(), childNameHashed); childExists && childOwned {
+					switch subnamespace.GetMode() {
+					case "workspace":
+						controller.kubeclientset.CoreV1().Namespaces().Delete(context.TODO(), childNameHashed, metav1.DeleteOptions{})
+					case "subtenant":
+						controller.edgenetclientset.CoreV1alpha().Tenants().Delete(context.TODO(), childNameHashed, metav1.DeleteOptions{})
+					}
+				} else {
+					return
 				}
-				parentResourceQuotaCopy := parentResourceQuota.DeepCopy()
-				parentResourceQuotaCopy.Spec.Hard = returnedQuota
-				controller.kubeclientset.CoreV1().ResourceQuotas(parentResourceQuota.GetNamespace()).Update(context.TODO(), parentResourceQuotaCopy, metav1.UpdateOptions{})
+				// TODO: Return resources when there is a slice
+				if parentResourceQuota, err := controller.kubeclientset.CoreV1().ResourceQuotas(subnamespace.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{}); err == nil {
+					returnedQuota := make(map[corev1.ResourceName]resource.Quantity)
+					for key, value := range parentResourceQuota.Spec.Hard {
+						remainingQuota := value.DeepCopy()
+						remainingQuota.Add(subnamespace.RetrieveQuantity(key))
+						returnedQuota[key] = remainingQuota
+					}
+					parentResourceQuotaCopy := parentResourceQuota.DeepCopy()
+					parentResourceQuotaCopy.Spec.Hard = returnedQuota
+					controller.kubeclientset.CoreV1().ResourceQuotas(parentResourceQuota.GetNamespace()).Update(context.TODO(), parentResourceQuotaCopy, metav1.UpdateOptions{})
+				}
 			}
 		},
 	})
 
-	roleInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newObj := new.(*rbacv1.Role)
-			oldObj := old.(*rbacv1.Role)
-			if newObj.ResourceVersion == oldObj.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	rolebindingInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newObj := new.(*rbacv1.RoleBinding)
-			oldObj := old.(*rbacv1.RoleBinding)
-			if newObj.ResourceVersion == oldObj.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	networkpolicyInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newObj := new.(*networkingv1.NetworkPolicy)
-			oldObj := old.(*networkingv1.NetworkPolicy)
-			if newObj.ResourceVersion == oldObj.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	limitrangeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newObj := new.(*corev1.LimitRange)
-			oldObj := old.(*corev1.LimitRange)
-			if newObj.ResourceVersion == oldObj.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	secretInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newObj := new.(*corev1.Secret)
-			oldObj := old.(*corev1.Secret)
-			if newObj.ResourceVersion == oldObj.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	configmapInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newObj := new.(*corev1.ConfigMap)
-			oldObj := old.(*corev1.ConfigMap)
-			if newObj.ResourceVersion == oldObj.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	serviceaccountInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newObj := new.(*corev1.ServiceAccount)
-			oldObj := old.(*corev1.ServiceAccount)
-			if newObj.ResourceVersion == oldObj.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
+	/*
+		roleInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: controller.handleObject,
+			UpdateFunc: func(old, new interface{}) {
+				newObj := new.(*rbacv1.Role)
+				oldObj := old.(*rbacv1.Role)
+				if newObj.ResourceVersion == oldObj.ResourceVersion {
+					return
+				}
+				controller.handleObject(new)
+			},
+			DeleteFunc: controller.handleObject,
+		})
+		rolebindingInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: controller.handleObject,
+			UpdateFunc: func(old, new interface{}) {
+				newObj := new.(*rbacv1.RoleBinding)
+				oldObj := old.(*rbacv1.RoleBinding)
+				if newObj.ResourceVersion == oldObj.ResourceVersion {
+					return
+				}
+				controller.handleObject(new)
+			},
+			DeleteFunc: controller.handleObject,
+		})
+		networkpolicyInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: controller.handleObject,
+			UpdateFunc: func(old, new interface{}) {
+				newObj := new.(*networkingv1.NetworkPolicy)
+				oldObj := old.(*networkingv1.NetworkPolicy)
+				if newObj.ResourceVersion == oldObj.ResourceVersion {
+					return
+				}
+				controller.handleObject(new)
+			},
+			DeleteFunc: controller.handleObject,
+		})
+		limitrangeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: controller.handleObject,
+			UpdateFunc: func(old, new interface{}) {
+				newObj := new.(*corev1.LimitRange)
+				oldObj := old.(*corev1.LimitRange)
+				if newObj.ResourceVersion == oldObj.ResourceVersion {
+					return
+				}
+				controller.handleObject(new)
+			},
+			DeleteFunc: controller.handleObject,
+		})
+		secretInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: controller.handleObject,
+			UpdateFunc: func(old, new interface{}) {
+				newObj := new.(*corev1.Secret)
+				oldObj := old.(*corev1.Secret)
+				if newObj.ResourceVersion == oldObj.ResourceVersion {
+					return
+				}
+				controller.handleObject(new)
+			},
+			DeleteFunc: controller.handleObject,
+		})
+		configmapInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: controller.handleObject,
+			UpdateFunc: func(old, new interface{}) {
+				newObj := new.(*corev1.ConfigMap)
+				oldObj := old.(*corev1.ConfigMap)
+				if newObj.ResourceVersion == oldObj.ResourceVersion {
+					return
+				}
+				controller.handleObject(new)
+			},
+			DeleteFunc: controller.handleObject,
+		})
+		serviceaccountInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: controller.handleObject,
+			UpdateFunc: func(old, new interface{}) {
+				newObj := new.(*corev1.ServiceAccount)
+				oldObj := old.(*corev1.ServiceAccount)
+				if newObj.ResourceVersion == oldObj.ResourceVersion {
+					return
+				}
+				controller.handleObject(new)
+			},
+			DeleteFunc: controller.handleObject,
+		})*/
 
 	access.Clientset = kubeclientset
 	access.EdgenetClientset = edgenetclientset
@@ -606,7 +610,7 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha.SubNamesp
 			return
 		}
 
-		if subnamespaceCopy.GetResourceAllocation() != nil {
+		if subnamespaceCopy.GetResourceAllocation() != nil || subnamespaceCopy.GetSliceClaim() != nil {
 			quotaApplied := c.applyChildResourceQuota(subnamespaceCopy, childNameHashed)
 			if !quotaApplied {
 				// TODO: Error handling
@@ -646,7 +650,6 @@ func (c *Controller) checkSliceClaim(namespace, name string) (bool, bool) {
 
 func (c *Controller) checkSlice(name string) bool {
 	if slice, err := c.edgenetclientset.CoreV1alpha().Slices().Get(context.TODO(), name, metav1.GetOptions{}); err == nil {
-		klog.Infoln(slice.Status.State)
 		if slice.Status.State == provisioned {
 			return true
 		}
@@ -679,7 +682,7 @@ func (c *Controller) validateChildOwnership(parentNamespace *corev1.Namespace, m
 
 func (c *Controller) tuneParentResourceQuota(subnamespaceCopy *corev1alpha.SubNamespace, parentResourceQuota *corev1.ResourceQuota, childResourceQuota map[corev1.ResourceName]resource.Quantity) bool {
 	remainingQuota := make(map[corev1.ResourceName]resource.Quantity)
-	if slice := subnamespaceCopy.GetSliceClaim(); slice == nil {
+	if slice := subnamespaceCopy.GetSliceClaim(); slice == nil || slice != nil && subnamespaceCopy.GetResourceAllocation() != nil {
 		for key, value := range parentResourceQuota.Spec.Hard {
 			availableQuota := value.DeepCopy()
 			if _, elementExists := childResourceQuota[key]; childResourceQuota != nil && elementExists {
@@ -696,7 +699,7 @@ func (c *Controller) tuneParentResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 			}
 		}
 	} else {
-		isProvisioned := false
+		/*isProvisioned := false
 		if subnamespaceCopy.Status.State == established {
 			ticker := time.NewTicker(500 * time.Millisecond)
 			done := make(chan bool)
@@ -719,11 +722,12 @@ func (c *Controller) tuneParentResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 			done <- true
 		} else {
 			isProvisioned = c.checkSlice(*slice)
-		}
+		}*/
+
 		labelSelector := fmt.Sprintf("edge-net.io/access=public,edge-net.io/pre-reservation=%s", *slice)
-		if isProvisioned {
+		/*if isProvisioned {
 			labelSelector = fmt.Sprintf("edge-net.io/access=private,edge-net.io/slice=%s", *slice)
-		}
+		}*/
 		if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector}); err == nil {
 			for key, value := range parentResourceQuota.Spec.Hard {
 				availableQuota := value.DeepCopy()
@@ -742,8 +746,6 @@ func (c *Controller) tuneParentResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 			return false
 		}
 	}
-
-	klog.Infoln(remainingQuota)
 
 	parentResourceQuotaCopy := parentResourceQuota.DeepCopy()
 	parentResourceQuotaCopy.Spec.Hard = remainingQuota
@@ -892,9 +894,10 @@ func (c *Controller) constructSubsidiaryNamespace(subnamespaceCopy *corev1alpha.
 func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNamespace, childName string) bool {
 	var childQuota map[corev1.ResourceName]resource.Quantity
 	var slice *string
-	if slice = subnamespaceCopy.GetSliceClaim(); slice != nil {
+
+	if slice = subnamespaceCopy.GetSliceClaim(); slice != nil && subnamespaceCopy.GetResourceAllocation() == nil {
 		childQuota = make(map[corev1.ResourceName]resource.Quantity)
-		isProvisioned := false
+		/*isProvisioned := false
 		if subnamespaceCopy.Status.State == established {
 			ticker := time.NewTicker(500 * time.Millisecond)
 			done := make(chan bool)
@@ -917,11 +920,11 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 			done <- true
 		} else {
 			isProvisioned = c.checkSlice(*slice)
-		}
+		}*/
 		labelSelector := fmt.Sprintf("edge-net.io/access=public,edge-net.io/pre-reservation=%s", *slice)
-		if isProvisioned {
+		/*if isProvisioned {
 			labelSelector = fmt.Sprintf("edge-net.io/access=private,edge-net.io/slice=%s", *slice)
-		}
+		}*/
 		if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector}); err == nil {
 			for _, nodeRow := range nodeRaw.Items {
 				for key, capacity := range nodeRow.Status.Capacity {
@@ -944,7 +947,7 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 		if childResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(childName).Get(context.TODO(), "sub-quota", metav1.GetOptions{}); err == nil {
 			childResourceQuotaCopy := childResourceQuota.DeepCopy()
 			childResourceQuotaCopy.Spec.Hard = subnamespaceCopy.GetResourceAllocation()
-			if slice != nil {
+			if slice != nil && subnamespaceCopy.GetResourceAllocation() == nil {
 				childResourceQuotaCopy.Spec.Hard = childQuota
 			}
 			if _, err := c.kubeclientset.CoreV1().ResourceQuotas(childName).Update(context.TODO(), childResourceQuotaCopy, metav1.UpdateOptions{}); err != nil {
@@ -957,7 +960,7 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 			resourceQuota.Spec = corev1.ResourceQuotaSpec{
 				Hard: subnamespaceCopy.GetResourceAllocation(),
 			}
-			if slice != nil {
+			if slice != nil && subnamespaceCopy.GetResourceAllocation() == nil {
 				resourceQuota.Spec = corev1.ResourceQuotaSpec{
 					Hard: childQuota,
 				}
@@ -975,7 +978,7 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha.SubNa
 			claim := corev1alpha.ResourceTuning{
 				ResourceList: subnamespaceCopy.GetResourceAllocation(),
 			}
-			if slice != nil {
+			if slice != nil && subnamespaceCopy.GetResourceAllocation() == nil {
 				claim = corev1alpha.ResourceTuning{
 					ResourceList: childQuota,
 				}

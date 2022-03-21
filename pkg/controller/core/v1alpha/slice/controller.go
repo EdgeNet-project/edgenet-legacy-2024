@@ -156,7 +156,7 @@ func NewController(
 			newSliceClaim := new.(*corev1alpha.SliceClaim)
 			oldSliceClaim := old.(*corev1alpha.SliceClaim)
 			if newSliceClaim.ResourceVersion != oldSliceClaim.ResourceVersion {
-				controller.enqueueSlice(new)
+				controller.handleObject(new)
 			}
 		},
 		DeleteFunc: controller.handleObject,

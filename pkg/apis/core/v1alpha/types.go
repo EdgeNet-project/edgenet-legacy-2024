@@ -237,6 +237,15 @@ func (s SubNamespace) GetResourceAllocation() map[corev1.ResourceName]resource.Q
 	}
 }
 
+// SetResourceAllocation set the allocated resources at workspace or subtenant.
+func (s SubNamespace) SetResourceAllocation(resource map[corev1.ResourceName]resource.Quantity) {
+	if s.Spec.Workspace != nil {
+		s.Spec.Workspace.ResourceAllocation = resource
+	} else {
+		s.Spec.Subtenant.ResourceAllocation = resource
+	}
+}
+
 // GetSliceClaim return the assigned slice claim at workspace or subtenant.
 func (s SubNamespace) GetSliceClaim() *string {
 	if s.Spec.Workspace != nil {
