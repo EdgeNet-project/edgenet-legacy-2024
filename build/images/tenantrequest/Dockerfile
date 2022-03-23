@@ -8,16 +8,16 @@ RUN apk update && \
 ADD . "$GOPATH/src/github.com/EdgeNet-project/edgenet"
 
 RUN cd "$GOPATH/src/github.com/EdgeNet-project/edgenet" && \
-    CGO_ENABLED=0 go build -a -o /go/bin/tenantregistrationrequest ./cmd/tenantregistrationrequest/
+    CGO_ENABLED=0 go build -a -o /go/bin/tenantrequest ./cmd/tenantrequest/
 
 
 
 FROM alpine:latest
 
-WORKDIR /root/cmd/tenantregistrationrequest/
+WORKDIR /root/cmd/tenantrequest/
 
 COPY ./assets/templates/ /root/assets/templates/
 COPY ./assets/certs/ /root/assets/certs/
-COPY --from=builder /go/bin/tenantregistrationrequest .
+COPY --from=builder /go/bin/tenantrequest .
 
-CMD ["./tenantregistrationrequest"]
+CMD ["./tenantrequest"]
