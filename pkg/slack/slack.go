@@ -14,9 +14,9 @@ const (
 )
 
 const (
-	CLUSTER_ROLE_REQUEST_MADE = "kubectl list %s"
-	ROLE_REQUEST_MADE         = "kubectl list %s %s"
-	TENANT_REQUEST_MADE       = "kubectl list %s "
+	CLUSTER_ROLE_REQUEST_MADE = "kubectl patch clusterrolerequest %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./edgenet-kubeconfig.cfg"
+	ROLE_REQUEST_MADE         = "kubectl patch rolerequest %s -n %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./edgenet-kubeconfig.cfg"
+	TENANT_REQUEST_MADE       = "kubectl patch tenantrequest %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./admin.cfg"
 )
 
 // // "clusterrole-request-made"
