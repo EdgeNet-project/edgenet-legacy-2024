@@ -159,8 +159,8 @@ func SendEmailForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha.
 	email.LastName = clusterRoleRequestCopy.Spec.LastName
 	email.Subject = subject
 	email.Recipient = recipient
-	email.TenantRequest = new(mailer.TenantRequest)
-	email.TenantRequest.Tenant = clusterRoleRequestCopy.GetName()
+	email.ClusterRoleRequest = new(mailer.ClusterRoleRequest)
+	email.ClusterRoleRequest.Name = clusterRoleRequestCopy.GetName()
 	email.Send(purpose)
 }
 
@@ -195,7 +195,7 @@ func SendSlackNotificationForTenantRequest(tenantRequestCopy *registrationv1alph
 	slackNotification.Send(purpose)
 }
 
-// Send a slack notification for role request
+// Send a slack notification for cluster role request
 func SendSlackNotificationForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha.ClusterRoleRequest, purpose, subject, clusterUID string) {
 	slackNotification := new(slack.Content)
 	slackNotification.Cluster = clusterUID
@@ -205,8 +205,7 @@ func SendSlackNotificationForClusterRoleRequest(clusterRoleRequestCopy *registra
 	slackNotification.Subject = subject
 	slackNotification.AuthToken = os.Getenv(slack.AUTH_TOKEN_IDENTIFIER)
 	slackNotification.ChannelId = os.Getenv(slack.CHANNEL_ID_IDENTIFIER)
-	slackNotification.RoleRequest = new(slack.RoleRequest)
-	slackNotification.RoleRequest.Name = clusterRoleRequestCopy.GetName()
-	slackNotification.RoleRequest.Namespace = clusterRoleRequestCopy.GetNamespace()
+	slackNotification.ClusterRolerequest = new(slack.ClusterRoleRequest)
+	slackNotification.ClusterRolerequest.Name = clusterRoleRequestCopy.GetName()
 	slackNotification.Send(purpose)
 }

@@ -403,15 +403,15 @@ func (c *Controller) processClusterRoleRequest(clusterRolerequest *registrationv
 			}
 		}
 		if len(emailList) > 0 {
-			access.SendEmailForClusterRoleRequest(clusterRolerequest, "cluster-role-request-made", "[EdgeNet] A cluster role request made",
+			access.SendEmailForClusterRoleRequest(clusterRolerequest, "clusterrole-request-made", "[EdgeNet] A cluster role request made",
 				string(systemNamespace.GetUID()), emailList)
-			access.SendSlackNotificationForClusterRoleRequest(clusterRolerequest, "cluster-role-request-made", "[EdgeNet] A cluster role request made",
+			access.SendSlackNotificationForClusterRoleRequest(clusterRolerequest, "clusterrole-request-made", "[EdgeNet] A cluster role request made",
 				string(systemNamespace.GetUID()))
 		}
 	} else {
-		access.SendEmailForClusterRoleRequest(clusterRolerequest, "cluster-role-request-approved", "[EdgeNet] Cluster role request approved",
+		access.SendEmailForClusterRoleRequest(clusterRolerequest, "clusterrole-request-approved", "[EdgeNet] Cluster role request approved",
 			string(systemNamespace.GetUID()), []string{clusterRolerequest.Spec.Email})
-		access.SendSlackNotificationForClusterRoleRequest(clusterRolerequest, "cluster-role-request-approved", "[EdgeNet] Cluster role request approved",
+		access.SendSlackNotificationForClusterRoleRequest(clusterRolerequest, "clusterrole-request-approved", "[EdgeNet] Cluster role request approved",
 			string(systemNamespace.GetUID()))
 	}
 }

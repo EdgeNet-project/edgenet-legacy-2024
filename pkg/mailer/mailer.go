@@ -49,12 +49,16 @@ type Content struct {
 	Recipient           []string
 	RoleRequest         *RoleRequest
 	TenantRequest       *TenantRequest
+	ClusterRoleRequest  *ClusterRoleRequest
 	EmailVerification   *EmailVerification
 	AcceptableUsePolicy *AcceptableUsePolicy
 }
 type RoleRequest struct {
 	Name      string
 	Namespace string
+}
+type ClusterRoleRequest struct {
+	Name string
 }
 type TenantRequest struct {
 	Tenant string
