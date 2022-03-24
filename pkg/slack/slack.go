@@ -11,6 +11,7 @@ import (
 const (
 	AUTH_TOKEN_IDENTIFIER = "SLACK_AUTH_TOKEN"
 	CHANNEL_ID_IDENTIFIER = "SLACK_CHANNEL_ID"
+	USER_INFO_TEMPLATE    = ""
 )
 
 type Content struct {
@@ -37,6 +38,9 @@ type TenantRequest struct {
 
 func (c *Content) Send(purpose string) error {
 	client := slack.New(c.AuthToken)
+
+	googleScholarLink := fmt.Sprintf("<https://scholar.google.com/scholar?hl=en&as_sdt=0%%2C5&q=%s+%s&oq=/>", c.FirstName, c.LastName)
+
 	attachment := slack.Attachment{
 		Pretext: c.Subject,
 		Text:    purpose,
@@ -44,7 +48,7 @@ func (c *Content) Send(purpose string) error {
 		Fields: []slack.AttachmentField{
 			{
 				Title: "User Information",
-				Value: fmt.Sprintf("%s (%s %s)", c.User, c.FirstName, c.LastName),
+				Value: fmt.Sprintf("%s (%s %s) Google Scholar: %s", c.User, c.FirstName, c.LastName, googleScholarLink),
 			},
 			{
 				Title: "Cluster Information",
