@@ -361,3 +361,57 @@ func (c *Controller) processRoleRequest(rolerequest *registrationv1alpha.RoleReq
 			string(systemNamespace.GetUID()))
 	}
 }
+
+func (c *Controller) processClusterRoleRequest(clusterRolerequest *registrationv1alpha.ClusterRoleRequest) {
+	klog.V(4).Infoln("Handler.ObjectCreated")
+
+	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
+	if err != nil {
+		return
+	}
+	if clusterRolerequest.Status.State == failure || clusterRolerequest.Status.State == "" {
+		return
+	} else if clusterRolerequest.Status.State == pending {
+		// The function below notifies those who have the right to approve this role request.
+		// As role requests run on the layer of namespaces, we here ignore the permissions granted by Cluster Role Binding to avoid email floods.
+		// Furthermore, only those to which the system has granted permission, by attaching the "edge-net.io/generated=true" label, receive a notification email.
+		emailList := []string{}
+		if roleBindingRaw, err := c.kubeclientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
+			r, _ := regexp.Compile("(.*)(owner|admin|manager|deputy)(.*)")
+			for _, roleBindingRow := range roleBindingRaw.Items {
+				if match := r.MatchString(roleBindingRow.GetName()); !match {
+					continue
+				}
+				for _, subjectRow := range roleBindingRow.Subjects {
+					if subjectRow.Kind == "User" {
+						_, err := mail.ParseAddress(subjectRow.Name)
+						if err == nil {
+							subjectAccessReview := new(authorizationv1.SubjectAccessReview)
+							subjectAccessReview.Spec.ResourceAttributes = new(authorizationv1.ResourceAttributes)
+							subjectAccessReview.Spec.ResourceAttributes.Resource = "rolerequests"
+							subjectAccessReview.Spec.ResourceAttributes.Namespace = clusterRolerequest.GetNamespace()
+							subjectAccessReview.Spec.ResourceAttributes.Verb = "UPDATE"
+							subjectAccessReview.Spec.ResourceAttributes.Name = clusterRolerequest.GetName()
+							if subjectAccessReviewResult, err := c.kubeclientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), subjectAccessReview, metav1.CreateOptions{}); err == nil {
+								if subjectAccessReviewResult.Status.Allowed {
+									emailList = append(emailList, subjectRow.Name)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		if len(emailList) > 0 {
+			access.SendEmailForClusterRoleRequest(clusterRolerequest, "cluster-role-request-made", "[EdgeNet] A cluster role request made",
+				string(systemNamespace.GetUID()), emailList)
+			access.SendSlackNotificationForClusterRoleRequest(clusterRolerequest, "cluster-role-request-made", "[EdgeNet] A cluster role request made",
+				string(systemNamespace.GetUID()))
+		}
+	} else {
+		access.SendEmailForClusterRoleRequest(clusterRolerequest, "cluster-role-request-approved", "[EdgeNet] Cluster role request approved",
+			string(systemNamespace.GetUID()), []string{clusterRolerequest.Spec.Email})
+		access.SendSlackNotificationForClusterRoleRequest(clusterRolerequest, "cluster-role-request-approved", "[EdgeNet] Cluster role request approved",
+			string(systemNamespace.GetUID()))
+	}
+}
