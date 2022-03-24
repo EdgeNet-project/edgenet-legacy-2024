@@ -39,7 +39,7 @@ type TenantRequest struct {
 func (c *Content) Send(purpose string) error {
 	client := slack.New(c.AuthToken)
 
-	googleScholarLink := fmt.Sprintf("<https://scholar.google.com/scholar?hl=en&as_sdt=0%%2C5&q=%s+%s&oq=/>", c.FirstName, c.LastName)
+	googleScholarLink := fmt.Sprintf("<https://scholar.google.com/scholar?hl=en&as_sdt=0%%2C5&q=%s+%s&oq=|Google Scholar>", c.FirstName, c.LastName)
 
 	attachment := slack.Attachment{
 		Pretext: c.Subject,
@@ -57,6 +57,10 @@ func (c *Content) Send(purpose string) error {
 			{
 				Title: "Date",
 				Value: time.Now().String(),
+			},
+			{
+				Title: "Console Link",
+				Value: "Use this <https://www.edge-net.org/|link>",
 			},
 		},
 	}
