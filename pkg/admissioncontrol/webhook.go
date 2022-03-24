@@ -445,6 +445,14 @@ func (wh *Webhook) validateSubNamespace(w http.ResponseWriter, r *http.Request) 
 
 	admissionResponse := new(admissionv1.AdmissionResponse)
 	admissionResponse.Allowed = true
+	if admissionReviewRequest.Request.Operation == "CREATE" {
+		if subnamespace.GetSliceClaim() != nil && subnamespace.GetResourceAllocation() != nil {
+			admissionResponse.Allowed = false
+			admissionResponse.Result = &metav1.Status{
+				Message: "subsidiary namespace slice and resource allocation cannot be set at creation",
+			}
+		}
+	}
 
 	if admissionReviewRequest.Request.Operation == "UPDATE" || admissionReviewRequest.Request.Operation == "PATCH" {
 		oldObjectRaw := admissionReviewRequest.Request.OldObject.Raw
@@ -466,6 +474,20 @@ func (wh *Webhook) validateSubNamespace(w http.ResponseWriter, r *http.Request) 
 			admissionResponse.Allowed = false
 			admissionResponse.Result = &metav1.Status{
 				Message: "subsidiary namespace mode cannot be changed after creation",
+			}
+		}
+
+		if *oldSubnamespace.GetSliceClaim() != *subnamespace.GetSliceClaim() {
+			admissionResponse.Allowed = false
+			admissionResponse.Result = &metav1.Status{
+				Message: "subsidiary namespace slice cannot be set after creation",
+			}
+		}
+
+		if subnamespace.GetSliceClaim() != nil && !reflect.DeepEqual(oldSubnamespace.GetResourceAllocation(), subnamespace.GetResourceAllocation()) && admissionReviewRequest.Request.UserInfo.Username != "system:serviceaccount:edgenet:sliceclaim" {
+			admissionResponse.Allowed = false
+			admissionResponse.Result = &metav1.Status{
+				Message: "subsidiary namespace resource allocation cannot be updated when a slice is applied",
 			}
 		}
 	}
