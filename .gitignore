@@ -16,6 +16,7 @@
 configs/**
 !configs/id_rsa.pub
 !configs/id_edgenet_2021.pub
+!configs/id_rsa_ehome.pub
 !configs/*_template.yaml
 !configs/user-files
 !configs/user-files/**
@@ -27,6 +28,7 @@ configs/**
 !configs/opa/**
 !configs/ca_sample.crt
 !configs/public.cfg
+!configs/public_ehome.cfg
 !configs/nodelabeler
 !configs/nodelabeler/**
 
