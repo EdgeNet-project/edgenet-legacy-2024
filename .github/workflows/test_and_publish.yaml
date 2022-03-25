@@ -63,6 +63,7 @@ jobs:
           - sliceclaim
           - slice
           - notifier
+          - admissioncontrol
     steps:
       - name: Check out the repo
         uses: actions/checkout@v2
