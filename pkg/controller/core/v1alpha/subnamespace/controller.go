@@ -236,91 +236,90 @@ func NewController(
 		},
 	})
 
-	/*
-		roleInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: controller.handleObject,
-			UpdateFunc: func(old, new interface{}) {
-				newObj := new.(*rbacv1.Role)
-				oldObj := old.(*rbacv1.Role)
-				if newObj.ResourceVersion == oldObj.ResourceVersion {
-					return
-				}
-				controller.handleObject(new)
-			},
-			DeleteFunc: controller.handleObject,
-		})
-		rolebindingInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: controller.handleObject,
-			UpdateFunc: func(old, new interface{}) {
-				newObj := new.(*rbacv1.RoleBinding)
-				oldObj := old.(*rbacv1.RoleBinding)
-				if newObj.ResourceVersion == oldObj.ResourceVersion {
-					return
-				}
-				controller.handleObject(new)
-			},
-			DeleteFunc: controller.handleObject,
-		})
-		networkpolicyInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: controller.handleObject,
-			UpdateFunc: func(old, new interface{}) {
-				newObj := new.(*networkingv1.NetworkPolicy)
-				oldObj := old.(*networkingv1.NetworkPolicy)
-				if newObj.ResourceVersion == oldObj.ResourceVersion {
-					return
-				}
-				controller.handleObject(new)
-			},
-			DeleteFunc: controller.handleObject,
-		})
-		limitrangeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: controller.handleObject,
-			UpdateFunc: func(old, new interface{}) {
-				newObj := new.(*corev1.LimitRange)
-				oldObj := old.(*corev1.LimitRange)
-				if newObj.ResourceVersion == oldObj.ResourceVersion {
-					return
-				}
-				controller.handleObject(new)
-			},
-			DeleteFunc: controller.handleObject,
-		})
-		secretInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: controller.handleObject,
-			UpdateFunc: func(old, new interface{}) {
-				newObj := new.(*corev1.Secret)
-				oldObj := old.(*corev1.Secret)
-				if newObj.ResourceVersion == oldObj.ResourceVersion {
-					return
-				}
-				controller.handleObject(new)
-			},
-			DeleteFunc: controller.handleObject,
-		})
-		configmapInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: controller.handleObject,
-			UpdateFunc: func(old, new interface{}) {
-				newObj := new.(*corev1.ConfigMap)
-				oldObj := old.(*corev1.ConfigMap)
-				if newObj.ResourceVersion == oldObj.ResourceVersion {
-					return
-				}
-				controller.handleObject(new)
-			},
-			DeleteFunc: controller.handleObject,
-		})
-		serviceaccountInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: controller.handleObject,
-			UpdateFunc: func(old, new interface{}) {
-				newObj := new.(*corev1.ServiceAccount)
-				oldObj := old.(*corev1.ServiceAccount)
-				if newObj.ResourceVersion == oldObj.ResourceVersion {
-					return
-				}
-				controller.handleObject(new)
-			},
-			DeleteFunc: controller.handleObject,
-		})*/
+	roleInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*rbacv1.Role)
+			oldObj := old.(*rbacv1.Role)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
+	rolebindingInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*rbacv1.RoleBinding)
+			oldObj := old.(*rbacv1.RoleBinding)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
+	networkpolicyInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*networkingv1.NetworkPolicy)
+			oldObj := old.(*networkingv1.NetworkPolicy)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
+	limitrangeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*corev1.LimitRange)
+			oldObj := old.(*corev1.LimitRange)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
+	secretInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*corev1.Secret)
+			oldObj := old.(*corev1.Secret)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
+	configmapInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*corev1.ConfigMap)
+			oldObj := old.(*corev1.ConfigMap)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
+	serviceaccountInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleObject,
+		UpdateFunc: func(old, new interface{}) {
+			newObj := new.(*corev1.ServiceAccount)
+			oldObj := old.(*corev1.ServiceAccount)
+			if newObj.ResourceVersion == oldObj.ResourceVersion {
+				return
+			}
+			controller.handleObject(new)
+		},
+		DeleteFunc: controller.handleObject,
+	})
 
 	access.Clientset = kubeclientset
 	access.EdgenetClientset = edgenetclientset
