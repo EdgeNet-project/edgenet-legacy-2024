@@ -50,16 +50,16 @@ const controllerAgentName = "sliceclaim-controller"
 const (
 	successSynced         = "Synced"
 	messageResourceSynced = "Slice claim synced successfully"
-	successCreation       = "Slice Created"
-	messageCreation       = "Slice creation successfully"
-	successBound          = "Bound"
-	messageBound          = "Slice claim is bound successfully"
+	successClaimed        = "Slice Claimed"
+	messageClaimed        = "Slice claimed successfully"
+	successApplied        = "Applied"
+	messageApplied        = "Slice claim has applied successfully"
 	successQuotaCheck     = "Checked"
 	messageQuotaCheck     = "The parent has sufficient quota"
+	successBound          = "Bound"
+	messageBound          = "Slice is bound successfully"
 	failureQuotaShortage  = "Shortage"
 	messageQuotaShortage  = "Insufficient quota at the parent"
-	failureUpdate         = "Not Updated"
-	messageUpdateFail     = "Parent quota cannot be updated"
 	failureBound          = "Already Bound"
 	messageBoundAlready   = "Slice is bound to another claim already"
 	failureBinding        = "Binding Failed"
@@ -75,7 +75,6 @@ const (
 	bound       = "Bound"
 	applied     = "Applied"
 	reserved    = "Reserved"
-	provisioned = "Provisioned"
 	established = "Established"
 )
 
@@ -368,39 +367,23 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 		}
 	}
 
-	slice, err := c.edgenetclientset.CoreV1alpha().Slices().Get(context.TODO(), sliceclaimCopy.Spec.SliceName, metav1.GetOptions{})
-	if err == nil {
-		if slice.Spec.ClaimRef == nil {
-			if slice.Status.State == reserved && slice.Spec.SliceClassName == sliceclaimCopy.Spec.SliceClassName && reflect.DeepEqual(slice.Spec.NodeSelector, sliceclaimCopy.Spec.NodeSelector) {
-				sliceCopy := slice.DeepCopy()
-				sliceCopy.Spec.ClaimRef = sliceclaimCopy.MakeObjectReference()
-				if _, err := c.edgenetclientset.CoreV1alpha().Slices().Update(context.TODO(), sliceCopy, metav1.UpdateOptions{}); err != nil {
-					c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
-					sliceclaimCopy.Status.State = failure
-					sliceclaimCopy.Status.Message = messageBindingFailed
-				} else {
-					sliceclaimCopy.Status.State = pending
-					sliceclaimCopy.Status.Message = messagePending
-				}
-			} else {
-				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
-				sliceclaimCopy.Status.State = failure
-				sliceclaimCopy.Status.Message = messageBindingFailed
-			}
-			return
-		} else {
-			if !reflect.DeepEqual(slice.Spec.ClaimRef, sliceclaimCopy.MakeObjectReference()) {
-				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBound, messageBoundAlready)
-				sliceclaimCopy.Status.State = failure
-				sliceclaimCopy.Status.Message = messageBoundAlready
-				return
-			}
-			if slice.Status.State != failure && sliceclaimCopy.Status.State != applied {
-				sliceclaimCopy.Status.State = bound
-				sliceclaimCopy.Status.Message = messageBound
-			}
-		}
+	if hasFailure := c.claimSlice(sliceclaimCopy); hasFailure {
+		return
+	}
+
+	if isApplied := c.setAsOwnerReference(sliceclaimCopy); isApplied {
+		c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successApplied, messageApplied)
+		sliceclaimCopy.Status.State = applied
+		sliceclaimCopy.Status.Message = messageApplied
 	} else {
+		if sliceclaimCopy.Status.State == applied {
+			c.edgenetclientset.CoreV1alpha().SliceClaims(sliceclaimCopy.GetNamespace()).Delete(context.TODO(), sliceclaimCopy.GetName(), metav1.DeleteOptions{})
+		}
+	}
+}
+
+func (c *Controller) claimSlice(sliceclaimCopy *corev1alpha.SliceClaim) bool {
+	if slice, err := c.edgenetclientset.CoreV1alpha().Slices().Get(context.TODO(), sliceclaimCopy.Spec.SliceName, metav1.GetOptions{}); err != nil {
 		if strings.EqualFold(c.provisioning, dynamic) {
 			slice = new(corev1alpha.Slice)
 			slice.SetName(sliceclaimCopy.Spec.SliceName)
@@ -412,31 +395,51 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureCreation, messageCreationFailed)
 				sliceclaimCopy.Status.State = failure
 				sliceclaimCopy.Status.Message = messageCreationFailed
-			} else {
-				c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successCreation, messageCreation)
-				sliceclaimCopy.Status.State = pending
-				sliceclaimCopy.Status.Message = messagePending
+				return false
 			}
+			c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successClaimed, messageClaimed)
 		} else {
 			c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, pendingSlice, messagePending)
 			sliceclaimCopy.Status.State = pending
 			sliceclaimCopy.Status.Message = messagePending
 		}
-		return
-	}
-
-	if isApplied := c.setAsOwnerReference(sliceclaimCopy); isApplied {
-		sliceclaimCopy.Status.State = applied
-		sliceclaimCopy.Status.Message = messageBound
 	} else {
-		if sliceclaimCopy.Status.State == applied {
-			c.edgenetclientset.CoreV1alpha().SliceClaims(sliceclaimCopy.GetNamespace()).Delete(context.TODO(), sliceclaimCopy.GetName(), metav1.DeleteOptions{})
+		if !reflect.DeepEqual(slice.Spec.ClaimRef, sliceclaimCopy.MakeObjectReference()) {
+			if slice.Spec.ClaimRef == nil {
+				if slice.Status.State == reserved && slice.Spec.SliceClassName == sliceclaimCopy.Spec.SliceClassName && reflect.DeepEqual(slice.Spec.NodeSelector, sliceclaimCopy.Spec.NodeSelector) {
+					sliceCopy := slice.DeepCopy()
+					sliceCopy.Spec.ClaimRef = sliceclaimCopy.MakeObjectReference()
+					if _, err := c.edgenetclientset.CoreV1alpha().Slices().Update(context.TODO(), sliceCopy, metav1.UpdateOptions{}); err != nil {
+						c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
+						sliceclaimCopy.Status.State = failure
+						sliceclaimCopy.Status.Message = messageBindingFailed
+						return false
+					}
+					c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successClaimed, messageClaimed)
+				} else {
+					c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
+					sliceclaimCopy.Status.State = failure
+					sliceclaimCopy.Status.Message = messageBindingFailed
+					return false
+				}
+			} else {
+				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBound, messageBoundAlready)
+				sliceclaimCopy.Status.State = failure
+				sliceclaimCopy.Status.Message = messageBoundAlready
+				return false
+			}
+		} else {
+			if slice.Status.State != failure {
+				c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successBound, messageBound)
+				sliceclaimCopy.Status.State = bound
+				sliceclaimCopy.Status.Message = messageBound
+			}
 		}
 	}
+	return true
 }
 
 func (c *Controller) setAsOwnerReference(sliceclaimCopy *corev1alpha.SliceClaim) bool {
-	klog.Infoln("Set As Owner Reference")
 	if subnamespaceRaw, err := c.edgenetclientset.CoreV1alpha().SubNamespaces(sliceclaimCopy.GetNamespace()).List(context.TODO(), metav1.ListOptions{}); err == nil {
 		for _, subnamespaceRow := range subnamespaceRaw.Items {
 			subnamespaceCopy := subnamespaceRow.DeepCopy()
