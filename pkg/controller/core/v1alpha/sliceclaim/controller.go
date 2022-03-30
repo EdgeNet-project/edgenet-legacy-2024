@@ -336,15 +336,18 @@ func (c *Controller) handleSubNamespace(obj interface{}) {
 }
 
 func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
+	updated := make(chan bool, 1)
 	oldStatus := sliceclaimCopy.Status
-	statusUpdate := func() {
+	updateStatus := func(updated chan<- bool) {
 		if !reflect.DeepEqual(oldStatus, sliceclaimCopy.Status) {
 			if _, err := c.edgenetclientset.CoreV1alpha().SliceClaims(sliceclaimCopy.GetNamespace()).UpdateStatus(context.TODO(), sliceclaimCopy, metav1.UpdateOptions{}); err != nil {
 				klog.Infoln(err)
 			}
 		}
+		updated <- true
+		close(updated)
 	}
-	defer statusUpdate()
+	defer updateStatus(updated)
 
 	namespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), sliceclaimCopy.GetNamespace(), metav1.GetOptions{})
 	if err != nil {
@@ -367,7 +370,7 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 		}
 	}
 
-	if hasFailure := c.claimSlice(sliceclaimCopy); hasFailure {
+	if done := c.claimSlice(sliceclaimCopy, updated); !done {
 		return
 	}
 
@@ -382,27 +385,28 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha.SliceClaim) {
 	}
 }
 
-func (c *Controller) claimSlice(sliceclaimCopy *corev1alpha.SliceClaim) bool {
+func (c *Controller) claimSlice(sliceclaimCopy *corev1alpha.SliceClaim, updated <-chan bool) bool {
 	if slice, err := c.edgenetclientset.CoreV1alpha().Slices().Get(context.TODO(), sliceclaimCopy.Spec.SliceName, metav1.GetOptions{}); err != nil {
 		if strings.EqualFold(c.provisioning, dynamic) {
-			slice = new(corev1alpha.Slice)
-			slice.SetName(sliceclaimCopy.Spec.SliceName)
-			slice.Spec.ClaimRef = sliceclaimCopy.MakeObjectReference()
-			slice.Status.Expiry = sliceclaimCopy.Spec.SliceExpiry
-			slice.Spec.SliceClassName = sliceclaimCopy.Spec.SliceClassName
-			slice.Spec.NodeSelector = sliceclaimCopy.Spec.NodeSelector
-			if _, err := c.edgenetclientset.CoreV1alpha().Slices().Create(context.TODO(), slice, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureCreation, messageCreationFailed)
-				sliceclaimCopy.Status.State = failure
-				sliceclaimCopy.Status.Message = messageCreationFailed
-				return false
-			}
-			c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successClaimed, messageClaimed)
+			go func() {
+				<-updated
+				slice = new(corev1alpha.Slice)
+				slice.SetName(sliceclaimCopy.Spec.SliceName)
+				slice.Spec.ClaimRef = sliceclaimCopy.MakeObjectReference()
+				slice.Status.Expiry = sliceclaimCopy.Spec.SliceExpiry
+				slice.Spec.SliceClassName = sliceclaimCopy.Spec.SliceClassName
+				slice.Spec.NodeSelector = sliceclaimCopy.Spec.NodeSelector
+				if _, err := c.edgenetclientset.CoreV1alpha().Slices().Create(context.TODO(), slice, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+					c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureCreation, messageCreationFailed)
+				} else {
+					c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successClaimed, messageClaimed)
+				}
+			}()
 		} else {
 			c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, pendingSlice, messagePending)
-			sliceclaimCopy.Status.State = pending
-			sliceclaimCopy.Status.Message = messagePending
 		}
+		sliceclaimCopy.Status.State = pending
+		sliceclaimCopy.Status.Message = messagePending
 	} else {
 		if !reflect.DeepEqual(slice.Spec.ClaimRef, sliceclaimCopy.MakeObjectReference()) {
 			if slice.Spec.ClaimRef == nil {
@@ -416,6 +420,8 @@ func (c *Controller) claimSlice(sliceclaimCopy *corev1alpha.SliceClaim) bool {
 						return false
 					}
 					c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successClaimed, messageClaimed)
+					sliceclaimCopy.Status.State = pending
+					sliceclaimCopy.Status.Message = messagePending
 				} else {
 					c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
 					sliceclaimCopy.Status.State = failure
