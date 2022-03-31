@@ -402,12 +402,17 @@ func (c *Controller) provisionSlice(sliceCopy *corev1alpha.Slice) {
 	if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/pre-reservation=%s", sliceCopy.GetName())}); err == nil {
 		for _, nodeRow := range nodeRaw.Items {
 			c.patchNode("slice", sliceCopy.GetName(), nodeRow.GetName())
+			if podRaw, err := c.kubeclientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeRow.GetName())}); err == nil {
+				for _, podRow := range podRaw.Items {
+					var zero int64 = 0
+					c.kubeclientset.CoreV1().Pods(podRow.GetNamespace()).Delete(context.TODO(), podRow.GetName(), metav1.DeleteOptions{GracePeriodSeconds: &zero})
+				}
+			}
 		}
 		// c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messagePr)
 		sliceCopy.Status.State = provisioned
 		// sliceCopy.Status.Message = messageReserved
 	}
-
 }
 
 func (c *Controller) reserveNodes(sliceCopy *corev1alpha.Slice) bool {
@@ -509,12 +514,6 @@ func (c *Controller) reserveNodes(sliceCopy *corev1alpha.Slice) bool {
 						}
 					}
 					return false
-				}
-				if podRaw, err := c.kubeclientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("spec.nodeName in (%s)", strings.Join(pickedNodeList, ","))}); err == nil {
-					for _, podRow := range podRaw.Items {
-						var zero int64 = 0
-						c.kubeclientset.CoreV1().Pods(podRow.GetNamespace()).Delete(context.TODO(), podRow.GetName(), metav1.DeleteOptions{GracePeriodSeconds: &zero})
-					}
 				}
 			}
 		}
