@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	tlsCert string
-	tlsKey  string
+	tlsCert          string
+	tlsKey           string
+	containerRuntime string
 )
 
 func init() {
@@ -24,6 +25,7 @@ func init() {
 		klog.Fatalf("Error running admission control webhook: %s", err.Error())
 		os.Exit(1)
 	}
+	containerRuntime = os.Getenv("CONTAINER_RUNTIME")
 }
 
 func main() {
@@ -31,5 +33,6 @@ func main() {
 	webhook.CertFile = tlsCert
 	webhook.KeyFile = tlsKey
 	webhook.Codecs = serializer.NewCodecFactory(runtime.NewScheme())
+	webhook.Runtime = containerRuntime
 	webhook.RunServer()
 }
