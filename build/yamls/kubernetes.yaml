@@ -85,124 +85,6 @@ stringData:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: acceptableusepolicies.core.edgenet.io
-spec:
-  group: core.edgenet.io
-  versions:
-    - name: v1alpha
-      served: true
-      storage: true
-      subresources:
-        status: {}
-      additionalPrinterColumns:
-        - name: Accepted
-          type: boolean
-          jsonPath: .spec.accepted
-        - name: Expiry
-          type: string
-          jsonPath: .status.expiry
-        - name: Age
-          type: date
-          jsonPath: .metadata.creationTimestamp
-      schema:
-        openAPIV3Schema:
-          type: object
-          properties:
-            spec:
-              type: object
-              required:
-                - accepted
-              properties:
-                email:
-                  type: string
-                accepted:
-                  type: boolean
-            status:
-              type: object
-              properties:
-                tenant:
-                  type: string
-                expiry:
-                  type: string
-                  format: dateTime
-                  nullable: true
-                state:
-                  type: string
-                message:
-                  type: array
-                  nullable: true
-                  items:
-                    type: string
-  scope: Cluster
-  names:
-    plural: acceptableusepolicies
-    singular: acceptableusepolicy
-    kind: AcceptableUsePolicy
-    shortNames:
-      - aup
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: emailverifications.registration.edgenet.io
-spec:
-  group: registration.edgenet.io
-  versions:
-    - name: v1alpha
-      served: true
-      storage: true
-      subresources:
-        status: {}
-      additionalPrinterColumns:
-        - name: Email
-          type: string
-          jsonPath: .spec.email
-        - name: Verified
-          type: boolean
-          jsonPath: .spec.verified
-        - name: Expiry
-          type: string
-          jsonPath: .status.expiry
-        - name: Age
-          type: date
-          jsonPath: .metadata.creationTimestamp
-      schema:
-        openAPIV3Schema:
-          type: object
-          properties:
-            spec:
-              type: object
-              required:
-                - email
-                - verified
-              properties:
-                email:
-                  type: string
-                verified:
-                  type: boolean
-            status:
-              type: object
-              properties:
-                expiry:
-                  type: string
-                  format: dateTime
-                  nullable: true
-                state:
-                  type: string
-                message:
-                  type: array
-                  nullable: true
-                  items:
-                    type: string
-  scope: Cluster
-  names:
-    plural: emailverifications
-    singular: emailverification
-    kind: EmailVerification
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
   name: nodecontributions.core.edgenet.io
 spec:
   group: core.edgenet.io
@@ -250,6 +132,7 @@ spec:
                   minimum: 1
                 user:
                   type: string
+                  default: edgenet
                 enabled:
                   type: boolean
                 limitations:
@@ -272,10 +155,7 @@ spec:
                 state:
                   type: string
                 message:
-                  type: array
-                  nullable: true
-                  items:
-                    type: string
+                  type: string
   scope: Cluster
   names:
     plural: nodecontributions
@@ -323,30 +203,35 @@ spec:
                       type: array
                       items:
                         type: object
+                        x-kubernetes-embedded-resource: true
                         x-kubernetes-preserve-unknown-fields: true
                       nullable: true
                     daemonset:
                       type: array
                       items:
                         type: object
+                        x-kubernetes-embedded-resource: true
                         x-kubernetes-preserve-unknown-fields: true
                       nullable: true
                     statefulset:
                       type: array
                       items:
                         type: object
+                        x-kubernetes-embedded-resource: true
                         x-kubernetes-preserve-unknown-fields: true
                       nullable: true
                     job:
                       type: array
                       items:
                         type: object
+                        x-kubernetes-embedded-resource: true
                         x-kubernetes-preserve-unknown-fields: true
                       nullable: true
                     cronjob:
                       type: array
                       items:
                         type: object
+                        x-kubernetes-embedded-resource: true
                         x-kubernetes-preserve-unknown-fields: true
                       nullable: true
                 selector:
@@ -414,18 +299,6 @@ spec:
         - name: Status
           type: string
           jsonPath: .status.state
-        - name: CPU Allocation
-          type: string
-          jsonPath: .spec.resources.cpu
-        - name: Memory Allocation
-          type: string
-          jsonPath: .spec.resources.memory
-        - name: Network Policy Inheritance
-          type: string
-          jsonPath: .spec.inheritance.networkpolicy
-        - name: RBAC Inheritance
-          type: string
-          jsonPath: .spec.inheritance.rbac
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -435,39 +308,93 @@ spec:
           properties:
             spec:
               type: object
-              required:
-                - resources
               properties:
-                resources:
+                workspace:
                   type: object
                   properties:
-                    cpu:
+                    resourceallocation:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    inheritance:
+                      type: object
+                      properties:
+                        rbac: 
+                          type: boolean
+                          default: true
+                        networkpolicy:
+                          type: boolean
+                          default: true
+                        limitrange:
+                          type: boolean
+                          default: true
+                        secret:
+                          type: boolean
+                          default: false
+                        configmap:
+                          type: boolean
+                          default: false
+                        serviceaccount:
+                          type: boolean
+                          default: false
+                    scope:
                       type: string
-                    memory:
+                      default: "local"
+                    sync:
+                      type: boolean
+                      default: true
+                    owner:
+                      type: object
+                      required:
+                        - email
+                      nullable: true
+                      properties:
+                        firstname:
+                          type: string
+                        lastname:
+                          type: string
+                        email:
+                          type: string
+                        phone:
+                          type: string
+                    sliceclaim:
                       type: string
-                inheritance:
+                      nullable: true
+                subtenant:
                   type: object
                   properties:
-                    networkpolicy:
-                      type: boolean
-                      default: true
-                    rbac:
-                      type: boolean
-                      default: true
+                    resourceallocation:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    owner:
+                      type: object
+                      required:
+                        - firstname
+                        - lastname
+                        - email
+                        - phone
+                      properties:
+                        firstname:
+                          type: string
+                        lastname:
+                          type: string
+                        email:
+                          type: string
+                        phone:
+                          type: string
+                    sliceclaim:
+                      type: string
+                      nullable: true
                 expiry:
                   type: string
                   format: dateTime
-                  nullable: true
+                  nullable: true 
             status:
               type: object
               properties:
                 state:
                   type: string
                 message:
-                  type: array
-                  nullable: true
-                  items:
-                    type: string
+                  type: string
   scope: Namespaced
   names:
     plural: subnamespaces
@@ -563,27 +490,18 @@ spec:
                       type: string
                     phone:
                       type: string
+                clusternetworkpolicy:
+                  type: boolean
+                  default: false
                 enabled:
                   type: boolean
             status:
               type: object
               properties:
-                nodecontribution:
-                  type: array
-                  nullable: true
-                  items:
-                    type: string
-                registrationrequest:
-                  type: array
-                  nullable: true
-                  items:
-                    type: string
                 state:
                   type: string
                 message:
-                  type: array
-                  items:
-                    type: string
+                  type: string
   scope: Cluster
   names:
     plural: tenants
@@ -621,6 +539,9 @@ spec:
         - name: Expiry
           type: string
           jsonPath: .status.expiry
+        - name: Status
+          type: string
+          jsonPath: .status.state
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -665,15 +586,11 @@ spec:
                 contact:
                   type: object
                   required:
-                    - username
                     - firstname
                     - lastname
                     - email
                     - phone
                   properties:
-                    username:
-                      type: string
-                      pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                     firstname:
                       type: string
                     lastname:
@@ -682,6 +599,12 @@ spec:
                       type: string
                     phone:
                       type: string
+                clusternetworkpolicy:
+                  type: boolean
+                  default: true
+                resourceallocation:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 approved:
                   type: boolean
             status:
@@ -696,9 +619,7 @@ spec:
                 state:
                   type: string
                 message:
-                  type: array
-                  items:
-                    type: string
+                  type: string
   scope: Cluster
   names:
     plural: tenantrequests
@@ -720,6 +641,9 @@ spec:
       subresources:
         status: {}
       additionalPrinterColumns:
+        - name: Status
+          type: string
+          jsonPath: .status.state
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -733,54 +657,18 @@ spec:
                 - claim
               properties:
                 claim:
-                  type: array
-                  items:
-                    type: object
-                    required:
-                      - name
-                      - cpu
-                      - memory
-                    properties:
-                      name:
-                        type: string
-                      cpu:
-                        type: string
-                      memory:
-                        type: string
-                      expiry:
-                        type: string
-                        format: date
-                        nullable: true
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 drop:
-                  type: array
-                  nullable: true
-                  items:
-                    type: object
-                    required:
-                      - name
-                      - cpu
-                      - memory
-                    properties:
-                      name:
-                        type: string
-                      cpu:
-                        type: string
-                      memory:
-                        type: string
-                      expiry:
-                        type: string
-                        format: date
-                        nullable: true
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
             status:
               type: object
               properties:
                 state:
                   type: string
                 message:
-                  type: array
-                  nullable: true
-                  items:
-                    type: string
+                  type: string
   scope: Cluster
   names:
     plural: tenantresourcequotas
@@ -792,7 +680,7 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: userrequests.registration.edgenet.io
+  name: rolerequests.registration.edgenet.io
 spec:
   group: registration.edgenet.io
   versions:
@@ -802,21 +690,21 @@ spec:
       subresources:
         status: {}
       additionalPrinterColumns:
-        - name: "Tenant"
-          type: string
-          jsonPath: .spec.tenant
-        - name: "First Name"
-          type: string
-          jsonPath: .spec.firstname
-        - name: "Last Name"
-          type: string
-          jsonPath: .spec.lastname
         - name: Email
           type: string
           jsonPath: .spec.email
+        - name: Kind
+          type: string
+          jsonPath: .spec.roleref.kind
+        - name: Name
+          type: string
+          jsonPath: .spec.roleref.name
         - name: Expiry
           type: string
           jsonPath: .status.expiry
+        - name: Status
+          type: string
+          jsonPath: .status.state
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
@@ -827,37 +715,35 @@ spec:
             spec:
               type: object
               required:
-                - tenant
-                - firstname
-                - lastname
                 - email
+                - roleref
               properties:
-                tenant:
-                  type: string
-                  pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                 firstname:
                   type: string
-                  pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                 lastname:
                   type: string
-                  pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                 email:
                   type: string
                   format: email
-                role:
-                  type: string
-                  enum:
-                    - Owner
-                    - Admin
-                    - Collaborator
-                  default: Collaborator
+                roleref:
+                  type: object
+                  required:
+                  - kind
+                  - name
+                  properties:
+                    kind:
+                      type: string
+                      enum:
+                        - Role
+                        - ClusterRole
+                    name:
+                      type: string
+                      pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                 approved:
                   type: boolean
             status:
               type: object
               properties:
-                emailverified:
-                  type: boolean
                 expiry:
                   type: string
                   format: dateTime
@@ -865,17 +751,14 @@ spec:
                 state:
                   type: string
                 message:
-                  type: array
-                  nullable: true
-                  items:
-                    type: string
-  scope: Cluster
+                  type: string
+  scope: Namespaced
   names:
-    plural: userrequests
-    singular: userrequest
-    kind: UserRequest
+    plural: rolerequests
+    singular: rolerequest
+    kind: RoleRequest
     shortNames:
-      - urr
+      - rr
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -942,207 +825,235 @@ spec:
     shortNames:
       - vpn
 ---
-apiVersion: v1
-kind: ServiceAccount
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
 metadata:
-  labels:
-    app: edgenet
-    component: acceptableusepolicy
-  name: acceptableusepolicy
-  namespace: edgenet
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app: edgenet
-    component: acceptableusepolicy
-  name: edgenet:service:acceptableusepolicy
-rules:
-- apiGroups: ["core.edgenet.io"]
-  resources: ["acceptableusepolicies", "acceptableusepolicies/status"]
-  verbs: ["*"]
-- apiGroups: ["core.edgenet.io"]
-  resources: ["tenants"]
-  verbs: ["get", "update"]
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["*"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app: edgenet
-    component: acceptableusepolicy
-  name: edgenet:service:acceptableusepolicy
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: edgenet:service:acceptableusepolicy
-subjects:
-- kind: ServiceAccount
-  name: acceptableusepolicy
-  namespace: edgenet
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app: edgenet
-    component: acceptableusepolicy
-  name: acceptableusepolicy
-  namespace: edgenet
+  name: clusterrolerequests.registration.edgenet.io
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: edgenet
-      component: acceptableusepolicy
-  strategy:
-    type: Recreate
-  template:
-    metadata:
-      labels:
-        app: edgenet
-        component: acceptableusepolicy
-    spec:
-      containers:
-      - command:
-        - ./acceptableusepolicy
-        image: edgenetio/acceptableusepolicy:v1.0.0
-        imagePullPolicy: Always
-        name: acceptableusepolicy
-        volumeMounts:
-        - name: configs
-          readOnly: true
-          mountPath: /root/configs/
-      hostNetwork: true
-      priorityClassName: system-cluster-critical
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: ""
-      serviceAccountName: acceptableusepolicy
-      tolerations:
-      - key: CriticalAddonsOnly
-        operator: Exists
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
-        key: node.kubernetes.io/unschedulable
-      volumes:
-      - name: configs
-        secret:
-          secretName: configs-secret
+  group: registration.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Email
+          type: string
+          jsonPath: .spec.email
+        - name: Cluster Role
+          type: string
+          jsonPath: .spec.rolename
+        - name: Approved
+          type: boolean
+          jsonPath: .spec.approved
+        - name: Expiry
+          type: string
+          jsonPath: .status.expiry
+        - name: Status
+          type: string
+          jsonPath: .status.state
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - email
+                - rolename
+              properties:
+                firstname:
+                  type: string
+                lastname:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                rolename:
+                  type: string
+                  pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
+                approved:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                expiry:
+                  type: string
+                  format: dateTime
+                  nullable: true
+                state:
+                  type: string
+                message:
+                  type: string
+  scope: Cluster
+  names:
+    plural: clusterrolerequests
+    singular: clusterrolerequest
+    kind: ClusterRoleRequest
+    shortNames:
+      - crr
 ---
-apiVersion: v1
-kind: ServiceAccount
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
 metadata:
-  labels:
-    app: edgenet
-    component: emailverification
-  name: emailverification
-  namespace: edgenet
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app: edgenet
-    component: emailverification
-  name: edgenet:service:emailverification
-rules:
-- apiGroups: ["registration.edgenet.io"]
-  resources: ["emailverifications", "emailverifications/status"]
-  verbs: ["*"]
-- apiGroups: ["registration.edgenet.io"]
-  resources: ["tenantrequests"]
-  verbs: ["get"]
-- apiGroups: ["registration.edgenet.io"]
-  resources: ["tenantrequests/status"]
-  verbs: ["get", "update"]
-- apiGroups: ["registration.edgenet.io"]
-  resources: ["userrequests"]
-  verbs: ["get"]
-- apiGroups: ["registration.edgenet.io"]
-  resources: ["userrequests/status"]
-  verbs: ["get", "update"]
-- apiGroups: ["core.edgenet.io"]
-  resources: ["acceptableusepolicies"]
-  verbs: ["get", "list", "update"]
-- apiGroups: ["core.edgenet.io"]
-  resources: ["tenants"]
-  verbs: ["get"]
-- apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["clusterroles","clusterrolebindings", "roles","rolebindings"]
-  verbs: ["get", "list"]
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["*"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app: edgenet
-    component: emailverification
-  name: edgenet:service:emailverification
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: edgenet:service:emailverification
-subjects:
-- kind: ServiceAccount
-  name: emailverification
-  namespace: edgenet
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app: edgenet
-    component: emailverification
-  name: emailverification
-  namespace: edgenet
+  name: sliceclaims.core.edgenet.io
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: edgenet
-      component: emailverification
-  strategy:
-    type: Recreate
-  template:
-    metadata:
-      labels:
-        app: edgenet
-        component: emailverification
-    spec:
-      containers:
-      - command:
-        - ./emailverification
-        image: edgenetio/emailverification:v1.0.0
-        imagePullPolicy: Always
-        name: emailverification
-        volumeMounts:
-        - name: configs
-          readOnly: true
-          mountPath: /root/configs/
-      hostNetwork: true
-      priorityClassName: system-cluster-critical
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: ""
-      serviceAccountName: emailverification
-      tolerations:
-      - key: CriticalAddonsOnly
-        operator: Exists
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
-        key: node.kubernetes.io/unschedulable
-      volumes:
-      - name: configs
-        secret:
-          secretName: configs-secret
+  group: core.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Slice Class
+          type: string
+          jsonPath: .spec.sliceclassname
+        - name: Slice
+          type: string
+          jsonPath: .spec.slicename
+        - name: Expiry
+          type: string
+          jsonPath: .spec.expiry
+        - name: Status
+          type: string
+          jsonPath: .status.state
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - slicename
+                - nodeselector
+              properties:
+                sliceclassname:
+                  type: string
+                  default: "Node"
+                  enum:
+                    - Node
+                    - Resource
+                slicename:
+                  type: string
+                nodeselector:
+                  type: object
+                  required:
+                    - selector
+                    - nodecount
+                    - resources
+                  properties:
+                    selector:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    nodecount:
+                      type: integer
+                      minimum: 1
+                    resources:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                expiry:
+                  type: string
+                  format: dateTime
+                  nullable: true
+            status:
+              type: object
+              properties:
+                state:
+                  type: string
+                message:
+                  type: string
+  scope: Namespaced
+  names:
+    plural: sliceclaims
+    singular: sliceclaim
+    kind: SliceClaim
+    shortNames:
+      - sc
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: slices.core.edgenet.io
+spec:
+  group: core.edgenet.io
+  versions:
+    - name: v1alpha
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Slice Class
+          type: string
+          jsonPath: .spec.sliceclassname
+        - name: Expiry
+          type: string
+          jsonPath: .status.expiry
+        - name: Status
+          type: string
+          jsonPath: .status.state
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - nodeselector
+              properties:
+                sliceclassname:
+                  type: string
+                  default: "Node"
+                  enum:
+                    - Node
+                    - Resource
+                claimref:
+                  type: object
+                  x-kubernetes-embedded-resource: true
+                  x-kubernetes-preserve-unknown-fields: true
+                nodeselector:
+                  type: object
+                  required:
+                    - selector
+                    - nodecount
+                    - resources
+                  properties:
+                    selector:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    nodecount:
+                      type: integer
+                      minimum: 1
+                    resources:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              properties:
+                state:
+                  type: string
+                message:
+                  type: string
+                expiry:
+                  type: string
+                  format: dateTime
+                  nullable: true
+  scope: Cluster
+  names:
+    plural: slices
+    singular: slice
+    kind: Slice
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -1215,7 +1126,7 @@ spec:
       containers:
       - command:
         - ./nodecontribution
-        image: edgenetio/nodecontribution:v1.0.0
+        image: edgenetio/nodecontribution:main
         imagePullPolicy: Always
         name: nodecontribution
         volumeMounts:
@@ -1323,7 +1234,7 @@ spec:
       containers:
       - command:
         - ./nodelabeler
-        image: edgenetio/nodelabeler:v1.0.0
+        image: edgenetio/nodelabeler:main
         imagePullPolicy: Always
         name: nodelabeler
         env:
@@ -1424,7 +1335,7 @@ spec:
       containers:
       - command:
         - ./selectivedeployment
-        image: edgenetio/selectivedeployment:v1.0.0
+        image: edgenetio/selectivedeployment:main
         imagePullPolicy: Always
         name: selectivedeployment
       hostNetwork: true
@@ -1462,21 +1373,48 @@ rules:
   verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenants"]
+  verbs: ["get", "create", "update", "delete"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["tenantresourcequotas"]
+  verbs: ["get", "create", "update"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["sliceclaims"]
+  verbs: ["get"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["slices"]
   verbs: ["get"]
 - apiGroups: [""]
   resources: ["namespaces"]
-  verbs: ["get", "create", "delete"]
+  verbs: ["get", "watch", "create", "delete"]
 - apiGroups: [""]
   resources: ["resourcequotas"]
   verbs: ["get", "create", "update"]
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["roles","rolebindings"]
-  verbs: ["get", "list", "create"]
+  verbs: ["*"]
 - apiGroups: ["networking.k8s.io"]
-  resources: ["networkpolicies"]
-  verbs: ["get", "list", "create"]
+  resources: ["networkpolicies", "ingresses"]
+  verbs: ["*"]
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["selectivedeployments"]
+  verbs: ["*"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+  verbs: ["*"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["*"]
+- apiGroups: ["batch"]
+  resources: ["cronjobs", "jobs"]
+  verbs: ["*"]
+- apiGroups: ["extensions"]
+  resources: ["daemonsets", "deployments", "ingresses", "networkpolicies", "replicasets", "replicationcontrollers"]
+  verbs: ["*"]
 - apiGroups: [""]
-  resources: ["events"]
+  resources: ["controllerrevisions"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events", "limitranges", "configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets", "serviceaccounts"]
   verbs: ["*"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -1520,7 +1458,7 @@ spec:
       containers:
       - command:
         - ./subnamespace
-        image: edgenetio/subnamespace:v1.0.0
+        image: edgenetio/subnamespace:main
         imagePullPolicy: Always
         name: subnamespace
         volumeMounts:
@@ -1562,13 +1500,13 @@ metadata:
   name: edgenet:service:tenant
 rules:
 - apiGroups: ["core.edgenet.io"]
-  resources: ["tenants", "tenants/status", "subnamespaces", "acceptableusepolicies"]
+  resources: ["tenants", "tenants/status", "subnamespaces"]
   verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenantresourcequotas"]
   verbs: ["create"]
 - apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces/status", "acceptableusepolicies/status"]
+  resources: ["subnamespaces/status"]
   verbs: ["get", "list", "watch"]
 - apiGroups: ["registration.edgenet.io"]
   resources: ["tenantrequests"]
@@ -1581,7 +1519,7 @@ rules:
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["namespaces"]
-  verbs: ["get", "list", "create", "delete"]
+  verbs: ["get", "list", "create", "update", "delete"]
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["clusterroles", "clusterrolebindings"]
   verbs: ["get", "list", "create", "update", "deletecollection"]
@@ -1591,6 +1529,9 @@ rules:
 - apiGroups: [""]
   resources: ["resourcequotas"]
   verbs: ["create"]
+- apiGroups: ["crd.antrea.io"]
+  resources: ["clusternetworkpolicies"]
+  verbs: ["get", "create", "delete"]
 - apiGroups: ["certificates.k8s.io"]
   resources: ["certificatesigningrequests"]
   verbs: ["get", "list", "watch", "create"]
@@ -1601,7 +1542,7 @@ rules:
   resources: ["signers"]
   verbs: ["approve"]
 - apiGroups: [""]
-  resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"]
+  resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets", "serviceaccounts"]
   verbs: ["*"]
 - apiGroups: ["apps"]
   resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
@@ -1666,7 +1607,7 @@ spec:
       containers:
       - command:
         - ./tenant
-        image: edgenetio/tenant:v1.0.0
+        image: edgenetio/tenant:main
         imagePullPolicy: Always
         name: tenant
         volumeMounts:
@@ -1701,8 +1642,8 @@ kind: ServiceAccount
 metadata:
   labels:
     app: edgenet
-    component: tenantregistrationrequest
-  name: tenantregistrationrequest
+    component: tenantrequest
+  name: tenantrequest
   namespace: edgenet
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -1710,23 +1651,23 @@ kind: ClusterRole
 metadata:
   labels:
     app: edgenet
-    component: tenantregistrationrequest
-  name: edgenet:service:tenantregistrationrequest
+    component: tenantrequest
+  name: edgenet:service:tenantrequest
 rules:
 - apiGroups: ["registration.edgenet.io"]
   resources: ["tenantrequests", "tenantrequests/status"]
   verbs: ["*"]
-- apiGroups: ["registration.edgenet.io"]
-  resources: ["emailverifications"]
-  verbs: ["create"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenants"]
   verbs: ["get", "create"]
 - apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces", "acceptableusepolicies"]
+  resources: ["tenantresourcequotas"]
+  verbs: ["get", "create", "update"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces"]
   verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces/status", "acceptableusepolicies/status"]
+  resources: ["subnamespaces/status"]
   verbs: ["get", "list", "watch"]
 - apiGroups: ["apps.edgenet.io"]
   resources: ["selectivedeployments"]
@@ -1736,7 +1677,7 @@ rules:
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["namespaces"]
-  verbs: ["get", "list", "create", "delete"]
+  verbs: ["get", "list", "watch", "create", "delete"]
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["clusterroles", "clusterrolebindings"]
   verbs: ["get", "list", "create", "update", "deletecollection"]
@@ -1785,15 +1726,15 @@ kind: ClusterRoleBinding
 metadata:
   labels:
     app: edgenet
-    component: tenantregistrationrequest
-  name: edgenet:service:tenantregistrationrequest
+    component: tenantrequest
+  name: edgenet:service:tenantrequest
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: edgenet:service:tenantregistrationrequest
+  name: edgenet:service:tenantrequest
 subjects:
 - kind: ServiceAccount
-  name: tenantregistrationrequest
+  name: tenantrequest
   namespace: edgenet
 ---
 apiVersion: apps/v1
@@ -1801,29 +1742,29 @@ kind: Deployment
 metadata:
   labels:
     app: edgenet
-    component: tenantregistrationrequest
-  name: tenantregistrationrequest
+    component: tenantrequest
+  name: tenantrequest
   namespace: edgenet
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: edgenet
-      component: tenantregistrationrequest
+      component: tenantrequest
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
         app: edgenet
-        component: tenantregistrationrequest
+        component: tenantrequest
     spec:
       containers:
       - command:
-        - ./tenantregistrationrequest
-        image: edgenetio/tenantregistrationrequest:v1.0.0
+        - ./tenantrequest
+        image: edgenetio/tenantrequest:main
         imagePullPolicy: Always
-        name: tenantregistrationrequest
+        name: tenantrequest
         volumeMounts:
         - name: configs
           readOnly: true
@@ -1835,7 +1776,7 @@ spec:
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
-      serviceAccountName: tenantregistrationrequest
+      serviceAccountName: tenantrequest
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
@@ -1882,7 +1823,7 @@ rules:
   verbs: ["get", "watch", "list"]
 - apiGroups: [""]
   resources: ["resourcequotas"]
-  verbs: ["get", "list", "update"]
+  verbs: ["get", "list", "create", "update"]
 - apiGroups: [""]
   resources: ["events"]
   verbs: ["*"]
@@ -1928,7 +1869,7 @@ spec:
       containers:
       - command:
         - ./tenantresourcequota
-        image: edgenetio/tenantresourcequota:v1.0.0
+        image: edgenetio/tenantresourcequota:main
         imagePullPolicy: Always
         name: tenantresourcequota
         volumeMounts:
@@ -1957,8 +1898,8 @@ kind: ServiceAccount
 metadata:
   labels:
     app: edgenet
-    component: userregistrationrequest
-  name: userregistrationrequest
+    component: rolerequest
+  name: rolerequest
   namespace: edgenet
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -1966,23 +1907,20 @@ kind: ClusterRole
 metadata:
   labels:
     app: edgenet
-    component: userregistrationrequest
-  name: edgenet:service:userregistrationrequest
+    component: rolerequest
+  name: edgenet:service:rolerequest
 rules:
 - apiGroups: ["registration.edgenet.io"]
-  resources: ["userrequests", "userrequests/status"]
+  resources: ["rolerequests", "rolerequests/status"]
   verbs: ["*"]
-- apiGroups: ["registration.edgenet.io"]
-  resources: ["emailverifications"]
-  verbs: ["create"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenants"]
   verbs: ["get"]
 - apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces", "acceptableusepolicies"]
+  resources: ["subnamespaces"]
   verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces/status", "acceptableusepolicies/status"]
+  resources: ["subnamespaces/status"]
   verbs: ["get", "list", "watch"]
 - apiGroups: ["apps.edgenet.io"]
   resources: ["selectivedeployments"]
@@ -2006,7 +1944,7 @@ rules:
   resources: ["signers"]
   verbs: ["approve"]
 - apiGroups: [""]
-  resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets"]
+  resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets", "serviceaccounts"]
   verbs: ["*"]
 - apiGroups: ["apps"]
   resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
@@ -2035,15 +1973,15 @@ kind: ClusterRoleBinding
 metadata:
   labels:
     app: edgenet
-    component: userregistrationrequest
-  name: edgenet:service:userregistrationrequest
+    component: rolerequest
+  name: edgenet:service:rolerequest
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: edgenet:service:userregistrationrequest
+  name: edgenet:service:rolerequest
 subjects:
 - kind: ServiceAccount
-  name: userregistrationrequest
+  name: rolerequest
   namespace: edgenet
 ---
 apiVersion: apps/v1
@@ -2051,29 +1989,29 @@ kind: Deployment
 metadata:
   labels:
     app: edgenet
-    component: userregistrationrequest
-  name: userregistrationrequest
+    component: rolerequest
+  name: rolerequest
   namespace: edgenet
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: edgenet
-      component: userregistrationrequest
+      component: rolerequest
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
         app: edgenet
-        component: userregistrationrequest
+        component: rolerequest
     spec:
       containers:
       - command:
-        - ./userregistrationrequest
-        image: edgenetio/userregistrationrequest:v1.0.0
+        - ./rolerequest
+        image: edgenetio/rolerequest:main
         imagePullPolicy: Always
-        name: userregistrationrequest
+        name: rolerequest
         volumeMounts:
         - name: configs
           readOnly: true
@@ -2085,7 +2023,7 @@ spec:
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
-      serviceAccountName: userregistrationrequest
+      serviceAccountName: rolerequest
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
@@ -2163,7 +2101,7 @@ spec:
       containers:
       - command:
         - ./vpnpeer
-        image: edgenetio/vpnpeer:v1.0.0
+        image: edgenetio/vpnpeer:main
         imagePullPolicy: Always
         name: vpnpeer
         securityContext:
@@ -2173,6 +2111,455 @@ spec:
       hostNetwork: true
       priorityClassName: system-cluster-critical
       serviceAccountName: vpnpeer
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: clusterrolerequest
+  name: clusterrolerequest
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: clusterrolerequest
+  name: edgenet:service:clusterrolerequest
+rules:
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["clusterrolerequests", "clusterrolerequests/status"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["tenants"]
+  verbs: ["get"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces/status"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["selectivedeployments"]
+  verbs: ["*"]
+- apiGroups: ["apps.edgenet.io"]
+  resources: ["selectivedeployments/status"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles","clusterrolebindings"]
+  verbs: ["get", "list", "create", "update"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["*"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["certificatesigningrequests"]
+  verbs: ["get", "list", "watch", "create"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["certificatesigningrequests/approval"]
+  verbs: ["update"]
+- apiGroups: ["certificates.k8s.io"]
+  resources: ["signers"]
+  verbs: ["approve"]
+- apiGroups: [""]
+  resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/exec", "pods/log", "pods/attach", "replicationcontrollers", "services", "secrets", "serviceaccounts"]
+  verbs: ["*"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+  verbs: ["*"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["*"]
+- apiGroups: ["batch"]
+  resources: ["cronjobs", "jobs"]
+  verbs: ["*"]
+- apiGroups: ["extensions"]
+  resources: ["daemonsets", "deployments", "ingresses", "networkpolicies", "replicasets", "replicationcontrollers"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["controllerrevisions", "resourcequotas"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: clusterrolerequest
+  name: edgenet:service:clusterrolerequest
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:clusterrolerequest
+subjects:
+- kind: ServiceAccount
+  name: clusterrolerequest
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: clusterrolerequest
+  name: clusterrolerequest
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: clusterrolerequest
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: clusterrolerequest
+    spec:
+      containers:
+      - command:
+        - ./clusterrolerequest
+        image: edgenetio/clusterrolerequest:main
+        imagePullPolicy: Always
+        name: clusterrolerequest
+        volumeMounts:
+        - name: configs
+          readOnly: true
+          mountPath: /root/configs/
+        - name: kubeconfig
+          readOnly: true
+          mountPath: /root/.kube/
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: clusterrolerequest
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
+      volumes:
+      - name: configs
+        secret:
+          secretName: configs-secret
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig-secret
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: sliceclaim
+  name: sliceclaim
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: sliceclaim
+  name: edgenet:service:sliceclaim
+rules:
+- apiGroups: ["core.edgenet.io"]
+  resources: ["sliceclaims", "sliceclaims/status", "slices", "slices/status"]
+  verbs: ["*"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces"]
+  verbs: ["get", "list", "watch", "update"]
+- apiGroups: ["core.edgenet.io"]
+  resources: ["subnamespaces/status"]
+  verbs: ["get", "list", "watch", "update"]
+- apiGroups: [""]
+  resources: ["resourcequotas"]
+  verbs: ["get", "list", "update"]
+- apiGroups: [""]
+  resources: ["controllerrevisions"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: sliceclaim
+  name: edgenet:service:sliceclaim
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:sliceclaim
+subjects:
+- kind: ServiceAccount
+  name: sliceclaim
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: sliceclaim
+  name: sliceclaim
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: sliceclaim
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: sliceclaim
+    spec:
+      containers:
+      - command:
+        - ./sliceclaim
+        image: edgenetio/sliceclaim:main
+        imagePullPolicy: Always
+        name: sliceclaim
+        volumeMounts:
+        - name: kubeconfig
+          readOnly: true
+          mountPath: /root/.kube/
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: sliceclaim
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
+      volumes:
+      - name: configs
+        secret:
+          secretName: configs-secret
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig-secret
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: slice
+  name: slice
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: slice
+  name: edgenet:service:slice
+rules:
+- apiGroups: ["core.edgenet.io"]
+  resources: ["sliceclaims", "sliceclaims/status", "slices", "slices/status"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "watch", "list", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list", "delete"]
+- apiGroups: [""]
+  resources: ["resourcequotas"]
+  verbs: ["get", "list", "update"]
+- apiGroups: [""]
+  resources: ["controllerrevisions"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: slice
+  name: edgenet:service:slice
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:slice
+subjects:
+- kind: ServiceAccount
+  name: slice
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: slice
+  name: slice
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: slice
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: slice
+    spec:
+      containers:
+      - command:
+        - ./slice
+        image: edgenetio/slice:main
+        imagePullPolicy: Always
+        name: slice
+        volumeMounts:
+        - name: kubeconfig
+          readOnly: true
+          mountPath: /root/.kube/
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: slice
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
+      volumes:
+      - name: configs
+        secret:
+          secretName: configs-secret
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig-secret
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: notifier
+  name: notifier
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: notifier
+  name: edgenet:service:notifier
+rules:
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["tenantrequests", "clusterrolerequests", "rolerequests"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterrolebindings", "rolebindings"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["authorization.k8s.io"]
+  resources: ["subjectaccessreviews"]
+  verbs: ["get", "list", "watch", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: notifier
+  name: edgenet:service:notifier
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:notifier
+subjects:
+- kind: ServiceAccount
+  name: notifier
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: notifier
+  name: notifier
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: notifier
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: notifier
+    spec:
+      containers:
+      - command:
+        - ./notifier
+        image: edgenetio/notifier:main
+        imagePullPolicy: Always
+        name: notifier
+        env:
+          - name: MAXMIND_ACCOUNT_ID
+            valueFrom:
+              secretKeyRef:
+                name: configs-secret
+                key: maxmind-account-id
+          - name: MAXMIND_LICENSE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: configs-secret
+                key: maxmind-license-key
+      hostNetwork: true
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: notifier
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
@@ -2248,9 +2635,6 @@ rules:
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenants"]
   verbs: ["get", "list"]
-- apiGroups: ["registration.edgenet.io"]
-  resources: ["emailverifications"]
-  verbs: ["get", "update", "patch"]
 - apiGroups: ["networking.edgenet.io"]
   resources: ["vpnpeers"]
   verbs: ["create", "get", "list"]
