@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"testing"
 
-	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
-	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
+	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
+	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
@@ -36,35 +36,35 @@ import (
 )
 
 type TestGroup struct {
-	tenant                 corev1alpha.Tenant
+	tenant                 corev1alpha1.Tenant
 	namespace              corev1.Namespace
-	tenantObj              corev1alpha.Tenant
-	tenantRequest          registrationv1alpha.TenantRequest
-	tenantResourceQuotaObj corev1alpha.TenantResourceQuota
+	tenantObj              corev1alpha1.Tenant
+	tenantRequest          registrationv1alpha1.TenantRequest
+	tenantResourceQuotaObj corev1alpha1.TenantResourceQuota
 	client                 kubernetes.Interface
 	edgenetclient          versioned.Interface
 }
 
 func (g *TestGroup) Init() {
-	tenantObj := corev1alpha.Tenant{
+	tenantObj := corev1alpha1.Tenant{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Tenant",
-			APIVersion: "core.edgenet.io/v1alpha",
+			APIVersion: "core.edgenet.io/v1alpha1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "edgenet",
 		},
-		Spec: corev1alpha.TenantSpec{
+		Spec: corev1alpha1.TenantSpec{
 			FullName:  "EdgeNet",
 			ShortName: "EdgeNet",
 			URL:       "https://www.edge-net.org",
-			Address: corev1alpha.Address{
+			Address: corev1alpha1.Address{
 				City:    "Paris - NY - CA",
 				Country: "France - US",
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.Contact{
+			Contact: corev1alpha1.Contact{
 				Email:     "john.doe@edge-net.org",
 				FirstName: "John",
 				LastName:  "Doe",
@@ -73,25 +73,25 @@ func (g *TestGroup) Init() {
 			Enabled: false,
 		},
 	}
-	tenantRequestObj := registrationv1alpha.TenantRequest{
+	tenantRequestObj := registrationv1alpha1.TenantRequest{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "tenantRequest",
-			APIVersion: "apps.edgenet.io/v1alpha",
+			APIVersion: "apps.edgenet.io/v1alpha1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "edgenet-request",
 		},
-		Spec: registrationv1alpha.TenantRequestSpec{
+		Spec: registrationv1alpha1.TenantRequestSpec{
 			FullName:  "EdgeNet",
 			ShortName: "EdgeNet",
 			URL:       "https://www.edge-net.org",
-			Address: corev1alpha.Address{
+			Address: corev1alpha1.Address{
 				City:    "Paris - NY - CA",
 				Country: "France - US",
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.Contact{
+			Contact: corev1alpha1.Contact{
 				Email:     "tom.public@edge-net.org",
 				FirstName: "Tom",
 				LastName:  "Public",
@@ -99,10 +99,10 @@ func (g *TestGroup) Init() {
 			},
 		},
 	}
-	tenantResourceQuotaObj := corev1alpha.TenantResourceQuota{
+	tenantResourceQuotaObj := corev1alpha1.TenantResourceQuota{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "tenantResourceQuota",
-			APIVersion: "apps.edgenet.io/v1alpha",
+			APIVersion: "apps.edgenet.io/v1alpha1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "edgenet",
@@ -179,7 +179,7 @@ func TestCreateObjectSpecificClusterRole(t *testing.T) {
 	tenant2.SetName("lip6")
 
 	cases := map[string]struct {
-		tenant       corev1alpha.Tenant
+		tenant       corev1alpha1.Tenant
 		apiGroup     string
 		resource     string
 		resourceName string
@@ -320,9 +320,9 @@ func TestApplyTenantResourceQuota(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 
-	_, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
+	_, err := EdgenetClientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.Equals(t, true, errors.IsNotFound(err))
-	claim := corev1alpha.ResourceTuning{
+	claim := corev1alpha1.ResourceTuning{
 		ResourceList: map[corev1.ResourceName]resource.Quantity{
 			"cpu":    resource.MustParse("6000m"),
 			"memory": resource.MustParse("6Gi"),
@@ -331,6 +331,6 @@ func TestApplyTenantResourceQuota(t *testing.T) {
 	applied := make(chan error)
 	ApplyTenantResourceQuota(g.tenantResourceQuotaObj.GetName(), nil, claim, applied)
 	util.OK(t, <-applied)
-	_, err = EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
+	_, err = EdgenetClientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 }

@@ -20,14 +20,14 @@ package fake
 
 import (
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
-	appsv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha"
-	fakeappsv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha/fake"
-	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha"
-	fakecorev1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha/fake"
-	networkingv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/networking/v1alpha"
-	fakenetworkingv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/networking/v1alpha/fake"
-	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/registration/v1alpha"
-	fakeregistrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/registration/v1alpha/fake"
+	appsv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha1"
+	fakeappsv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha1/fake"
+	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha1"
+	fakecorev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha1/fake"
+	networkingv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/networking/v1alpha1"
+	fakenetworkingv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/networking/v1alpha1/fake"
+	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/registration/v1alpha1"
+	fakeregistrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/registration/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -82,22 +82,22 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 
 var _ clientset.Interface = &Clientset{}
 
-// AppsV1alpha retrieves the AppsV1alphaClient
-func (c *Clientset) AppsV1alpha() appsv1alpha.AppsV1alphaInterface {
-	return &fakeappsv1alpha.FakeAppsV1alpha{Fake: &c.Fake}
+// AppsV1alpha1 retrieves the AppsV1alpha1Client
+func (c *Clientset) AppsV1alpha1() appsv1alpha1.AppsV1alpha1Interface {
+	return &fakeappsv1alpha1.FakeAppsV1alpha1{Fake: &c.Fake}
 }
 
-// CoreV1alpha retrieves the CoreV1alphaClient
-func (c *Clientset) CoreV1alpha() corev1alpha.CoreV1alphaInterface {
-	return &fakecorev1alpha.FakeCoreV1alpha{Fake: &c.Fake}
+// CoreV1alpha1 retrieves the CoreV1alpha1Client
+func (c *Clientset) CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface {
+	return &fakecorev1alpha1.FakeCoreV1alpha1{Fake: &c.Fake}
 }
 
-// NetworkingV1alpha retrieves the NetworkingV1alphaClient
-func (c *Clientset) NetworkingV1alpha() networkingv1alpha.NetworkingV1alphaInterface {
-	return &fakenetworkingv1alpha.FakeNetworkingV1alpha{Fake: &c.Fake}
+// NetworkingV1alpha1 retrieves the NetworkingV1alpha1Client
+func (c *Clientset) NetworkingV1alpha1() networkingv1alpha1.NetworkingV1alpha1Interface {
+	return &fakenetworkingv1alpha1.FakeNetworkingV1alpha1{Fake: &c.Fake}
 }
 
-// RegistrationV1alpha retrieves the RegistrationV1alphaClient
-func (c *Clientset) RegistrationV1alpha() registrationv1alpha.RegistrationV1alphaInterface {
-	return &fakeregistrationv1alpha.FakeRegistrationV1alpha{Fake: &c.Fake}
+// RegistrationV1alpha1 retrieves the RegistrationV1alpha1Client
+func (c *Clientset) RegistrationV1alpha1() registrationv1alpha1.RegistrationV1alpha1Interface {
+	return &fakeregistrationv1alpha1.FakeRegistrationV1alpha1{Fake: &c.Fake}
 }

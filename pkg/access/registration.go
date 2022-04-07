@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
-	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
-	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
+	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
+	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/mailer"
 	slack "github.com/EdgeNet-project/edgenet/pkg/slack"
@@ -40,9 +40,9 @@ var Clientset kubernetes.Interface
 var EdgenetClientset clientset.Interface
 
 // Create function is for being used by other resources to create a tenant
-func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) error {
+func CreateTenant(tenantRequest *registrationv1alpha1.TenantRequest) error {
 	// Create a tenant on the cluster
-	tenant := new(corev1alpha.Tenant)
+	tenant := new(corev1alpha1.Tenant)
 	tenant.SetName(tenantRequest.GetName())
 	tenant.Spec.Address = tenantRequest.Spec.Address
 	tenant.Spec.Contact = tenantRequest.Spec.Contact
@@ -56,12 +56,12 @@ func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) error {
 		tenant.SetOwnerReferences(tenantRequest.GetOwnerReferences())
 	}
 
-	if tenantCreated, err := EdgenetClientset.CoreV1alpha().Tenants().Create(context.TODO(), tenant, metav1.CreateOptions{}); err != nil {
+	if tenantCreated, err := EdgenetClientset.CoreV1alpha1().Tenants().Create(context.TODO(), tenant, metav1.CreateOptions{}); err != nil {
 		klog.Infof("Couldn't create tenant %s: %s", tenant.GetName(), err)
 		return err
 	} else {
 		if tenantRequest.Spec.ResourceAllocation != nil {
-			claim := corev1alpha.ResourceTuning{
+			claim := corev1alpha1.ResourceTuning{
 				ResourceList: tenantRequest.Spec.ResourceAllocation,
 			}
 			applied := make(chan error, 1)
@@ -74,25 +74,25 @@ func CreateTenant(tenantRequest *registrationv1alpha.TenantRequest) error {
 }
 
 // ApplyTenantResourceQuota generates a tenant resource quota with the name provided
-func ApplyTenantResourceQuota(name string, ownerReferences []metav1.OwnerReference, claim corev1alpha.ResourceTuning, applied chan<- error) {
+func ApplyTenantResourceQuota(name string, ownerReferences []metav1.OwnerReference, claim corev1alpha1.ResourceTuning, applied chan<- error) {
 	created := make(chan bool, 1)
 	go checkNamespaceCreation(name, created)
 	if <-created {
-		if tenantResourceQuota, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), name, metav1.GetOptions{}); err == nil {
+		if tenantResourceQuota, err := EdgenetClientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), name, metav1.GetOptions{}); err == nil {
 			tenantResourceQuota.Spec.Claim["initial"] = claim
-			if _, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.UpdateOptions{}); err != nil {
+			if _, err := EdgenetClientset.CoreV1alpha1().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.UpdateOptions{}); err != nil {
 				klog.Infof("Couldn't update tenant resource quota %s: %s", name, err)
 				applied <- err
 			}
 		} else {
-			tenantResourceQuota := new(corev1alpha.TenantResourceQuota)
+			tenantResourceQuota := new(corev1alpha1.TenantResourceQuota)
 			tenantResourceQuota.SetName(name)
 			if ownerReferences != nil {
 				tenantResourceQuota.SetOwnerReferences(ownerReferences)
 			}
-			tenantResourceQuota.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
+			tenantResourceQuota.Spec.Claim = make(map[string]corev1alpha1.ResourceTuning)
 			tenantResourceQuota.Spec.Claim["initial"] = claim
-			if _, err := EdgenetClientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{}); err != nil {
+			if _, err := EdgenetClientset.CoreV1alpha1().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuota.DeepCopy(), metav1.CreateOptions{}); err != nil {
 				klog.Infof("Couldn't create tenant resource quota %s: %s", name, err)
 				applied <- err
 			}
@@ -132,7 +132,7 @@ func checkNamespaceCreation(tenant string, created chan<- bool) {
 	close(created)
 }
 
-func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha.RoleRequest, purpose, subject, clusterUID string, recipient []string) {
+func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha1.RoleRequest, purpose, subject, clusterUID string, recipient []string) {
 	email := new(mailer.Content)
 	email.Cluster = clusterUID
 	email.User = roleRequestCopy.Spec.Email
@@ -146,7 +146,7 @@ func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha.RoleRequest, p
 	email.Send(purpose)
 }
 
-func SendEmailForTenantRequest(tenantRequestCopy *registrationv1alpha.TenantRequest, purpose, subject, clusterUID string, recipient []string) {
+func SendEmailForTenantRequest(tenantRequestCopy *registrationv1alpha1.TenantRequest, purpose, subject, clusterUID string, recipient []string) {
 	email := new(mailer.Content)
 	email.Cluster = clusterUID
 	email.User = tenantRequestCopy.Spec.Contact.Email
@@ -159,7 +159,7 @@ func SendEmailForTenantRequest(tenantRequestCopy *registrationv1alpha.TenantRequ
 	email.Send(purpose)
 }
 
-func SendEmailForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha.ClusterRoleRequest, purpose, subject, clusterUID string, recipient []string) {
+func SendEmailForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest, purpose, subject, clusterUID string, recipient []string) {
 	email := new(mailer.Content)
 	email.Cluster = clusterUID
 	email.User = clusterRoleRequestCopy.Spec.Email
@@ -173,7 +173,7 @@ func SendEmailForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha.
 }
 
 // Send a slack notification for role request
-func SendSlackNotificationForRoleRequest(roleRequestCopy *registrationv1alpha.RoleRequest, purpose, subject, clusterUID string) {
+func SendSlackNotificationForRoleRequest(roleRequestCopy *registrationv1alpha1.RoleRequest, purpose, subject, clusterUID string) {
 	slackNotification := new(slack.Content)
 	slackNotification.Cluster = clusterUID
 	slackNotification.User = roleRequestCopy.Spec.Email
@@ -189,7 +189,7 @@ func SendSlackNotificationForRoleRequest(roleRequestCopy *registrationv1alpha.Ro
 }
 
 // Send a slack notification for tenant request
-func SendSlackNotificationForTenantRequest(tenantRequestCopy *registrationv1alpha.TenantRequest, purpose, subject, clusterUID string) {
+func SendSlackNotificationForTenantRequest(tenantRequestCopy *registrationv1alpha1.TenantRequest, purpose, subject, clusterUID string) {
 	slackNotification := new(slack.Content)
 	slackNotification.Cluster = clusterUID
 	slackNotification.User = tenantRequestCopy.Spec.Contact.Email
@@ -204,7 +204,7 @@ func SendSlackNotificationForTenantRequest(tenantRequestCopy *registrationv1alph
 }
 
 // Send a slack notification for cluster role request
-func SendSlackNotificationForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha.ClusterRoleRequest, purpose, subject, clusterUID string) {
+func SendSlackNotificationForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest, purpose, subject, clusterUID string) {
 	slackNotification := new(slack.Content)
 	slackNotification.Cluster = clusterUID
 	slackNotification.User = clusterRoleRequestCopy.Spec.Email

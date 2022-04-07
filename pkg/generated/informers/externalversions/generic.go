@@ -21,10 +21,10 @@ package externalversions
 import (
 	"fmt"
 
-	v1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha"
-	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
-	networkingv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/networking/v1alpha"
-	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
+	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha1"
+	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
+	networkingv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/networking/v1alpha1"
+	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -55,35 +55,35 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=apps.edgenet.io, Version=v1alpha
-	case v1alpha.SchemeGroupVersion.WithResource("selectivedeployments"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha().SelectiveDeployments().Informer()}, nil
+	// Group=apps.edgenet.io, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithResource("selectivedeployments"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha1().SelectiveDeployments().Informer()}, nil
 
-		// Group=core.edgenet.io, Version=v1alpha
-	case corev1alpha.SchemeGroupVersion.WithResource("nodecontributions"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().NodeContributions().Informer()}, nil
-	case corev1alpha.SchemeGroupVersion.WithResource("slices"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().Slices().Informer()}, nil
-	case corev1alpha.SchemeGroupVersion.WithResource("sliceclaims"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().SliceClaims().Informer()}, nil
-	case corev1alpha.SchemeGroupVersion.WithResource("subnamespaces"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().SubNamespaces().Informer()}, nil
-	case corev1alpha.SchemeGroupVersion.WithResource("tenants"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().Tenants().Informer()}, nil
-	case corev1alpha.SchemeGroupVersion.WithResource("tenantresourcequotas"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha().TenantResourceQuotas().Informer()}, nil
+		// Group=core.edgenet.io, Version=v1alpha1
+	case corev1alpha1.SchemeGroupVersion.WithResource("nodecontributions"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().NodeContributions().Informer()}, nil
+	case corev1alpha1.SchemeGroupVersion.WithResource("slices"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().Slices().Informer()}, nil
+	case corev1alpha1.SchemeGroupVersion.WithResource("sliceclaims"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().SliceClaims().Informer()}, nil
+	case corev1alpha1.SchemeGroupVersion.WithResource("subnamespaces"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().SubNamespaces().Informer()}, nil
+	case corev1alpha1.SchemeGroupVersion.WithResource("tenants"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().Tenants().Informer()}, nil
+	case corev1alpha1.SchemeGroupVersion.WithResource("tenantresourcequotas"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().TenantResourceQuotas().Informer()}, nil
 
-		// Group=networking.edgenet.io, Version=v1alpha
-	case networkingv1alpha.SchemeGroupVersion.WithResource("vpnpeers"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Networking().V1alpha().VPNPeers().Informer()}, nil
+		// Group=networking.edgenet.io, Version=v1alpha1
+	case networkingv1alpha1.SchemeGroupVersion.WithResource("vpnpeers"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Networking().V1alpha1().VPNPeers().Informer()}, nil
 
-		// Group=registration.edgenet.io, Version=v1alpha
-	case registrationv1alpha.SchemeGroupVersion.WithResource("clusterrolerequests"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Registration().V1alpha().ClusterRoleRequests().Informer()}, nil
-	case registrationv1alpha.SchemeGroupVersion.WithResource("rolerequests"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Registration().V1alpha().RoleRequests().Informer()}, nil
-	case registrationv1alpha.SchemeGroupVersion.WithResource("tenantrequests"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Registration().V1alpha().TenantRequests().Informer()}, nil
+		// Group=registration.edgenet.io, Version=v1alpha1
+	case registrationv1alpha1.SchemeGroupVersion.WithResource("clusterrolerequests"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Registration().V1alpha1().ClusterRoleRequests().Informer()}, nil
+	case registrationv1alpha1.SchemeGroupVersion.WithResource("rolerequests"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Registration().V1alpha1().RoleRequests().Informer()}, nil
+	case registrationv1alpha1.SchemeGroupVersion.WithResource("tenantrequests"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Registration().V1alpha1().TenantRequests().Informer()}, nil
 
 	}
 

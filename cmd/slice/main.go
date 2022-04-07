@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/slice"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha1/slice"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
@@ -37,8 +37,8 @@ func main() {
 
 	controller := slice.NewController(kubeclientset,
 		edgenetclientset,
-		edgenetInformerFactory.Core().V1alpha().SliceClaims(),
-		edgenetInformerFactory.Core().V1alpha().Slices())
+		edgenetInformerFactory.Core().V1alpha1().SliceClaims(),
+		edgenetInformerFactory.Core().V1alpha1().Slices())
 
 	kubeInformerFactory.Start(stopCh)
 	edgenetInformerFactory.Start(stopCh)

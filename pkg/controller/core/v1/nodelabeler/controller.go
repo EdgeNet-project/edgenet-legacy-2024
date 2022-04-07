@@ -194,7 +194,7 @@ func (c *Controller) setNodeGeolocation(obj interface{}) {
 	result := false
 
 	// 1. Use the VPNPeer endpoint address if available.
-	peer, err := c.edgenetclientset.NetworkingV1alpha().VPNPeers().Get(context.TODO(), nodeObj.Name, v1.GetOptions{})
+	peer, err := c.edgenetclientset.NetworkingV1alpha1().VPNPeers().Get(context.TODO(), nodeObj.Name, v1.GetOptions{})
 	if err != nil {
 		klog.V(4).Infof(
 			"Failed to find a matching VPNPeer object for %s: %s. The node IP will be used instead.",

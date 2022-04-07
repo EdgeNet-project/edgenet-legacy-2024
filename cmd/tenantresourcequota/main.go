@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenantresourcequota"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha1/tenantresourcequota"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
@@ -38,7 +38,7 @@ func main() {
 	controller := tenantresourcequota.NewController(kubeclientset,
 		edgenetclientset,
 		kubeInformerFactory.Core().V1().Nodes(),
-		edgenetInformerFactory.Core().V1alpha().TenantResourceQuotas())
+		edgenetInformerFactory.Core().V1alpha1().TenantResourceQuotas())
 
 	kubeInformerFactory.Start(stopCh)
 	edgenetInformerFactory.Start(stopCh)

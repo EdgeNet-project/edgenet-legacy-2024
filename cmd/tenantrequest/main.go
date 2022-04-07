@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/tenantrequest"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha1/tenantrequest"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
@@ -34,7 +34,7 @@ func main() {
 
 	controller := tenantrequest.NewController(kubeclientset,
 		edgenetclientset,
-		edgenetInformerFactory.Registration().V1alpha().TenantRequests())
+		edgenetInformerFactory.Registration().V1alpha1().TenantRequests())
 
 	edgenetInformerFactory.Start(stopCh)
 

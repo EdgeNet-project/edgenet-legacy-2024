@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/notifier"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha1/notifier"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
@@ -53,8 +53,8 @@ func main() {
 	controller := notifier.NewController(
 		kubeclientset,
 		edgenetclientset,
-		edgenetInformerFactory.Registration().V1alpha().TenantRequests(),
-		edgenetInformerFactory.Registration().V1alpha().RoleRequests())
+		edgenetInformerFactory.Registration().V1alpha1().TenantRequests(),
+		edgenetInformerFactory.Registration().V1alpha1().RoleRequests())
 
 	edgenetInformerFactory.Start(stopCh)
 

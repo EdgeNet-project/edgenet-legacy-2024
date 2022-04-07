@@ -7,7 +7,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/tenant"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha1/tenant"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
@@ -42,7 +42,7 @@ func main() {
 	controller := tenant.NewController(kubeclientset,
 		edgenetclientset,
 		antreaclientset,
-		edgenetInformerFactory.Core().V1alpha().Tenants())
+		edgenetInformerFactory.Core().V1alpha1().Tenants())
 
 	edgenetInformerFactory.Start(stopCh)
 

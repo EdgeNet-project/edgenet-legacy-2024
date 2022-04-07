@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/apps/v1alpha/selectivedeployment"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/apps/v1alpha1/selectivedeployment"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
@@ -59,7 +59,7 @@ func main() {
 		kubeInformerFactory.Apps().V1().StatefulSets(),
 		kubeInformerFactory.Batch().V1().Jobs(),
 		kubeInformerFactory.Batch().V1beta1().CronJobs(),
-		edgenetInformerFactory.Apps().V1alpha().SelectiveDeployments())
+		edgenetInformerFactory.Apps().V1alpha1().SelectiveDeployments())
 
 	kubeInformerFactory.Start(stopCh)
 	edgenetInformerFactory.Start(stopCh)

@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/rolerequest"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha1/rolerequest"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
@@ -34,7 +34,7 @@ func main() {
 
 	controller := rolerequest.NewController(kubeclientset,
 		edgenetclientset,
-		edgenetInformerFactory.Registration().V1alpha().RoleRequests())
+		edgenetInformerFactory.Registration().V1alpha1().RoleRequests())
 
 	edgenetInformerFactory.Start(stopCh)
 

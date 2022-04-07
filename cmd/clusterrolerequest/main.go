@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha/clusterrolerequest"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha1/clusterrolerequest"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
@@ -34,7 +34,7 @@ func main() {
 
 	controller := clusterrolerequest.NewController(kubeclientset,
 		edgenetclientset,
-		edgenetInformerFactory.Registration().V1alpha().ClusterRoleRequests())
+		edgenetInformerFactory.Registration().V1alpha1().ClusterRoleRequests())
 
 	edgenetInformerFactory.Start(stopCh)
 

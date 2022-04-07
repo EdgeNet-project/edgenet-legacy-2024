@@ -20,13 +20,13 @@ package networking
 
 import (
 	internalinterfaces "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/internalinterfaces"
-	v1alpha "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/networking/v1alpha"
+	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/networking/v1alpha1"
 )
 
 // Interface provides access to each of this group's versions.
 type Interface interface {
-	// V1alpha provides access to shared informers for resources in V1alpha.
-	V1alpha() v1alpha.Interface
+	// V1alpha1 provides access to shared informers for resources in V1alpha1.
+	V1alpha1() v1alpha1.Interface
 }
 
 type group struct {
@@ -40,7 +40,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &group{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// V1alpha returns a new v1alpha.Interface.
-func (g *group) V1alpha() v1alpha.Interface {
-	return v1alpha.New(g.factory, g.namespace, g.tweakListOptions)
+// V1alpha1 returns a new v1alpha1.Interface.
+func (g *group) V1alpha1() v1alpha1.Interface {
+	return v1alpha1.New(g.factory, g.namespace, g.tweakListOptions)
 }

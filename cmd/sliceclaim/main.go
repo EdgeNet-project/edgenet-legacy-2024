@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/sliceclaim"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha1/sliceclaim"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
@@ -35,8 +35,8 @@ func main() {
 
 	controller := sliceclaim.NewController(kubeclientset,
 		edgenetclientset,
-		edgenetInformerFactory.Core().V1alpha().SubNamespaces(),
-		edgenetInformerFactory.Core().V1alpha().SliceClaims(),
+		edgenetInformerFactory.Core().V1alpha1().SubNamespaces(),
+		edgenetInformerFactory.Core().V1alpha1().SliceClaims(),
 		*provisioning)
 
 	edgenetInformerFactory.Start(stopCh)

@@ -11,11 +11,10 @@ import (
 	"reflect"
 	"strings"
 
-	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha"
-	registrationv1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha"
+	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
+	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 
 	admissionv1 "k8s.io/api/admission/v1"
-	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -161,7 +160,7 @@ func (wh *Webhook) mutatePod(w http.ResponseWriter, r *http.Request) {
 		klog.Infoln("Pod: no bandwidth requested")
 		patch = fmt.Sprintf(`[{"op":"%s","path":"/spec/runtimeClassName","value":"%s"}}]`, patchOperation["runtime"], wh.Runtime)
 	}
-	patchType := v1.PatchTypeJSONPatch
+	patchType := admissionv1.PatchTypeJSONPatch
 	admissionResponse.PatchType = &patchType
 	admissionResponse.Patch = []byte(patch)
 
@@ -295,7 +294,7 @@ func (wh *Webhook) validateTenantRequest(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	tenantrequestResource := metav1.GroupVersionResource{Group: "registration.edgenet.io", Version: "v1alpha", Resource: "tenantrequests"}
+	tenantrequestResource := metav1.GroupVersionResource{Group: "registration.edgenet.io", Version: "v1alpha1", Resource: "tenantrequests"}
 	if admissionReviewRequest.Request.Resource != tenantrequestResource {
 		err := fmt.Errorf("tenantrequest wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
@@ -305,7 +304,7 @@ func (wh *Webhook) validateTenantRequest(w http.ResponseWriter, r *http.Request)
 	}
 
 	rawRequest := admissionReviewRequest.Request.Object.Raw
-	tenantrequest := new(registrationv1alpha.TenantRequest)
+	tenantrequest := new(registrationv1alpha1.TenantRequest)
 	if _, _, err := deserializer.Decode(rawRequest, nil, tenantrequest); err != nil {
 		klog.Errorf("tenantrequest decode error: %v", err)
 		w.WriteHeader(400)
@@ -350,7 +349,7 @@ func (wh *Webhook) validateClusterRoleRequest(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	clusterrolerequestResource := metav1.GroupVersionResource{Group: "registration.edgenet.io", Version: "v1alpha", Resource: "clusterrolerequests"}
+	clusterrolerequestResource := metav1.GroupVersionResource{Group: "registration.edgenet.io", Version: "v1alpha1", Resource: "clusterrolerequests"}
 	if admissionReviewRequest.Request.Resource != clusterrolerequestResource {
 		err := fmt.Errorf("clusterrolerequest wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
@@ -360,7 +359,7 @@ func (wh *Webhook) validateClusterRoleRequest(w http.ResponseWriter, r *http.Req
 	}
 
 	rawRequest := admissionReviewRequest.Request.Object.Raw
-	clusterrolerequest := new(registrationv1alpha.ClusterRoleRequest)
+	clusterrolerequest := new(registrationv1alpha1.ClusterRoleRequest)
 	if _, _, err := deserializer.Decode(rawRequest, nil, clusterrolerequest); err != nil {
 		klog.Errorf("clusterrolerequest decode error: %v", err)
 		w.WriteHeader(400)
@@ -405,7 +404,7 @@ func (wh *Webhook) validateRoleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rolerequestResource := metav1.GroupVersionResource{Group: "registration.edgenet.io", Version: "v1alpha", Resource: "rolerequests"}
+	rolerequestResource := metav1.GroupVersionResource{Group: "registration.edgenet.io", Version: "v1alpha1", Resource: "rolerequests"}
 	if admissionReviewRequest.Request.Resource != rolerequestResource {
 		err := fmt.Errorf("rolerequest wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
@@ -415,7 +414,7 @@ func (wh *Webhook) validateRoleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rawRequest := admissionReviewRequest.Request.Object.Raw
-	rolerequest := new(registrationv1alpha.RoleRequest)
+	rolerequest := new(registrationv1alpha1.RoleRequest)
 	if _, _, err := deserializer.Decode(rawRequest, nil, rolerequest); err != nil {
 		klog.Errorf("rolerequest decode error: %v", err)
 		w.WriteHeader(400)
@@ -460,7 +459,7 @@ func (wh *Webhook) validateSubNamespace(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	subnamespaceResource := metav1.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha", Resource: "subnamespaces"}
+	subnamespaceResource := metav1.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha1", Resource: "subnamespaces"}
 	if admissionReviewRequest.Request.Resource != subnamespaceResource {
 		err := fmt.Errorf("subnamespace wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
@@ -470,7 +469,7 @@ func (wh *Webhook) validateSubNamespace(w http.ResponseWriter, r *http.Request) 
 	}
 
 	rawRequest := admissionReviewRequest.Request.Object.Raw
-	subnamespace := new(corev1alpha.SubNamespace)
+	subnamespace := new(corev1alpha1.SubNamespace)
 	if _, _, err := deserializer.Decode(rawRequest, nil, subnamespace); err != nil {
 		klog.Errorf("subnamespace decode error: %v", err)
 		w.WriteHeader(400)
@@ -491,7 +490,7 @@ func (wh *Webhook) validateSubNamespace(w http.ResponseWriter, r *http.Request) 
 
 	if admissionReviewRequest.Request.Operation == "UPDATE" || admissionReviewRequest.Request.Operation == "PATCH" {
 		oldObjectRaw := admissionReviewRequest.Request.OldObject.Raw
-		oldSubnamespace := new(corev1alpha.SubNamespace)
+		oldSubnamespace := new(corev1alpha1.SubNamespace)
 		if _, _, err := deserializer.Decode(oldObjectRaw, nil, oldSubnamespace); err != nil {
 			klog.Errorf("old subnamespace decode error: %v", err)
 			w.WriteHeader(400)
@@ -554,7 +553,7 @@ func (wh *Webhook) validateSlice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sliceResource := metav1.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha", Resource: "slices"}
+	sliceResource := metav1.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha1", Resource: "slices"}
 	if admissionReviewRequest.Request.Resource != sliceResource {
 		err := fmt.Errorf("slice wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
@@ -564,7 +563,7 @@ func (wh *Webhook) validateSlice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rawRequest := admissionReviewRequest.Request.Object.Raw
-	slice := new(corev1alpha.Slice)
+	slice := new(corev1alpha1.Slice)
 	if _, _, err := deserializer.Decode(rawRequest, nil, slice); err != nil {
 		klog.Errorf("slice decode error: %v", err)
 		w.WriteHeader(400)
@@ -577,7 +576,7 @@ func (wh *Webhook) validateSlice(w http.ResponseWriter, r *http.Request) {
 
 	if admissionReviewRequest.Request.Operation == "UPDATE" || admissionReviewRequest.Request.Operation == "PATCH" {
 		oldObjectRaw := admissionReviewRequest.Request.OldObject.Raw
-		oldSlice := new(corev1alpha.Slice)
+		oldSlice := new(corev1alpha1.Slice)
 		if _, _, err := deserializer.Decode(oldObjectRaw, nil, oldSlice); err != nil {
 			klog.Errorf("old slice decode error: %v", err)
 			w.WriteHeader(400)
@@ -633,7 +632,7 @@ func (wh *Webhook) validateSliceClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sliceclaimResource := metav1.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha", Resource: "sliceclaims"}
+	sliceclaimResource := metav1.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha1", Resource: "sliceclaims"}
 	if admissionReviewRequest.Request.Resource != sliceclaimResource {
 		err := fmt.Errorf("sliceclaim wrong resource kind: %v", admissionReviewRequest.Request.Resource.Resource)
 		klog.Error(err)
@@ -643,7 +642,7 @@ func (wh *Webhook) validateSliceClaim(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rawRequest := admissionReviewRequest.Request.Object.Raw
-	sliceclaim := new(corev1alpha.SliceClaim)
+	sliceclaim := new(corev1alpha1.SliceClaim)
 	if _, _, err := deserializer.Decode(rawRequest, nil, sliceclaim); err != nil {
 		klog.Errorf("sliceclaim decode error: %v", err)
 		w.WriteHeader(400)
@@ -656,7 +655,7 @@ func (wh *Webhook) validateSliceClaim(w http.ResponseWriter, r *http.Request) {
 
 	if admissionReviewRequest.Request.Operation == "UPDATE" || admissionReviewRequest.Request.Operation == "PATCH" {
 		oldObjectRaw := admissionReviewRequest.Request.OldObject.Raw
-		oldSliceClaim := new(corev1alpha.SliceClaim)
+		oldSliceClaim := new(corev1alpha1.SliceClaim)
 		if _, _, err := deserializer.Decode(oldObjectRaw, nil, oldSliceClaim); err != nil {
 			klog.Errorf("old sliceclaim decode error: %v", err)
 			w.WriteHeader(400)

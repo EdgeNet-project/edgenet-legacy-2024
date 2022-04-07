@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/nodecontribution"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha1/nodecontribution"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
@@ -38,7 +38,7 @@ func main() {
 	controller := nodecontribution.NewController(kubeclientset,
 		edgenetclientset,
 		kubeInformerFactory.Core().V1().Nodes(),
-		edgenetInformerFactory.Core().V1alpha().NodeContributions())
+		edgenetInformerFactory.Core().V1alpha1().NodeContributions())
 
 	kubeInformerFactory.Start(stopCh)
 	edgenetInformerFactory.Start(stopCh)

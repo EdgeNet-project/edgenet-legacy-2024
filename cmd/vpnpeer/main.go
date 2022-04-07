@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/controller/networking/v1alpha/vpnpeer"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/networking/v1alpha1/vpnpeer"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
@@ -46,7 +46,7 @@ func main() {
 	controller := vpnpeer.NewController(
 		kubeclientset,
 		edgenetclientset,
-		edgenetInformerFactory.Networking().V1alpha().VPNPeers(),
+		edgenetInformerFactory.Networking().V1alpha1().VPNPeers(),
 		linkName,
 	)
 

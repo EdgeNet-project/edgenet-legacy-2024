@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha/subnamespace"
+	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha1/subnamespace"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
@@ -43,7 +43,7 @@ func main() {
 		kubeInformerFactory.Core().V1().Secrets(),
 		kubeInformerFactory.Core().V1().ConfigMaps(),
 		kubeInformerFactory.Core().V1().ServiceAccounts(),
-		edgenetInformerFactory.Core().V1alpha().SubNamespaces())
+		edgenetInformerFactory.Core().V1alpha1().SubNamespaces())
 
 	kubeInformerFactory.Start(stopCh)
 	edgenetInformerFactory.Start(stopCh)
