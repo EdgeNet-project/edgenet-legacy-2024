@@ -96,6 +96,7 @@ services:
     image: notifier:v1.0.0
     volumes:
       - ~/.kube/:/root/.kube/
+      - ../assets/templates/:/root/assets/templates/
   clusterrolerequest:
     container_name: clusterrolerequest
     restart: always

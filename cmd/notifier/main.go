@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"log"
-	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha1/notifier"
@@ -48,13 +47,14 @@ func main() {
 	}
 
 	// Start the controller to provide the functionalities of notifier controller
-	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
 
 	controller := notifier.NewController(
 		kubeclientset,
 		edgenetclientset,
 		edgenetInformerFactory.Registration().V1alpha1().TenantRequests(),
-		edgenetInformerFactory.Registration().V1alpha1().RoleRequests())
+		edgenetInformerFactory.Registration().V1alpha1().RoleRequests(),
+		edgenetInformerFactory.Registration().V1alpha1().ClusterRoleRequests())
 
 	edgenetInformerFactory.Start(stopCh)
 

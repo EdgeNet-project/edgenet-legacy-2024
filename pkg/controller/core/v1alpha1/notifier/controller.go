@@ -59,17 +59,21 @@ type Controller struct {
 	kubeclientset    kubernetes.Interface
 	edgenetclientset clientset.Interface
 
-	tenantrequestsLister listers.TenantRequestLister
-	tenantrequestsSynced cache.InformerSynced
-	rolerequestsLister   listers.RoleRequestLister
-	rolerequestsSynced   cache.InformerSynced
+	tenantrequestsLister      listers.TenantRequestLister
+	tenantrequestsSynced      cache.InformerSynced
+	rolerequestsLister        listers.RoleRequestLister
+	rolerequestsSynced        cache.InformerSynced
+	clusterrolerequestsLister listers.ClusterRoleRequestLister
+	clusterrolerequestsSynced cache.InformerSynced
 
 	// workqueue is a rate limited work queue. This is used to queue work to be
 	// processed instead of performing it as soon as a change happens. This
 	// means we can ensure we only process a fixed amount of resources at a
 	// time, and makes it easy to ensure we are never processing the same item
 	// simultaneously in two different workers.
-	workqueue workqueue.RateLimitingInterface
+	workqueueTenantRequest      workqueue.RateLimitingInterface
+	workqueueClusterRoleRequest workqueue.RateLimitingInterface
+	workqueueRoleRequest        workqueue.RateLimitingInterface
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
 	recorder record.EventRecorder
@@ -80,26 +84,30 @@ func NewController(
 	kubeclientset kubernetes.Interface,
 	edgenetclientset clientset.Interface,
 	tenantrequestInformer informers.TenantRequestInformer,
-	rolerequestInformer informers.RoleRequestInformer) *Controller {
+	rolerequestInformer informers.RoleRequestInformer,
+	clusterrolerequestInformer informers.ClusterRoleRequestInformer) *Controller {
 	// Create event broadcaster
 	utilruntime.Must(scheme.AddToScheme(scheme.Scheme))
-	klog.V(4).Infoln("Creating event broadcaster")
+	klog.Infoln("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(klog.Infof)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeclientset:        kubeclientset,
-		edgenetclientset:     edgenetclientset,
-		tenantrequestsLister: tenantrequestInformer.Lister(),
-		tenantrequestsSynced: tenantrequestInformer.Informer().HasSynced,
-		rolerequestsLister:   rolerequestInformer.Lister(),
-		rolerequestsSynced:   rolerequestInformer.Informer().HasSynced,
-		workqueue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Notifier"),
-		recorder:             recorder,
+		kubeclientset:               kubeclientset,
+		edgenetclientset:            edgenetclientset,
+		tenantrequestsLister:        tenantrequestInformer.Lister(),
+		tenantrequestsSynced:        tenantrequestInformer.Informer().HasSynced,
+		rolerequestsLister:          rolerequestInformer.Lister(),
+		rolerequestsSynced:          rolerequestInformer.Informer().HasSynced,
+		clusterrolerequestsLister:   clusterrolerequestInformer.Lister(),
+		clusterrolerequestsSynced:   clusterrolerequestInformer.Informer().HasSynced,
+		workqueueTenantRequest:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NotifierTenantRequest"),
+		workqueueClusterRoleRequest: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NotifierClusterRoleRequest"),
+		workqueueRoleRequest:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NotifierRoleRequest"),
+		recorder:                    recorder,
 	}
-
 	klog.Infoln("Setting up event handlers")
 
 	// Event handlers deal with events of resources.
@@ -114,9 +122,18 @@ func NewController(
 	})
 	rolerequestInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		UpdateFunc: func(old, new interface{}) {
-			newRoleRequest := new.(*registrationv1alpha1.TenantRequest)
-			oldRoleRequest := old.(*registrationv1alpha1.TenantRequest)
+			newRoleRequest := new.(*registrationv1alpha1.RoleRequest)
+			oldRoleRequest := old.(*registrationv1alpha1.RoleRequest)
 			if !reflect.DeepEqual(newRoleRequest.Status, oldRoleRequest.Status) {
+				controller.enqueueNotifier(new)
+			}
+		},
+	})
+	clusterrolerequestInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		UpdateFunc: func(old, new interface{}) {
+			newClusterRoleRequest := new.(*registrationv1alpha1.ClusterRoleRequest)
+			oldClusterRoleRequest := old.(*registrationv1alpha1.ClusterRoleRequest)
+			if !reflect.DeepEqual(newClusterRoleRequest.Status, oldClusterRoleRequest.Status) {
 				controller.enqueueNotifier(new)
 			}
 		},
@@ -127,26 +144,29 @@ func NewController(
 
 func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
-	defer c.workqueue.ShutDown()
+	defer c.workqueueTenantRequest.ShutDown()
+	defer c.workqueueClusterRoleRequest.ShutDown()
+	defer c.workqueueRoleRequest.ShutDown()
 
-	klog.V(4).Infoln("Starting Notifier Controller")
+	klog.Infoln("Starting Notifier Controller")
 
-	klog.V(4).Infoln("Waiting for informer caches to sync")
+	klog.Infoln("Waiting for informer caches to sync")
 
 	if ok := cache.WaitForCacheSync(stopCh,
 		c.tenantrequestsSynced,
-		c.rolerequestsSynced); !ok {
+		c.rolerequestsSynced,
+		c.clusterrolerequestsSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
-	klog.V(4).Infoln("Starting workers")
+	klog.Infoln("Starting workers")
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
 
-	klog.V(4).Infoln("Started workers")
+	klog.Infoln("Started workers")
 	<-stopCh
-	klog.V(4).Infoln("Shutting down workers")
+	klog.Infoln("Shutting down workers")
 
 	return nil
 }
@@ -157,36 +177,113 @@ func (c *Controller) runWorker() {
 }
 
 func (c *Controller) processNextWorkItem() bool {
-	obj, shutdown := c.workqueue.Get()
+	isSyncedTenant := c.processNextTenantRequestItem()
+	isSyncedClusterRoleRequest := c.processNextClusterRoleRequestItem()
+	isSyncedRoleRequest := c.processNextRoleRequestItem()
+
+	if !isSyncedTenant && !isSyncedClusterRoleRequest && !isSyncedRoleRequest {
+		return false
+	}
+	return true
+}
+
+func (c *Controller) processNextTenantRequestItem() bool {
+	obj, shutdown := c.workqueueTenantRequest.Get()
 
 	if shutdown {
 		return false
 	}
 
 	err := func(obj interface{}) error {
-		defer c.workqueue.Done(obj)
+		defer c.workqueueTenantRequest.Done(obj)
 		var key string
 		var ok bool
 
 		if key, ok = obj.(string); !ok {
-			c.workqueue.Forget(obj)
+			c.workqueueTenantRequest.Forget(obj)
 			utilruntime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
 			return nil
 		}
-		switch obj.(type) {
-		case registrationv1alpha1.TenantRequest:
-			if err := c.syncTenantRequestHandler(key); err != nil {
-				c.workqueue.AddRateLimited(key)
-				return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
-			}
-		case registrationv1alpha1.RoleRequest:
-			if err := c.syncRoleRequestHandler(key); err != nil {
-				c.workqueue.AddRateLimited(key)
-				return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
-			}
+
+		if err := c.syncTenantRequestHandler(key); err != nil {
+			c.workqueueTenantRequest.AddRateLimited(key)
+			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
 		}
-		c.workqueue.Forget(obj)
-		klog.V(4).Infof("Successfully synced '%s'", key)
+
+		c.workqueueTenantRequest.Forget(obj)
+		klog.Infof("Successfully synced '%s'", key)
+		return nil
+	}(obj)
+
+	if err != nil {
+		utilruntime.HandleError(err)
+		return true
+	}
+
+	return true
+}
+
+func (c *Controller) processNextClusterRoleRequestItem() bool {
+	obj, shutdown := c.workqueueClusterRoleRequest.Get()
+
+	if shutdown {
+		return false
+	}
+
+	err := func(obj interface{}) error {
+		defer c.workqueueClusterRoleRequest.Done(obj)
+		var key string
+		var ok bool
+
+		if key, ok = obj.(string); !ok {
+			c.workqueueClusterRoleRequest.Forget(obj)
+			utilruntime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
+			return nil
+		}
+
+		if err := c.syncClusterRoleRequestHandler(key); err != nil {
+			c.workqueueClusterRoleRequest.AddRateLimited(key)
+			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
+		}
+
+		c.workqueueClusterRoleRequest.Forget(obj)
+		klog.Infof("Successfully synced '%s'", key)
+		return nil
+	}(obj)
+
+	if err != nil {
+		utilruntime.HandleError(err)
+		return true
+	}
+
+	return true
+}
+
+func (c *Controller) processNextRoleRequestItem() bool {
+	obj, shutdown := c.workqueueRoleRequest.Get()
+
+	if shutdown {
+		return false
+	}
+
+	err := func(obj interface{}) error {
+		defer c.workqueueRoleRequest.Done(obj)
+		var key string
+		var ok bool
+
+		if key, ok = obj.(string); !ok {
+			c.workqueueRoleRequest.Forget(obj)
+			utilruntime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
+			return nil
+		}
+
+		if err := c.syncRoleRequestHandler(key); err != nil {
+			c.workqueueRoleRequest.AddRateLimited(key)
+			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
+		}
+
+		c.workqueueRoleRequest.Forget(obj)
+		klog.Infof("Successfully synced '%s'", key)
 		return nil
 	}(obj)
 
@@ -214,8 +311,30 @@ func (c *Controller) syncTenantRequestHandler(key string) error {
 
 		return err
 	}
-	klog.V(4).Infof("processNextItem: object created/updated detected: %s", key)
+	klog.Infof("processNextTenantRequestItem: object created/updated detected: %s", key)
 	c.processTenantRequest(tenantrequest)
+
+	return nil
+}
+
+// syncClusterRoleRequestHandler looks at the actual state and sends a notification if desired.
+func (c *Controller) syncClusterRoleRequestHandler(key string) error {
+	_, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
+		return nil
+	}
+	clusterrolerequest, err := c.clusterrolerequestsLister.Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			utilruntime.HandleError(fmt.Errorf("cluster role request '%s' in work queue no longer exists", key))
+			return nil
+		}
+
+		return err
+	}
+	klog.Infof("processNextClusterRoleRequestItem: object created/updated detected: %s", key)
+	c.processClusterRoleRequest(clusterrolerequest)
 
 	return nil
 }
@@ -236,7 +355,7 @@ func (c *Controller) syncRoleRequestHandler(key string) error {
 
 		return err
 	}
-	klog.V(4).Infof("processNextItem: object created/updated detected: %s", key)
+	klog.Infof("processNextRoleRequestItem: object created/updated detected: %s", key)
 	c.processRoleRequest(rolerequest)
 
 	return nil
@@ -251,12 +370,19 @@ func (c *Controller) enqueueNotifier(obj interface{}) {
 		utilruntime.HandleError(err)
 		return
 	}
-
-	c.workqueue.Add(key)
+	klog.Infoln(obj)
+	switch obj.(type) {
+	case *registrationv1alpha1.TenantRequest:
+		c.workqueueTenantRequest.Add(key)
+	case *registrationv1alpha1.ClusterRoleRequest:
+		c.workqueueClusterRoleRequest.Add(key)
+	case *registrationv1alpha1.RoleRequest:
+		c.workqueueRoleRequest.Add(key)
+	}
 }
 
 func (c *Controller) processTenantRequest(tenantrequest *registrationv1alpha1.TenantRequest) {
-	klog.V(4).Infoln("Handler.ObjectCreated")
+	klog.Infoln("processTenantRequest")
 	//nodeObj := obj.(*corev1.Node)
 
 	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
@@ -281,9 +407,14 @@ func (c *Controller) processTenantRequest(tenantrequest *registrationv1alpha1.Te
 						_, err := mail.ParseAddress(subjectRow.Name)
 						if err == nil {
 							subjectAccessReview := new(authorizationv1.SubjectAccessReview)
-							subjectAccessReview.Spec.ResourceAttributes.Resource = "tenantrequests"
-							subjectAccessReview.Spec.ResourceAttributes.Verb = "UPDATE"
-							subjectAccessReview.Spec.ResourceAttributes.Name = tenantrequest.GetName()
+							resourceAttributes := new(authorizationv1.ResourceAttributes)
+							resourceAttributes.Group = "registration.edgenet.io"
+							resourceAttributes.Version = "v1alpha1"
+							resourceAttributes.Resource = "tenantrequests"
+							resourceAttributes.Verb = "UPDATE"
+							resourceAttributes.Name = tenantrequest.GetName()
+							subjectAccessReview.Spec.ResourceAttributes = resourceAttributes
+							subjectAccessReview.Spec.User = subjectRow.Name
 							if subjectAccessReviewResult, err := c.kubeclientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), subjectAccessReview, metav1.CreateOptions{}); err == nil {
 								if subjectAccessReviewResult.Status.Allowed {
 									emailList = append(emailList, subjectRow.Name)
@@ -295,6 +426,7 @@ func (c *Controller) processTenantRequest(tenantrequest *registrationv1alpha1.Te
 			}
 		}
 		if len(emailList) > 0 {
+			klog.Infoln(emailList)
 			access.SendEmailForTenantRequest(tenantrequest, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
 				string(systemNamespace.GetUID()), emailList)
 			access.SendSlackNotificationForTenantRequest(tenantrequest, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
@@ -309,7 +441,7 @@ func (c *Controller) processTenantRequest(tenantrequest *registrationv1alpha1.Te
 }
 
 func (c *Controller) processRoleRequest(rolerequest *registrationv1alpha1.RoleRequest) {
-	klog.V(4).Infoln("Handler.ObjectCreated")
+	klog.Infoln("processRoleRequest")
 
 	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
 	if err != nil {
@@ -333,11 +465,15 @@ func (c *Controller) processRoleRequest(rolerequest *registrationv1alpha1.RoleRe
 						_, err := mail.ParseAddress(subjectRow.Name)
 						if err == nil {
 							subjectAccessReview := new(authorizationv1.SubjectAccessReview)
-							subjectAccessReview.Spec.ResourceAttributes = new(authorizationv1.ResourceAttributes)
-							subjectAccessReview.Spec.ResourceAttributes.Resource = "rolerequests"
-							subjectAccessReview.Spec.ResourceAttributes.Namespace = rolerequest.GetNamespace()
-							subjectAccessReview.Spec.ResourceAttributes.Verb = "UPDATE"
-							subjectAccessReview.Spec.ResourceAttributes.Name = rolerequest.GetName()
+							resourceAttributes := new(authorizationv1.ResourceAttributes)
+							resourceAttributes.Group = "registration.edgenet.io"
+							resourceAttributes.Version = "v1alpha1"
+							resourceAttributes.Resource = "rolerequests"
+							resourceAttributes.Verb = "UPDATE"
+							resourceAttributes.Namespace = rolerequest.GetNamespace()
+							resourceAttributes.Name = rolerequest.GetName()
+							subjectAccessReview.Spec.ResourceAttributes = resourceAttributes
+							subjectAccessReview.Spec.User = subjectRow.Name
 							if subjectAccessReviewResult, err := c.kubeclientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), subjectAccessReview, metav1.CreateOptions{}); err == nil {
 								if subjectAccessReviewResult.Status.Allowed {
 									emailList = append(emailList, subjectRow.Name)
@@ -363,7 +499,7 @@ func (c *Controller) processRoleRequest(rolerequest *registrationv1alpha1.RoleRe
 }
 
 func (c *Controller) processClusterRoleRequest(clusterRolerequest *registrationv1alpha1.ClusterRoleRequest) {
-	klog.V(4).Infoln("Handler.ObjectCreated")
+	klog.Infoln("processClusterRoleRequest")
 
 	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
 	if err != nil {
@@ -387,11 +523,14 @@ func (c *Controller) processClusterRoleRequest(clusterRolerequest *registrationv
 						_, err := mail.ParseAddress(subjectRow.Name)
 						if err == nil {
 							subjectAccessReview := new(authorizationv1.SubjectAccessReview)
-							subjectAccessReview.Spec.ResourceAttributes = new(authorizationv1.ResourceAttributes)
-							subjectAccessReview.Spec.ResourceAttributes.Resource = "rolerequests"
-							subjectAccessReview.Spec.ResourceAttributes.Namespace = clusterRolerequest.GetNamespace()
-							subjectAccessReview.Spec.ResourceAttributes.Verb = "UPDATE"
-							subjectAccessReview.Spec.ResourceAttributes.Name = clusterRolerequest.GetName()
+							resourceAttributes := new(authorizationv1.ResourceAttributes)
+							resourceAttributes.Group = "registration.edgenet.io"
+							resourceAttributes.Version = "v1alpha1"
+							resourceAttributes.Resource = "clusterrolerequests"
+							resourceAttributes.Verb = "UPDATE"
+							resourceAttributes.Name = clusterRolerequest.GetName()
+							subjectAccessReview.Spec.ResourceAttributes = resourceAttributes
+							subjectAccessReview.Spec.User = subjectRow.Name
 							if subjectAccessReviewResult, err := c.kubeclientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), subjectAccessReview, metav1.CreateOptions{}); err == nil {
 								if subjectAccessReviewResult.Status.Allowed {
 									emailList = append(emailList, subjectRow.Name)

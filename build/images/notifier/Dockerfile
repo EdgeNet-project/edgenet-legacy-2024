@@ -16,6 +16,7 @@ FROM alpine:latest
 
 WORKDIR /root/cmd/notifier/
 
+COPY ./assets/templates/ /root/assets/templates/
 COPY --from=builder /go/bin/notifier .
 
 CMD ["./notifier"]
