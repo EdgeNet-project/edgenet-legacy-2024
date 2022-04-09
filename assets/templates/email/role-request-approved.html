@@ -25,7 +25,7 @@
                   <tr>
                     <td style="word-break: break-word; padding: 35px;">
                       <div class="f-fallback">
-                        <h1 style="margin-top: 0; color: #333333; font-size: 22px; font-weight: bold; text-align: left;">Dear {{.CommonData.Name}},</h1>
+                        <h1 style="margin-top: 0; color: #333333; font-size: 22px; font-weight: bold; text-align: left;">Dear {{.FirstName}} {{.LastName}},</h1>
                         <p>
                           This email is to confirm that your role binding has been established and your user has been authorized accordingly.
                         </p>
@@ -43,21 +43,14 @@
                                 <tr>
                                   <td style="word-break: break-word; padding: 0;">
                                     <span class="f-fallback">
-                                      <strong>Tenant:</strong> {{.CommonData.Tenant}}
+                                      <strong>Namespace:</strong> {{.RoleRequest.Namespace}}
                                     </span>
                                   </td>
                                 </tr>
                                 <tr>
                                   <td style="word-break: break-word; padding: 0;">
                                     <span class="f-fallback">
-                                      <strong>Username with hash:</strong> {{.CommonData.Username}}
-                                    </span>
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td style="word-break: break-word; padding: 0;">
-                                    <span class="f-fallback">
-                                      <strong>Core Namespace:</strong> {{.CommonData.Tenant}}
+                                      <strong>Username:</strong> {{.User}}
                                     </span>
                                   </td>
                                 </tr>

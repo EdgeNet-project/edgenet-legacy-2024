@@ -4,7 +4,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="x-apple-disable-message-reformatting" />
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <title>[EdgeNet] Cluster role Binding Request</title>
+    <title>[EdgeNet] Cluster Role Binding Request</title>
   </head>
   <body>
     <span style="display: none !important; visibility: hidden; mso-hide: all; font-size: 1px; line-height: 1px; max-height: 0; max-width: 0; opacity: 0; overflow: hidden;">A cluster role binding request arrived! Please follow the instructions below.</span>
@@ -37,21 +37,21 @@
                                 <tr>
                                   <td style="word-break: break-word; padding: 0;">
                                     <span class="f-fallback">
-                                      <strong>Tenant:</strong> {{.CommonData.Tenant}}
+                                      <strong>Cluster Role:</strong> {{.ClusterRoleRequest.Name}}
                                     </span>
                                   </td>
                                 </tr>
                                 <tr>
                                   <td style="word-break: break-word; padding: 0;">
                                     <span class="f-fallback">
-                                      <strong>Contact:</strong> {{.CommonData.Name}}
+                                      <strong>Requester:</strong> {{.FirstName}} {{.LastName}}
                                     </span>
                                   </td>
                                 </tr>
                                 <tr>
                                   <td style="word-break: break-word; padding: 0;">
                                     <span class="f-fallback">
-                                      <strong>Username:</strong> {{.CommonData.Username}}
+                                      <strong>Username:</strong> {{.User}}
                                     </span>
                                   </td>
                                 </tr>
@@ -70,7 +70,7 @@
                                   <td style="word-break: break-word; padding: 0;">
                                     <span class="f-fallback">
                                         <strong>Kubectl command:</strong>
-                                        <span style="background-color: #1f1f1f; color: #629755; border: 1px solid #A4BCB6; display: block; padding: 20px; white-space: pre">kubectl patch clusterrolerequest {{.CommonData.Username}} --type='json' -p='[{"op": "replace", "path": "/spec/approved", "value":true}]' --kubeconfig ./edgenet-kubeconfig.cfg</span>
+                                        <span style="background-color: #1f1f1f; color: #629755; border: 1px solid #A4BCB6; display: block; padding: 20px; white-space: pre">kubectl patch clusterrolerequest {{.ClusterRoleRequest.Name}} --type='json' -p='[{"op": "replace", "path": "/spec/approved", "value":true}]' --kubeconfig ./edgenet-kubeconfig.cfg</span>
                                     </span>
                                   </td>
                                 </tr>

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 Contributors to the EdgeNet project.
+Copyright 2022 Contributors to the EdgeNet project.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"text/template"
 	"time"
 
@@ -33,7 +34,7 @@ import (
 // smtpServer implementation
 type smtpServer struct {
 	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
+	Port     string `yaml:"port"`
 	From     string `yaml:"from"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
@@ -41,17 +42,15 @@ type smtpServer struct {
 }
 
 type Content struct {
-	Cluster             string
-	User                string
-	FirstName           string
-	LastName            string
-	Subject             string
-	Recipient           []string
-	RoleRequest         *RoleRequest
-	TenantRequest       *TenantRequest
-	ClusterRoleRequest  *ClusterRoleRequest
-	EmailVerification   *EmailVerification
-	AcceptableUsePolicy *AcceptableUsePolicy
+	Cluster            string
+	User               string
+	FirstName          string
+	LastName           string
+	Subject            string
+	Recipient          []string
+	RoleRequest        *RoleRequest
+	TenantRequest      *TenantRequest
+	ClusterRoleRequest *ClusterRoleRequest
 }
 type RoleRequest struct {
 	Name      string
@@ -63,13 +62,6 @@ type ClusterRoleRequest struct {
 type TenantRequest struct {
 	Tenant string
 }
-type EmailVerification struct {
-	Code string
-	URL  string
-}
-type AcceptableUsePolicy struct {
-	Name string
-}
 
 var dir = "../.."
 
@@ -79,11 +71,14 @@ func (c *Content) Send(purpose string) error {
 	// Prepare SMTP server configuration
 	smtpInfo, err := getSMTPInformation()
 	if err != nil {
-		klog.V(4).Infoln(err)
+		klog.Infoln(err)
 		return err
 	}
 	server.Host = smtpInfo.Host
-	server.Port = smtpInfo.Port
+	if port, err := strconv.Atoi(smtpInfo.Port); err == nil {
+		server.Port = port
+	}
+	server.Port = 25
 	server.Username = smtpInfo.Username
 	server.Password = smtpInfo.Password
 	server.Encryption = mail.EncryptionSTARTTLS
@@ -94,12 +89,13 @@ func (c *Content) Send(purpose string) error {
 	// Prepare SMTP client
 	smtpClient, err := server.Connect()
 	if err != nil {
-		klog.V(4).Infoln(err)
+		klog.Infoln(err)
 		return err
 	}
 	var htmlBody bytes.Buffer
 	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, purpose))
 	t.Execute(&htmlBody, c)
+	// || c.TenantRequest != nil
 	if len(c.Recipient) == 0 {
 		c.Recipient = append(c.Recipient, smtpInfo.To)
 	}
@@ -110,13 +106,13 @@ func (c *Content) Send(purpose string) error {
 			SetSubject(c.Subject)
 		email.SetBodyData(mail.TextHTML, htmlBody.Bytes())
 		if email.Error != nil {
-			klog.V(4).Infoln(email.Error)
+			klog.Infoln(email.Error)
 		}
 		err = email.Send(smtpClient)
 		if err != nil {
-			klog.V(4).Infoln(err)
+			klog.Infoln(err)
 		} else {
-			klog.V(4).Infoln(fmt.Sprintf("Email sent to %s: %s", to, c.Subject))
+			klog.Infoln(fmt.Sprintf("Email sent to %s: %s", to, c.Subject))
 		}
 	}
 	return err
@@ -137,14 +133,14 @@ func getSMTPInformation() (*smtpServer, error) {
 	}
 	file, err := os.Open(pathSMTP)
 	if err != nil {
-		klog.V(4).Infof("Mailer: unexpected error executing command: %v", err)
+		klog.Infof("Mailer: unexpected error executing command: %v", err)
 		return nil, err
 	}
 	decoder := yaml.NewDecoder(file)
 	var smtpServer smtpServer
 	err = decoder.Decode(&smtpServer)
 	if err != nil {
-		klog.V(4).Infof("Mailer: unexpected error executing command: %v", err)
+		klog.Infof("Mailer: unexpected error executing command: %v", err)
 		return nil, err
 	}
 	return &smtpServer, nil

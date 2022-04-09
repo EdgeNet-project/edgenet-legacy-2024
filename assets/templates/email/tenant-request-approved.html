@@ -25,8 +25,8 @@
                   <tr>
                     <td style="word-break: break-word; padding: 35px;">
                       <div class="f-fallback">
-                        <h1 style="margin-top: 0; color: #333333; font-size: 22px; font-weight: bold; text-align: left;">Dear {{.CommonData.Name}},</h1>
-                        <p>Thank you for registering {{.CommonData.Tenant}} as a local tenant with EdgeNet. This email is to confirm that we have accepted your registration and your tenant is ready to use.</p>
+                        <h1 style="margin-top: 0; color: #333333; font-size: 22px; font-weight: bold; text-align: left;">Dear {{.FirstName}} {{.LastName}},</h1>
+                        <p>Thank you for registering {{.TenantRequest.Tenant}} as a local tenant with EdgeNet. This email is to confirm that we have accepted your registration and your tenant is ready to use.</p>
                         <p>At the same time as registering the tenant, you registered yourself as the administrator of your local tenant.</p>
                         <p>
                             Please click <a href="https://edge-net.org" style="font-size: 16px; font-weight: bold; color: #A8AAAF; text-decoration: none; text-shadow: 0 1px 0 white;">here</a> 
@@ -40,21 +40,21 @@
                                 <tr>
                                   <td style="word-break: break-word; padding: 0;">
                                     <span class="f-fallback">
-                                      <strong>Tenant:</strong> {{.CommonData.Tenant}}
+                                      <strong>Tenant:</strong> {{.TenantRequest.Tenant}}
                                     </span>
                                   </td>
                                 </tr>
                                 <tr>
                                   <td style="word-break: break-word; padding: 0;">
                                     <span class="f-fallback">
-                                      <strong>Username:</strong> {{.CommonData.Username}}
+                                      <strong>Username:</strong> {{.User}}
                                     </span>
                                   </td>
                                 </tr>
                                 <tr>
                                   <td style="word-break: break-word; padding: 0;">
                                     <span class="f-fallback">
-                                      <strong>Core Namespace:</strong> {{.CommonData.Tenant}}
+                                      <strong>Core Namespace:</strong> {{.TenantRequest.Tenant}}
                                     </span>
                                   </td>
                                 </tr>
