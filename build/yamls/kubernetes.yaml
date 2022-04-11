@@ -89,7 +89,7 @@ metadata:
 spec:
   group: core.edgenet.io
   versions:
-    - name: v1alpha
+    - name: v1alpha1
       served: true
       storage: true
       subresources:
@@ -171,7 +171,7 @@ metadata:
 spec:
   group: apps.edgenet.io
   versions:
-    - name: v1alpha
+    - name: v1alpha1
       served: true
       storage: true
       subresources:
@@ -290,7 +290,7 @@ metadata:
 spec:
   group: core.edgenet.io
   versions:
-    - name: v1alpha
+    - name: v1alpha1
       served: true
       storage: true
       subresources:
@@ -408,7 +408,7 @@ metadata:
 spec:
   group: core.edgenet.io
   versions:
-    - name: v1alpha
+    - name: v1alpha1
       served: true
       storage: true
       subresources:
@@ -515,7 +515,7 @@ metadata:
 spec:
   group: registration.edgenet.io
   versions:
-    - name: v1alpha
+    - name: v1alpha1
       served: true
       storage: true
       subresources:
@@ -635,7 +635,7 @@ metadata:
 spec:
   group: core.edgenet.io
   versions:
-    - name: v1alpha
+    - name: v1alpha1
       served: true
       storage: true
       subresources:
@@ -684,7 +684,7 @@ metadata:
 spec:
   group: registration.edgenet.io
   versions:
-    - name: v1alpha
+    - name: v1alpha1
       served: true
       storage: true
       subresources:
@@ -767,7 +767,7 @@ metadata:
 spec:
   group: networking.edgenet.io
   versions:
-    - name: v1alpha
+    - name: v1alpha1
       served: true
       storage: true
       subresources:
@@ -832,7 +832,7 @@ metadata:
 spec:
   group: registration.edgenet.io
   versions:
-    - name: v1alpha
+    - name: v1alpha1
       served: true
       storage: true
       subresources:
@@ -904,7 +904,7 @@ metadata:
 spec:
   group: core.edgenet.io
   versions:
-    - name: v1alpha
+    - name: v1alpha1
       served: true
       storage: true
       subresources:
@@ -985,7 +985,7 @@ metadata:
 spec:
   group: core.edgenet.io
   versions:
-    - name: v1alpha
+    - name: v1alpha1
       served: true
       storage: true
       subresources:
