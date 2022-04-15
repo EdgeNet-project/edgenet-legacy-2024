@@ -143,7 +143,7 @@ func NewController(
 	selectivedeploymentInformer informers.SelectiveDeploymentInformer) *Controller {
 
 	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
-	klog.V(4).Info("Creating event broadcaster")
+	klog.Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartStructuredLogging(0)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
@@ -170,11 +170,16 @@ func NewController(
 		recorder:                   recorder,
 	}
 
-	klog.V(4).Infoln("Setting up event handlers")
+	klog.Infoln("Setting up event handlers")
 	// Set up an event handler for when Selective Deployment resources change
 	selectivedeploymentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueSelectiveDeployment,
 		UpdateFunc: func(old, new interface{}) {
+			newSelectiveDeployment := new.(*appsv1alpha1.SelectiveDeployment)
+			oldSelectiveDeployment := old.(*appsv1alpha1.SelectiveDeployment)
+			if newSelectiveDeployment.ResourceVersion == oldSelectiveDeployment.ResourceVersion {
+				return
+			}
 			controller.enqueueSelectiveDeployment(new)
 		},
 	})
@@ -263,9 +268,9 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
-	klog.V(4).Infoln("Starting Selective Deployment controller")
+	klog.Infoln("Starting Selective Deployment controller")
 
-	klog.V(4).Infoln("Waiting for informer caches to sync")
+	klog.Infoln("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh,
 		c.selectivedeploymentsSynced,
 		c.nodesSynced,
@@ -277,14 +282,14 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
-	klog.V(4).Infoln("Starting workers")
+	klog.Infoln("Starting workers")
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
 
-	klog.V(4).Infoln("Started workers")
+	klog.Infoln("Started workers")
 	<-stopCh
-	klog.V(4).Infoln("Shutting down workers")
+	klog.Infoln("Shutting down workers")
 
 	return nil
 }
@@ -321,7 +326,7 @@ func (c *Controller) processNextWorkItem() bool {
 			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
 		}
 		c.workqueue.Forget(obj)
-		klog.V(4).Infof("Successfully synced '%s'", key)
+		klog.Infof("Successfully synced '%s'", key)
 		return nil
 	}(obj)
 
@@ -390,9 +395,9 @@ func (c *Controller) handleObject(obj interface{}) {
 			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
 			return
 		}
-		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
+		klog.Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 	}
-	klog.V(4).Infof("Processing object: %s", object.GetName())
+	klog.Infof("Processing object: %s", object.GetName())
 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
 		if ownerRef.Kind != "SelectiveDeployment" {
 			return
@@ -400,7 +405,7 @@ func (c *Controller) handleObject(obj interface{}) {
 
 		selectivedeployment, err := c.selectivedeploymentsLister.SelectiveDeployments(object.GetNamespace()).Get(ownerRef.Name)
 		if err != nil {
-			klog.V(4).Infof("ignoring orphaned object '%s' of selectivedeployment '%s'", object.GetSelfLink(), ownerRef.Name)
+			klog.Infof("ignoring orphaned object '%s' of selectivedeployment '%s'", object.GetSelfLink(), ownerRef.Name)
 			return
 		}
 
@@ -417,7 +422,7 @@ func (c *Controller) recoverSelectiveDeployments(obj interface{}) {
 			for _, ownerRow := range ownerRaw {
 				selectivedeployment, err := c.selectivedeploymentsLister.SelectiveDeployments(ownerRow[0]).Get(ownerRow[1])
 				if err != nil {
-					klog.V(4).Infoln(err.Error())
+					klog.Infoln(err.Error())
 					continue
 				}
 				if selectivedeployment.Spec.Recovery {
@@ -483,7 +488,7 @@ func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 	}
 	deploymentRaw, err := c.deploymentsLister.Deployments("").List(labels.Everything())
 	if err != nil {
-		klog.V(4).Infoln(err.Error())
+		klog.Infoln(err.Error())
 		panic(err.Error())
 	}
 	for _, deploymentRow := range deploymentRaw {
@@ -491,7 +496,7 @@ func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 	}
 	daemonsetRaw, err := c.daemonsetsLister.DaemonSets("").List(labels.Everything())
 	if err != nil {
-		klog.V(4).Infoln(err.Error())
+		klog.Infoln(err.Error())
 		panic(err.Error())
 	}
 	for _, daemonsetRow := range daemonsetRaw {
@@ -499,7 +504,7 @@ func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 	}
 	statefulsetRaw, err := c.statefulsetsLister.StatefulSets("").List(labels.Everything())
 	if err != nil {
-		klog.V(4).Infoln(err.Error())
+		klog.Infoln(err.Error())
 		panic(err.Error())
 	}
 	for _, statefulsetRow := range statefulsetRaw {
@@ -507,7 +512,7 @@ func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 	}
 	jobRaw, err := c.jobsLister.Jobs("").List(labels.Everything())
 	if err != nil {
-		klog.V(4).Infoln(err.Error())
+		klog.Infoln(err.Error())
 		panic(err.Error())
 	}
 	for _, jobRow := range jobRaw {
@@ -515,7 +520,7 @@ func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 	}
 	cronjobRaw, err := c.cronjobsLister.CronJobs("").List(labels.Everything())
 	if err != nil {
-		klog.V(4).Infoln(err.Error())
+		klog.Infoln(err.Error())
 		panic(err.Error())
 	}
 	for _, cronjobRow := range cronjobRaw {
@@ -703,7 +708,7 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 
 // configureWorkload manipulate the workload by selectivedeployments to match the desired state that users supplied
 func (c *Controller) configureWorkload(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment, workloadRow interface{}, ownerReferences []metav1.OwnerReference) (interface{}, int) {
-	klog.V(4).Infoln("configureWorkload: start")
+	klog.Infoln("configureWorkload: start")
 	nodeSelectorTermList, failureCount := c.setFilter(selectivedeploymentCopy, "addOrUpdate")
 	// Set the new node affinity configuration for the workload and update that
 	nodeAffinity := &corev1.NodeAffinity{
@@ -823,7 +828,7 @@ func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha1.SelectiveDe
 				selector = selector.Add(*scheduleReq)
 				nodesRaw, err := c.nodesLister.List(selector)
 				if err != nil {
-					klog.V(4).Infoln(err.Error())
+					klog.Infoln(err.Error())
 					panic(err.Error())
 				}
 				counter := 0
@@ -883,7 +888,7 @@ func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha1.SelectiveDe
 				selector = selector.Add(*scheduleReq)
 				nodesRaw, err := c.nodesLister.List(selector)
 				if err != nil {
-					klog.V(4).Infoln(err.Error())
+					klog.Infoln(err.Error())
 					panic(err.Error())
 				}
 
@@ -990,7 +995,7 @@ func SetAsOwnerReference(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployme
 func checkOwnerReferences(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment, ownerReferences []metav1.OwnerReference) bool {
 	underControl := false
 	for _, reference := range ownerReferences {
-		if reference.Kind == "SelectiveDeployment" && reference.UID != selectivedeploymentCopy.GetUID() {
+		if reference.Kind == "SelectiveDeployment" && reference.UID == selectivedeploymentCopy.GetUID() {
 			underControl = true
 		}
 	}

@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"log"
-	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/apps/v1alpha1/selectivedeployment"
@@ -48,8 +47,8 @@ func main() {
 		panic(err.Error())
 	}
 	// Start the controller to provide the functionalities of selectivedeployment resource
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
-	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, 0)
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
 
 	controller := selectivedeployment.NewController(kubeclientset,
 		edgenetclientset,
