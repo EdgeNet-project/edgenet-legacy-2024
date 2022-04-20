@@ -24,6 +24,7 @@ import (
 	antreatestclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -33,6 +34,7 @@ import (
 
 type TestGroup struct {
 	tenantObj corev1alpha.Tenant
+	nodeObj   corev1.Node
 }
 
 var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
@@ -45,6 +47,11 @@ var antreaclientset antreaversioned.Interface = antreatestclient.NewSimpleClient
 		},
 	},
 })
+var edgenetInformerFactory = informers.NewSharedInformerFactory(edgenetclientset, 0)
+var c = NewController(kubeclientset,
+	edgenetclientset,
+	antreaclientset,
+	edgenetInformerFactory.Core().V1alpha().Tenants())
 
 func TestMain(m *testing.M) {
 	klog.SetOutput(ioutil.Discard)
@@ -113,6 +120,44 @@ func (g *TestGroup) Init() {
 			ClusterNetworkPolicy: false,
 		},
 	}
+	nodeObj := corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "fr-idf-0000.edge-net.io",
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps.edgenet.io/v1alpha",
+					Kind:       "Tenant",
+					Name:       "edgenet",
+					UID:        "edgenet",
+				},
+			},
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Node",
+			APIVersion: "v1",
+		},
+		Status: corev1.NodeStatus{
+			Capacity: corev1.ResourceList{
+				corev1.ResourceMemory:           resource.MustParse("4Gi"),
+				corev1.ResourceCPU:              resource.MustParse("2"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("51493088"),
+				corev1.ResourcePods:             resource.MustParse("100"),
+			},
+			Allocatable: corev1.ResourceList{
+				corev1.ResourceMemory:           resource.MustParse("4Gi"),
+				corev1.ResourceCPU:              resource.MustParse("2"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("51493088"),
+				corev1.ResourcePods:             resource.MustParse("100"),
+			},
+			Conditions: []corev1.NodeCondition{
+				{
+					Type:   "Ready",
+					Status: "True",
+				},
+			},
+		},
+	}
+	g.nodeObj = nodeObj
 	g.tenantObj = tenantObj
 }
 
@@ -165,4 +210,55 @@ func TestCreate(t *testing.T) {
 		_, err := kubeclientset.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner", tenant.GetName(), tenant.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
+}
+
+func TestApplyNetworkPolicy(t *testing.T) {
+	tenantControllerTest, node := getTestResource()
+	tenant, _ := edgenetclientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantControllerTest.GetName(), metav1.GetOptions{})
+	tenantUID := string(tenantControllerTest.ObjectMeta.UID)
+	clusterNetworkPolicyEnabled := true
+	ownerReferences := node.OwnerReferences
+	clusterUID := string(node.GetUID())
+	err := c.applyNetworkPolicy(tenant.GetName(), tenantUID, clusterUID, clusterNetworkPolicyEnabled, ownerReferences)
+	util.OK(t, err)
+	// TODO case 2: should fail
+}
+
+func TestCreateCoreNamespace(t *testing.T) {
+	tennant, node := getTestResource()
+	ownerReferences := node.OwnerReferences
+	clusterUID := string(node.GetUID())
+	err := c.createCoreNamespace(tennant, ownerReferences, clusterUID)
+	// Case 1: should success
+	util.OK(t, err)
+	// Case 2: AlreadyExists, should success
+	err = c.createCoreNamespace(tennant, ownerReferences, clusterUID)
+	util.OK(t, err)
+	// TODO: Case 3: should fail
+
+}
+
+func TestProcessTenant(t *testing.T) {
+	tenantCopy, _ := getTestResource()
+	tenantCopy.Status.State = "Failure"
+	tenantCopy.Spec.Enabled = true
+	c.ProcessTenant(tenantCopy)
+	tenantCopy.Spec.Enabled = false
+	c.ProcessTenant(tenantCopy)
+	//TODO how to check if run success?
+}
+
+func getTestResource() (*corev1alpha.Tenant, *corev1.Node) {
+	g := TestGroup{}
+	g.Init()
+	// Create a tenant
+	tenantCopy := g.tenantObj.DeepCopy()
+	tenantCopy.SetName("tenant-controller")
+	edgenetclientset.CoreV1alpha().Tenants().Create(context.TODO(), tenantCopy, metav1.CreateOptions{})
+	// Wait for the status update of the created object
+	time.Sleep(250 * time.Millisecond)
+	// Create a node
+	node := g.nodeObj
+	nodeCopy, _ := kubeclientset.CoreV1().Nodes().Create(context.TODO(), node.DeepCopy(), metav1.CreateOptions{})
+	return tenantCopy, nodeCopy
 }

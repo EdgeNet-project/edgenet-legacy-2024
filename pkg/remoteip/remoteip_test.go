@@ -55,6 +55,60 @@ func TestIsPrivateSubnet(t *testing.T) {
 	}
 }
 
+// TODO: wierd, run it failed, re-run success
+func FuzzIsPrivateSubnet(f *testing.F) {
+	a := uint8(192)
+	b := uint8(168)
+	c := uint8(17)
+	d := uint8(87)
+	expected := false
+	f.Add(a, b, c, d)
+	f.Fuzz(func(t *testing.T, a, b, c, d uint8) {
+		ipv4 := net.ParseIP(fmt.Sprintf("%d.%d.%d.%d", a, b, c, d))
+		t.Logf("%d.%d.%d.%d", a, b, c, d)
+		switch a {
+		case 10:
+			expected = true
+		case 100:
+			if inBetween(b, 64, 127) {
+				expected = true
+			} else {
+				expected = false
+			}
+		case 172:
+			if inBetween(b, 16, 31) {
+				expected = true
+			} else {
+				expected = false
+			}
+		case 192:
+			if b == 0 && c == 0 || b == 168 {
+				expected = true
+			} else {
+				expected = false
+			}
+		case 198:
+			if inBetween(b, 18, 19) {
+				expected = true
+			} else {
+				expected = false
+			}
+		default:
+			expected = false
+		}
+		output := isPrivateSubnet(ipv4)
+		util.Equals(t, expected, output)
+	})
+}
+
+func inBetween(i, min, max uint8) bool {
+	if (i >= min) && (i <= max) {
+		return true
+	} else {
+		return false
+	}
+}
+
 func TestGetIPAdress(t *testing.T) {
 	cases := []struct {
 		input    string

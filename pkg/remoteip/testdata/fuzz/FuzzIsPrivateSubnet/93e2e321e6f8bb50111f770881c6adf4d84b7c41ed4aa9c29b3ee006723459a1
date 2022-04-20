@@ -1,0 +1,5 @@
+go test fuzz v1
+byte('\u0083')
+byte('¨')
+byte('\x11')
+byte('W')
