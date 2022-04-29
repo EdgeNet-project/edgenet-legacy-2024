@@ -7,10 +7,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/EdgeNet-project/edgenet/pkg/util"
 	"github.com/sirupsen/logrus"
 
-	yaml "gopkg.in/yaml.v2"
 	"k8s.io/klog"
 )
 
@@ -25,7 +23,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestNotification(t *testing.T) {
+/*func TestNotification(t *testing.T) {
 	var smtpServer smtpServer
 	// The code below inits the SMTP configuration for sending emails
 	// The path of the yaml config file of test smtp server
@@ -54,4 +52,4 @@ func TestNotification(t *testing.T) {
 	email.RoleRequest.Namespace = "edgenet"
 	err = email.Send("role-request-approved")
 	util.OK(t, err)
-}
+}*/
