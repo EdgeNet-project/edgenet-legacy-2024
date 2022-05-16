@@ -14,6 +14,7 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -22,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
@@ -113,11 +115,11 @@ func (g *TestGroup) Init() {
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
+						{
 							Name:  "nginx",
 							Image: "nginx:1.7.9",
 							Ports: []corev1.ContainerPort{
-								corev1.ContainerPort{
+								{
 									ContainerPort: 80,
 								},
 							},
@@ -152,11 +154,11 @@ func (g *TestGroup) Init() {
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
+						{
 							Name:  "nginx",
 							Image: "nginx:1.7.9",
 							Ports: []corev1.ContainerPort{
-								corev1.ContainerPort{
+								{
 									ContainerPort: 80,
 								},
 							},
@@ -192,11 +194,11 @@ func (g *TestGroup) Init() {
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
+						{
 							Name:  "nginx",
 							Image: "nginx:1.7.9",
 							Ports: []corev1.ContainerPort{
-								corev1.ContainerPort{
+								{
 									ContainerPort: 80,
 								},
 							},
@@ -231,11 +233,11 @@ func (g *TestGroup) Init() {
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
+						{
 							Name:  "nginx",
 							Image: "nginx:1.7.9",
 							Ports: []corev1.ContainerPort{
-								corev1.ContainerPort{
+								{
 									ContainerPort: 80,
 								},
 							},
@@ -273,11 +275,11 @@ func (g *TestGroup) Init() {
 						},
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
-								corev1.Container{
+								{
 									Name:  "nginx",
 									Image: "nginx:1.7.9",
 									Ports: []corev1.ContainerPort{
-										corev1.ContainerPort{
+										{
 											ContainerPort: 80,
 										},
 									},
@@ -301,6 +303,7 @@ func (g *TestGroup) Init() {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "default",
+			UID:  "sd",
 		},
 		Spec: appsv1alpha1.SelectiveDeploymentSpec{
 			Recovery: false,
@@ -348,7 +351,7 @@ func (g *TestGroup) Init() {
 				corev1.ResourcePods:             resource.MustParse("100"),
 			},
 			Conditions: []corev1.NodeCondition{
-				corev1.NodeCondition{
+				{
 					Type:   "Ready",
 					Status: "True",
 				},
@@ -391,6 +394,8 @@ func TestStartController(t *testing.T) {
 	kubeclientset.BatchV1beta1().CronJobs("default").Create(context.TODO(), g.cronjobObj.DeepCopy(), metav1.CreateOptions{})
 	// Invoking the create function
 	sdObj := g.sdObj.DeepCopy()
+	uid := types.UID(uuid.New().String())
+	sdObj.SetUID(uid)
 	edgenetclientset.AppsV1alpha1().SelectiveDeployments("default").Create(context.TODO(), sdObj.DeepCopy(), metav1.CreateOptions{})
 	time.Sleep(time.Millisecond * 500)
 	sdCopy, err := edgenetclientset.AppsV1alpha1().SelectiveDeployments("default").Get(context.TODO(), sdObj.GetName(), metav1.GetOptions{})
@@ -425,6 +430,7 @@ func TestStartController(t *testing.T) {
 	useu.Name = "Country"
 	countryUSEU := []appsv1alpha1.Selector{useu}
 	sdCopy.Spec.Selector = countryUSEU
+	sdCopy.SetResourceVersion(util.GenerateRandomString(6))
 	edgenetclientset.AppsV1alpha1().SelectiveDeployments("default").Update(context.TODO(), sdCopy.DeepCopy(), metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
 	sdCopy, err = edgenetclientset.AppsV1alpha1().SelectiveDeployments("default").Get(context.TODO(), sdCopy.GetName(), metav1.GetOptions{})
@@ -451,6 +457,7 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, "0/5", sdCopy.Status.Ready)
 
 	sdCopy.Spec.Recovery = true
+	sdCopy.SetResourceVersion(util.GenerateRandomString(6))
 	_, err = edgenetclientset.AppsV1alpha1().SelectiveDeployments("default").Update(context.TODO(), sdCopy, metav1.UpdateOptions{})
 	util.OK(t, err)
 	time.Sleep(time.Millisecond * 500)
@@ -479,6 +486,7 @@ func TestStartController(t *testing.T) {
 	useu.Name = "Country"
 	countryUSEU = []appsv1alpha1.Selector{useu}
 	sdCopy.Spec.Selector = countryUSEU
+	sdCopy.SetResourceVersion(util.GenerateRandomString(6))
 	edgenetclientset.AppsV1alpha1().SelectiveDeployments("default").Update(context.TODO(), sdCopy.DeepCopy(), metav1.UpdateOptions{})
 	time.Sleep(time.Millisecond * 500)
 	sdCopy, err = edgenetclientset.AppsV1alpha1().SelectiveDeployments("default").Get(context.TODO(), sdCopy.GetName(), metav1.GetOptions{})
@@ -749,7 +757,7 @@ func TestUpdate(t *testing.T) {
 	sdObj := g.sdObj.DeepCopy()
 	sdObj.SetName("update")
 	edgenetclientset.AppsV1alpha1().SelectiveDeployments("update").Create(context.TODO(), sdObj.DeepCopy(), metav1.CreateOptions{})
-	time.Sleep(time.Millisecond * 2500)
+	time.Sleep(time.Millisecond * 500)
 	sdCopy, err := edgenetclientset.AppsV1alpha1().SelectiveDeployments("update").Get(context.TODO(), sdObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, success, sdCopy.Status.State)
@@ -832,21 +840,22 @@ func TestUpdate(t *testing.T) {
 		expectedStatus string
 		expected       [][]string
 	}{
-		"city/seaside":          {citySeaside, success, [][]string{[]string{nodeSeaside.GetName()}}},
-		"polygon/paris":         {polygonParis, success, [][]string{[]string{nodeParis.GetName()}}},
-		"state/ca":              {stateCA, success, [][]string{[]string{nodeSeaside.GetName()}}},
-		"country/us/all":        {countryUSAll, success, [][]string{[]string{nodeSeaside.GetName()}}},
-		"country/us/out":        {countryUSOut, success, [][]string{[]string{nodeParis.GetName()}}},
-		"continent/europe":      {continentEU, success, [][]string{[]string{nodeParis.GetName()}}},
-		"country/us-eu":         {countryUSEU, success, [][]string{[]string{nodeSeaside.GetName()}, []string{nodeParis.GetName()}}},
-		"country/us|city/paris": {countryUScityParis, success, [][]string{[]string{nodeSeaside.GetName()}, []string{nodeParis.GetName()}}},
-		"polygon/paris/fewer":   {polygonParisFewer, failure, [][]string{[]string{nodeParis.GetName()}}},
-		"country/us/fewer":      {countryUSFewer, failure, [][]string{[]string{nodeSeaside.GetName()}}},
+		"city/seaside":          {citySeaside, success, [][]string{{nodeSeaside.GetName()}}},
+		"polygon/paris":         {polygonParis, success, [][]string{{nodeParis.GetName()}}},
+		"state/ca":              {stateCA, success, [][]string{{nodeSeaside.GetName()}}},
+		"country/us/all":        {countryUSAll, success, [][]string{{nodeSeaside.GetName()}}},
+		"country/us/out":        {countryUSOut, success, [][]string{{nodeParis.GetName()}}},
+		"continent/europe":      {continentEU, success, [][]string{{nodeParis.GetName()}}},
+		"country/us-eu":         {countryUSEU, success, [][]string{{nodeSeaside.GetName()}, {nodeParis.GetName()}}},
+		"country/us|city/paris": {countryUScityParis, success, [][]string{{nodeSeaside.GetName()}, {nodeParis.GetName()}}},
+		"polygon/paris/fewer":   {polygonParisFewer, failure, [][]string{{nodeParis.GetName()}}},
+		"country/us/fewer":      {countryUSFewer, failure, [][]string{{nodeSeaside.GetName()}}},
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
 			sdCopy, _ := edgenetclientset.AppsV1alpha1().SelectiveDeployments("update").Get(context.TODO(), sdObj.GetName(), metav1.GetOptions{})
 			sdCopy.Spec.Selector = tc.input
+			sdCopy.SetResourceVersion(util.GenerateRandomString(6))
 			edgenetclientset.AppsV1alpha1().SelectiveDeployments("update").Update(context.TODO(), sdCopy, metav1.UpdateOptions{})
 			time.Sleep(time.Millisecond * 500)
 			sdCopy, _ = edgenetclientset.AppsV1alpha1().SelectiveDeployments("update").Get(context.TODO(), sdObj.GetName(), metav1.GetOptions{})
@@ -902,6 +911,7 @@ func TestUpdate(t *testing.T) {
 		sdCopy.Spec.Workloads.Job[0].Spec.Template.Spec.Containers[0].Image = "nginx:1.8.3"
 		sdCopy.Spec.Workloads.CronJob[0].Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image = "nginx:1.8.4"
 
+		sdCopy.SetResourceVersion(util.GenerateRandomString(6))
 		edgenetclientset.AppsV1alpha1().SelectiveDeployments("update").Update(context.TODO(), sdCopy, metav1.UpdateOptions{})
 		time.Sleep(time.Millisecond * 500)
 		deploymentCopy, err := kubeclientset.AppsV1().Deployments("update").Get(context.TODO(), deploymentCopy.GetName(), metav1.GetOptions{})

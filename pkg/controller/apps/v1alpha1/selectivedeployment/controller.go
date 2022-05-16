@@ -70,12 +70,7 @@ const (
 	partial               = "Running Partially"
 	success               = "Running"
 	noSchedule            = "NoSchedule"
-	create                = "create"
-	update                = "update"
-	delete                = "delete"
 	trueStr               = "True"
-	falseStr              = "False"
-	unknownStr            = "Unknown"
 )
 
 // Dictionary of status messages
@@ -416,7 +411,7 @@ func (c *Controller) handleObject(obj interface{}) {
 
 func (c *Controller) recoverSelectiveDeployments(obj interface{}) {
 	nodeCopy := obj.(*corev1.Node).DeepCopy()
-	if nodeCopy.GetDeletionTimestamp() != nil || node.GetConditionReadyStatus(nodeCopy) != trueStr || nodeCopy.Spec.Unschedulable == true {
+	if nodeCopy.GetDeletionTimestamp() != nil || node.GetConditionReadyStatus(nodeCopy) != trueStr || nodeCopy.Spec.Unschedulable {
 		ownerRaw, status := c.getByNode(nodeCopy.GetName())
 		if status {
 			for _, ownerRow := range ownerRaw {
@@ -557,8 +552,7 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 					failureCounter++
 				}
 			} else {
-				underControl := checkOwnerReferences(selectivedeploymentCopy, deploymentObj.GetOwnerReferences())
-				if !underControl {
+				if hasOwner := checkOwnerReferences(selectivedeploymentCopy, deploymentObj.GetOwnerReferences()); !hasOwner {
 					// Configure the deployment according to the SD
 					configuredDeployment, failureCount := c.configureWorkload(selectivedeploymentCopy, deployment, ownerReferences)
 					failureCounter += failureCount
@@ -587,8 +581,7 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 					failureCounter++
 				}
 			} else {
-				underControl := checkOwnerReferences(selectivedeploymentCopy, daemonsetObj.GetOwnerReferences())
-				if !underControl {
+				if hasOwner := checkOwnerReferences(selectivedeploymentCopy, daemonsetObj.GetOwnerReferences()); !hasOwner {
 					// Configure the daemonset according to the SD
 					configuredDaemonSet, failureCount := c.configureWorkload(selectivedeploymentCopy, sdDaemonset, ownerReferences)
 					failureCounter += failureCount
@@ -617,8 +610,7 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 					failureCounter++
 				}
 			} else {
-				underControl := checkOwnerReferences(selectivedeploymentCopy, statefulsetObj.GetOwnerReferences())
-				if !underControl {
+				if hasOwner := checkOwnerReferences(selectivedeploymentCopy, statefulsetObj.GetOwnerReferences()); !hasOwner {
 					// Configure the statefulset according to the SD
 					configuredStatefulSet, failureCount := c.configureWorkload(selectivedeploymentCopy, sdStatefulset, ownerReferences)
 					failureCounter += failureCount
@@ -647,8 +639,7 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 					failureCounter++
 				}
 			} else {
-				underControl := checkOwnerReferences(selectivedeploymentCopy, jobObj.GetOwnerReferences())
-				if !underControl {
+				if hasOwner := checkOwnerReferences(selectivedeploymentCopy, jobObj.GetOwnerReferences()); !hasOwner {
 					// Configure the job according to the SD
 					configuredJob, failureCount := c.configureWorkload(selectivedeploymentCopy, sdJob, ownerReferences)
 					failureCounter += failureCount
@@ -677,8 +668,7 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 					failureCounter++
 				}
 			} else {
-				underControl := checkOwnerReferences(selectivedeploymentCopy, cronjobObj.GetOwnerReferences())
-				if !underControl {
+				if hasOwner := checkOwnerReferences(selectivedeploymentCopy, cronjobObj.GetOwnerReferences()); !hasOwner {
 					// Configure the cronjob according to the SD
 					configuredCronJob, failureCount := c.configureWorkload(selectivedeploymentCopy, sdCronJob, ownerReferences)
 					failureCounter += failureCount
@@ -995,7 +985,7 @@ func SetAsOwnerReference(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployme
 func checkOwnerReferences(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment, ownerReferences []metav1.OwnerReference) bool {
 	underControl := false
 	for _, reference := range ownerReferences {
-		if reference.Kind == "SelectiveDeployment" && reference.UID == selectivedeploymentCopy.GetUID() {
+		if reference.Kind == "SelectiveDeployment" && reference.UID != selectivedeploymentCopy.GetUID() {
 			underControl = true
 		}
 	}
