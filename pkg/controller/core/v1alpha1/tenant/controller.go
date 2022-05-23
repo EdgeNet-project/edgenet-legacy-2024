@@ -107,7 +107,7 @@ func NewController(
 	tenantInformer informers.TenantInformer) *Controller {
 
 	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
-	klog.V(4).Infoln("Creating event broadcaster")
+	klog.Infoln("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartStructuredLogging(0)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
@@ -123,7 +123,7 @@ func NewController(
 		recorder:         recorder,
 	}
 
-	klog.V(4).Infoln("Setting up event handlers")
+	klog.Infoln("Setting up event handlers")
 	tenantInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueTenant,
 		UpdateFunc: func(oldObj, newObj interface{}) {
@@ -147,22 +147,22 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
-	klog.V(4).Infoln("Starting Tenant controller")
+	klog.Infoln("Starting Tenant controller")
 
-	klog.V(4).Infoln("Waiting for informer caches to sync")
+	klog.Infoln("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh,
 		c.tenantsSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
-	klog.V(4).Infoln("Starting workers")
+	klog.Infoln("Starting workers")
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
 
-	klog.V(4).Infoln("Started workers")
+	klog.Infoln("Started workers")
 	<-stopCh
-	klog.V(4).Infoln("Shutting down workers")
+	klog.Infoln("Shutting down workers")
 
 	return nil
 }
@@ -199,7 +199,7 @@ func (c *Controller) processNextWorkItem() bool {
 			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
 		}
 		c.workqueue.Forget(obj)
-		klog.V(4).Infof("Successfully synced '%s'", key)
+		klog.Infof("Successfully synced '%s'", key)
 		return nil
 	}(obj)
 
@@ -255,7 +255,7 @@ func (c *Controller) ProcessTenant(tenantCopy *corev1alpha1.Tenant) {
 	statusUpdate := func() {
 		if !reflect.DeepEqual(oldStatus, tenantCopy.Status) {
 			if _, err := c.edgenetclientset.CoreV1alpha1().Tenants().UpdateStatus(context.TODO(), tenantCopy, metav1.UpdateOptions{}); err != nil {
-				klog.V(4).Infoln(err)
+				klog.Infoln(err)
 			}
 		}
 	}
@@ -263,7 +263,7 @@ func (c *Controller) ProcessTenant(tenantCopy *corev1alpha1.Tenant) {
 
 	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
 	if err != nil {
-		klog.V(4).Infoln(err)
+		klog.Infoln(err)
 		return
 	}
 
@@ -273,7 +273,7 @@ func (c *Controller) ProcessTenant(tenantCopy *corev1alpha1.Tenant) {
 		// Create the cluster roles
 		tenantOwnerClusterRole, err := access.CreateObjectSpecificClusterRole(tenantCopy.GetName(), "core.edgenet.io", "tenants", tenantCopy.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences)
 		if err != nil && !errors.IsAlreadyExists(err) {
-			klog.V(4).Infof("Couldn't create owner cluster role %s: %s", tenantCopy.GetName(), err)
+			klog.Infof("Couldn't create owner cluster role %s: %s", tenantCopy.GetName(), err)
 			// TODO: Provide err information at the EVENTS
 		}
 		err = c.createCoreNamespace(tenantCopy, ownerReferences, string(systemNamespace.GetUID()))
@@ -300,7 +300,7 @@ func (c *Controller) ProcessTenant(tenantCopy *corev1alpha1.Tenant) {
 				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
 				tenantCopy.Status.State = failure
 				tenantCopy.Status.Message = messageBindingFailed
-				klog.V(4).Infoln(err)
+				klog.Infoln(err)
 			} else if errors.IsAlreadyExists(err) {
 				if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(tenantCopy.GetName()).Get(context.TODO(), roleBind.GetName(), metav1.GetOptions{}); err == nil {
 					roleBindingCopy := roleBinding.DeepCopy()
@@ -409,7 +409,7 @@ func (c *Controller) applyNetworkPolicy(tenant, tenantUID, clusterUID string, cl
 		},
 	}
 	_, err = c.kubeclientset.NetworkingV1().NetworkPolicies(tenant).Create(context.TODO(), networkPolicy, metav1.CreateOptions{})
-	klog.V(4).Infoln(err)
+	klog.Infoln(err)
 	if clusterNetworkPolicyEnabled {
 		drop := antreav1alpha1.RuleActionDrop
 		allow := antreav1alpha1.RuleActionAllow
@@ -483,7 +483,7 @@ func (c *Controller) applyNetworkPolicy(tenant, tenantUID, clusterUID string, cl
 		}
 
 		_, err = c.antreaclientset.CrdV1alpha1().ClusterNetworkPolicies().Create(context.TODO(), clusterNetworkPolicy, metav1.CreateOptions{})
-		klog.V(4).Infoln(err)
+		klog.Infoln(err)
 	} else {
 		c.antreaclientset.CrdV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), tenant, metav1.DeleteOptions{})
 	}
