@@ -70,6 +70,8 @@ func CreateEdgeNetClientset(by string) (*clientset.Clientset, error) {
 	if by == "kubeconfig" {
 		// Use the current context in kubeconfig
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		config.QPS = 1e6
+	        config.Burst = 1e6
 		if err != nil {
 			log.Println(err.Error())
 			panic(err.Error())
@@ -78,6 +80,8 @@ func CreateEdgeNetClientset(by string) (*clientset.Clientset, error) {
 	} else if by == "serviceaccount" {
 		// Creates the in-cluster config
 		config, err := rest.InClusterConfig()
+		config.QPS = 1e6
+	        config.Burst = 1e6
 		if err != nil {
 			panic(err.Error())
 		}
@@ -102,6 +106,8 @@ func CreateClientset(by string) (*kubernetes.Clientset, error) {
 	if by == "kubeconfig" {
 		// Use the current context in kubeconfig
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		config.QPS = 1e6
+	        config.Burst = 1e6
 		if err != nil {
 			// TODO: Error handling
 			panic(err.Error())
@@ -110,6 +116,8 @@ func CreateClientset(by string) (*kubernetes.Clientset, error) {
 	} else if by == "serviceaccount" {
 		// Creates the in-cluster config
 		config, err := rest.InClusterConfig()
+		config.QPS = 1e6
+	        config.Burst = 1e6
 		if err != nil {
 			// TODO: Error handling
 			panic(err.Error())
