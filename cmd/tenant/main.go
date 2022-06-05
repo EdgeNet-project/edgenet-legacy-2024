@@ -46,7 +46,7 @@ func main() {
 
 	edgenetInformerFactory.Start(stopCh)
 
-	if err = controller.Run(2, stopCh); err != nil {
+	if err = controller.Run(10, stopCh); err != nil {
 		klog.Fatalf("Error running controller: %s", err.Error())
 	}
 }
