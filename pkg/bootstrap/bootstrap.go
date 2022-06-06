@@ -154,6 +154,8 @@ func CreateAntreaClientset(by string) (*antrea.Clientset, error) {
 	if by == "kubeconfig" {
 		// Use the current context in kubeconfig
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		config.QPS = 1e6
+	        config.Burst = 1e6
 		if err != nil {
 			log.Println(err.Error())
 			panic(err.Error())
@@ -162,6 +164,8 @@ func CreateAntreaClientset(by string) (*antrea.Clientset, error) {
 	} else if by == "serviceaccount" {
 		// Creates the in-cluster config
 		config, err := rest.InClusterConfig()
+		config.QPS = 1e6
+	        config.Burst = 1e6
 		if err != nil {
 			panic(err.Error())
 		}
