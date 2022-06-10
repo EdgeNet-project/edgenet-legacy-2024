@@ -302,7 +302,7 @@ type NodeContributionStatus struct {
 	// This can be 'InQueue', 'Failure', 'Success', 'Incomplete', or 'InProgress'.
 	State string `json:"state"`
 	// Message contains additional information.
-	Message []string `json:"message"`
+	Message string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

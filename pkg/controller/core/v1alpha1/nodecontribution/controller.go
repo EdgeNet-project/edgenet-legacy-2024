@@ -129,7 +129,7 @@ func NewController(
 	nodecontributionInformer informers.NodeContributionInformer) *Controller {
 
 	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
-	klog.V(4).Info("Creating event broadcaster")
+	klog.Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartStructuredLogging(0)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
@@ -138,13 +138,13 @@ func NewController(
 	// Get the SSH Private Key of the control plane node
 	key, err := ioutil.ReadFile("../../.ssh/id_rsa")
 	if err != nil {
-		klog.V(4).Info(err.Error())
+		klog.Info(err.Error())
 		panic(err.Error())
 	}
 
 	publicKey, err := ssh.ParsePrivateKey(key)
 	if err != nil {
-		klog.V(4).Info(err.Error())
+		klog.Info(err.Error())
 		panic(err.Error())
 	}
 
@@ -160,7 +160,7 @@ func NewController(
 		publicKey:               publicKey,
 	}
 
-	klog.V(4).Infoln("Setting up event handlers")
+	klog.Infoln("Setting up event handlers")
 	// Set up an event handler for when Node Contribution resources change
 	nodecontributionInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueNodeContribution,
@@ -200,23 +200,23 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
-	klog.V(4).Infoln("Starting Node Contribution controller")
+	klog.Infoln("Starting Node Contribution controller")
 
-	klog.V(4).Infoln("Waiting for informer caches to sync")
+	klog.Infoln("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh,
 		c.nodecontributionsSynced,
 		c.nodesSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
-	klog.V(4).Infoln("Starting workers")
+	klog.Infoln("Starting workers")
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
 
-	klog.V(4).Infoln("Started workers")
+	klog.Infoln("Started workers")
 	<-stopCh
-	klog.V(4).Infoln("Shutting down workers")
+	klog.Infoln("Shutting down workers")
 
 	return nil
 }
@@ -253,7 +253,7 @@ func (c *Controller) processNextWorkItem() bool {
 			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
 		}
 		c.workqueue.Forget(obj)
-		klog.V(4).Infof("Successfully synced '%s'", key)
+		klog.Infof("Successfully synced '%s'", key)
 		return nil
 	}(obj)
 
@@ -287,9 +287,11 @@ func (c *Controller) syncHandler(key string) error {
 
 	if nodecontribution.Status.State != inqueue && nodecontribution.Status.State != inprogress && nodecontribution.Status.State != success {
 		nodecontributionCopy := nodecontribution.DeepCopy()
+		c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, inqueue, statusDict["in-queue"])
 		nodecontributionCopy.Status.State = inqueue
-		nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["in-queue"])
-		c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
+		nodecontributionCopy.Status.Message = statusDict["in-queue"]
+		_, err := c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
+		klog.Infoln(err)
 		return nil
 	}
 
@@ -300,13 +302,14 @@ func (c *Controller) syncHandler(key string) error {
 
 func (c *Controller) init(nodecontribution *corev1alpha1.NodeContribution) {
 	nodecontributionCopy := nodecontribution.DeepCopy()
-	nodecontributionCopy.Status.Message = []string{}
+	nodecontributionCopy.Status.Message = ""
 	nodeName := fmt.Sprintf("%s.edge-net.io", nodecontributionCopy.GetName())
 
 	recordType := remoteip.GetRecordType(nodecontributionCopy.Spec.Host)
 	if recordType == "" {
+		c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, failure, statusDict["invalid-host"])
 		nodecontributionCopy.Status.State = failure
-		nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["invalid-host"])
+		nodecontributionCopy.Status.Message = statusDict["invalid-host"]
 		c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
 		return
 	}
@@ -325,18 +328,21 @@ func (c *Controller) init(nodecontribution *corev1alpha1.NodeContribution) {
 		if contributedNode.Spec.Unschedulable != !nodecontributionCopy.Spec.Enabled {
 			err := node.SetNodeScheduling(nodeName, !nodecontributionCopy.Spec.Enabled)
 			if err != nil {
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, incomplete, statusDict["configuration-failure"])
 				nodecontributionCopy.Status.State = incomplete
-				nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["configuration-failure"])
+				nodecontributionCopy.Status.Message = statusDict["configuration-failure"]
 			} else {
 				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDonePatch)
 			}
 		}
 		if node.GetConditionReadyStatus(contributedNode.DeepCopy()) == trueStr {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, success, statusDict["successful"])
 			nodecontributionCopy.Status.State = success
-			nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["successful"])
+			nodecontributionCopy.Status.Message = statusDict["successful"]
 		} else {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, failure, statusDict["failure"])
 			nodecontributionCopy.Status.State = failure
-			nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["failure"])
+			nodecontributionCopy.Status.Message = statusDict["failure"]
 		}
 		c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
 	} else {
@@ -377,9 +383,9 @@ func (c *Controller) handleObject(obj interface{}) {
 			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
 			return
 		}
-		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
+		klog.Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 	}
-	klog.V(4).Infof("Processing object: %s", object.GetName())
+	klog.Infof("Processing object: %s", object.GetName())
 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
 		if ownerRef.Kind != "NodeContribution" {
 			return
@@ -387,7 +393,7 @@ func (c *Controller) handleObject(obj interface{}) {
 
 		nodecontribution, err := c.nodecontributionsLister.Get(ownerRef.Name)
 		if err != nil {
-			klog.V(4).Infof("ignoring orphaned object '%s' of nodecontribution '%s'", object.GetSelfLink(), ownerRef.Name)
+			klog.Infof("ignoring orphaned object '%s' of nodecontribution '%s'", object.GetSelfLink(), ownerRef.Name)
 			return
 		}
 
@@ -447,15 +453,16 @@ func (c *Controller) setup(addr, nodeName, recordType string, config *ssh.Client
 	nodePatch := make(chan bool, 1)
 
 	// Set the status as in progress
+	c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, inprogress, statusDict["in-progress"])
 	nodecontributionCopy.Status.State = inprogress
-	nodecontributionCopy.Status.Message = append(nodecontributionCopy.Status.Message, statusDict["in-progress"])
+	nodecontributionCopy.Status.Message = statusDict["in-progress"]
 	nodecontributionUpdated, err := c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
 
 	defer func() {
 		if !reflect.DeepEqual(nodecontributionCopy.Status, nodecontributionUpdated.Status) {
 			if _, err := c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(context.TODO(), nodecontributionUpdated, metav1.UpdateOptions{}); err != nil {
 				// TO-DO: Provide more information on error
-				klog.V(4).Info(err)
+				klog.Info(err)
 			}
 		}
 	}()
@@ -470,7 +477,7 @@ nodeSetupLoop:
 	for {
 		select {
 		case <-dnsConfiguration:
-			klog.V(4).Infof("DNS configuration started: %s", nodeName)
+			klog.Infof("DNS configuration started: %s", nodeName)
 			// Use Namecheap API for registration
 			hostRecord := namecheap.DomainDNSHost{
 				Name:    strings.TrimSuffix(nodeName, ".edge-net.io"),
@@ -482,28 +489,30 @@ nodeSetupLoop:
 			// However, the setup procedure keeps going on, so, it is not terminated.
 			if !updated {
 				hostnameError := fmt.Sprintf("Warning: Hostname %s or address %s couldn't added", hostRecord.Name, hostRecord.Address)
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, incomplete, hostnameError)
 				nodecontributionUpdated.Status.State = incomplete
-				nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, hostnameError)
-				klog.V(4).Info(hostnameError)
+				nodecontributionUpdated.Status.Message = hostnameError
+				klog.Info(hostnameError)
 			} else {
 				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneDNS)
 			}
 			establishConnection <- true
 		case <-establishConnection:
-			klog.V(4).Infof("Establish SSH connection: %s", nodeName)
+			klog.Infof("Establish SSH connection: %s", nodeName)
 			go func() {
 				conn, err = ssh.Dial("tcp", addr, config)
 				if err != nil && connCounter < 3 {
-					klog.V(4).Info(err)
+					klog.Info(err)
 					// Wait one minute to try establishing a connection again
 					time.Sleep(1 * time.Minute)
 					establishConnection <- true
 					connCounter++
 					return
 				} else if (conn == nil) || (err != nil && connCounter >= 3) {
+					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, failure, statusDict["ssh-failure"])
 					nodecontributionUpdated.Status.State = failure
-					nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["ssh-failure"])
-					klog.V(4).Info(err)
+					nodecontributionUpdated.Status.Message = statusDict["ssh-failure"]
+					klog.Info(err)
 					endProcedure <- true
 					return
 				}
@@ -511,7 +520,7 @@ nodeSetupLoop:
 				kubeadm <- true
 			}()
 		case <-kubeadm:
-			klog.V(4).Infof("Create a token and run kubadm join: %s", nodeName)
+			klog.Infof("Create a token and run kubadm join: %s", nodeName)
 			// To prevent hanging forever during establishing a connection
 			go func() {
 				defer func() {
@@ -521,9 +530,10 @@ nodeSetupLoop:
 				}()
 				err := c.join(conn, nodeName)
 				if err != nil {
+					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, failure, statusDict["join-failure"])
 					nodecontributionUpdated.Status.State = failure
-					nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["join-failure"])
-					klog.V(4).Info(err)
+					nodecontributionUpdated.Status.Message = statusDict["join-failure"]
+					klog.Info(err)
 					endProcedure <- true
 					return
 				}
@@ -534,12 +544,13 @@ nodeSetupLoop:
 				}
 			}()
 		case <-nodePatch:
-			klog.V(4).Infof("Patch scheduling option: %s", nodeName)
+			klog.Infof("Patch scheduling option: %s", nodeName)
 			// Set the node as schedulable or unschedulable according to the node contribution
 			err := node.SetNodeScheduling(nodeName, !nodecontributionUpdated.Spec.Enabled)
 			if err != nil {
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, incomplete, statusDict["configuration-failure"])
 				nodecontributionUpdated.Status.State = incomplete
-				nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["configuration-failure"])
+				nodecontributionUpdated.Status.Message = statusDict["configuration-failure"]
 			} else {
 				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDonePatch)
 			}
@@ -552,21 +563,22 @@ nodeSetupLoop:
 			}
 			err = node.SetOwnerReferences(nodeName, ownerReferences)
 			if err != nil {
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, incomplete, statusDict["owner-reference-failure"])
 				nodecontributionUpdated.Status.State = incomplete
-				nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["owner-reference-failure"])
+				nodecontributionUpdated.Status.Message = statusDict["owner-reference-failure"]
 			}
 			endProcedure <- true
 		case <-endProcedure:
-			klog.V(4).Infof("Procedure completed: %s", nodeName)
+			klog.Infof("Procedure completed: %s", nodeName)
 			c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageEnd)
 			break nodeSetupLoop
 		case <-time.After(5 * time.Minute):
-			klog.V(4).Infof("Timeout: %s", nodeName)
+			klog.Infof("Timeout: %s", nodeName)
 			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, setupProcedure, messageTimeout)
 			// Terminate the procedure after 5 minutes
 			nodecontributionUpdated.Status.State = failure
-			nodecontributionUpdated.Status.Message = append(nodecontributionUpdated.Status.Message, statusDict["timeout"])
-			klog.V(4).Info(err)
+			nodecontributionUpdated.Status.Message = statusDict["timeout"]
+			klog.Info(err)
 			break nodeSetupLoop
 		}
 	}
@@ -582,28 +594,28 @@ func (c *Controller) join(conn *ssh.Client, nodeName string) error {
 	}
 	sess, err := startSession(conn)
 	if err != nil {
-		klog.V(4).Info(err)
+		klog.Info(err)
 		return err
 	}
 	defer sess.Close()
 	// StdinPipe for commands
 	stdin, err := sess.StdinPipe()
 	if err != nil {
-		klog.V(4).Info(err)
+		klog.Info(err)
 		return err
 	}
 	//sess.Stdout = os.Stdout
 	sess.Stderr = os.Stderr
 	sess, err = startShell(sess)
 	if err != nil {
-		klog.V(4).Info(err)
+		klog.Info(err)
 		return err
 	}
 	// Run commands sequentially
 	for _, cmd := range commands {
 		_, err = fmt.Fprintf(stdin, "%s\n", cmd)
 		if err != nil {
-			klog.V(4).Info(err)
+			klog.Info(err)
 			return err
 		}
 	}
@@ -611,7 +623,7 @@ func (c *Controller) join(conn *ssh.Client, nodeName string) error {
 	// Wait for session to finish
 	err = sess.Wait()
 	if err != nil {
-		klog.V(4).Info(err)
+		klog.Info(err)
 		return err
 	}
 	return nil
@@ -621,7 +633,7 @@ func (c *Controller) join(conn *ssh.Client, nodeName string) error {
 func startSession(conn *ssh.Client) (*ssh.Session, error) {
 	sess, err := conn.NewSession()
 	if err != nil {
-		klog.V(4).Info(err)
+		klog.Info(err)
 		return nil, err
 	}
 	return sess, nil
@@ -631,7 +643,7 @@ func startSession(conn *ssh.Client) (*ssh.Session, error) {
 func startShell(sess *ssh.Session) (*ssh.Session, error) {
 	// Start remote shell
 	if err := sess.Shell(); err != nil {
-		klog.V(4).Info(err)
+		klog.Info(err)
 		return nil, err
 	}
 	return sess, nil
