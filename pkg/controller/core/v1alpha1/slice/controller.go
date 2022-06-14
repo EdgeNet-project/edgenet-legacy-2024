@@ -460,8 +460,8 @@ func (c *Controller) reserveNodes(sliceCopy *corev1alpha1.Slice) bool {
 					}
 
 					match := false
-					for key, value := range sliceCopy.Spec.NodeSelector.Resources.Requests {
-						if value.Cmp(nodeRow.Status.Capacity[key]) == 1 {
+					for key, value := range sliceCopy.Spec.NodeSelector.Resources.Limits {
+						if value.Cmp(nodeRow.Status.Capacity[key]) == -1 {
 							match = false
 							break
 						} else {
@@ -469,8 +469,8 @@ func (c *Controller) reserveNodes(sliceCopy *corev1alpha1.Slice) bool {
 						}
 					}
 					if match {
-						for key, value := range sliceCopy.Spec.NodeSelector.Resources.Limits {
-							if value.Cmp(nodeRow.Status.Capacity[key]) == -1 {
+						for key, value := range sliceCopy.Spec.NodeSelector.Resources.Requests {
+							if value.Cmp(nodeRow.Status.Capacity[key]) == 1 {
 								match = false
 								break
 							} else {
