@@ -558,7 +558,6 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 			return
 		}
 	}
-
 	if permitted {
 		var labels = map[string]string{"edge-net.io/generated": "true", "edge-net.io/kind": "sub"}
 		var childResourceQuota map[corev1.ResourceName]resource.Quantity
@@ -733,6 +732,9 @@ func (c *Controller) tuneParentResourceQuota(subnamespaceCopy *corev1alpha1.SubN
 				for _, nodeRow := range nodeRaw.Items {
 					if _, elementExists := nodeRow.Status.Capacity[key]; elementExists {
 						if availableQuota.Cmp(nodeRow.Status.Capacity[key]) == -1 {
+							c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureQuotaShortage, messageQuotaShortage)
+							subnamespaceCopy.Status.State = failure
+							subnamespaceCopy.Status.Message = messageQuotaShortage
 							return false
 						} else {
 							availableQuota.Sub(nodeRow.Status.Capacity[key])
@@ -742,6 +744,7 @@ func (c *Controller) tuneParentResourceQuota(subnamespaceCopy *corev1alpha1.SubN
 				}
 			}
 		} else {
+			klog.Infoln(err)
 			return false
 		}
 	}
@@ -937,6 +940,7 @@ func (c *Controller) applyChildResourceQuota(subnamespaceCopy *corev1alpha1.SubN
 				}
 			}
 		} else {
+			klog.Infoln(err)
 			return false
 		}
 	}
