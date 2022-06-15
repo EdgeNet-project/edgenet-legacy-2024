@@ -359,7 +359,7 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha1.SliceClaim) 
 	if sliceclaimCopy.Status.State != bound && sliceclaimCopy.Status.State != applied {
 		parentResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(sliceclaimCopy.GetNamespace()).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"]), metav1.GetOptions{})
 		if err == nil {
-			sufficientQuota := c.tuneParentResourceQuota(sliceclaimCopy, parentResourceQuota)
+			sufficientQuota := c.checkParentResourceQuota(sliceclaimCopy, parentResourceQuota)
 			if !sufficientQuota {
 				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureQuotaShortage, messageQuotaShortage)
 				sliceclaimCopy.Status.State = failure
@@ -483,7 +483,7 @@ func (c *Controller) setAsOwnerReference(sliceclaimCopy *corev1alpha1.SliceClaim
 	return false
 }
 
-func (c *Controller) tuneParentResourceQuota(sliceclaimCopy *corev1alpha1.SliceClaim, parentResourceQuota *corev1.ResourceQuota) bool {
+func (c *Controller) checkParentResourceQuota(sliceclaimCopy *corev1alpha1.SliceClaim, parentResourceQuota *corev1.ResourceQuota) bool {
 	var resourceDemandList = make(corev1.ResourceList)
 	for key, value := range sliceclaimCopy.Spec.NodeSelector.Resources.Limits {
 		resourceDemand := value.DeepCopy()
