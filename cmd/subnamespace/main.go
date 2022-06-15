@@ -9,7 +9,9 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/informers/internalinterfaces"
 	"k8s.io/klog"
 )
 
@@ -31,7 +33,13 @@ func main() {
 		panic(err.Error())
 	}
 	// Start the controller to provide the functionalities of subnamespace resource
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(kubeclientset, 0)
+	var listOptionsFunc = func(labelSelector string) internalinterfaces.TweakListOptionsFunc {
+		return func(listOptions *metav1.ListOptions) {
+			listOptions.LabelSelector = labelSelector
+		}
+	}
+	informerOption := kubeinformers.WithTweakListOptions(listOptionsFunc("edge-net.io/tenant"))
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(kubeclientset, 0, informerOption)
 	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
 
 	controller := subnamespace.NewController(kubeclientset,
