@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha1/sliceclaim"
@@ -31,7 +32,7 @@ func main() {
 		panic(err.Error())
 	}
 	// Start the controller to provide the functionalities of sliceclaim resource
-	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
 
 	controller := sliceclaim.NewController(kubeclientset,
 		edgenetclientset,

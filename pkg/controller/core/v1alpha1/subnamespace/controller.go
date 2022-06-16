@@ -14,8 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// TODO: Clean up the code
-
 package subnamespace
 
 import (
@@ -190,14 +188,10 @@ func NewController(
 		UpdateFunc: func(old, new interface{}) {
 			newSubnamespace := new.(*corev1alpha1.SubNamespace)
 			oldSubnamespace := old.(*corev1alpha1.SubNamespace)
-			if reflect.DeepEqual(newSubnamespace.Spec, oldSubnamespace.Spec) && (newSubnamespace.Spec.Expiry == nil || time.Until(newSubnamespace.Spec.Expiry.Time) > 0) {
-				return
-			} else {
-				controller.enqueueSubNamespace(new)
-				if (oldSubnamespace.Spec.Expiry == nil && newSubnamespace.Spec.Expiry != nil) ||
-					(oldSubnamespace.Spec.Expiry != nil && newSubnamespace.Spec.Expiry != nil && !oldSubnamespace.Spec.Expiry.Time.Equal(newSubnamespace.Spec.Expiry.Time) && time.Until(newSubnamespace.Spec.Expiry.Time) > 0) {
-					controller.enqueueSubNamespaceAfter(new, time.Until(newSubnamespace.Spec.Expiry.Time))
-				}
+			controller.enqueueSubNamespace(new)
+			if (oldSubnamespace.Spec.Expiry == nil && newSubnamespace.Spec.Expiry != nil) ||
+				(oldSubnamespace.Spec.Expiry != nil && newSubnamespace.Spec.Expiry != nil && !oldSubnamespace.Spec.Expiry.Time.Equal(newSubnamespace.Spec.Expiry.Time) && time.Until(newSubnamespace.Spec.Expiry.Time) > 0) {
+				controller.enqueueSubNamespaceAfter(new, time.Until(newSubnamespace.Spec.Expiry.Time))
 			}
 		}, DeleteFunc: func(obj interface{}) {
 			subnamespace := obj.(*corev1alpha1.SubNamespace)

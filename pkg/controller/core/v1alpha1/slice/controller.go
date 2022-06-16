@@ -379,11 +379,22 @@ func (c *Controller) syncWithSliceClaim(sliceCopy *corev1alpha1.Slice, sliceClai
 					c.edgenetclientset.CoreV1alpha1().Slices().Delete(context.TODO(), sliceCopy.GetName(), metav1.DeleteOptions{})
 					return
 				} else if sliceClaim.Status.State == applied {
-					c.provisionSlice(sliceCopy)
+					if sliceCopy.Status.State != provisioned {
+						c.provisionSlice(sliceCopy)
+					}
 				} else {
-					c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messageBound)
-					sliceCopy.Status.State = bound
-					sliceCopy.Status.Message = messageBound
+					if sliceCopy.Status.State != bound {
+						if sliceCopy.Status.State == provisioned {
+							if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/slice=%s", sliceCopy.GetName())}); err == nil {
+								for _, nodeRow := range nodeRaw.Items {
+									c.patchNode("reservation", sliceCopy.GetName(), nodeRow.GetName())
+								}
+							}
+						}
+						c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messageBound)
+						sliceCopy.Status.State = bound
+						sliceCopy.Status.Message = messageBound
+					}
 
 					if sliceClaim.Status.State != bound {
 						sliceClaimCopy := sliceClaim.DeepCopy()

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha1/subnamespace"
@@ -39,8 +40,8 @@ func main() {
 		}
 	}
 	informerOption := kubeinformers.WithTweakListOptions(listOptionsFunc("edge-net.io/tenant"))
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(kubeclientset, 0, informerOption)
-	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(kubeclientset, time.Second*30, informerOption)
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
 
 	controller := subnamespace.NewController(kubeclientset,
 		edgenetclientset,

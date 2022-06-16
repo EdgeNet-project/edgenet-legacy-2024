@@ -10,7 +10,6 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 
-	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/klog"
 )
 
@@ -32,15 +31,13 @@ func main() {
 		panic(err.Error())
 	}
 	// Start the controller to provide the functionalities of slice resource
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
-	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
 
 	controller := slice.NewController(kubeclientset,
 		edgenetclientset,
 		edgenetInformerFactory.Core().V1alpha1().SliceClaims(),
 		edgenetInformerFactory.Core().V1alpha1().Slices())
 
-	kubeInformerFactory.Start(stopCh)
 	edgenetInformerFactory.Start(stopCh)
 
 	if err = controller.Run(1, stopCh); err != nil {
