@@ -1,0 +1,129 @@
+# Copyright 2022 Contributors to the EdgeNet project.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: configs-secret
+  namespace: edgenet
+type: Opaque
+stringData:
+  headnode.yaml: |
+    # DNS should contain the root domain consisting of domain name and top-level domain.
+    # dns: "<Root domain>"
+    # ip: "<IP address of the control plane node>"
+  smtp.yaml: |
+    # SMTP settings for mailer service. The 'to' field indicates the email address to receive the emails
+    # that concerns the cluster administration.
+    # host: ""
+    # port: ""
+    # from: ""
+    # username : ""
+    # password : ""
+    # to: ""
+  console.yaml: |
+    # URL to the console if you deploy on your cluster. For example, https://console.edge-net.org.
+    # url: "<URL of the console>"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: edgenet
+    component: notifier
+  name: notifier
+  namespace: edgenet
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: edgenet
+    component: notifier
+  name: edgenet:service:notifier
+rules:
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["tenantrequests", "clusterrolerequests", "rolerequests"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterrolebindings", "rolebindings"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["authorization.k8s.io"]
+  resources: ["subjectaccessreviews"]
+  verbs: ["get", "list", "watch", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: edgenet
+    component: notifier
+  name: edgenet:service:notifier
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edgenet:service:notifier
+subjects:
+- kind: ServiceAccount
+  name: notifier
+  namespace: edgenet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: edgenet
+    component: notifier
+  name: notifier
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgenet
+      component: notifier
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: edgenet
+        component: notifier
+    spec:
+      containers:
+      - command:
+        - ./notifier
+        image: edgenetio/notifier:main
+        imagePullPolicy: Always
+        name: notifier
+        volumeMounts:
+        - name: configs
+          readOnly: true
+          mountPath: /root/configs/
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: notifier
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
+      volumes:
+      - name: configs
+        secret:
+          secretName: configs-secret

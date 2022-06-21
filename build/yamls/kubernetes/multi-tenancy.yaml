@@ -1,4 +1,4 @@
-# Copyright 2021 Contributors to the EdgeNet project.
+# Copyright 2022 Contributors to the EdgeNet project.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,273 +15,6 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: edgenet
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: kubeconfig-secret
-  namespace: edgenet
-type: Opaque
-stringData:
-  config : |
-    # Provide the certificate authority of your cluster along with the IP address below.
-    # The address that you will provide at the server field should be like https://51.75.127.152:6443.
-    # apiVersion: v1
-    # clusters:
-    # - cluster:
-    #     certificate-authority-data: <CA>
-    #     server: <kube-apiserver>
-    #   name: kubernetes
-    # contexts: null
-    # current-context: null
-    # kind: Config
-    # preferences: {}
-    # users: null
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: configs-secret
-  namespace: edgenet
-type: Opaque
-stringData:
-  headnode.yaml: |
-    # DNS should contain the root domain consisting of domain name and top-level domain.
-    # dns: "<Root domain>"
-    # ip: "<IP address of the control plane node>"
-  smtp.yaml: |
-    # SMTP settings for mailer service. The 'to' field indicates the email address to receive the emails
-    # that concerns the cluster administration.
-    # host: ""
-    # port: ""
-    # from: ""
-    # username : ""
-    # password : ""
-    # to: ""
-  console.yaml: |
-    # URL to the console if you deploy on your cluster. For example, https://console.edge-net.org.
-    # url: "<URL of the console>"
-  namecheap.yaml: |
-    # Provide the namecheap credentials for DNS records.
-    # app: ""
-    # apiUser : ""
-    # apiToken : ""
-    # username : ""
-  # MaxMind GeoIP2 precision API keys
-  maxmind-account-id: ""
-  maxmind-license-key: ""
-#---
-# Provide the Private and Public SSH keys of the control plane node to enable node contribution feature.
-#apiVersion: v1
-#kind: Secret
-#metadata:
-#  name: ssh-key-secret
-#  namespace: edgenet
-#type: Opaque
-#data:
-#  id_rsa: <SSH Private Key of the control plane node>
-#  id_rsa.pub: <SSH Public Key of the control plane node>
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: nodecontributions.core.edgenet.io
-spec:
-  group: core.edgenet.io
-  versions:
-    - name: v1alpha1
-      served: true
-      storage: true
-      subresources:
-        status: {}
-      additionalPrinterColumns:
-        - name: Address
-          type: string
-          jsonPath: .spec.host
-        - name: Port
-          type: integer
-          jsonPath: .spec.port
-        - name: Enabled
-          type: boolean
-          jsonPath: .spec.enabled
-        - name: Status
-          type: string
-          jsonPath: .status.state
-        - name: Age
-          type: date
-          jsonPath: .metadata.creationTimestamp
-      schema:
-        openAPIV3Schema:
-          type: object
-          properties:
-            spec:
-              type: object
-              required:
-                - host
-                - port
-                - enabled
-              properties:
-                tenant:
-                  type: string
-                  nullable: true
-                  pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
-                host:
-                  type: string
-                port:
-                  type: integer
-                  minimum: 1
-                user:
-                  type: string
-                  default: edgenet
-                enabled:
-                  type: boolean
-                limitations:
-                  type: array
-                  nullable: true
-                  items:
-                    type: object
-                    properties:
-                      kind:
-                        type: string
-                        enum:
-                          - Tenant
-                          - Namespace
-                      identifier:
-                        type: string
-                        pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
-            status:
-              type: object
-              properties:
-                state:
-                  type: string
-                message:
-                  type: string
-  scope: Cluster
-  names:
-    plural: nodecontributions
-    singular: nodecontribution
-    kind: NodeContribution
-    shortNames:
-      - nc
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: selectivedeployments.apps.edgenet.io
-spec:
-  group: apps.edgenet.io
-  versions:
-    - name: v1alpha1
-      served: true
-      storage: true
-      subresources:
-        status: {}
-      additionalPrinterColumns:
-        - name: Ready
-          type: string
-          jsonPath: .status.ready
-        - name: Status
-          type: string
-          jsonPath: .status.state
-        - name: Age
-          type: date
-          jsonPath: .metadata.creationTimestamp
-      schema:
-        openAPIV3Schema:
-          type: object
-          properties:
-            spec:
-              type: object
-              required:
-                - workloads
-                - selector
-              properties:
-                workloads:
-                  type: object
-                  properties:
-                    deployment:
-                      type: array
-                      items:
-                        type: object
-                        x-kubernetes-embedded-resource: true
-                        x-kubernetes-preserve-unknown-fields: true
-                      nullable: true
-                    daemonset:
-                      type: array
-                      items:
-                        type: object
-                        x-kubernetes-embedded-resource: true
-                        x-kubernetes-preserve-unknown-fields: true
-                      nullable: true
-                    statefulset:
-                      type: array
-                      items:
-                        type: object
-                        x-kubernetes-embedded-resource: true
-                        x-kubernetes-preserve-unknown-fields: true
-                      nullable: true
-                    job:
-                      type: array
-                      items:
-                        type: object
-                        x-kubernetes-embedded-resource: true
-                        x-kubernetes-preserve-unknown-fields: true
-                      nullable: true
-                    cronjob:
-                      type: array
-                      items:
-                        type: object
-                        x-kubernetes-embedded-resource: true
-                        x-kubernetes-preserve-unknown-fields: true
-                      nullable: true
-                selector:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      name:
-                        type: string
-                        enum:
-                          - City
-                          - State
-                          - Country
-                          - Continent
-                          - Polygon
-                      value:
-                        type: array
-                        items:
-                          type: string
-                      operator:
-                        type: string
-                        enum:
-                          - In
-                          - NotIn
-                      quantity:
-                        type: integer
-                        description: The count of nodes that will be picked for this selector.
-                        minimum: 1
-                        nullable: true
-                  minimum: 1
-                recovery:
-                  type: boolean
-            status:
-              type: object
-              properties:
-                ready:
-                  type: string
-                state:
-                  type: string
-                message:
-                  type: array
-                  items:
-                    type: string
-  scope: Namespaced
-  names:
-    plural: selectivedeployments
-    singular: selectivedeployment
-    kind: SelectiveDeployment
-    shortNames:
-      - sd
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -763,71 +496,6 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: vpnpeers.networking.edgenet.io
-spec:
-  group: networking.edgenet.io
-  versions:
-    - name: v1alpha1
-      served: true
-      storage: true
-      subresources:
-        status: {}
-      additionalPrinterColumns:
-        - name: Address-V4
-          type: string
-          jsonPath: .spec.addressV4
-        - name: Address-V6
-          type: string
-          jsonPath: .spec.addressV6
-        - name: Endpoint
-          type: string
-          jsonPath: .spec.endpointAddress
-        - name: Port
-          type: string
-          jsonPath: .spec.endpointPort
-      schema:
-        openAPIV3Schema:
-          type: object
-          properties:
-            spec:
-              type: object
-              required:
-                - addressV4
-                - addressV6
-                - publicKey
-              properties:
-                addressV4:
-                  type: string
-                  pattern: '^[0-9.]+$'
-                  description: The IPv4 address assigned to the node's VPN interface.
-                addressV6:
-                  type: string
-                  pattern: '^[a-f0-9:]+$'
-                  description: The IPv6 address assigned to the node's VPN interface.
-                endpointAddress:
-                  type: string
-                  pattern: '^[a-f0-9.:]+$'
-                  nullable: true
-                  description: The public IPv4/v6 address of the node. Required for NAT-NAT communications.
-                endpointPort:
-                  type: integer
-                  minimum: 1
-                  nullable: true
-                  description: The port on which WireGuard is listening. Required for NAT-NAT communications.
-                publicKey:
-                  type: string
-                  description: The WireGuard public key of the node's VPN interface (Base64 encoded).
-  scope: Cluster
-  names:
-    plural: vpnpeers
-    singular: vpnpeer
-    kind: VPNPeer
-    shortNames:
-      - vpn
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
   name: clusterrolerequests.registration.edgenet.io
 spec:
   group: registration.edgenet.io
@@ -1060,302 +728,6 @@ kind: ServiceAccount
 metadata:
   labels:
     app: edgenet
-    component: nodecontribution
-  name: nodecontribution
-  namespace: edgenet
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app: edgenet
-    component: nodecontribution
-  name: edgenet:service:nodecontribution
-rules:
-- apiGroups: ["core.edgenet.io"]
-  resources: ["nodecontributions", "nodecontributions/status"]
-  verbs: ["*"]
-- apiGroups: [""]
-  resources: ["nodes"]
-  verbs: ["get", "watch", "list", "patch", "delete"]
-- apiGroups: [""]
-  resources: ["secrets"]
-  verbs: ["get", "create", "update"]
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["*"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app: edgenet
-    component: nodecontribution
-  name: edgenet:service:nodecontribution
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: edgenet:service:nodecontribution
-subjects:
-- kind: ServiceAccount
-  name: nodecontribution
-  namespace: edgenet
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app: edgenet
-    component: nodecontribution
-  name: nodecontribution
-  namespace: edgenet
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: edgenet
-      component: nodecontribution
-  strategy:
-    type: Recreate
-  template:
-    metadata:
-      labels:
-        app: edgenet
-        component: nodecontribution
-    spec:
-      containers:
-      - command:
-        - ./nodecontribution
-        image: edgenetio/nodecontribution:main
-        imagePullPolicy: Always
-        name: nodecontribution
-        volumeMounts:
-        - mountPath: /etc/kubernetes/pki/ca.crt
-          name: kubernetes
-          readOnly: true
-        - name: ssh
-          readOnly: true
-          mountPath: /root/.ssh/
-        - name: configs
-          readOnly: true
-          mountPath: /root/configs/
-        - name: kubeconfig
-          readOnly: true
-          mountPath: /root/.kube/
-      hostNetwork: true
-      priorityClassName: system-cluster-critical
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: ""
-      serviceAccountName: nodecontribution
-      tolerations:
-      - key: CriticalAddonsOnly
-        operator: Exists
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
-        key: node.kubernetes.io/unschedulable
-      volumes:
-      - name: kubernetes
-        hostPath:
-          path: /etc/kubernetes/pki/ca.crt
-          type: File
-      - name: ssh
-        secret:
-          secretName: ssh-key-secret
-      - name: configs
-        secret:
-          secretName: configs-secret
-      - name: kubeconfig
-        secret:
-          secretName: kubeconfig-secret
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  labels:
-    app: edgenet
-    component: nodelabeler
-  name: nodelabeler
-  namespace: edgenet
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app: edgenet
-    component: nodelabeler
-  name: edgenet:service:nodelabeler
-rules:
-- apiGroups: [""]
-  resources: ["nodes"]
-  verbs: ["get", "watch", "list", "patch"]
-- apiGroups: ["networking.edgenet.io"]
-  resources: ["vpnpeers"]
-  verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app: edgenet
-    component: nodelabeler
-  name: edgenet:service:nodelabeler
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: edgenet:service:nodelabeler
-subjects:
-- kind: ServiceAccount
-  name: nodelabeler
-  namespace: edgenet
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app: edgenet
-    component: nodelabeler
-  name: nodelabeler
-  namespace: edgenet
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: edgenet
-      component: nodelabeler
-  strategy:
-    type: Recreate
-  template:
-    metadata:
-      labels:
-        app: edgenet
-        component: nodelabeler
-    spec:
-      containers:
-      - command:
-        - ./nodelabeler
-        image: edgenetio/nodelabeler:main
-        imagePullPolicy: Always
-        name: nodelabeler
-        env:
-          - name: MAXMIND_ACCOUNT_ID
-            valueFrom:
-              secretKeyRef:
-                name: configs-secret
-                key: maxmind-account-id
-          - name: MAXMIND_LICENSE_KEY
-            valueFrom:
-              secretKeyRef:
-                name: configs-secret
-                key: maxmind-license-key
-      hostNetwork: true
-      priorityClassName: system-cluster-critical
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: ""
-      serviceAccountName: nodelabeler
-      tolerations:
-      - key: CriticalAddonsOnly
-        operator: Exists
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
-        key: node.kubernetes.io/unschedulable
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  labels:
-    app: edgenet
-    component: selectivedeployment
-  name: selectivedeployment
-  namespace: edgenet
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app: edgenet
-    component: selectivedeployment
-  name: edgenet:service:selectivedeployment
-rules:
-- apiGroups: ["apps.edgenet.io"]
-  resources: ["selectivedeployments", "selectivedeployments/status"]
-  verbs: ["*"]
-- apiGroups: [""]
-  resources: ["nodes"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["apps"]
-  resources: ["daemonsets", "deployments", "statefulsets"]
-  verbs: ["get", "watch", "list", "create", "patch", "update", "delete"]
-- apiGroups: ["batch"]
-  resources: ["cronjobs", "jobs"]
-  verbs: ["get", "watch", "list", "create", "patch", "update", "delete"]
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["*"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app: edgenet
-    component: selectivedeployment
-  name: edgenet:service:selectivedeployment
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: edgenet:service:selectivedeployment
-subjects:
-- kind: ServiceAccount
-  name: selectivedeployment
-  namespace: edgenet
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app: edgenet
-    component: selectivedeployment
-  name: selectivedeployment
-  namespace: edgenet
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: edgenet
-      component: selectivedeployment
-  strategy:
-    type: Recreate
-  template:
-    metadata:
-      labels:
-        app: edgenet
-        component: selectivedeployment
-    spec:
-      containers:
-      - command:
-        - ./selectivedeployment
-        image: edgenetio/selectivedeployment:main
-        imagePullPolicy: Always
-        name: selectivedeployment
-      hostNetwork: true
-      priorityClassName: system-cluster-critical
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: ""
-      serviceAccountName: selectivedeployment
-      tolerations:
-      - key: CriticalAddonsOnly
-        operator: Exists
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
-        key: node.kubernetes.io/unschedulable
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  labels:
-    app: edgenet
     component: subnamespace
   name: subnamespace
   namespace: edgenet
@@ -1461,11 +833,6 @@ spec:
         image: edgenetio/subnamespace:main
         imagePullPolicy: Always
         name: subnamespace
-        volumeMounts:
-        - name: configs
-          readOnly: true
-          mountPath: /root/configs/
-      hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -1474,13 +841,11 @@ spec:
       - key: CriticalAddonsOnly
         operator: Exists
       - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
-      volumes:
-      - name: configs
-        secret:
-          secretName: configs-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -1610,14 +975,6 @@ spec:
         image: edgenetio/tenant:main
         imagePullPolicy: Always
         name: tenant
-        volumeMounts:
-        - name: configs
-          readOnly: true
-          mountPath: /root/configs/
-        - name: kubeconfig
-          readOnly: true
-          mountPath: /root/.kube/
-      hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -1626,16 +983,11 @@ spec:
       - key: CriticalAddonsOnly
         operator: Exists
       - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
-      volumes:
-      - name: configs
-        secret:
-          secretName: configs-secret
-      - name: kubeconfig
-        secret:
-          secretName: kubeconfig-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -1765,14 +1117,6 @@ spec:
         image: edgenetio/tenantrequest:main
         imagePullPolicy: Always
         name: tenantrequest
-        volumeMounts:
-        - name: configs
-          readOnly: true
-          mountPath: /root/configs/
-        - name: kubeconfig
-          readOnly: true
-          mountPath: /root/.kube/
-      hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -1781,16 +1125,11 @@ spec:
       - key: CriticalAddonsOnly
         operator: Exists
       - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
-      volumes:
-      - name: configs
-        secret:
-          secretName: configs-secret
-      - name: kubeconfig
-        secret:
-          secretName: kubeconfig-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -1872,11 +1211,6 @@ spec:
         image: edgenetio/tenantresourcequota:main
         imagePullPolicy: Always
         name: tenantresourcequota
-        volumeMounts:
-        - name: configs
-          readOnly: true
-          mountPath: /root/configs/
-      hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -1885,13 +1219,11 @@ spec:
       - key: CriticalAddonsOnly
         operator: Exists
       - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
-      volumes:
-      - name: configs
-        secret:
-          secretName: configs-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -2012,14 +1344,6 @@ spec:
         image: edgenetio/rolerequest:main
         imagePullPolicy: Always
         name: rolerequest
-        volumeMounts:
-        - name: configs
-          readOnly: true
-          mountPath: /root/configs/
-        - name: kubeconfig
-          readOnly: true
-          mountPath: /root/.kube/
-      hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -2028,92 +1352,7 @@ spec:
       - key: CriticalAddonsOnly
         operator: Exists
       - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
-        key: node.kubernetes.io/unschedulable
-      volumes:
-      - name: configs
-        secret:
-          secretName: configs-secret
-      - name: kubeconfig
-        secret:
-          secretName: kubeconfig-secret
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  labels:
-    app: edgenet
-    component: vpnpeer
-  name: vpnpeer
-  namespace: edgenet
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app: edgenet
-    component: vpnpeer
-  name: edgenet:service:vpnpeer
-rules:
-- apiGroups: ["networking.edgenet.io"]
-  resources: ["vpnpeers", "vpnpeers/status"]
-  verbs: ["*"]
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["*"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app: edgenet
-    component: vpnpeer
-  name: edgenet:service:vpnpeer
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: edgenet:service:vpnpeer
-subjects:
-- kind: ServiceAccount
-  name: vpnpeer
-  namespace: edgenet
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  labels:
-    app: edgenet
-    component: vpnpeer
-  name: vpnpeer
-  namespace: edgenet
-spec:
-  selector:
-    matchLabels:
-      app: edgenet
-      component: vpnpeer
-  template:
-    metadata:
-      labels:
-        app: edgenet
-        component: vpnpeer
-    spec:
-      containers:
-      - command:
-        - ./vpnpeer
-        image: edgenetio/vpnpeer:main
-        imagePullPolicy: Always
-        name: vpnpeer
-        securityContext:
-          capabilities:
-            add:
-              - NET_ADMIN
-      hostNetwork: true
-      priorityClassName: system-cluster-critical
-      serviceAccountName: vpnpeer
-      tolerations:
-      - key: CriticalAddonsOnly
-        operator: Exists
+        key: node-role.kubernetes.io/master
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
@@ -2238,14 +1477,6 @@ spec:
         image: edgenetio/clusterrolerequest:main
         imagePullPolicy: Always
         name: clusterrolerequest
-        volumeMounts:
-        - name: configs
-          readOnly: true
-          mountPath: /root/configs/
-        - name: kubeconfig
-          readOnly: true
-          mountPath: /root/.kube/
-      hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -2254,16 +1485,11 @@ spec:
       - key: CriticalAddonsOnly
         operator: Exists
       - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
-      volumes:
-      - name: configs
-        secret:
-          secretName: configs-secret
-      - name: kubeconfig
-        secret:
-          secretName: kubeconfig-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -2345,11 +1571,6 @@ spec:
         image: edgenetio/sliceclaim:main
         imagePullPolicy: Always
         name: sliceclaim
-        volumeMounts:
-        - name: kubeconfig
-          readOnly: true
-          mountPath: /root/.kube/
-      hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -2358,6 +1579,8 @@ spec:
       - key: CriticalAddonsOnly
         operator: Exists
       - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
@@ -2365,9 +1588,6 @@ spec:
       - name: configs
         secret:
           secretName: configs-secret
-      - name: kubeconfig
-        secret:
-          secretName: kubeconfig-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -2449,11 +1669,6 @@ spec:
         image: edgenetio/slice:main
         imagePullPolicy: Always
         name: slice
-        volumeMounts:
-        - name: kubeconfig
-          readOnly: true
-          mountPath: /root/.kube/
-      hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -2462,6 +1677,8 @@ spec:
       - key: CriticalAddonsOnly
         operator: Exists
       - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
@@ -2469,104 +1686,6 @@ spec:
       - name: configs
         secret:
           secretName: configs-secret
-      - name: kubeconfig
-        secret:
-          secretName: kubeconfig-secret
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  labels:
-    app: edgenet
-    component: notifier
-  name: notifier
-  namespace: edgenet
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app: edgenet
-    component: notifier
-  name: edgenet:service:notifier
-rules:
-- apiGroups: ["registration.edgenet.io"]
-  resources: ["tenantrequests", "clusterrolerequests", "rolerequests"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["clusterrolebindings", "rolebindings"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: ["authorization.k8s.io"]
-  resources: ["subjectaccessreviews"]
-  verbs: ["get", "list", "watch", "create"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app: edgenet
-    component: notifier
-  name: edgenet:service:notifier
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: edgenet:service:notifier
-subjects:
-- kind: ServiceAccount
-  name: notifier
-  namespace: edgenet
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app: edgenet
-    component: notifier
-  name: notifier
-  namespace: edgenet
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: edgenet
-      component: notifier
-  strategy:
-    type: Recreate
-  template:
-    metadata:
-      labels:
-        app: edgenet
-        component: notifier
-    spec:
-      containers:
-      - command:
-        - ./notifier
-        image: edgenetio/notifier:main
-        imagePullPolicy: Always
-        name: notifier
-        env:
-          - name: MAXMIND_ACCOUNT_ID
-            valueFrom:
-              secretKeyRef:
-                name: configs-secret
-                key: maxmind-account-id
-          - name: MAXMIND_LICENSE_KEY
-            valueFrom:
-              secretKeyRef:
-                name: configs-secret
-                key: maxmind-license-key
-      hostNetwork: true
-      priorityClassName: system-cluster-critical
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: ""
-      serviceAccountName: notifier
-      tolerations:
-      - key: CriticalAddonsOnly
-        operator: Exists
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
-        key: node.kubernetes.io/unschedulable
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -2654,3 +1773,270 @@ subjects:
 - kind: ServiceAccount
   name: edgenet-public
   namespace: kube-system
+---
+kind: ClusterIssuer
+apiVersion: cert-manager.io/v1
+metadata:
+  name: ca-bootstrap
+spec:
+  selfSigned: {}
+---
+kind: ClusterIssuer
+apiVersion: cert-manager.io/v1
+metadata:
+  name: ca-root
+spec:
+  ca:
+    secretName: ca-root
+---
+kind: Certificate
+apiVersion: cert-manager.io/v1
+metadata:
+  name: ca-root
+  namespace: cert-manager
+spec:
+  secretName: ca-root
+  isCA: true
+  commonName: ca-root
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  issuerRef:
+    kind: ClusterIssuer
+    name: ca-bootstrap
+---
+kind: Certificate
+apiVersion: cert-manager.io/v1
+metadata:
+  name: api-server-webhook
+  namespace: edgenet
+spec:
+  issuerRef:
+    name: ca-root
+    kind: ClusterIssuer
+  secretName: api-server
+  duration: 2160h
+  renewBefore: 360h
+  dnsNames:
+    - pod-bandwidth-mutate.edge-net.io
+    - pod-bandwidth-validate.edge-net.io
+    - tenant-request-validate.edge-net.io
+    - cluster-role-request-validate.edge-net.io
+    - role-request-validate.edge-net.io
+    - subnamespace-validate.edge-net.io
+    - slice-validate.edge-net.io
+    - slice-claim-validate.edge-net.io
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  usages:
+    - client auth
+    - server auth
+---
+kind: Certificate
+apiVersion: cert-manager.io/v1
+metadata:
+  name: admission-control-webhook
+  namespace: edgenet
+spec:
+  issuerRef:
+    name: ca-root
+    kind: ClusterIssuer
+  secretName: admission-control
+  duration: 2160h
+  renewBefore: 360h
+  dnsNames:
+    - admission-control.edgenet.svc
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  usages:
+    - client auth
+    - server auth
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: admission-control-webhook
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admission-control-webhook
+  template:
+    metadata:
+      labels:
+        app: admission-control-webhook
+    spec:
+      containers:
+        - name: admission-control-webhook
+          image: edgenetio/admissioncontrol:main
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 443
+          volumeMounts:
+            - name: cert
+              mountPath: /tls
+              readOnly: true
+          env:
+            - name: TLS_CERTIFICATE
+              value: /tls/tls.crt
+            - name: TLS_PRIVATE_KEY
+              value: /tls/tls.key
+      volumes:
+        - name: cert
+          secret:
+            secretName: admission-control
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: admission-control
+  namespace: edgenet
+spec:
+  selector:
+    app: admission-control-webhook
+  ports:
+    - port: 443
+      targetPort: 443
+---
+kind: MutatingWebhookConfiguration
+apiVersion: admissionregistration.k8s.io/v1
+metadata:
+  name: edgenet-admission-control
+  annotations:
+    cert-manager.io/inject-ca-from: edgenet/api-server-webhook
+webhooks:
+  - name: pod-bandwidth-mutate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /mutate/pod
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: NotIn
+        values: ["edgenet", "kube-system", "cert-manager"]
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        operations: ["CREATE"]
+        scope: Namespaced
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+---
+kind: ValidatingWebhookConfiguration
+apiVersion: admissionregistration.k8s.io/v1
+metadata:
+  name: edgenet-admission-control
+  annotations:
+    cert-manager.io/inject-ca-from: edgenet/api-server-webhook
+webhooks:
+  - name: pod-bandwidth-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/pod
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: NotIn
+        values: ["edgenet", "kube-system", "cert-manager"]
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        operations: ["CREATE", "UPDATE"]
+        scope: Namespaced
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+  - name: tenant-request-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/tenant-request
+    rules:
+      - apiGroups: ["registration.edgenet.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["tenantrequests"]
+        operations: ["CREATE"]
+        scope: Cluster
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+  - name: cluster-role-request-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/cluster-role-request
+    rules:
+      - apiGroups: ["registration.edgenet.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["clusterrolerequests"]
+        operations: ["CREATE"]
+        scope: Cluster
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+  - name: role-request-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/role-request
+    rules:
+      - apiGroups: ["registration.edgenet.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["rolerequests"]
+        operations: ["CREATE"]
+        scope: Namespaced
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+  - name: subnamespace-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/subnamespace
+    rules:
+      - apiGroups: ["core.edgenet.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["subnamespaces"]
+        operations: ["CREATE", "UPDATE"]
+        scope: Namespaced
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+  - name: slice-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/slice
+    rules:
+      - apiGroups: ["core.edgenet.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["slices"]
+        operations: ["UPDATE"]
+        scope: Cluster
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+  - name: slice-claim-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/slice-claim
+    rules:
+      - apiGroups: ["core.edgenet.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["sliceclaims"]
+        operations: ["UPDATE"]
+        scope: Namespaced
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
