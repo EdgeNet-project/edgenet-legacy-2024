@@ -126,6 +126,7 @@ func (wh *Webhook) mutatePod(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
 	if slice, sliceExists := pod.Spec.NodeSelector["edge-net.io/slice"]; sliceExists && slice == "none" {
 		if pod.Spec.RuntimeClassName == nil {
 			patchOperation["runtime"] = "add"
@@ -139,27 +140,22 @@ func (wh *Webhook) mutatePod(w http.ResponseWriter, r *http.Request) {
 
 	_, ingressExists := patchOperation["ingress"]
 	_, egressExists := patchOperation["egress"]
-	var patch string
-	if ingressExists && egressExists {
-		if patchOperation["ingress"] == patchOperation["egress"] {
-			patch = fmt.Sprintf(`[{"op":"%s","path":"/metadata/annotations","value":{"kubernetes.io/ingress-bandwidth":"%s", "kubernetes.io/egress-bandwidth":"%s"}},{"op":"%s","path":"/spec/runtimeClassName","value":"%s"}}]`,
-				patchOperation["ingress"], ingressBandwidth.String(), egressBandwidth.String(), patchOperation["runtime"], wh.Runtime)
-		} else if patchOperation["ingress"] != patchOperation["egress"] {
-			ingress := fmt.Sprintf(`{"op":"%s","path":"/metadata/annotations","value":{"kubernetes.io/ingress-bandwidth":"%s"}}`, patchOperation["ingress"], ingressBandwidth.String())
-			egress := fmt.Sprintf(`{"op":"%s","path":"/metadata/annotations","value":{"kubernetes.io/egress-bandwidth":"%s"}}`, patchOperation["egress"], egressBandwidth.String())
-			runtime := fmt.Sprintf(`{"op":"%s","path":"/spec/runtimeClassName","value":"%s"}`, patchOperation["runtime"], wh.Runtime)
-			patch = fmt.Sprintf(`[%s]`, strings.Join([]string{ingress, egress, runtime}, ","))
-		}
-	} else if ingressExists && !egressExists {
-		patch = fmt.Sprintf(`[{"op":"%s","path":"/metadata/annotations","value":{"kubernetes.io/ingress-bandwidth":"%s"}},{"op":"%s","path":"/spec/runtimeClassName","value":"%s"}}]`,
-			patchOperation["ingress"], ingressBandwidth.String(), patchOperation["runtime"], wh.Runtime)
-	} else if !ingressExists && egressExists {
-		patch = fmt.Sprintf(`[{"op":"%s","path":"/metadata/annotations","value":{"kubernetes.io/egress-bandwidth":"%s"}},{"op":"%s","path":"/spec/runtimeClassName","value":"%s"}}]`,
-			patchOperation["egress"], egressBandwidth.String(), patchOperation["runtime"], wh.Runtime)
-	} else {
-		klog.Infoln("Pod: no bandwidth requested")
-		patch = fmt.Sprintf(`[{"op":"%s","path":"/spec/runtimeClassName","value":"%s"}}]`, patchOperation["runtime"], wh.Runtime)
+	_, runtimeExists := patchOperation["runtime"]
+
+	var patchItems []string
+	if ingressExists {
+		ingress := fmt.Sprintf(`{"op":"%s","path":"/metadata/annotations","value":{"kubernetes.io/ingress-bandwidth":"%s"}}`, patchOperation["ingress"], ingressBandwidth.String())
+		patchItems = append(patchItems, ingress)
 	}
+	if egressExists {
+		egress := fmt.Sprintf(`{"op":"%s","path":"/metadata/annotations","value":{"kubernetes.io/egress-bandwidth":"%s"}}`, patchOperation["egress"], egressBandwidth.String())
+		patchItems = append(patchItems, egress)
+	}
+	if runtimeExists {
+		runtime := fmt.Sprintf(`{"op":"%s","path":"/spec/runtimeClassName","value":"%s"}`, patchOperation["runtime"], wh.Runtime)
+		patchItems = append(patchItems, runtime)
+	}
+	patch := fmt.Sprintf(`[%s]`, strings.Join(patchItems, ","))
 	patchType := admissionv1.PatchTypeJSONPatch
 	admissionResponse.PatchType = &patchType
 	admissionResponse.Patch = []byte(patch)
