@@ -107,7 +107,7 @@ func Boundbox(points [][]float64) []float64 {
 
 // GetKubeletVersion looks at the head node to decide which version of Kubernetes to install
 func GetKubeletVersion() string {
-	nodeRaw, err := Clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master"})
+	nodeRaw, err := Clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/control-plane"})
 	if err != nil {
 		log.Println(err.Error())
 	}

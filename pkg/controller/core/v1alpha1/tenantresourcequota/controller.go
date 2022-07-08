@@ -222,7 +222,7 @@ func NewController(
 		AddFunc: func(obj interface{}) {
 			nodeObj := obj.(*corev1.Node)
 			for key := range nodeObj.Labels {
-				if key == "node-role.kubernetes.io/master" {
+				if key == "node-role.kubernetes.io/control-plane" {
 					return
 				}
 			}

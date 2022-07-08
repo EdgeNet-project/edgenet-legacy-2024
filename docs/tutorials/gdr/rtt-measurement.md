@@ -259,7 +259,7 @@ spec:
                 app: ping-destination-<username>
             spec:
               tolerations:
-                - key: node-role.kubernetes.io/master
+                - key: node-role.kubernetes.io/control-plane
                   operator: Exists
                   effect: NoSchedule
               containers:
@@ -306,7 +306,7 @@ spec:
                 app: ping-source-<username>
             spec:
               tolerations:
-                - key: node-role.kubernetes.io/master
+                - key: node-role.kubernetes.io/control-plane
                   operator: Exists
                   effect: NoSchedule
               containers:

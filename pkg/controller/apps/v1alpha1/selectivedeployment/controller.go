@@ -829,7 +829,7 @@ func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha1.SelectiveDe
 					for _, nodeRow := range nodesRaw {
 						taintBlock := false
 						for _, taint := range nodeRow.Spec.Taints {
-							if (taint.Key == "node-role.kubernetes.io/master" && taint.Effect == noSchedule) ||
+							if (taint.Key == "node-role.kubernetes.io/control-plane" && taint.Effect == noSchedule) ||
 								(taint.Key == "node.kubernetes.io/unschedulable" && taint.Effect == noSchedule) {
 								taintBlock = true
 							}
@@ -903,7 +903,7 @@ func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha1.SelectiveDe
 					for _, nodeRow := range nodesRaw {
 						taintBlock := false
 						for _, taint := range nodeRow.Spec.Taints {
-							if (taint.Key == "node-role.kubernetes.io/master" && taint.Effect == noSchedule) ||
+							if (taint.Key == "node-role.kubernetes.io/control-plane" && taint.Effect == noSchedule) ||
 								(taint.Key == "node.kubernetes.io/unschedulable" && taint.Effect == noSchedule) {
 								taintBlock = true
 							}
