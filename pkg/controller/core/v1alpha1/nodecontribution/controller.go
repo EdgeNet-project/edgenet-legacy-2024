@@ -567,6 +567,15 @@ nodeSetupLoop:
 				nodecontributionUpdated.Status.State = incomplete
 				nodecontributionUpdated.Status.Message = statusDict["owner-reference-failure"]
 			}
+			if vpnPeer, err := c.edgenetclientset.NetworkingV1alpha1().VPNPeers().Get(context.TODO(), nodecontributionUpdated.GetName(), metav1.GetOptions{}); err == nil {
+				vpnPeerCopy := vpnPeer.DeepCopy()
+				vpnPeerCopy.SetOwnerReferences(ownerReferences)
+				if _, err := c.edgenetclientset.NetworkingV1alpha1().VPNPeers().Update(context.TODO(), vpnPeerCopy, metav1.UpdateOptions{}); err != nil {
+					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, incomplete, statusDict["owner-reference-failure"])
+					nodecontributionUpdated.Status.State = incomplete
+					nodecontributionUpdated.Status.Message = statusDict["owner-reference-failure"]
+				}
+			}
 			endProcedure <- true
 		case <-endProcedure:
 			klog.Infof("Procedure completed: %s", nodeName)
