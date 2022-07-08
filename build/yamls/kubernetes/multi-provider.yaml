@@ -286,8 +286,6 @@ spec:
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
       volumes:
       - name: kubernetes
@@ -390,8 +388,6 @@ spec:
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
@@ -469,8 +465,6 @@ spec:
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule

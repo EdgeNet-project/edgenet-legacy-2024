@@ -843,8 +843,6 @@ spec:
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
@@ -982,8 +980,6 @@ spec:
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
@@ -1127,8 +1123,6 @@ spec:
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
@@ -1218,8 +1212,6 @@ spec:
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
@@ -1354,8 +1346,6 @@ spec:
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
@@ -1487,8 +1477,6 @@ spec:
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
 ---
 apiVersion: v1
@@ -1578,8 +1566,6 @@ spec:
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
@@ -1676,8 +1662,6 @@ spec:
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
