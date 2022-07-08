@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
@@ -34,11 +36,15 @@ func main() {
 	// Start the controller to provide the functionalities of nodecontribution resource
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
 	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
+	hostedZone := strings.TrimSpace(os.Getenv("ROUTE53_HOSTED_ZONE"))
+	domain := strings.TrimSpace(os.Getenv("DOMAIN_NAME"))
 
 	controller := nodecontribution.NewController(kubeclientset,
 		edgenetclientset,
 		kubeInformerFactory.Core().V1().Nodes(),
-		edgenetInformerFactory.Core().V1alpha1().NodeContributions())
+		edgenetInformerFactory.Core().V1alpha1().NodeContributions(),
+		hostedZone,
+		domain)
 
 	kubeInformerFactory.Start(stopCh)
 	edgenetInformerFactory.Start(stopCh)

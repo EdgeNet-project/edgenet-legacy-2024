@@ -28,7 +28,12 @@ import (
 
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/route53"
+
 	namecheap "github.com/billputer/go-namecheap"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -174,6 +179,35 @@ func SetHostname(client *namecheap.Client, hostRecord namecheap.DomainDNSHost) (
 	} else if setResponse.IsSuccess == false {
 		log.Printf("Set host unknown problem: %s - %s", hostRecord.Name, hostRecord.Address)
 		return false, "unknown"
+	}
+	return true, ""
+}
+
+func AddARecordRoute53(input *route53.ChangeResourceRecordSetsInput) (bool, string) {
+	svc := route53.New(session.New())
+	_, err := svc.ChangeResourceRecordSets(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case route53.ErrCodeNoSuchHostedZone:
+				log.Println(route53.ErrCodeNoSuchHostedZone, aerr.Error())
+			case route53.ErrCodeNoSuchHealthCheck:
+				log.Println(route53.ErrCodeNoSuchHealthCheck, aerr.Error())
+			case route53.ErrCodeInvalidChangeBatch:
+				log.Println(route53.ErrCodeInvalidChangeBatch, aerr.Error())
+			case route53.ErrCodeInvalidInput:
+				log.Println(route53.ErrCodeInvalidInput, aerr.Error())
+			case route53.ErrCodePriorRequestNotComplete:
+				log.Println(route53.ErrCodePriorRequestNotComplete, aerr.Error())
+			default:
+				log.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			log.Println(err.Error())
+		}
+		return false, "failed"
 	}
 	return true, ""
 }

@@ -23,10 +23,8 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
-	"strings"
 	"time"
 
-	namecheap "github.com/billputer/go-namecheap"
 	"golang.org/x/crypto/ssh"
 
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
@@ -117,8 +115,10 @@ type Controller struct {
 	workqueue workqueue.RateLimitingInterface
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
-	recorder  record.EventRecorder
-	publicKey ssh.Signer
+	recorder          record.EventRecorder
+	publicKey         ssh.Signer
+	route53hostedZone string
+	domainName        string
 }
 
 // NewController returns a new controller
@@ -126,7 +126,8 @@ func NewController(
 	kubeclientset kubernetes.Interface,
 	edgenetclientset clientset.Interface,
 	nodeInformer coreinformers.NodeInformer,
-	nodecontributionInformer informers.NodeContributionInformer) *Controller {
+	nodecontributionInformer informers.NodeContributionInformer,
+	hostedZone, domain string) *Controller {
 
 	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
 	klog.Info("Creating event broadcaster")
@@ -158,6 +159,8 @@ func NewController(
 		workqueue:               workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NodeContributions"),
 		recorder:                recorder,
 		publicKey:               publicKey,
+		route53hostedZone:       hostedZone,
+		domainName:              domain,
 	}
 
 	klog.Infoln("Setting up event handlers")
@@ -303,7 +306,7 @@ func (c *Controller) syncHandler(key string) error {
 func (c *Controller) init(nodecontribution *corev1alpha1.NodeContribution) {
 	nodecontributionCopy := nodecontribution.DeepCopy()
 	nodecontributionCopy.Status.Message = ""
-	nodeName := fmt.Sprintf("%s.edge-net.io", nodecontributionCopy.GetName())
+	nodeName := fmt.Sprintf("%s.%s", nodecontributionCopy.GetName(), c.domainName)
 
 	recordType := remoteip.GetRecordType(nodecontributionCopy.Spec.Host)
 	if recordType == "" {
@@ -470,7 +473,7 @@ func (c *Controller) setup(addr, nodeName, recordType string, config *ssh.Client
 	var conn *ssh.Client
 	// connCounter to try establishing a connection for several times
 	connCounter := 0
-	// Start DNS configuration of `edge-net.io`
+	// Start DNS configuration for domain
 	dnsConfiguration <- true
 	// This statement to organize tasks and put a general timeout on
 nodeSetupLoop:
@@ -478,21 +481,16 @@ nodeSetupLoop:
 		select {
 		case <-dnsConfiguration:
 			klog.Infof("DNS configuration started: %s", nodeName)
-			// Use Namecheap API for registration
-			hostRecord := namecheap.DomainDNSHost{
-				Name:    strings.TrimSuffix(nodeName, ".edge-net.io"),
-				Type:    recordType,
-				Address: nodecontributionUpdated.Spec.Host,
-			}
-			updated, _ := node.SetHostname(hostRecord)
+			// Use AWS Route53 for registration
+			updated, _ := node.SetHostnameRoute53(c.route53hostedZone, nodeName, nodecontributionUpdated.Spec.Host, recordType)
 			// If the DNS record cannot be updated, update the status of the node contribution.
 			// However, the setup procedure keeps going on, so, it is not terminated.
 			if !updated {
-				hostnameError := fmt.Sprintf("Warning: Hostname %s or address %s couldn't added", hostRecord.Name, hostRecord.Address)
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, incomplete, hostnameError)
+				recordError := fmt.Sprintf("Warning: Hostname %s or address %s couldn't added", nodeName, nodecontributionUpdated.Spec.Host)
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, incomplete, recordError)
 				nodecontributionUpdated.Status.State = incomplete
-				nodecontributionUpdated.Status.Message = hostnameError
-				klog.Info(hostnameError)
+				nodecontributionUpdated.Status.Message = recordError
+				klog.Info(recordError)
 			} else {
 				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneDNS)
 			}

@@ -35,6 +35,8 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/node/infrastructure"
 	"github.com/savaki/geoip2"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/route53"
 	namecheap "github.com/billputer/go-namecheap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -321,6 +323,32 @@ func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
 		return false, "Unknown"
 	}
 	result, state := infrastructure.SetHostname(client, hostRecord)
+	return result, state
+}
+
+func SetHostnameRoute53(hostedZone, nodeName, address, recordType string) (bool, string) {
+	input := &route53.ChangeResourceRecordSetsInput{
+		ChangeBatch: &route53.ChangeBatch{
+			Changes: []*route53.Change{
+				{
+					Action: aws.String("CREATE"),
+					ResourceRecordSet: &route53.ResourceRecordSet{
+						Name: aws.String(nodeName),
+						ResourceRecords: []*route53.ResourceRecord{
+							{
+								Value: aws.String(address),
+							},
+						},
+						TTL:  aws.Int64(60),
+						Type: aws.String(recordType),
+					},
+				},
+			},
+			Comment: aws.String("Node contribution for EdgeNet"),
+		},
+		HostedZoneId: aws.String(hostedZone),
+	}
+	result, state := infrastructure.AddARecordRoute53(input)
 	return result, state
 }
 

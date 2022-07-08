@@ -47,10 +47,13 @@ examples/*/*.txt
 code-generator
 hack
 
+cmd/dnsrecords
+
 # Ignore OS X metadata files
 ._*
 
 # IDEA
 .idea/
 
+.vscode
 vendor

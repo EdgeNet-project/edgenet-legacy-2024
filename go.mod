@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	antrea.io/antrea v1.5.0
+	github.com/aws/aws-sdk-go v1.44.34
 	github.com/billputer/go-namecheap v0.0.0-20191113012015-80fb801c9a11
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/websocket v1.5.0 // indirect
