@@ -95,7 +95,7 @@ func NewController(
 	rolerequestInformer informers.RoleRequestInformer) *Controller {
 
 	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
-	klog.V(4).Info("Creating event broadcaster")
+	klog.Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartStructuredLogging(0)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
@@ -110,7 +110,7 @@ func NewController(
 		recorder:           recorder,
 	}
 
-	klog.V(4).Infoln("Setting up event handlers")
+	klog.Infoln("Setting up event handlers")
 	// Set up an event handler for when Role Request resources change
 	rolerequestInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueRoleRequest,
@@ -139,22 +139,22 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
-	klog.V(4).Infoln("Starting Role Request controller")
+	klog.Infoln("Starting Role Request controller")
 
-	klog.V(4).Infoln("Waiting for informer caches to sync")
+	klog.Infoln("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh,
 		c.rolerequestsSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
-	klog.V(4).Infoln("Starting workers")
+	klog.Infoln("Starting workers")
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
 
-	klog.V(4).Infoln("Started workers")
+	klog.Infoln("Started workers")
 	<-stopCh
-	klog.V(4).Infoln("Shutting down workers")
+	klog.Infoln("Shutting down workers")
 
 	return nil
 }
@@ -191,7 +191,7 @@ func (c *Controller) processNextWorkItem() bool {
 			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
 		}
 		c.workqueue.Forget(obj)
-		klog.V(4).Infof("Successfully synced '%s'", key)
+		klog.Infof("Successfully synced '%s'", key)
 		return nil
 	}(obj)
 
@@ -262,7 +262,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha1.Ro
 	statusUpdate := func() {
 		if !reflect.DeepEqual(oldStatus, roleRequestCopy.Status) {
 			if _, err := c.edgenetclientset.RegistrationV1alpha1().RoleRequests(roleRequestCopy.GetNamespace()).UpdateStatus(context.TODO(), roleRequestCopy, metav1.UpdateOptions{}); err != nil {
-				klog.V(4).Infoln(err)
+				klog.Infoln(err)
 			}
 		}
 	}
@@ -282,13 +282,13 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha1.Ro
 	permitted := false
 	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
 	if err != nil {
-		klog.V(4).Infoln(err)
+		klog.Infoln(err)
 		c.edgenetclientset.RegistrationV1alpha1().RoleRequests(roleRequestCopy.GetNamespace()).Delete(context.TODO(), roleRequestCopy.GetName(), metav1.DeleteOptions{})
 		return
 	}
 	namespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), roleRequestCopy.GetNamespace(), metav1.GetOptions{})
 	if err != nil {
-		klog.V(4).Infoln(err)
+		klog.Infoln(err)
 		c.edgenetclientset.RegistrationV1alpha1().RoleRequests(roleRequestCopy.GetNamespace()).Delete(context.TODO(), roleRequestCopy.GetName(), metav1.DeleteOptions{})
 		return
 	}
@@ -298,7 +298,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha1.Ro
 	} else {
 		tenant, err := c.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), strings.ToLower(namespaceLabels["edge-net.io/tenant"]), metav1.GetOptions{})
 		if err != nil {
-			klog.V(4).Infoln(err)
+			klog.Infoln(err)
 			c.edgenetclientset.RegistrationV1alpha1().RoleRequests(roleRequestCopy.GetNamespace()).Delete(context.TODO(), roleRequestCopy.GetName(), metav1.DeleteOptions{})
 			return
 		}
@@ -349,7 +349,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha1.Ro
 								c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
 								roleRequestCopy.Status.State = failure
 								roleRequestCopy.Status.Message = messageBindingFailed
-								klog.V(4).Infoln(err)
+								klog.Infoln(err)
 							}
 							break
 						}
@@ -366,7 +366,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha1.Ro
 						c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
 						roleRequestCopy.Status.State = failure
 						roleRequestCopy.Status.Message = messageBindingFailed
-						klog.V(4).Infoln(err)
+						klog.Infoln(err)
 					}
 				}
 			}
