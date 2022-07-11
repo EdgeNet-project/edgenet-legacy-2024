@@ -1,4 +1,4 @@
-# Visual traceroute demonstration on EdgeNet
+# Visual traceroute demonstration and RTT measurement tutorial on EdgeNet
 
 This demo describes whether and how you can launch a visual traceroute on EdgeNet. You need to register with EdgeNet as a first step.
 
@@ -81,7 +81,7 @@ who wants to use EdgeNet can make registration request in a tenant only to becom
 
 ### What you will do
 
-You will use our [web app](https://dashboard.edge-net.org/single-sign-on/register/tenant) to authenticate via Cilogon, an identity and access management platform for science, GitHub, Google, LinkedIn, or Microsoft. Once authenticated, you will land on the user role registration page to create a *registration request* object that is associated with your e-mail address. This will alert the tenant administrators, who will, if all is in order, approve your request. With approval, you can act as a user of the tenant from which you make the request.
+You will use our [web app](https://dashboard.edge-net.org/single-sign-on/register/role) to authenticate via Cilogon, an identity and access management platform for science, GitHub, Google, LinkedIn, or Microsoft. Once authenticated, you will land on the user role registration page to create a *registration request* object that is associated with your e-mail address. This will alert the tenant administrators, who will, if all is in order, approve your request. With approval, you can act as a user of the tenant from which you make the request.
 
 ### Steps
 
@@ -99,11 +99,11 @@ You need to provide the following information regarding your future role:
 
 #### Create your user role registration request
 
-Using our [web app](https://dashboard.edge-net.org/single-sign-on/register/tenant), create a user role request object.
+Using our [web app](https://dashboard.edge-net.org/single-sign-on/register/role), create a user role request object.
 
 #### Wait for approval and receipt of your permanent access credential
 
-At this point, the tenant administrators will, if needed, contact you, and, provided everything is in order, approve your registration request. Upon approval, you will receive an email that confirms that your registration is complete. In the meantime, you can download your user-specific kubeconfig file from the [web app](https://dashboard.edge-net.org/single-sign-on/register/tenant).
+At this point, the tenant administrators will, if needed, contact you, and, provided everything is in order, approve your registration request. Upon approval, you will receive an email that confirms that your registration is complete. In the meantime, you can download your user-specific kubeconfig file from the [web app](https://dashboard.edge-net.org/single-sign-on/register/role).
 
 You can now start using EdgeNet, as a regular user, with your user-specific kubeconfig file.
 
