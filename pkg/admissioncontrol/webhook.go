@@ -318,6 +318,13 @@ func (wh *Webhook) validateTenantRequest(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	if admissionReviewRequest.Request.UserInfo.Username != tenantrequest.Spec.Contact.Email {
+		admissionResponse.Allowed = false
+		admissionResponse.Result = &metav1.Status{
+			Message: "username, which is an email address, and contact email address must be the same",
+		}
+	}
+
 	var admissionReviewResponse admissionv1.AdmissionReview
 	admissionReviewResponse.Response = admissionResponse
 	admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
@@ -373,6 +380,13 @@ func (wh *Webhook) validateClusterRoleRequest(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	if admissionReviewRequest.Request.UserInfo.Username != clusterrolerequest.Spec.Email {
+		admissionResponse.Allowed = false
+		admissionResponse.Result = &metav1.Status{
+			Message: "username, which is an email address, and email address must be the same",
+		}
+	}
+
 	var admissionReviewResponse admissionv1.AdmissionReview
 	admissionReviewResponse.Response = admissionResponse
 	admissionReviewResponse.SetGroupVersionKind(admissionReviewRequest.GroupVersionKind())
@@ -425,6 +439,13 @@ func (wh *Webhook) validateRoleRequest(w http.ResponseWriter, r *http.Request) {
 		admissionResponse.Allowed = false
 		admissionResponse.Result = &metav1.Status{
 			Message: "role request cannot be approved at creation",
+		}
+	}
+
+	if admissionReviewRequest.Request.UserInfo.Username != rolerequest.Spec.Email {
+		admissionResponse.Allowed = false
+		admissionResponse.Result = &metav1.Status{
+			Message: "username, which is an email address, and email address must be the same",
 		}
 	}
 
