@@ -19,6 +19,7 @@ package rolerequest
 import (
 	"context"
 	"fmt"
+	"log"
 	"reflect"
 	"strings"
 	"time"
@@ -319,6 +320,27 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha1.Ro
 			if roleRequestCopy.Status.State == pending && roleRequestCopy.Status.Message == messageRoleNotApproved {
 				return
 			}
+
+			objectName := fmt.Sprintf("edgenet:%s:%s", "rolerequest", roleRequestCopy.GetName())
+			policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"registration.edgenet.io"}, Resources: []string{"rolerequests"}, ResourceNames: []string{roleRequestCopy.GetName()}, Verbs: []string{"get", "update", "patch", "delete"}},
+				{APIGroups: []string{"registration.edgenet.io"}, Resources: []string{fmt.Sprintf("%s/status", "rolerequests")}, ResourceNames: []string{roleRequestCopy.GetName()}, Verbs: []string{"get", "list", "watch"}},
+			}
+			role := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: objectName, OwnerReferences: []metav1.OwnerReference{roleRequestCopy.MakeOwnerReference()}},
+				Rules: policyRule}
+
+			_, err := c.kubeclientset.RbacV1().ClusterRoles().Create(context.TODO(), role, metav1.CreateOptions{})
+			if err != nil {
+				log.Printf("Couldn't create %s role: %s", objectName, err)
+			}
+			roleRef := rbacv1.RoleRef{Kind: "Role", Name: objectName}
+			rbSubjects := []rbacv1.Subject{{Kind: "User", Name: roleRequestCopy.Spec.Email, APIGroup: "rbac.authorization.k8s.io"}}
+			roleBind := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName},
+				Subjects: rbSubjects, RoleRef: roleRef}
+			roleBind.ObjectMeta.OwnerReferences = []metav1.OwnerReference{roleRequestCopy.MakeOwnerReference()}
+			if _, err := c.kubeclientset.RbacV1().ClusterRoleBindings().Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
+				log.Printf("Couldn't create %s  role binding: %s", objectName, err)
+			}
+
 			c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, warningApproved, messageRoleNotApproved)
 			roleRequestCopy.Status.State = pending
 			roleRequestCopy.Status.Message = messageRoleNotApproved

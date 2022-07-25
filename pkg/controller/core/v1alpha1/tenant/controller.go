@@ -271,7 +271,7 @@ func (c *Controller) ProcessTenant(tenantCopy *corev1alpha1.Tenant) {
 		// When a tenant is deleted, the owner references feature drives the namespace to be automatically removed
 		ownerReferences := []metav1.OwnerReference{tenantCopy.MakeOwnerReference()}
 		// Create the cluster roles
-		tenantOwnerClusterRole, err := access.CreateObjectSpecificClusterRole(tenantCopy.GetName(), "core.edgenet.io", "tenants", tenantCopy.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences)
+		tenantOwnerClusterRole, err := access.CreateObjectSpecificClusterRole("core.edgenet.io", "tenants", tenantCopy.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			klog.Infof("Couldn't create owner cluster role %s: %s", tenantCopy.GetName(), err)
 			// TODO: Provide err information at the EVENTS

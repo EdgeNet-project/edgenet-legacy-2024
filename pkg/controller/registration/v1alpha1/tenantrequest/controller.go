@@ -290,6 +290,17 @@ func (c *Controller) processTenantRequest(tenantRequestCopy *registrationv1alpha
 		if tenantRequestCopy.Status.State == pending && tenantRequestCopy.Status.Message == messageNotApproved {
 			return
 		}
+
+		clusterRole, err := access.CreateObjectSpecificClusterRole("registration.edgenet.io", "tenantrequests", tenantRequestCopy.GetName(), "owner", []string{"get", "update", "patch", "delete"}, []metav1.OwnerReference{tenantRequestCopy.MakeOwnerReference()})
+		if err != nil && !errors.IsAlreadyExists(err) {
+			klog.Infof("Couldn't create owner cluster role %s: %s", tenantRequestCopy.GetName(), err)
+			// TODO: Provide err information in the EVENT
+		}
+		if err := access.CreateObjectSpecificClusterRoleBinding(clusterRole, tenantRequestCopy.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{tenantRequestCopy.MakeOwnerReference()}); err != nil {
+			klog.Infof("Couldn't create cluster role binding %s: %s", tenantRequestCopy.GetName(), err)
+			// TODO: Provide err information in the EVENT
+		}
+
 		c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, warningNotApproved, messageNotApproved)
 		tenantRequestCopy.Status.State = pending
 		tenantRequestCopy.Status.Message = messageNotApproved

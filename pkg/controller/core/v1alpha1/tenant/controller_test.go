@@ -153,7 +153,7 @@ func TestCreate(t *testing.T) {
 		tenant, err := edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), tenant.GetName(), metav1.GetOptions{})
 		util.OK(t, err)
 		t.Run("cluster role binding", func(t *testing.T) {
-			_, err := kubeclientset.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner", tenant.GetName(), tenant.GetName()), metav1.GetOptions{})
+			_, err := kubeclientset.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:tenants:%s-owner", tenant.GetName()), metav1.GetOptions{})
 			util.OK(t, err)
 		})
 		t.Run("role binding", func(t *testing.T) {
@@ -162,7 +162,7 @@ func TestCreate(t *testing.T) {
 		})
 	})
 	t.Run("cluster roles", func(t *testing.T) {
-		_, err := kubeclientset.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("edgenet:%s:tenants:%s-owner", tenant.GetName(), tenant.GetName()), metav1.GetOptions{})
+		_, err := kubeclientset.RbacV1().ClusterRoles().Get(context.TODO(), fmt.Sprintf("edgenet:tenants:%s-owner", tenant.GetName()), metav1.GetOptions{})
 		util.OK(t, err)
 	})
 }

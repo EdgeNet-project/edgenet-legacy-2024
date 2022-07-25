@@ -28,71 +28,6 @@ import (
 
 var labels = map[string]string{"edge-net.io/generated": "true"}
 
-// CheckAuthorization returns true if the user is holder of a role
-func CheckAuthorization(namespace, email, resource, resourceName, scope string) bool {
-	authorized := false
-
-	checkRules := func(rule rbacv1.PolicyRule) {
-		for _, ruleResource := range rule.Resources {
-			if ruleResource == resource {
-				for _, verb := range rule.Verbs {
-					if verb == "create" || verb == "update" || verb == "patch" || verb == "delete" || verb == "*" {
-						if len(rule.ResourceNames) > 0 {
-							for _, ruleResourceName := range rule.ResourceNames {
-								if ruleResourceName == resourceName {
-									authorized = true
-								}
-							}
-						} else {
-							authorized = true
-						}
-					}
-				}
-			}
-		}
-	}
-	if scope == "namespace" {
-		roleBindingRaw, _ := Clientset.RbacV1().RoleBindings(namespace).List(context.TODO(), metav1.ListOptions{})
-		for _, roleBindingRow := range roleBindingRaw.Items {
-			for _, subject := range roleBindingRow.Subjects {
-				if subject.Kind == "User" && subject.Name == email {
-					if roleBindingRow.RoleRef.Kind == "Role" {
-						role, err := Clientset.RbacV1().Roles(namespace).Get(context.TODO(), roleBindingRow.RoleRef.Name, metav1.GetOptions{})
-						if err == nil {
-							for _, rule := range role.Rules {
-								checkRules(rule)
-							}
-						}
-					} else if roleBindingRow.RoleRef.Kind == "ClusterRole" {
-						role, err := Clientset.RbacV1().ClusterRoles().Get(context.TODO(), roleBindingRow.RoleRef.Name, metav1.GetOptions{})
-						if err == nil {
-							for _, rule := range role.Rules {
-								checkRules(rule)
-							}
-						}
-					}
-				}
-			}
-		}
-	} else {
-		clusterRoleBindingRaw, _ := Clientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{})
-		for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
-			for _, subject := range clusterRoleBindingRow.Subjects {
-				if subject.Kind == "User" && subject.Name == email {
-					clusterRole, err := Clientset.RbacV1().ClusterRoles().Get(context.TODO(), clusterRoleBindingRow.RoleRef.Name, metav1.GetOptions{})
-					if err == nil {
-						for _, rule := range clusterRole.Rules {
-							checkRules(rule)
-						}
-					}
-				}
-			}
-		}
-
-	}
-	return authorized
-}
-
 // CreateClusterRoles generate a cluster role for tenant owners, admins, and collaborators
 func CreateClusterRoles() error {
 	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"core.edgenet.io"}, Resources: []string{"subnamespaces"}, Verbs: []string{"*"}},
@@ -172,18 +107,14 @@ func CreateClusterRoles() error {
 }
 
 // CreateObjectSpecificClusterRole generates a object specific cluster role to allow the user access
-func CreateObjectSpecificClusterRole(tenant, apiGroup, resource, resourceName, name string, verbs []string, ownerReferences []metav1.OwnerReference) (string, error) {
-	objectName := fmt.Sprintf("edgenet:%s:%s:%s-%s", tenant, resource, resourceName, name)
+func CreateObjectSpecificClusterRole(apiGroup, resource, resourceName, name string, verbs []string, ownerReferences []metav1.OwnerReference) (string, error) {
+	objectName := fmt.Sprintf("edgenet:%s:%s-%s", resource, resourceName, name)
 	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{apiGroup}, Resources: []string{resource}, ResourceNames: []string{resourceName}, Verbs: verbs},
 		{APIGroups: []string{apiGroup}, Resources: []string{fmt.Sprintf("%s/status", resource)}, ResourceNames: []string{resourceName}, Verbs: []string{"get", "list", "watch"}},
 	}
 	role := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: objectName, OwnerReferences: ownerReferences},
 		Rules: policyRule}
-	roleLabels := map[string]string{"edge-net.io/tenant": tenant}
-	for key, value := range labels {
-		roleLabels[key] = value
-	}
-	role.SetLabels(roleLabels)
+
 	_, err := Clientset.RbacV1().ClusterRoles().Create(context.TODO(), role, metav1.CreateOptions{})
 	if err != nil {
 		log.Printf("Couldn't create %s cluster role: %s", objectName, err)
@@ -225,33 +156,6 @@ func CreateObjectSpecificClusterRoleBinding(roleName, email string, roleBindLabe
 		if _, err := Clientset.RbacV1().ClusterRoleBindings().Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
 			log.Printf("Couldn't create %s cluster role binding: %s", roleName, err)
 			return err
-		}
-	}
-	return nil
-}
-
-// CreateObjectSpecificRoleBinding links the cluster role up with the user
-func CreateObjectSpecificRoleBinding(tenant, namespace, roleName, email string) error {
-	roleBindLabels := map[string]string{"edge-net.io/tenant": tenant}
-	for key, value := range labels {
-		roleBindLabels[key] = value
-	}
-
-	if currentRoleBind, err := Clientset.RbacV1().RoleBindings(namespace).Get(context.TODO(), roleName, metav1.GetOptions{}); err == nil {
-		currentRoleBind.Subjects = []rbacv1.Subject{{Kind: "User", Name: email, APIGroup: "rbac.authorization.k8s.io"}}
-		currentRoleBind.SetLabels(roleBindLabels)
-		if _, err = Clientset.RbacV1().RoleBindings(namespace).Update(context.TODO(), currentRoleBind, metav1.UpdateOptions{}); err != nil {
-			log.Printf("Updated: %s role binding updated", roleName)
-			return err
-		}
-	} else {
-		roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: roleName}
-		rbSubjects := []rbacv1.Subject{{Kind: "User", Name: email, APIGroup: "rbac.authorization.k8s.io"}}
-		roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: roleName, Namespace: namespace},
-			Subjects: rbSubjects, RoleRef: roleRef}
-		roleBind.SetLabels(roleBindLabels)
-		if _, err := Clientset.RbacV1().RoleBindings(namespace).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
-			log.Printf("Couldn't create %s role binding: %s", roleName, err)
 		}
 	}
 	return nil

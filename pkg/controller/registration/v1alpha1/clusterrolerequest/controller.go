@@ -286,6 +286,17 @@ func (c *Controller) processClusterRoleRequest(clusterRoleRequestCopy *registrat
 		if clusterRoleRequestCopy.Status.State == pending && clusterRoleRequestCopy.Status.Message == messageRoleNotApproved {
 			return
 		}
+
+		clusterRole, err := access.CreateObjectSpecificClusterRole("registration.edgenet.io", "clusterrolerequests", clusterRoleRequestCopy.GetName(), "owner", []string{"get", "update", "patch", "delete"}, []metav1.OwnerReference{clusterRoleRequestCopy.MakeOwnerReference()})
+		if err != nil && !errors.IsAlreadyExists(err) {
+			klog.Infof("Couldn't create owner cluster role %s: %s", clusterRoleRequestCopy.GetName(), err)
+			// TODO: Provide err information in the EVENT
+		}
+		if err := access.CreateObjectSpecificClusterRoleBinding(clusterRole, clusterRoleRequestCopy.Spec.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{clusterRoleRequestCopy.MakeOwnerReference()}); err != nil {
+			klog.Infof("Couldn't create cluster role binding %s: %s", clusterRoleRequestCopy.GetName(), err)
+			// TODO: Provide err information in the EVENT
+		}
+
 		c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeWarning, warningApproved, messageRoleNotApproved)
 		clusterRoleRequestCopy.Status.State = pending
 		clusterRoleRequestCopy.Status.Message = messageRoleNotApproved

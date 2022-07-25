@@ -85,6 +85,10 @@ type TenantRequestList struct {
 	Items []TenantRequest `json:"items"`
 }
 
+func (tr TenantRequest) MakeOwnerReference() metav1.OwnerReference {
+	return *metav1.NewControllerRef(&tr.ObjectMeta, SchemeGroupVersion.WithKind("TenantRequest"))
+}
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -137,6 +141,10 @@ type ClusterRoleRequestList struct {
 	// ClusterRoleRequestList is a list of ClusterRoleRequest resources. This element contains
 	// ClusterRoleRequest resources.
 	Items []ClusterRoleRequest `json:"items"`
+}
+
+func (crr ClusterRoleRequest) MakeOwnerReference() metav1.OwnerReference {
+	return *metav1.NewControllerRef(&crr.ObjectMeta, SchemeGroupVersion.WithKind("ClusterRoleRequest"))
 }
 
 // +genclient
@@ -197,4 +205,8 @@ type RoleRequestList struct {
 	// RoleRequestList is a list of RoleRequest resources. This element contains
 	// RoleRequest resources.
 	Items []RoleRequest `json:"items"`
+}
+
+func (rr RoleRequest) MakeOwnerReference() metav1.OwnerReference {
+	return *metav1.NewControllerRef(&rr.ObjectMeta, SchemeGroupVersion.WithKind("RoleRequest"))
 }
