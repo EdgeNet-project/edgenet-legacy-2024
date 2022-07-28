@@ -90,7 +90,7 @@ type SelectiveDeploymentStatus struct {
 	// are deployed. 'Success' if all of the workloads are deployed.
 	State string `json:"state"`
 	// There can be multiple display messages for state description.
-	Message []string `json:"message"`
+	Message string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -65,31 +65,23 @@ const controllerAgentName = "selectivedeployment-controller"
 
 // Definitions of the state of the selectivedeployment resource
 const (
-	SuccessSynced         = "Synced"
-	MessageResourceSynced = "Selective Deployment synced successfully"
-	failure               = "Failure"
-	partial               = "Running Partially"
-	success               = "Running"
-	noSchedule            = "NoSchedule"
-	trueStr               = "True"
+	successSynced                 = "Synced"
+	messageResourceSynced         = "Selective Deployment synced successfully"
+	messageWorkloadCreated        = "The desired workload(s) are created successfully"
+	failureCreation               = "Creation Failed"
+	messageWorkloadFailed         = "A workload defined in the spec could not be created"
+	messageExtendedWorkloadFailed = "Workload could not be created: %s %s"
+	messageExtendedWorkloadInUse  = "Workload is owned by another selective deployment: %s %s"
+	failureGeoJSON                = "GeoJSON Error"
+	messageGeoJSONError           = "GeoJSON has a format error"
+	failureFewerNodes             = "Fewer nodes issue"
+	messageFewerNodes             = "The number of nodes found is lower than desired"
+	failure                       = "Failure"
+	partial                       = "Running Partially"
+	success                       = "Running"
+	noSchedule                    = "NoSchedule"
+	trueStr                       = "True"
 )
-
-// Dictionary of status messages
-var statusDict = map[string]string{
-	"sd-success":                   "The selective deployment smoothly created the workload(s)",
-	"deployment-creation-failure":  "Deployment %s could not be created, %s",
-	"deployment-in-use":            "Deployment %s is already under the control of another selective deployment",
-	"daemonset-creation-failure":   "DaemonSet %s could not be created, %s",
-	"daemonset-in-use":             "DaemonSet %s is already under the control of another selective deployment",
-	"statefulset-creation-failure": "StatefulSet %s could not be created, %s",
-	"statefulset-in-use":           "StatefulSet %s is already under the control of another selective deployment",
-	"job-creation-failure":         "Job %s could not be created, %s",
-	"job-in-use":                   "Job %s is already under the control of another selective deployment",
-	"cronjob-creation-failure":     "CronJob %s could not be created, %s",
-	"cronjob-in-use":               "CronJob %s is already under the control of another selective deployment",
-	"nodes-fewer":                  "Fewer nodes issue, %d node(s) found instead of %d for %s%s",
-	"GeoJSON-err":                  "%s%s has a GeoJSON format error",
-}
 
 // Controller is the controller implementation for Selective Deployment resources
 type Controller struct {
@@ -357,7 +349,7 @@ func (c *Controller) syncHandler(key string) error {
 
 	c.applyCriteria(selectivedeployment)
 
-	c.recorder.Event(selectivedeployment, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
+	c.recorder.Event(selectivedeployment, corev1.EventTypeNormal, successSynced, messageResourceSynced)
 	return nil
 }
 
@@ -420,7 +412,8 @@ func (c *Controller) handleObject(obj interface{}) {
 			return
 		}
 
-		c.enqueueSelectiveDeploymentAfter(selectivedeployment, 5*time.Minute)
+		//c.enqueueSelectiveDeploymentAfter(selectivedeployment, 5*time.Minute)
+		c.enqueueSelectiveDeployment(selectivedeployment)
 		return
 	}
 }
@@ -446,19 +439,7 @@ func (c *Controller) recoverSelectiveDeployments(obj interface{}) {
 		for _, selectivedeploymentRow := range selectivedeploymentRaw {
 			if selectivedeploymentRow.Spec.Recovery {
 				if selectivedeploymentRow.Status.State == partial || selectivedeploymentRow.Status.State == failure {
-				selectorLoop:
-					for _, selectorDetails := range selectivedeploymentRow.Spec.Selector {
-						fewerNodes := false
-						for _, message := range selectivedeploymentRow.Status.Message {
-							if strings.Contains(message, "Fewer nodes issue") {
-								fewerNodes = true
-							}
-						}
-						if selectorDetails.Quantity == 0 || (selectorDetails.Quantity != 0 && fewerNodes) {
-							c.enqueueSelectiveDeployment(selectivedeploymentRow)
-							break selectorLoop
-						}
-					}
+					c.enqueueSelectiveDeployment(selectivedeploymentRow)
 				}
 			}
 		}
@@ -470,7 +451,6 @@ func (c *Controller) recoverSelectiveDeployments(obj interface{}) {
 func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 	ownerList := [][]string{}
 	status := false
-
 	setList := func(ctlPodSpec corev1.PodSpec, ownerReferences []metav1.OwnerReference, namespace string) {
 		podSpec := ctlPodSpec
 		if podSpec.Affinity != nil && podSpec.Affinity.NodeAffinity != nil && podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
@@ -549,8 +529,6 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 		}
 	}
 	defer statusUpdate()
-	// Flush the status
-	selectivedeploymentCopy.Status = appsv1alpha1.SelectiveDeploymentStatus{}
 
 	ownerReferences := SetAsOwnerReference(selectivedeploymentCopy)
 	workloadCounter := 0
@@ -559,30 +537,45 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 		workloadCounter += len(selectivedeploymentCopy.Spec.Workloads.Deployment)
 		for _, deployment := range selectivedeploymentCopy.Spec.Workloads.Deployment {
 			if actualDeployment, err := c.deploymentsLister.Deployments(selectivedeploymentCopy.GetNamespace()).Get(deployment.GetName()); errors.IsNotFound(err) {
-				desiredPodTemplate, failureCount := c.configureWorkload(selectivedeploymentCopy, deployment.Spec.Template, deployment.Spec.Template, ownerReferences)
+				desiredPodTemplate, isFailed := c.configureWorkload(selectivedeploymentCopy, deployment.Spec.Template, deployment.Spec.Template, ownerReferences)
 				desiredDeployment := deployment.DeepCopy()
 				desiredDeployment.Spec.Template = desiredPodTemplate
-				failureCounter += failureCount
-				_, err = c.kubeclientset.AppsV1().Deployments(selectivedeploymentCopy.GetNamespace()).Create(context.TODO(), desiredDeployment, metav1.CreateOptions{})
-				if err != nil {
-					selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["deployment-creation-failure"], desiredDeployment.GetName(), err))
+				desiredDeployment.SetOwnerReferences(ownerReferences)
+				if _, err = c.kubeclientset.AppsV1().Deployments(selectivedeploymentCopy.GetNamespace()).Create(context.TODO(), desiredDeployment, metav1.CreateOptions{}); err != nil {
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadFailed, desiredDeployment.GetObjectKind().GroupVersionKind().Kind, desiredDeployment.GetName()))
+					selectivedeploymentCopy.Status.State = failure
+					selectivedeploymentCopy.Status.Message = messageWorkloadFailed
+					klog.Infoln(err)
 					failureCounter++
+				} else {
+					if isFailed {
+						failureCounter++
+					}
 				}
 			} else {
 				if hasOwner := checkOwnerReferences(selectivedeploymentCopy, actualDeployment.GetOwnerReferences()); !hasOwner {
-					desiredPodTemplate, failureCount := c.configureWorkload(selectivedeploymentCopy, actualDeployment.Spec.Template, deployment.Spec.Template, ownerReferences)
+					desiredPodTemplate, isFailed := c.configureWorkload(selectivedeploymentCopy, actualDeployment.Spec.Template, deployment.Spec.Template, ownerReferences)
+					if isFailed {
+						failureCounter++
+					}
 					desiredDeployment := actualDeployment.DeepCopy()
 					desiredDeployment.Spec.Template = desiredPodTemplate
+					desiredDeployment.SetOwnerReferences(ownerReferences)
 					if actualDeployment.Status.Replicas != actualDeployment.Status.AvailableReplicas || !reflect.DeepEqual(actualDeployment.Spec.Template, desiredDeployment.Spec.Template) {
-						failureCounter += failureCount
-						_, err = c.kubeclientset.AppsV1().Deployments(selectivedeploymentCopy.GetNamespace()).Update(context.TODO(), desiredDeployment, metav1.UpdateOptions{})
-						if err != nil {
-							selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["deployment-creation-failure"], deployment.GetName(), err))
-							failureCounter++
+						if _, err = c.kubeclientset.AppsV1().Deployments(selectivedeploymentCopy.GetNamespace()).Update(context.TODO(), desiredDeployment, metav1.UpdateOptions{}); err != nil {
+							c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadFailed, desiredDeployment.GetObjectKind().GroupVersionKind().Kind, desiredDeployment.GetName()))
+							selectivedeploymentCopy.Status.State = failure
+							selectivedeploymentCopy.Status.Message = messageWorkloadFailed
+							klog.Infoln(err)
+							if !isFailed {
+								failureCounter++
+							}
 						}
 					}
 				} else {
-					selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["deployment-in-use"], deployment.GetName()))
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadInUse, deployment.GetObjectKind().GroupVersionKind().Kind, deployment.GetName()))
+					selectivedeploymentCopy.Status.State = failure
+					selectivedeploymentCopy.Status.Message = messageWorkloadFailed
 					failureCounter++
 				}
 			}
@@ -592,30 +585,45 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 		workloadCounter += len(selectivedeploymentCopy.Spec.Workloads.DaemonSet)
 		for _, daemonset := range selectivedeploymentCopy.Spec.Workloads.DaemonSet {
 			if actualDaemonset, err := c.daemonsetsLister.DaemonSets(selectivedeploymentCopy.GetNamespace()).Get(daemonset.GetName()); errors.IsNotFound(err) {
-				desiredPodTemplate, failureCount := c.configureWorkload(selectivedeploymentCopy, daemonset.Spec.Template, daemonset.Spec.Template, ownerReferences)
+				desiredPodTemplate, isFailed := c.configureWorkload(selectivedeploymentCopy, daemonset.Spec.Template, daemonset.Spec.Template, ownerReferences)
 				desiredDaemonset := daemonset.DeepCopy()
 				desiredDaemonset.Spec.Template = desiredPodTemplate
-				failureCounter += failureCount
-				_, err = c.kubeclientset.AppsV1().DaemonSets(selectivedeploymentCopy.GetNamespace()).Create(context.TODO(), desiredDaemonset, metav1.CreateOptions{})
-				if err != nil {
-					selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], daemonset.GetName(), err))
+				desiredDaemonset.SetOwnerReferences(ownerReferences)
+				if _, err = c.kubeclientset.AppsV1().DaemonSets(selectivedeploymentCopy.GetNamespace()).Create(context.TODO(), desiredDaemonset, metav1.CreateOptions{}); err != nil {
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadFailed, desiredDaemonset.GetObjectKind().GroupVersionKind().Kind, desiredDaemonset.GetName()))
+					selectivedeploymentCopy.Status.State = failure
+					selectivedeploymentCopy.Status.Message = messageWorkloadFailed
+					klog.Infoln(err)
 					failureCounter++
+				} else {
+					if isFailed {
+						failureCounter++
+					}
 				}
 			} else {
 				if hasOwner := checkOwnerReferences(selectivedeploymentCopy, actualDaemonset.GetOwnerReferences()); !hasOwner {
-					desiredPodTemplate, failureCount := c.configureWorkload(selectivedeploymentCopy, actualDaemonset.Spec.Template, daemonset.Spec.Template, ownerReferences)
+					desiredPodTemplate, isFailed := c.configureWorkload(selectivedeploymentCopy, actualDaemonset.Spec.Template, daemonset.Spec.Template, ownerReferences)
+					if isFailed {
+						failureCounter++
+					}
 					desiredDaemonset := daemonset.DeepCopy()
 					desiredDaemonset.Spec.Template = desiredPodTemplate
+					desiredDaemonset.SetOwnerReferences(ownerReferences)
 					if actualDaemonset.Status.DesiredNumberScheduled != actualDaemonset.Status.NumberReady || !reflect.DeepEqual(actualDaemonset.Spec.Template, desiredDaemonset.Spec.Template) {
-						failureCounter += failureCount
-						_, err = c.kubeclientset.AppsV1().DaemonSets(selectivedeploymentCopy.GetNamespace()).Update(context.TODO(), desiredDaemonset, metav1.UpdateOptions{})
-						if err != nil {
-							selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-creation-failure"], daemonset.GetName(), err))
-							failureCounter++
+						if _, err = c.kubeclientset.AppsV1().DaemonSets(selectivedeploymentCopy.GetNamespace()).Update(context.TODO(), desiredDaemonset, metav1.UpdateOptions{}); err != nil {
+							c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadFailed, desiredDaemonset.GetObjectKind().GroupVersionKind().Kind, desiredDaemonset.GetName()))
+							selectivedeploymentCopy.Status.State = failure
+							selectivedeploymentCopy.Status.Message = messageWorkloadFailed
+							klog.Infoln(err)
+							if !isFailed {
+								failureCounter++
+							}
 						}
 					}
 				} else {
-					selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["daemonset-in-use"], daemonset.GetName()))
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadInUse, daemonset.GetObjectKind().GroupVersionKind().Kind, daemonset.GetName()))
+					selectivedeploymentCopy.Status.State = failure
+					selectivedeploymentCopy.Status.Message = messageWorkloadFailed
 					failureCounter++
 				}
 			}
@@ -625,30 +633,45 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 		workloadCounter += len(selectivedeploymentCopy.Spec.Workloads.StatefulSet)
 		for _, statefulset := range selectivedeploymentCopy.Spec.Workloads.StatefulSet {
 			if actualStatefulset, err := c.statefulsetsLister.StatefulSets(selectivedeploymentCopy.GetNamespace()).Get(statefulset.GetName()); errors.IsNotFound(err) {
-				desiredPodTemplate, failureCount := c.configureWorkload(selectivedeploymentCopy, statefulset.Spec.Template, statefulset.Spec.Template, ownerReferences)
+				desiredPodTemplate, isFailed := c.configureWorkload(selectivedeploymentCopy, statefulset.Spec.Template, statefulset.Spec.Template, ownerReferences)
 				desiredStatefulset := statefulset.DeepCopy()
 				desiredStatefulset.Spec.Template = desiredPodTemplate
-				failureCounter += failureCount
-				_, err = c.kubeclientset.AppsV1().StatefulSets(selectivedeploymentCopy.GetNamespace()).Create(context.TODO(), desiredStatefulset, metav1.CreateOptions{})
-				if err != nil {
-					selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-creation-failure"], statefulset.GetName(), err))
+				desiredStatefulset.SetOwnerReferences(ownerReferences)
+				if _, err = c.kubeclientset.AppsV1().StatefulSets(selectivedeploymentCopy.GetNamespace()).Create(context.TODO(), desiredStatefulset, metav1.CreateOptions{}); err != nil {
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadFailed, desiredStatefulset.GetObjectKind().GroupVersionKind().Kind, desiredStatefulset.GetName()))
+					selectivedeploymentCopy.Status.State = failure
+					selectivedeploymentCopy.Status.Message = messageWorkloadFailed
+					klog.Infoln(err)
 					failureCounter++
+				} else {
+					if isFailed {
+						failureCounter++
+					}
 				}
 			} else {
 				if hasOwner := checkOwnerReferences(selectivedeploymentCopy, actualStatefulset.GetOwnerReferences()); !hasOwner {
-					desiredPodTemplate, failureCount := c.configureWorkload(selectivedeploymentCopy, actualStatefulset.Spec.Template, statefulset.Spec.Template, ownerReferences)
+					desiredPodTemplate, isFailed := c.configureWorkload(selectivedeploymentCopy, actualStatefulset.Spec.Template, statefulset.Spec.Template, ownerReferences)
+					if isFailed {
+						failureCounter++
+					}
 					desiredStatefulset := statefulset.DeepCopy()
 					desiredStatefulset.Spec.Template = desiredPodTemplate
-					if actualStatefulset.Status.Replicas != actualStatefulset.Status.ReadyReplicas || !reflect.DeepEqual(actualStatefulset.Spec.Template, desiredStatefulset.Spec.Template) {
-						failureCounter += failureCount
-						_, err = c.kubeclientset.AppsV1().StatefulSets(selectivedeploymentCopy.GetNamespace()).Update(context.TODO(), desiredStatefulset, metav1.UpdateOptions{})
-						if err != nil {
-							selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-creation-failure"], statefulset.GetName(), err))
-							failureCounter++
+					desiredStatefulset.SetOwnerReferences(ownerReferences)
+					if !reflect.DeepEqual(actualStatefulset.Spec.Template, desiredStatefulset.Spec.Template) {
+						if _, err = c.kubeclientset.AppsV1().StatefulSets(selectivedeploymentCopy.GetNamespace()).Update(context.TODO(), desiredStatefulset, metav1.UpdateOptions{}); err != nil {
+							c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadFailed, desiredStatefulset.GetObjectKind().GroupVersionKind().Kind, desiredStatefulset.GetName()))
+							selectivedeploymentCopy.Status.State = failure
+							selectivedeploymentCopy.Status.Message = messageWorkloadFailed
+							klog.Infoln(err)
+							if !isFailed {
+								failureCounter++
+							}
 						}
 					}
 				} else {
-					selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["statefulset-in-use"], statefulset.GetName()))
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadInUse, statefulset.GetObjectKind().GroupVersionKind().Kind, statefulset.GetName()))
+					selectivedeploymentCopy.Status.State = failure
+					selectivedeploymentCopy.Status.Message = messageWorkloadFailed
 					failureCounter++
 				}
 			}
@@ -658,30 +681,45 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 		workloadCounter += len(selectivedeploymentCopy.Spec.Workloads.Job)
 		for _, job := range selectivedeploymentCopy.Spec.Workloads.Job {
 			if actualJob, err := c.jobsLister.Jobs(selectivedeploymentCopy.GetNamespace()).Get(job.GetName()); errors.IsNotFound(err) {
-				desiredPodTemplate, failureCount := c.configureWorkload(selectivedeploymentCopy, job.Spec.Template, job.Spec.Template, ownerReferences)
+				desiredPodTemplate, isFailed := c.configureWorkload(selectivedeploymentCopy, job.Spec.Template, job.Spec.Template, ownerReferences)
 				desiredJob := job.DeepCopy()
 				desiredJob.Spec.Template = desiredPodTemplate
-				failureCounter += failureCount
-				_, err = c.kubeclientset.BatchV1().Jobs(selectivedeploymentCopy.GetNamespace()).Create(context.TODO(), desiredJob, metav1.CreateOptions{})
-				if err != nil {
-					selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["job-creation-failure"], job.GetName(), err))
+				desiredJob.SetOwnerReferences(ownerReferences)
+				if _, err = c.kubeclientset.BatchV1().Jobs(selectivedeploymentCopy.GetNamespace()).Create(context.TODO(), desiredJob, metav1.CreateOptions{}); err != nil {
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadFailed, desiredJob.GetObjectKind().GroupVersionKind().Kind, desiredJob.GetName()))
+					selectivedeploymentCopy.Status.State = failure
+					selectivedeploymentCopy.Status.Message = messageWorkloadFailed
+					klog.Infoln(err)
 					failureCounter++
+				} else {
+					if isFailed {
+						failureCounter++
+					}
 				}
 			} else {
 				if hasOwner := checkOwnerReferences(selectivedeploymentCopy, actualJob.GetOwnerReferences()); !hasOwner {
-					desiredPodTemplate, failureCount := c.configureWorkload(selectivedeploymentCopy, actualJob.Spec.Template, job.Spec.Template, ownerReferences)
+					desiredPodTemplate, isFailed := c.configureWorkload(selectivedeploymentCopy, actualJob.Spec.Template, job.Spec.Template, ownerReferences)
+					if isFailed {
+						failureCounter++
+					}
 					desiredJob := job.DeepCopy()
 					desiredJob.Spec.Template = desiredPodTemplate
-					if actualJob.Status.Active == 0 || !reflect.DeepEqual(actualJob.Spec.Template, desiredJob.Spec.Template) {
-						failureCounter += failureCount
-						_, err = c.kubeclientset.BatchV1().Jobs(selectivedeploymentCopy.GetNamespace()).Update(context.TODO(), desiredJob, metav1.UpdateOptions{})
-						if err != nil {
-							selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["job-creation-failure"], job.GetName(), err))
-							failureCounter++
+					desiredJob.SetOwnerReferences(ownerReferences)
+					if !reflect.DeepEqual(actualJob.Spec.Template, desiredJob.Spec.Template) {
+						if _, err = c.kubeclientset.BatchV1().Jobs(selectivedeploymentCopy.GetNamespace()).Update(context.TODO(), desiredJob, metav1.UpdateOptions{}); err != nil {
+							c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadFailed, desiredJob.GetObjectKind().GroupVersionKind().Kind, desiredJob.GetName()))
+							selectivedeploymentCopy.Status.State = failure
+							selectivedeploymentCopy.Status.Message = messageWorkloadFailed
+							klog.Infoln(err)
+							if !isFailed {
+								failureCounter++
+							}
 						}
 					}
 				} else {
-					selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["job-in-use"], job.GetName()))
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadInUse, job.GetObjectKind().GroupVersionKind().Kind, job.GetName()))
+					selectivedeploymentCopy.Status.State = failure
+					selectivedeploymentCopy.Status.Message = messageWorkloadFailed
 					failureCounter++
 				}
 			}
@@ -691,30 +729,45 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 		workloadCounter += len(selectivedeploymentCopy.Spec.Workloads.CronJob)
 		for _, cronjob := range selectivedeploymentCopy.Spec.Workloads.CronJob {
 			if actualCronjob, err := c.cronjobsLister.CronJobs(selectivedeploymentCopy.GetNamespace()).Get(cronjob.GetName()); errors.IsNotFound(err) {
-				desiredPodTemplate, failureCount := c.configureWorkload(selectivedeploymentCopy, cronjob.Spec.JobTemplate.Spec.Template, cronjob.Spec.JobTemplate.Spec.Template, ownerReferences)
+				desiredPodTemplate, isFailed := c.configureWorkload(selectivedeploymentCopy, cronjob.Spec.JobTemplate.Spec.Template, cronjob.Spec.JobTemplate.Spec.Template, ownerReferences)
 				desiredCronjob := cronjob.DeepCopy()
 				desiredCronjob.Spec.JobTemplate.Spec.Template = desiredPodTemplate
-				failureCounter += failureCount
-				_, err = c.kubeclientset.BatchV1beta1().CronJobs(selectivedeploymentCopy.GetNamespace()).Create(context.TODO(), desiredCronjob, metav1.CreateOptions{})
-				if err != nil {
-					selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-creation-failure"], cronjob.GetName(), err))
+				desiredCronjob.SetOwnerReferences(ownerReferences)
+				if _, err = c.kubeclientset.BatchV1beta1().CronJobs(selectivedeploymentCopy.GetNamespace()).Create(context.TODO(), desiredCronjob, metav1.CreateOptions{}); err != nil {
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadFailed, desiredCronjob.GetObjectKind().GroupVersionKind().Kind, desiredCronjob.GetName()))
+					selectivedeploymentCopy.Status.State = failure
+					selectivedeploymentCopy.Status.Message = messageWorkloadFailed
+					klog.Infoln(err)
 					failureCounter++
+				} else {
+					if isFailed {
+						failureCounter++
+					}
 				}
 			} else {
 				if hasOwner := checkOwnerReferences(selectivedeploymentCopy, actualCronjob.GetOwnerReferences()); !hasOwner {
-					desiredPodTemplate, failureCount := c.configureWorkload(selectivedeploymentCopy, actualCronjob.Spec.JobTemplate.Spec.Template, cronjob.Spec.JobTemplate.Spec.Template, ownerReferences)
+					desiredPodTemplate, isFailed := c.configureWorkload(selectivedeploymentCopy, actualCronjob.Spec.JobTemplate.Spec.Template, cronjob.Spec.JobTemplate.Spec.Template, ownerReferences)
+					if isFailed {
+						failureCounter++
+					}
 					desiredCronjob := cronjob.DeepCopy()
 					desiredCronjob.Spec.JobTemplate.Spec.Template = desiredPodTemplate
-					if len(actualCronjob.Status.Active) == 0 || !reflect.DeepEqual(actualCronjob.Spec.JobTemplate.Spec.Template, desiredCronjob.Spec.JobTemplate.Spec.Template) {
-						failureCounter += failureCount
-						_, err = c.kubeclientset.BatchV1beta1().CronJobs(selectivedeploymentCopy.GetNamespace()).Update(context.TODO(), desiredCronjob, metav1.UpdateOptions{})
-						if err != nil {
-							selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-creation-failure"], cronjob.GetName(), err))
-							failureCounter++
+					desiredCronjob.SetOwnerReferences(ownerReferences)
+					if !reflect.DeepEqual(actualCronjob.Spec.JobTemplate.Spec.Template, desiredCronjob.Spec.JobTemplate.Spec.Template) {
+						if _, err = c.kubeclientset.BatchV1beta1().CronJobs(selectivedeploymentCopy.GetNamespace()).Update(context.TODO(), desiredCronjob, metav1.UpdateOptions{}); err != nil {
+							c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadFailed, desiredCronjob.GetObjectKind().GroupVersionKind().Kind, desiredCronjob.GetName()))
+							selectivedeploymentCopy.Status.State = failure
+							selectivedeploymentCopy.Status.Message = messageWorkloadFailed
+							klog.Infoln(err)
+							if !isFailed {
+								failureCounter++
+							}
 						}
 					}
 				} else {
-					selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["cronjob-in-use"], cronjob.GetName()))
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureCreation, fmt.Sprintf(messageExtendedWorkloadInUse, cronjob.GetObjectKind().GroupVersionKind().Kind, cronjob.GetName()))
+					selectivedeploymentCopy.Status.State = failure
+					selectivedeploymentCopy.Status.Message = messageWorkloadFailed
 					failureCounter++
 				}
 			}
@@ -722,8 +775,9 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 	}
 
 	if failureCounter == 0 && workloadCounter != 0 {
+		c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeNormal, success, messageWorkloadCreated)
 		selectivedeploymentCopy.Status.State = success
-		selectivedeploymentCopy.Status.Message = []string{statusDict["sd-success"]}
+		selectivedeploymentCopy.Status.Message = messageWorkloadCreated
 	} else if workloadCounter == failureCounter {
 		selectivedeploymentCopy.Status.State = failure
 	} else {
@@ -733,15 +787,15 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 }
 
 // configureWorkload converges the actual state to the desired state of the workloads defined in selective deployment
-func (c *Controller) configureWorkload(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment, actualPodTemplate, desiredPodTemplate corev1.PodTemplateSpec, ownerReferences []metav1.OwnerReference) (corev1.PodTemplateSpec, int) {
+func (c *Controller) configureWorkload(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment, actualPodTemplate, desiredPodTemplate corev1.PodTemplateSpec, ownerReferences []metav1.OwnerReference) (corev1.PodTemplateSpec, bool) {
 	klog.Infoln("configureWorkload: start")
 
 	actualNodeSelectorTermList := corev1.NodeSelectorTerm{}
 
-	if actualPodTemplate.Spec.Affinity != nil {
+	if actualPodTemplate.Spec.Affinity != nil && len(actualPodTemplate.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) > 0 {
 		actualNodeSelectorTermList = actualPodTemplate.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0]
 	}
-	desiredNodeSelectorTermList, failureCount := c.setFilter(selectivedeploymentCopy, actualNodeSelectorTermList, "addOrUpdate")
+	desiredNodeSelectorTermList, isFailed := c.setFilter(selectivedeploymentCopy, actualNodeSelectorTermList, "addOrUpdate")
 	// Set the new node affinity configuration for the workload and update that
 	nodeAffinity := &corev1.NodeAffinity{
 		RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
@@ -769,171 +823,93 @@ func (c *Controller) configureWorkload(selectivedeploymentCopy *appsv1alpha1.Sel
 		}
 	}
 
-	return desiredPodTemplate, failureCount
+	return desiredPodTemplate, isFailed
 }
 
 // setFilter generates the values in the predefined form and puts those into the node selection fields of the selectivedeployment object
-func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment, existingnodeSelectorTerm corev1.NodeSelectorTerm, event string) ([]corev1.NodeSelectorTerm, int) {
+func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment, actualNodeSelectorTerm corev1.NodeSelectorTerm, event string) ([]corev1.NodeSelectorTerm, bool) {
 	var nodeSelectorTermList []corev1.NodeSelectorTerm
-	failureCounter := 0
+	isFailed := false
+
 	for _, selectorRow := range selectivedeploymentCopy.Spec.Selector {
 		var matchExpression corev1.NodeSelectorRequirement
 		matchExpression.Values = []string{}
 		matchExpression.Operator = selectorRow.Operator
 		matchExpression.Key = "kubernetes.io/hostname"
 		selectorName := strings.ToLower(selectorRow.Name)
-		// Turn the key into the predefined form which is determined at the custom resource definition of selectivedeployment
-		switch selectorName {
-		case "city", "state", "country", "continent":
-			// If the event type is delete then we don't need to run the part below
-			if event != "delete" {
-				labelKeySuffix := ""
-				if selectorName == "state" || selectorName == "country" {
-					labelKeySuffix = "-iso"
-				}
-				labelKey := strings.ToLower(fmt.Sprintf("edge-net.io/%s%s", selectorName, labelKeySuffix))
-				// This gets the node list which includes the EdgeNet geolabels
-				scheduleReq, _ := labels.NewRequirement("spec.unschedulable", selection.NotEquals, []string{"true"})
-				selector := labels.NewSelector()
-				selector = selector.Add(*scheduleReq)
-				nodesRaw, err := c.nodesLister.List(selector)
-				if err != nil {
-					klog.Infoln(err.Error())
-					panic(err.Error())
-				}
-				counter := 0
-				// This loop allows us to process each value defined at the object of selectivedeployment resource
 
-				matchNodeList := []string{}
-				pickedNodeList := []string{}
-			valueLoop:
-				for _, selectorValue := range selectorRow.Value {
-					// The loop to process each node separately
-					for _, nodeRow := range nodesRaw {
-						taintBlock := false
-						for _, taint := range nodeRow.Spec.Taints {
-							if (taint.Key == "node-role.kubernetes.io/master" && taint.Effect == noSchedule) ||
-								(taint.Key == "node.kubernetes.io/unschedulable" && taint.Effect == noSchedule) {
-								taintBlock = true
-							}
-						}
-						conditionBlock := false
-						if node.GetConditionReadyStatus(nodeRow.DeepCopy()) != trueStr {
-							conditionBlock = true
-						}
-
-						if !conditionBlock && !taintBlock {
-							klog.Infoln(existingnodeSelectorTerm.MatchExpressions)
-							if len(existingnodeSelectorTerm.MatchExpressions) > 0 {
-								if exists, _ := util.Contains(existingnodeSelectorTerm.MatchExpressions[0].Values, nodeRow.Labels["kubernetes.io/hostname"]); exists {
-									pickedNodeList = append(pickedNodeList, nodeRow.Labels["kubernetes.io/hostname"])
-									counter++
-									continue
-								}
-							}
-
-							if selectorValue == nodeRow.Labels[labelKey] && selectorRow.Operator == "In" {
-								matchNodeList = append(matchNodeList, nodeRow.Labels["kubernetes.io/hostname"])
-								counter++
-							} else if selectorValue != nodeRow.Labels[labelKey] && selectorRow.Operator == "NotIn" {
-								matchNodeList = append(matchNodeList, nodeRow.Labels["kubernetes.io/hostname"])
-								counter++
-							}
-							if selectorRow.Quantity != 0 && selectorRow.Quantity == counter {
-								break valueLoop
-							}
-						}
-					}
-				}
-				prePickedNodeCount := len(pickedNodeList)
-				for i := 0; i < (counter - prePickedNodeCount); i++ {
-					rand.Seed(time.Now().UnixNano())
-					randomSelect := rand.Intn(len(matchNodeList))
-					pickedNodeList = append(pickedNodeList, matchNodeList[randomSelect])
-					matchNodeList[randomSelect] = matchNodeList[len(matchNodeList)-1]
-					matchNodeList = matchNodeList[:len(matchNodeList)-1]
-				}
-				matchExpression.Values = pickedNodeList
-
-				if selectorRow.Quantity != 0 && selectorRow.Quantity > counter {
-					strLen := 16
-					strSuffix := "..."
-					if len(selectorRow.Value) <= strLen {
-						strLen = len(selectorRow.Value)
-						strSuffix = ""
-					}
-					selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["nodes-fewer"], counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix))
-					failureCounter++
-				}
+		// If the event type is delete then we don't need to run the part below
+		if event != "delete" {
+			labelKeySuffix := ""
+			if selectorName == "state" || selectorName == "country" {
+				labelKeySuffix = "-iso"
 			}
-		case "polygon":
-			// If the event type is delete then we don't need to run the GeoFence functions
-			if event != "delete" {
-				// If the selectivedeployment key is polygon then certain calculations like geofence need to be done
-				// for being had the list of nodes that the pods will be deployed on according to the desired state.
-				// This gets the node list which includes the EdgeNet geolabels
-				scheduleReq, _ := labels.NewRequirement("spec.unschedulable", selection.NotEquals, []string{"true"})
-				selector := labels.NewSelector()
-				selector = selector.Add(*scheduleReq)
-				nodesRaw, err := c.nodesLister.List(selector)
-				if err != nil {
-					klog.Infoln(err.Error())
-					panic(err.Error())
-				}
+			labelKey := strings.ToLower(fmt.Sprintf("edge-net.io/%s%s", selectorName, labelKeySuffix))
+			// This gets the node list which includes the EdgeNet geolabels
+			scheduleReq, _ := labels.NewRequirement("spec.unschedulable", selection.NotEquals, []string{"true"})
+			selector := labels.NewSelector()
+			selector = selector.Add(*scheduleReq)
+			nodesRaw, err := c.nodesLister.List(selector)
+			if err != nil {
+				klog.Infoln(err.Error())
+				panic(err.Error())
+			}
+			// This loop allows us to process each value defined at the object of selectivedeployment resource
 
-				var polygon [][]float64
-				// This loop allows us to process each polygon defined at the object of selectivedeployment resource
-				counter := 0
-				matchNodeList := []string{}
-				pickedNodeList := []string{}
-			polyValueLoop:
-				for _, selectorValue := range selectorRow.Value {
-					err = json.Unmarshal([]byte(selectorValue), &polygon)
-					if err != nil {
-						strLen := 16
-						strSuffix := "..."
-						if len(selectorRow.Value) <= strLen {
-							strLen = len(selectorRow.Value)
-							strSuffix = ""
-						}
-						selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["GeoJSON-err"], selectorValue[0:strLen], strSuffix))
-						failureCounter++
-						continue
+			matchNodeList := []string{}
+			desiredNodeList := []string{}
+			checkActualList := func(nodeName string) bool {
+				if len(actualNodeSelectorTerm.MatchExpressions) > 0 {
+					if exists, _ := util.Contains(actualNodeSelectorTerm.MatchExpressions[0].Values, nodeName); exists {
+						desiredNodeList = append(desiredNodeList, nodeName)
+						return true
 					}
-					// The loop to process each node separately
-					for _, nodeRow := range nodesRaw {
-						taintBlock := false
-						for _, taint := range nodeRow.Spec.Taints {
-							if (taint.Key == "node-role.kubernetes.io/master" && taint.Effect == noSchedule) ||
-								(taint.Key == "node.kubernetes.io/unschedulable" && taint.Effect == noSchedule) {
-								taintBlock = true
-							}
+				}
+				return false
+			}
+			for _, selectorValue := range selectorRow.Value {
+				// The loop to process each node separately
+				for _, nodeRow := range nodesRaw {
+					taintBlock := false
+					for _, taint := range nodeRow.Spec.Taints {
+						if (taint.Key == "node-role.kubernetes.io/master" && taint.Effect == noSchedule) ||
+							(taint.Key == "node.kubernetes.io/unschedulable" && taint.Effect == noSchedule) {
+							taintBlock = true
 						}
-						conditionBlock := false
-						for _, conditionRow := range nodeRow.Status.Conditions {
-							if conditionType := conditionRow.Type; conditionType == "Ready" {
-								if conditionRow.Status != trueStr {
-									conditionBlock = true
-								}
-							}
-						}
+					}
+					conditionBlock := false
+					if node.GetConditionReadyStatus(nodeRow.DeepCopy()) != trueStr {
+						conditionBlock = true
+					}
 
-						if !conditionBlock && !taintBlock {
-							if nodeRow.Labels["edge-net.io/lon"] != "" && nodeRow.Labels["edge-net.io/lat"] != "" {
-								klog.Infoln(existingnodeSelectorTerm.MatchExpressions)
-								if len(existingnodeSelectorTerm.MatchExpressions) > 0 {
-									if exists, _ := util.Contains(existingnodeSelectorTerm.MatchExpressions[0].Values, nodeRow.Labels["kubernetes.io/hostname"]); exists {
-										pickedNodeList = append(pickedNodeList, nodeRow.Labels["kubernetes.io/hostname"])
-										counter++
-										continue
-									}
+					if !conditionBlock && !taintBlock {
+						// Turn the key into the predefined form which is determined at the custom resource definition of selectivedeployment
+						switch selectorName {
+						case "city", "state", "country", "continent":
+							if selectorValue == nodeRow.Labels[labelKey] && selectorRow.Operator == "In" {
+								if !checkActualList(nodeRow.Labels["kubernetes.io/hostname"]) {
+									matchNodeList = append(matchNodeList, nodeRow.Labels["kubernetes.io/hostname"])
 								}
+							} else if selectorValue != nodeRow.Labels[labelKey] && selectorRow.Operator == "NotIn" {
+								if !checkActualList(nodeRow.Labels["kubernetes.io/hostname"]) {
+									matchNodeList = append(matchNodeList, nodeRow.Labels["kubernetes.io/hostname"])
+								}
+							}
+						case "polygon":
+							var polygon [][]float64
+							err = json.Unmarshal([]byte(selectorValue), &polygon)
+							if err != nil {
+								c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureGeoJSON, messageGeoJSONError)
+								selectivedeploymentCopy.Status.State = failure
+								selectivedeploymentCopy.Status.Message = messageGeoJSONError
+								isFailed = true
+								continue
+							}
+							if nodeRow.Labels["edge-net.io/lon"] != "" && nodeRow.Labels["edge-net.io/lat"] != "" {
 								// Because of alphanumeric limitations of Kubernetes on the labels we use "w", "e", "n", and "s" prefixes
 								// at the labels of latitude and longitude. Here is the place those prefixes are dropped away.
-								lonStr := nodeRow.Labels["edge-net.io/lon"]
-								lonStr = string(lonStr[1:])
-								latStr := nodeRow.Labels["edge-net.io/lat"]
-								latStr = string(latStr[1:])
+								lonStr := nodeRow.Labels["edge-net.io/lon"][1:]
+								latStr := nodeRow.Labels["edge-net.io/lat"][1:]
 								if lon, err := strconv.ParseFloat(lonStr, 64); err == nil {
 									if lat, err := strconv.ParseFloat(latStr, 64); err == nil {
 										// boundbox is a rectangle which provides to check whether the point is inside polygon
@@ -941,52 +917,61 @@ func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha1.SelectiveDe
 										boundbox := node.Boundbox(polygon)
 										status := node.GeoFence(boundbox, polygon, lon, lat)
 										if status && selectorRow.Operator == "In" {
-											matchNodeList = append(matchNodeList, nodeRow.Labels["kubernetes.io/hostname"])
-											counter++
+											if !checkActualList(nodeRow.Labels["kubernetes.io/hostname"]) {
+												matchNodeList = append(matchNodeList, nodeRow.Labels["kubernetes.io/hostname"])
+											}
 										} else if !status && selectorRow.Operator == "NotIn" {
-											matchNodeList = append(matchNodeList, nodeRow.Labels["kubernetes.io/hostname"])
-											counter++
+											if !checkActualList(nodeRow.Labels["kubernetes.io/hostname"]) {
+												matchNodeList = append(matchNodeList, nodeRow.Labels["kubernetes.io/hostname"])
+											}
 										}
 									}
 								}
 							}
-							if selectorRow.Quantity != 0 && selectorRow.Quantity == counter {
-								break polyValueLoop
-							}
 						}
 					}
 				}
+			}
 
-				prePickedNodeCount := len(pickedNodeList)
-				for i := 0; i < (counter - prePickedNodeCount); i++ {
-					rand.Seed(time.Now().UnixNano())
-					randomSelect := rand.Intn(len(matchNodeList))
-					pickedNodeList = append(pickedNodeList, matchNodeList[randomSelect])
-					matchNodeList[randomSelect] = matchNodeList[len(matchNodeList)-1]
-					matchNodeList = matchNodeList[:len(matchNodeList)-1]
-				}
-				matchExpression.Values = pickedNodeList
-
-				if selectorRow.Quantity != 0 && selectorRow.Quantity > counter {
-					strLen := 16
-					strSuffix := "..."
-					if len(selectorRow.Value) <= strLen {
-						strLen = len(selectorRow.Value)
-						strSuffix = ""
+			prePickedNodeCount := len(desiredNodeList)
+			if selectorRow.Quantity == 0 {
+				desiredNodeList = append(desiredNodeList, matchNodeList...)
+			} else {
+				if selectorRow.Quantity > prePickedNodeCount {
+					if len(matchNodeList) > 0 {
+						for i := 0; i < (selectorRow.Quantity - prePickedNodeCount); i++ {
+							rand.Seed(time.Now().UnixNano())
+							randomSelect := rand.Intn(len(matchNodeList))
+							desiredNodeList = append(desiredNodeList, matchNodeList[randomSelect])
+							matchNodeList[randomSelect] = matchNodeList[len(matchNodeList)-1]
+							matchNodeList = matchNodeList[:len(matchNodeList)-1]
+							if len(matchNodeList) == 0 {
+								break
+							}
+						}
 					}
-					selectivedeploymentCopy.Status.Message = append(selectivedeploymentCopy.Status.Message, fmt.Sprintf(statusDict["nodes-fewer"], counter, selectorRow.Quantity, selectorRow.Value[0:strLen], strSuffix))
-					failureCounter++
+
+					if selectorRow.Quantity != len(desiredNodeList) {
+						c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, failureFewerNodes, messageFewerNodes)
+						selectivedeploymentCopy.Status.State = failure
+						selectivedeploymentCopy.Status.Message = messageFewerNodes
+						isFailed = true
+					}
+
+				} else {
+					for i := 0; i < (prePickedNodeCount - selectorRow.Quantity); i++ {
+						desiredNodeList = desiredNodeList[:len(desiredNodeList)-1]
+					}
 				}
 			}
-		default:
-			matchExpression.Key = ""
-		}
 
-		var nodeSelectorTerm corev1.NodeSelectorTerm
-		nodeSelectorTerm.MatchExpressions = append(nodeSelectorTerm.MatchExpressions, matchExpression)
-		nodeSelectorTermList = append(nodeSelectorTermList, nodeSelectorTerm)
+			matchExpression.Values = desiredNodeList
+			var nodeSelectorTerm corev1.NodeSelectorTerm
+			nodeSelectorTerm.MatchExpressions = append(nodeSelectorTerm.MatchExpressions, matchExpression)
+			nodeSelectorTermList = append(nodeSelectorTermList, nodeSelectorTerm)
+		}
 	}
-	return nodeSelectorTermList, failureCounter
+	return nodeSelectorTermList, isFailed
 }
 
 // SetAsOwnerReference returns the selectivedeployment as owner
@@ -1004,9 +989,6 @@ func checkOwnerReferences(selectivedeploymentCopy *appsv1alpha1.SelectiveDeploym
 	underControl := false
 	for _, reference := range ownerReferences {
 		if reference.Kind == "SelectiveDeployment" && reference.UID != selectivedeploymentCopy.GetUID() {
-			klog.Infoln("Compare Compare Compare")
-			klog.Infoln(reference.UID)
-			klog.Infoln(selectivedeploymentCopy.GetUID())
 			underControl = true
 		}
 	}

@@ -387,11 +387,13 @@ func TestStartController(t *testing.T) {
 		"edge-net.io/lat":         "n48.86",
 	}
 	kubeclientset.CoreV1().Nodes().Create(context.TODO(), nodeParis.DeepCopy(), metav1.CreateOptions{})
+	time.Sleep(time.Millisecond * 250)
 	kubeclientset.AppsV1().Deployments("default").Create(context.TODO(), g.deploymentObj.DeepCopy(), metav1.CreateOptions{})
 	kubeclientset.AppsV1().DaemonSets("default").Create(context.TODO(), g.daemonsetObj.DeepCopy(), metav1.CreateOptions{})
 	kubeclientset.AppsV1().StatefulSets("default").Create(context.TODO(), g.statefulsetObj.DeepCopy(), metav1.CreateOptions{})
 	kubeclientset.BatchV1().Jobs("default").Create(context.TODO(), g.jobObj.DeepCopy(), metav1.CreateOptions{})
 	kubeclientset.BatchV1beta1().CronJobs("default").Create(context.TODO(), g.cronjobObj.DeepCopy(), metav1.CreateOptions{})
+	time.Sleep(time.Millisecond * 250)
 	// Invoking the create function
 	sdObj := g.sdObj.DeepCopy()
 	uid := types.UID(uuid.New().String())
@@ -402,27 +404,6 @@ func TestStartController(t *testing.T) {
 	util.OK(t, err)
 	util.Equals(t, success, sdCopy.Status.State)
 	util.Equals(t, "5/5", sdCopy.Status.Ready)
-
-	kubeclientset.AppsV1().Deployments("default").Delete(context.TODO(), g.deploymentObj.GetName(), metav1.DeleteOptions{})
-	kubeclientset.AppsV1().DaemonSets("default").Delete(context.TODO(), g.daemonsetObj.GetName(), metav1.DeleteOptions{})
-	kubeclientset.AppsV1().StatefulSets("default").Delete(context.TODO(), g.statefulsetObj.GetName(), metav1.DeleteOptions{})
-	kubeclientset.BatchV1().Jobs("default").Delete(context.TODO(), g.jobObj.GetName(), metav1.DeleteOptions{})
-	kubeclientset.BatchV1beta1().CronJobs("default").Delete(context.TODO(), g.cronjobObj.GetName(), metav1.DeleteOptions{})
-	time.Sleep(time.Millisecond * 500)
-	sdCopy, err = edgenetclientset.AppsV1alpha1().SelectiveDeployments("default").Get(context.TODO(), sdObj.GetName(), metav1.GetOptions{})
-	util.OK(t, err)
-	util.Equals(t, success, sdCopy.Status.State)
-	util.Equals(t, "5/5", sdCopy.Status.Ready)
-	_, err = kubeclientset.AppsV1().Deployments("default").Get(context.TODO(), g.deploymentObj.GetName(), metav1.GetOptions{})
-	util.OK(t, err)
-	_, err = kubeclientset.AppsV1().DaemonSets("default").Get(context.TODO(), g.daemonsetObj.GetName(), metav1.GetOptions{})
-	util.OK(t, err)
-	_, err = kubeclientset.AppsV1().StatefulSets("default").Get(context.TODO(), g.statefulsetObj.GetName(), metav1.GetOptions{})
-	util.OK(t, err)
-	_, err = kubeclientset.BatchV1().Jobs("default").Get(context.TODO(), g.jobObj.GetName(), metav1.GetOptions{})
-	util.OK(t, err)
-	_, err = kubeclientset.BatchV1beta1().CronJobs("default").Get(context.TODO(), g.cronjobObj.GetName(), metav1.GetOptions{})
-	util.OK(t, err)
 
 	useu := g.selector
 	useu.Value = []string{"US", "FR"}
@@ -622,7 +603,7 @@ func TestCreate(t *testing.T) {
 	t.Run("status", func(t *testing.T) {
 		util.OK(t, err)
 		util.Equals(t, success, sdCopy.Status.State)
-		util.Equals(t, statusDict["sd-success"], sdCopy.Status.Message[0])
+		util.Equals(t, messageWorkloadCreated, sdCopy.Status.Message)
 		util.Equals(t, "10/10", sdCopy.Status.Ready)
 	})
 	edgenetclientset.AppsV1alpha1().SelectiveDeployments("create").Create(context.TODO(), sdRepeatedObj.DeepCopy(), metav1.CreateOptions{})
@@ -668,35 +649,35 @@ func TestCreate(t *testing.T) {
 			if tc.kind == "Deployment" {
 				deploymentCopy, err := kubeclientset.AppsV1().Deployments("create").Get(context.TODO(), tc.name, metav1.GetOptions{})
 				util.OK(t, err)
-				if deploymentCopy.Spec.Template.Spec.Affinity != nil {
+				if deploymentCopy.Spec.Template.Spec.Affinity != nil && len(deploymentCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) > 0 {
 					util.Equals(t, 1, len(deploymentCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values))
 					affinityValue = deploymentCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
 				}
 			} else if tc.kind == "DaemonSet" {
 				daemonsetCopy, err := kubeclientset.AppsV1().DaemonSets("create").Get(context.TODO(), tc.name, metav1.GetOptions{})
 				util.OK(t, err)
-				if daemonsetCopy.Spec.Template.Spec.Affinity != nil {
+				if daemonsetCopy.Spec.Template.Spec.Affinity != nil && len(daemonsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) > 0 {
 					util.Equals(t, 1, len(daemonsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values))
 					affinityValue = daemonsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
 				}
 			} else if tc.kind == "StatefulSet" {
 				statefulsetCopy, err := kubeclientset.AppsV1().StatefulSets("create").Get(context.TODO(), tc.name, metav1.GetOptions{})
 				util.OK(t, err)
-				if statefulsetCopy.Spec.Template.Spec.Affinity != nil {
+				if statefulsetCopy.Spec.Template.Spec.Affinity != nil && len(statefulsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) > 0 {
 					util.Equals(t, 1, len(statefulsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values))
 					affinityValue = statefulsetCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
 				}
 			} else if tc.kind == "Job" {
 				jobCopy, err := kubeclientset.BatchV1().Jobs("create").Get(context.TODO(), tc.name, metav1.GetOptions{})
 				util.OK(t, err)
-				if jobCopy.Spec.Template.Spec.Affinity != nil {
+				if jobCopy.Spec.Template.Spec.Affinity != nil && len(jobCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) > 0 {
 					util.Equals(t, 1, len(jobCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values))
 					affinityValue = jobCopy.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
 				}
 			} else if tc.kind == "CronJob" {
 				jobCopy, err := kubeclientset.BatchV1beta1().CronJobs("create").Get(context.TODO(), tc.name, metav1.GetOptions{})
 				util.OK(t, err)
-				if jobCopy.Spec.JobTemplate.Spec.Template.Spec.Affinity != nil {
+				if jobCopy.Spec.JobTemplate.Spec.Template.Spec.Affinity != nil && len(jobCopy.Spec.JobTemplate.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) > 0 {
 					util.Equals(t, 1, len(jobCopy.Spec.JobTemplate.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values))
 					affinityValue = jobCopy.Spec.JobTemplate.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0]
 				}
@@ -761,7 +742,7 @@ func TestUpdate(t *testing.T) {
 	sdCopy, err := edgenetclientset.AppsV1alpha1().SelectiveDeployments("update").Get(context.TODO(), sdObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, success, sdCopy.Status.State)
-	util.Equals(t, statusDict["sd-success"], sdCopy.Status.Message[0])
+	util.Equals(t, messageWorkloadCreated, sdCopy.Status.Message)
 	util.Equals(t, "5/5", sdCopy.Status.Ready)
 
 	deploymentCopy, err := kubeclientset.AppsV1().Deployments("update").Get(context.TODO(), sdObj.Spec.Workloads.Deployment[0].GetName(), metav1.GetOptions{})
@@ -998,7 +979,7 @@ func TestGetByNode(t *testing.T) {
 	sdCopy, err := edgenetclientset.AppsV1alpha1().SelectiveDeployments("getbynode").Get(context.TODO(), sdObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, success, sdCopy.Status.State)
-	util.Equals(t, statusDict["sd-success"], sdCopy.Status.Message[0])
+	util.Equals(t, messageWorkloadCreated, sdCopy.Status.Message)
 	util.Equals(t, "5/5", sdCopy.Status.Ready)
 
 	ownerList, status := controller.getByNode(nodeParis.GetName())
