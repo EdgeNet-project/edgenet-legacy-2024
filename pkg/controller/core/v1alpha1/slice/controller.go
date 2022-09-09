@@ -411,18 +411,26 @@ func (c *Controller) syncWithSliceClaim(sliceCopy *corev1alpha1.Slice, sliceClai
 
 func (c *Controller) provisionSlice(sliceCopy *corev1alpha1.Slice) {
 	if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/pre-reservation=%s", sliceCopy.GetName())}); err == nil {
+		isSliceIsolated := true
 		for _, nodeRow := range nodeRaw.Items {
 			c.patchNode("slice", sliceCopy.GetName(), nodeRow.GetName())
-			if podRaw, err := c.kubeclientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeRow.GetName())}); err == nil {
+			if podRaw, err := c.kubeclientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.namespace!=kube-system,metadata.namespace!=edgenet,spec.nodeName=%s", nodeRow.GetName())}); err == nil {
 				for _, podRow := range podRaw.Items {
-					var zero int64 = 0
-					c.kubeclientset.CoreV1().Pods(podRow.GetNamespace()).Delete(context.TODO(), podRow.GetName(), metav1.DeleteOptions{GracePeriodSeconds: &zero})
+					isSliceIsolated = false
+					var gracePeriod int64 = 60
+					c.kubeclientset.CoreV1().Pods(podRow.GetNamespace()).Delete(context.TODO(), podRow.GetName(), metav1.DeleteOptions{GracePeriodSeconds: &gracePeriod})
 				}
 			}
 		}
-		// c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messagePr)
-		sliceCopy.Status.State = provisioned
-		// sliceCopy.Status.Message = messageReserved
+
+		if isSliceIsolated && len(nodeRaw.Items) != 0 {
+			// TO-DO: A Slice agent to ensure no multitenant workload runs
+			// c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messagePr)
+			sliceCopy.Status.State = provisioned
+			// sliceCopy.Status.Message = messageReserved
+		} else {
+			c.enqueueSliceAfter(sliceCopy, 60*time.Second)
+		}
 	}
 }
 
