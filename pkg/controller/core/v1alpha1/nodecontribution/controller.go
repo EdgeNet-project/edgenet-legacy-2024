@@ -536,6 +536,8 @@ nodeSetupLoop:
 					return
 				}
 				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneKubeadm)
+				// TO-DO: Provide a better mechanism here
+				time.Sleep(30 * time.Second)
 				_, err = c.nodesLister.Get(nodeName)
 				if err == nil {
 					nodePatch <- true
