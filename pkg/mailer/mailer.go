@@ -99,21 +99,19 @@ func (c *Content) Send(purpose string) error {
 	if len(c.Recipient) == 0 {
 		c.Recipient = append(c.Recipient, smtpInfo.To)
 	}
-	for _, to := range c.Recipient {
-		email := mail.NewMSG()
-		email.SetFrom(smtpInfo.From).
-			AddTo(to).
-			SetSubject(c.Subject)
-		email.SetBodyData(mail.TextHTML, htmlBody.Bytes())
-		if email.Error != nil {
-			klog.Infoln(email.Error)
-		}
-		err = email.Send(smtpClient)
-		if err != nil {
-			klog.Infoln(err)
-		} else {
-			klog.Infoln(fmt.Sprintf("Email sent to %s: %s", to, c.Subject))
-		}
+	email := mail.NewMSG()
+	email.SetFrom(smtpInfo.From).
+		AddTo(c.Recipient...).
+		SetSubject(c.Subject)
+	email.SetBodyData(mail.TextHTML, htmlBody.Bytes())
+	if email.Error != nil {
+		klog.Infoln(email.Error)
+	}
+	err = email.Send(smtpClient)
+	if err != nil {
+		klog.Infoln(err)
+	} else {
+		klog.Infoln(fmt.Sprintf("Email sent to %s: %s", c.Recipient, c.Subject))
 	}
 	return err
 }
