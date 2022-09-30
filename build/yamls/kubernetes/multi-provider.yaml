@@ -271,10 +271,10 @@ spec:
           readOnly: true
         - name: ssh
           readOnly: true
-          mountPath: /root/.ssh/
+          mountPath: /edgenet/.ssh/
         - name: configs
           readOnly: true
-          mountPath: /root/configs/
+          mountPath: /edgenet/configs/
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:

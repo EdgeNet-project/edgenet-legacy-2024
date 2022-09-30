@@ -109,7 +109,7 @@ spec:
         volumeMounts:
         - name: configs
           readOnly: true
-          mountPath: /root/configs/
+          mountPath: /edgenet/configs/
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""

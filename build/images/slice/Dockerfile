@@ -1,22 +1,20 @@
-FROM golang:1.18.3-alpine AS builder
+FROM golang:1.18.3-alpine AS build
 
-RUN apk update && \
-    apk add git build-base && \
-    rm -rf /var/cache/apk/* && \
-    mkdir -p "$GOPATH/src/github.com/EdgeNet-project/edgenet"
+WORKDIR /edgenet
 
-ADD . "$GOPATH/src/github.com/EdgeNet-project/edgenet"
+COPY go.mod .
+RUN go mod download
 
-RUN cd "$GOPATH/src/github.com/EdgeNet-project/edgenet" && \
-    CGO_ENABLED=0 go build -a -o /go/bin/slice ./cmd/slice/
+COPY . ./
+ENV CGO_ENABLED=0
+RUN go build -o slice ./cmd/slice/
 
+FROM alpine:3.16.2
 
+RUN adduser -D -u 8118 edgenet
+USER edgenet:edgenet
 
-FROM alpine:latest
-
-WORKDIR /root/cmd/slice/
-
-COPY ./assets/templates/ /root/assets/templates/
-COPY --from=builder /go/bin/slice .
+WORKDIR /edgenet/slice/
+COPY --from=build --chown=edgenet:edgenet /edgenet/slice ./
 
 CMD ["./slice"]

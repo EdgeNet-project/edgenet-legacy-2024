@@ -1113,10 +1113,10 @@ spec:
           readOnly: true
         - name: ssh
           readOnly: true
-          mountPath: /root/.ssh/
+          mountPath: /edgenet/.ssh/
         - name: configs
           readOnly: true
-          mountPath: /root/configs/
+          mountPath: /edgenet/configs/
       hostNetwork: true
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -2447,7 +2447,7 @@ spec:
         volumeMounts:
         - name: configs
           readOnly: true
-          mountPath: /root/configs/
+          mountPath: /edgenet/configs/
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""

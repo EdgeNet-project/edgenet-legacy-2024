@@ -9,7 +9,7 @@ services:
       dockerfile: ./build/images/nodelabeler/Dockerfile
     image: nodelabeler:v1.0.0
     volumes:
-      - ~/.kube/:/root/.kube/
+      - ~/.kube/:/edgenet/.kube/
   selectivedeployment:
     container_name: selectivedeployment
     restart: always
@@ -18,7 +18,7 @@ services:
       dockerfile: ./build/images/selectivedeployment/Dockerfile
     image: selectivedeployment:v1.0.0
     volumes:
-      - ~/.kube/:/root/.kube/
+      - ~/.kube/:/edgenet/.kube/
   tenant:
     container_name: tenant
     restart: always
@@ -27,7 +27,7 @@ services:
       dockerfile: ./build/images/tenant/Dockerfile
     image: tenant:v1.0.0
     volumes:
-      - ~/.kube/:/root/.kube/
+      - ~/.kube/:/edgenet/.kube/
   tenantrequest:
     container_name: tenantrequest
     restart: always
@@ -36,7 +36,7 @@ services:
       dockerfile: ./build/images/tenantrequest/Dockerfile
     image: tenantrequest:v1.0.0
     volumes:
-      - ~/.kube/:/root/.kube/
+      - ~/.kube/:/edgenet/.kube/
   rolerequest:
     container_name: rolerequest
     restart: always
@@ -45,7 +45,7 @@ services:
       dockerfile: ./build/images/rolerequest/Dockerfile
     image: rolerequest:v1.0.0
     volumes:
-      - ~/.kube/:/root/.kube/
+      - ~/.kube/:/edgenet/.kube/
   nodecontribution:
     container_name: nodecontribution
     restart: always
@@ -55,8 +55,8 @@ services:
     image: nodecontribution:v1.0.0
     volumes:
       - /etc/kubernetes/:/etc/kubernetes/
-      - ~/.kube/:/root/.kube/
-      - ~/.ssh/:/root/.ssh/
+      - ~/.kube/:/edgenet/.kube/
+      - ~/.ssh/:/edgenet/.ssh/
   tenantresourcequota:
     container_name: tenantresourcequota
     restart: always
@@ -65,7 +65,7 @@ services:
       dockerfile: ./build/images/tenantresourcequota/Dockerfile
     image: tenantresourcequota:v1.0.0
     volumes:
-      - ~/.kube/:/root/.kube/
+      - ~/.kube/:/edgenet/.kube/
   subnamespace:
     container_name: subnamespace
     restart: always
@@ -74,7 +74,7 @@ services:
       dockerfile: ./build/images/subnamespace/Dockerfile
     image: subnamespace:v1.0.0
     volumes:
-      - ~/.kube/:/root/.kube/
+      - ~/.kube/:/edgenet/.kube/
   vpnpeer:
     container_name: vpnpeer
     restart: always
@@ -83,7 +83,7 @@ services:
       dockerfile: ./build/images/vpnpeer/Dockerfile
     image: vpnpeer:v1.0.0
     volumes:
-      - ~/.kube/:/root/.kube/
+      - ~/.kube/:/edgenet/.kube/
     network_mode: host
     cap_add:
       - NET_ADMIN
@@ -95,8 +95,8 @@ services:
       dockerfile: ./build/images/notifier/Dockerfile
     image: notifier:v1.0.0
     volumes:
-      - ~/.kube/:/root/.kube/
-      - ../assets/templates/:/root/assets/templates/
+      - ~/.kube/:/edgenet/.kube/
+      - ../assets/templates/:/edgenet/assets/templates/
   clusterrolerequest:
     container_name: clusterrolerequest
     restart: always
@@ -105,7 +105,7 @@ services:
       dockerfile: ./build/images/clusterrolerequest/Dockerfile
     image: clusterrolerequest:v1.0.0
     volumes:
-      - ~/.kube/:/root/.kube/
+      - ~/.kube/:/edgenet/.kube/
   sliceclaim:
     container_name: sliceclaim
     restart: always
@@ -114,7 +114,7 @@ services:
       dockerfile: ./build/images/sliceclaim/Dockerfile
     image: sliceclaim:v1.0.0
     volumes:
-      - ~/.kube/:/root/.kube/
+      - ~/.kube/:/edgenet/.kube/
   slice:
     container_name: slice
     restart: always
@@ -123,7 +123,7 @@ services:
       dockerfile: ./build/images/slice/Dockerfile
     image: slice:v1.0.0
     volumes:
-      - ~/.kube/:/root/.kube/
+      - ~/.kube/:/edgenet/.kube/
   admissioncontrol:
     container_name: admissioncontrol
     restart: always
