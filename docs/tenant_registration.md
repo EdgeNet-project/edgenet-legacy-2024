@@ -18,13 +18,18 @@ For those of you familiar with PlanetLab, a tenant is similar to a *site* and a 
 
 ## Technologies you will use
 
-You will use [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview/), the [Kubernetes](https://kubernetes.io/) command-line interface, in conjunction with e-mail.
+You will use [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview/), the [Kubernetes](https://kubernetes.io/) command-line interface.
 
-Or, you can register via [the console](https://console.edge-net.org/signup) with an attractive user interface design to facilitate the process. If you take yourself to the console, you no longer need to follow these instructions as it provides you a classical registration procedure.
+In order to obtain your user-specific kubeconfig file, you need to take yourself to the [landing application](https://landing.edge-net.org). 
+This application also provides a user interface design to facilitate the process.
+In this case, you no longer need to follow these instructions as it provides you a classical registration procedure.
 
 ## What you will do
 
-You will use a public kubeconfig file provided by EdgeNet to create a *registration request* object that is associated with your e-mail address. Object creation generates an e-mail to you, containing a one-time code. You will authenticate yourself by using that code to patch the object. This will alert EdgeNet's central administrators, who will, if all is in order, approve your request. With approval, you receive via e-mail a kubeconfig file that is specific to you and that allows you to act as both the local owner and a user of your tenant.
+You will authenticate yourself through the landing application to obtain your kubeconfig file from the landing application.
+Using this kubeconfig file, you will create a *tenant request* object that is associated with your e-mail address. 
+This will alert the central administrators of EdgeNet, who will, if all is in order, approve your request. 
+With approval, your tenant is prepared so as to allow you to act as both the local owner and a user of your tenant.
 
 ## Steps
 
@@ -32,13 +37,13 @@ You will use a public kubeconfig file provided by EdgeNet to create a *registrat
 
 If you do not already have ``kubectl``, you will need to install it on your system. Follow the [Kubernetes documentation](https://kubernetes.io/docs/tasks/tools/install-kubectl/) for this.
 
-### Obtain a temporary access credential
+### Obtain your access credential
 
-An EdgeNet tenant request is a Kubernetes object, and to manipulate objects on a Kubernetes system you need a kubeconfig file. EdgeNet provides a public kubeconfig file that anyone can use for the prupose of creating tenant requests.
+An EdgeNet tenant request is a Kubernetes object, and to manipulate objects on a Kubernetes system you need a kubeconfig file.
 
-This public kubeconfig file is available here: [https://edge-net.org/downloads/config/public.cfg](https://edge-net.org/downloads/config/public.cfg). In what follows, we will assume that it is saved in your working directory on your system as ``./public.cfg``.
+You can fetch your kubeconfig file here: [https://landing.edge-net.org](https://landing.edge-net.org). In what follows, we will assume that it is saved in your working directory on your system as ``./edgenet.cfg``.
 
-The public file does not allow any actions beyond the creation of a tenant request and the use of the one-time code to confirm the request. Once the request goes through, you will be provided with another kubeconfig file that is specific to you and that will allow you to carry out adminstrative actions having to do with your tenant, as well as to use EdgeNet as an ordinary user.
+Default permissions do not allow any actions beyond the creation of a tenant/role/cluster role request. Once the request goes through, you can start using EdgeNet as the local owner and a user of your tenant.
 
 ### Prepare a description of your tenant
 
@@ -54,17 +59,18 @@ The [``.yaml`` format](https://kubernetes.io/docs/concepts/overview/working-with
   - a **region**, or state name (not mandatory)
   - a **country** name
 - the **contact person** who is the responsible for this tenant; this is the tenant's first administrator, who is typically yourself; the information provided for this person consists of:
-  - a **username** that will be used by the EdgeNet system; it must follow [Kubernetes' rules for names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/); note that usernames need only be distinct within a tenant
   - a **first name** (human readable)
   - a **last name** (human readable)
   - an **e-mail address**, which should be an institutional e-mail address
   - a **phone number**, which should be in quotation marks, start with the country code using the plus notation, and not contain any spaces or other formatting
+- the **cluster network policy** that will be used to isolate your pod network from other tenants, which is a boolean
+- the **resource allocation** that will be used to assign an overall quota, called tenant resource quota, that encompasses all tenant's namespaces; resources here must be compatible with [Kubernetes resource types](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#resource-types)
 
 In what follows, we will assume that this file is saved in your working directory on your system as ``./tenantrequest.yaml``.
 
 Example:
 ```yaml
-apiVersion: registration.edgenet.io/v1alpha
+apiVersion: registration.edgenet.io/v1alpha1
 kind: TenantRequest
 metadata:
   name: lip6-lab
@@ -79,11 +85,14 @@ spec:
     region: Île-de-France
     country: France
   contact:
-    username: timurfriedman
     firstname: Timur
     lastname: Friedman
     email: timur.friedman@sorbonne-universite.fr
     phone: "+33123456789"
+  clusternetworkpolicy: true
+  resourceallocation:
+    cpu: "12000m"
+    memory: "12Gi"
 ```
 
 ### Create your tenant request
@@ -91,25 +100,11 @@ spec:
 Using ``kubectl``, create a tenant request object:
 
 ```
-kubectl create -f ./tenantrequest.yaml --kubeconfig ./public.cfg
+kubectl create -f ./tenantrequest.yaml --kubeconfig ./edgenet.cfg
 ```
 
-This will cause an e-mail containing a one-time code to be sent to the address that you specified.
+### Wait for approval and enjoy your tenant
 
-### Authenticate your request using a one-time code
-
-The e-mail that you receive will contain a ``kubectl`` command that you can copy and paste onto your command line, editing only the path for the public kubeconfig file on your local system, if needed.
-
-In the example here, the one-time code is ``bsv10kgeyo7pmazwpr``:
-
-```
-kubectl patch emailverification bsv10kgeyo7pmazwpr --type='json' -p='[{"op": "replace", "path": "/spec/verified", "value": true}]' --kubeconfig ./public.cfg
-```
-
-After you have done this, the EdgeNet system sends a notification e-mail to EdgeNet's central administrators, informing them of your registration request.
-
-### Wait for approval and receipt of your permanent access credential
-
-At this point, the EdgeNet central administrators will, if needed, contact you, and, provided everything is in order, approve your registration request. Upon approval, you will receive two emails. The first one confirms that your registration is complete, while the second one contains your user information and user-specific kubeconfig file.
+At this point, the EdgeNet central administrators will, if needed, contact you, and, provided everything is in order, approve your role request. Upon approval, you will receive an email that confirms that your registration is complete and contains your tenant and user information.
 
 You can now start using EdgeNet, as both administrator of your local tenant and as a regular user, with your user-specific kubeconfig file.
