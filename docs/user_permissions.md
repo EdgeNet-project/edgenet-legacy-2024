@@ -72,5 +72,5 @@ The admin role grants users almost the same privileges that the tenant owner hol
 Using ``kubectl``, create a role binding object:
 
 ```
-kubectl create -f ./role_binding.yaml --kubeconfig ./edgenet-kubeconfig.cfg
+kubectl create -f ./role_binding.yaml --kubeconfig ./edgenet.cfg
 ```

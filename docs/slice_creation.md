@@ -72,7 +72,7 @@ spec:
 Using ``kubectl``, create a slice claim object:
 
 ```
-kubectl create -f ./sliceclaim.yaml --kubeconfig ./edgenet-kubeconfig.cfg
+kubectl create -f ./sliceclaim.yaml --kubeconfig ./edgenet.cfg
 ```
 ### Bind your slice to a subnamespace
 

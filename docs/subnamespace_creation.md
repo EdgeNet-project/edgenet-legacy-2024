@@ -116,5 +116,5 @@ spec:
 Using ``kubectl``, create a subnamespace object:
 
 ```
-kubectl create -f ./subnamespace.yaml --kubeconfig ./edgenet-kubeconfig.cfg
+kubectl create -f ./subnamespace.yaml --kubeconfig ./edgenet.cfg
 ```
