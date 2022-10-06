@@ -19,7 +19,6 @@ package clusterrolerequest
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
@@ -48,21 +47,24 @@ const controllerAgentName = "clusterrolerequest-controller"
 
 // Definitions of the state of the clusterrolerequest resource
 const (
-	successSynced          = "Synced"
-	messageResourceSynced  = "Cluster Role Request synced successfully"
-	successFound           = "Found"
-	messageRoleFound       = "Requested Role / Cluster Role found successfully"
-	failureFound           = "Not Found"
-	messageRoleNotFound    = "Requested Role / Cluster Role does not exist"
-	warningApproved        = "Not Approved"
-	messageRoleNotApproved = "Waiting for Requested Role / Cluster Role to be approved"
-	successApproved        = "Approved"
-	messageRoleApproved    = "Requested Role / Cluster Role approved successfully"
-	failureBinding         = "Binding Failed"
-	messageBindingFailed   = "Role binding failed"
-	failure                = "Failure"
-	pending                = "Pending"
-	approved               = "Approved"
+	successSynced  = "Synced"
+	successFound   = "Found"
+	failureFound   = "Not Found"
+	failureBinding = "Binding Failed"
+
+	messageResourceSynced   = "Cluster Role Request synced successfully"
+	messageRoleBound        = "Requested Cluster Role is bound"
+	messageRoleApproved     = "Requested Cluster Role approved"
+	messageRoleFound        = "Requested Cluster Role found"
+	messageRoleNotFound     = "Requested Cluster Role does not exist"
+	messagePending          = "Waiting for approval"
+	messageBindingFailed    = "Role binding failed"
+	messageOwnershipFailure = "Cluster Role Request ownership cannot be granted"
+
+	statusFailed   = "Failed"
+	statusPending  = "Pending"
+	statusApproved = "Approved"
+	statusBound    = "Bound"
 )
 
 // Controller is the controller implementation for Cluster Role Request resources
@@ -222,9 +224,7 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	if clusterrolerequest.Status.State != approved {
-		c.processClusterRoleRequest(clusterrolerequest.DeepCopy())
-	}
+	c.processClusterRoleRequest(clusterrolerequest.DeepCopy())
 	c.recorder.Event(clusterrolerequest, corev1.EventTypeNormal, successSynced, messageResourceSynced)
 	return nil
 }
@@ -256,14 +256,6 @@ func (c *Controller) enqueueClusterRoleRequestAfter(obj interface{}, after time.
 }
 
 func (c *Controller) processClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest) {
-	oldStatus := clusterRoleRequestCopy.Status
-	statusUpdate := func() {
-		if !reflect.DeepEqual(oldStatus, clusterRoleRequestCopy.Status) {
-			if _, err := c.edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().UpdateStatus(context.TODO(), clusterRoleRequestCopy, metav1.UpdateOptions{}); err != nil {
-				klog.V(4).Infoln(err)
-			}
-		}
-	}
 	if clusterRoleRequestCopy.Status.Expiry == nil {
 		// Set the approval timeout which is 72 hours
 		clusterRoleRequestCopy.Status.Expiry = &metav1.Time{
@@ -273,82 +265,93 @@ func (c *Controller) processClusterRoleRequest(clusterRoleRequestCopy *registrat
 		c.edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().Delete(context.TODO(), clusterRoleRequestCopy.GetName(), metav1.DeleteOptions{})
 		return
 	}
-	defer statusUpdate()
 
-	// Below is to ensure that the requested Role / ClusterRole exists before moving forward in the procedure.
+	// Below is to ensure that the requested ClusterRole exists before moving forward in the procedure.
 	// If not, the status of the object falls into an error state.
-	roleExists := c.checkForRequestedRole(clusterRoleRequestCopy)
-	if !roleExists {
+	if roleExists := c.checkForRequestedRole(clusterRoleRequestCopy); !roleExists {
 		return
 	}
 
-	if !clusterRoleRequestCopy.Spec.Approved {
-		if clusterRoleRequestCopy.Status.State == pending && clusterRoleRequestCopy.Status.Message == messageRoleNotApproved {
-			return
-		}
-
-		clusterRole, err := access.CreateObjectSpecificClusterRole("registration.edgenet.io", "clusterrolerequests", clusterRoleRequestCopy.GetName(), "owner", []string{"get", "update", "patch", "delete"}, []metav1.OwnerReference{clusterRoleRequestCopy.MakeOwnerReference()})
-		if err != nil && !errors.IsAlreadyExists(err) {
-			klog.Infof("Couldn't create owner cluster role %s: %s", clusterRoleRequestCopy.GetName(), err)
-			// TODO: Provide err information in the EVENT
-		}
-		if err := access.CreateObjectSpecificClusterRoleBinding(clusterRole, clusterRoleRequestCopy.Spec.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{clusterRoleRequestCopy.MakeOwnerReference()}); err != nil {
-			klog.Infof("Couldn't create cluster role binding %s: %s", clusterRoleRequestCopy.GetName(), err)
-			// TODO: Provide err information in the EVENT
-		}
-
-		c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeWarning, warningApproved, messageRoleNotApproved)
-		clusterRoleRequestCopy.Status.State = pending
-		clusterRoleRequestCopy.Status.Message = messageRoleNotApproved
-	} else {
-		c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
-		clusterRoleRequestCopy.Status.State = approved
-		clusterRoleRequestCopy.Status.Message = messageRoleApproved
-
+	switch clusterRoleRequestCopy.Status.State {
+	case statusBound:
+		c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeNormal, statusBound, messageRoleBound)
+	case statusApproved:
 		// The following section handles cluster role binding. There are two basic logical steps here.
-		// Check if cluster role binding already exists; if not, create a cluster role binding for the user.
+		// Try to create a cluster role binding for the user.
 		// If cluster role binding exists, check if the user already holds the role. If not, pin the cluster role to the user.
-		if clusterRoleBindingRaw, err := c.kubeclientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
-			// TODO: Simplfy below
-			clusterRoleBindingExists := false
-			clusterRoleBound := false
-			for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
-				if clusterRoleBindingRow.GetName() == clusterRoleRequestCopy.Spec.RoleName && clusterRoleBindingRow.RoleRef.Name == clusterRoleRequestCopy.Spec.RoleName {
-					clusterRoleBindingExists = true
-					for _, subjectRow := range clusterRoleBindingRow.Subjects {
-						if subjectRow.Kind == "User" && subjectRow.Name == clusterRoleRequestCopy.Spec.Email {
-							break
-						}
-					}
-					if !clusterRoleBound {
-						clusterRoleBindingCopy := clusterRoleBindingRow.DeepCopy()
-						clusterRoleBindingCopy.Subjects = append(clusterRoleBindingCopy.Subjects, rbacv1.Subject{Kind: "User", Name: clusterRoleRequestCopy.Spec.Email, APIGroup: "rbac.authorization.k8s.io"})
-						if _, err := c.kubeclientset.RbacV1().ClusterRoleBindings().Update(context.TODO(), clusterRoleBindingCopy, metav1.UpdateOptions{}); err != nil {
-							c.recorder.Event(clusterRoleBindingCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
-							clusterRoleRequestCopy.Status.State = failure
-							clusterRoleRequestCopy.Status.Message = messageBindingFailed
-							klog.V(4).Infoln(err)
-						}
+		roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRoleRequestCopy.Spec.RoleName}
+		rbSubjects := []rbacv1.Subject{{Kind: "User", Name: clusterRoleRequestCopy.Spec.Email, APIGroup: "rbac.authorization.k8s.io"}}
+		requestedBinding := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRoleRequestCopy.Spec.RoleName},
+			Subjects: rbSubjects, RoleRef: roleRef}
+		requestedBindingLabels := map[string]string{"edge-net.io/generated": "true"}
+		requestedBinding.SetLabels(requestedBindingLabels)
+		if _, err := c.kubeclientset.RbacV1().ClusterRoleBindings().Create(context.TODO(), requestedBinding, metav1.CreateOptions{}); err != nil {
+			if !errors.IsAlreadyExists(err) {
+				c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
+				return
+			}
+
+			if clusterRoleBinding, err := c.kubeclientset.RbacV1().ClusterRoleBindings().Get(context.TODO(), requestedBinding.GetName(), metav1.GetOptions{}); err != nil {
+				c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
+				return
+			} else {
+				isBound := false
+				for _, subjectRow := range clusterRoleBinding.Subjects {
+					if subjectRow.Kind == "User" && subjectRow.Name == clusterRoleRequestCopy.Spec.Email {
+						isBound = true
 						break
 					}
 				}
-			}
-			if !clusterRoleBindingExists {
-				roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRoleRequestCopy.Spec.RoleName}
-				rbSubjects := []rbacv1.Subject{{Kind: "User", Name: clusterRoleRequestCopy.Spec.Email, APIGroup: "rbac.authorization.k8s.io"}}
-				clusterRoleBind := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRoleRequestCopy.Spec.RoleName},
-					Subjects: rbSubjects, RoleRef: roleRef}
-				clusterRoleBindLabels := map[string]string{"edge-net.io/generated": "true"}
-				clusterRoleBind.SetLabels(clusterRoleBindLabels)
-				if _, err := c.kubeclientset.RbacV1().ClusterRoleBindings().Create(context.TODO(), clusterRoleBind, metav1.CreateOptions{}); err != nil {
-					c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
-					clusterRoleRequestCopy.Status.State = failure
-					clusterRoleRequestCopy.Status.Message = messageBindingFailed
-					klog.V(4).Infoln(err)
+				if !isBound {
+					clusterRoleBindingCopy := clusterRoleBinding.DeepCopy()
+					clusterRoleBindingCopy.Subjects = append(clusterRoleBindingCopy.Subjects, rbacv1.Subject{Kind: "User", Name: clusterRoleRequestCopy.Spec.Email, APIGroup: "rbac.authorization.k8s.io"})
+					if _, err := c.kubeclientset.RbacV1().ClusterRoleBindings().Update(context.TODO(), clusterRoleBindingCopy, metav1.UpdateOptions{}); err != nil {
+						c.recorder.Event(clusterRoleBindingCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
+						return
+					}
 				}
 			}
 		}
+
+		clusterRoleRequestCopy.Status.State = statusBound
+		clusterRoleRequestCopy.Status.Message = messageRoleBound
+		c.updateStatus(context.TODO(), clusterRoleRequestCopy)
+	case statusPending:
+		if clusterRoleRequestCopy.Spec.Approved {
+			c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeNormal, statusApproved, messageRoleApproved)
+			clusterRoleRequestCopy.Status.State = statusApproved
+			clusterRoleRequestCopy.Status.Message = messageRoleApproved
+			c.updateStatus(context.TODO(), clusterRoleRequestCopy)
+		}
+	default:
+		if ownershipGranted := c.grantRequestOwnership(clusterRoleRequestCopy); !ownershipGranted {
+			return
+		}
+
+		clusterRoleRequestCopy.Status.State = statusPending
+		clusterRoleRequestCopy.Status.Message = messagePending
+		c.updateStatus(context.TODO(), clusterRoleRequestCopy)
 	}
+}
+
+func (c *Controller) grantRequestOwnership(clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest) bool {
+	if clusterRole, err := access.CreateObjectSpecificClusterRole("registration.edgenet.io", "clusterrolerequests", clusterRoleRequestCopy.GetName(), "owner", []string{"get", "update", "patch", "delete"}, []metav1.OwnerReference{clusterRoleRequestCopy.MakeOwnerReference()}); err == nil || !errors.IsAlreadyExists(err) {
+		if err := access.CreateObjectSpecificClusterRoleBinding(clusterRole, clusterRoleRequestCopy.Spec.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{clusterRoleRequestCopy.MakeOwnerReference()}); err == nil || !errors.IsAlreadyExists(err) {
+			return true
+		} else {
+			klog.Infof("Couldn't create cluster role binding %s: %s", clusterRoleRequestCopy.GetName(), err)
+		}
+	} else {
+		klog.Infof("Couldn't create owner cluster role %s: %s", clusterRoleRequestCopy.GetName(), err)
+	}
+
+	if clusterRoleRequestCopy.Status.State != statusFailed {
+		clusterRoleRequestCopy.Status.State = statusFailed
+		clusterRoleRequestCopy.Status.Message = messageOwnershipFailure
+		c.updateStatus(context.TODO(), clusterRoleRequestCopy)
+	}
+
+	return false
 }
 
 func (c *Controller) checkForRequestedRole(clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest) bool {
@@ -362,7 +365,19 @@ func (c *Controller) checkForRequestedRole(clusterRoleRequestCopy *registrationv
 	}
 
 	c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeWarning, failureFound, messageRoleNotFound)
-	clusterRoleRequestCopy.Status.State = failure
-	clusterRoleRequestCopy.Status.Message = messageRoleNotFound
+
+	if clusterRoleRequestCopy.Status.State != statusFailed {
+		clusterRoleRequestCopy.Status.State = statusFailed
+		clusterRoleRequestCopy.Status.Message = messageRoleNotFound
+		c.updateStatus(context.TODO(), clusterRoleRequestCopy)
+	}
+
 	return false
+}
+
+// updateStatus calls the API to update the cluster role request status.
+func (c *Controller) updateStatus(ctx context.Context, clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest) {
+	if _, err := c.edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().UpdateStatus(ctx, clusterRoleRequestCopy, metav1.UpdateOptions{}); err != nil {
+		klog.Infoln(err)
+	}
 }
