@@ -118,7 +118,7 @@ func NewController(
 			newClusterRoleRequest := new.(*registrationv1alpha1.ClusterRoleRequest)
 			oldClusterRoleRequest := old.(*registrationv1alpha1.ClusterRoleRequest)
 			if (oldClusterRoleRequest.Status.Expiry == nil && newClusterRoleRequest.Status.Expiry != nil) ||
-				!oldClusterRoleRequest.Status.Expiry.Time.Equal(newClusterRoleRequest.Status.Expiry.Time) {
+				(oldClusterRoleRequest.Status.Expiry != nil && newClusterRoleRequest.Status.Expiry != nil && !oldClusterRoleRequest.Status.Expiry.Time.Equal(newClusterRoleRequest.Status.Expiry.Time)) {
 				controller.enqueueClusterRoleRequestAfter(newClusterRoleRequest, time.Until(newClusterRoleRequest.Status.Expiry.Time))
 			}
 			controller.enqueueClusterRoleRequest(new)
@@ -335,8 +335,8 @@ func (c *Controller) processClusterRoleRequest(clusterRoleRequestCopy *registrat
 }
 
 func (c *Controller) grantRequestOwnership(clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest) bool {
-	if clusterRole, err := access.CreateObjectSpecificClusterRole("registration.edgenet.io", "clusterrolerequests", clusterRoleRequestCopy.GetName(), "owner", []string{"get", "update", "patch", "delete"}, []metav1.OwnerReference{clusterRoleRequestCopy.MakeOwnerReference()}); err == nil || !errors.IsAlreadyExists(err) {
-		if err := access.CreateObjectSpecificClusterRoleBinding(clusterRole, clusterRoleRequestCopy.Spec.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{clusterRoleRequestCopy.MakeOwnerReference()}); err == nil || !errors.IsAlreadyExists(err) {
+	if clusterRole, err := access.CreateObjectSpecificClusterRole("registration.edgenet.io", "clusterrolerequests", clusterRoleRequestCopy.GetName(), "owner", []string{"get", "update", "patch", "delete"}, []metav1.OwnerReference{clusterRoleRequestCopy.MakeOwnerReference()}); err == nil || errors.IsAlreadyExists(err) {
+		if err := access.CreateObjectSpecificClusterRoleBinding(clusterRole, clusterRoleRequestCopy.Spec.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{clusterRoleRequestCopy.MakeOwnerReference()}); err == nil || errors.IsAlreadyExists(err) {
 			return true
 		} else {
 			klog.Infof("Couldn't create cluster role binding %s: %s", clusterRoleRequestCopy.GetName(), err)
