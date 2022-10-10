@@ -19,7 +19,6 @@ package tenantrequest
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
@@ -47,19 +46,23 @@ const controllerAgentName = "tenantrequest-controller"
 
 // Definitions of the state of the tenantrequest resource
 const (
-	successSynced               = "Synced"
-	messageResourceSynced       = "Tenant Request synced successfully"
-	warningNotApproved          = "Not Approved"
-	messageNotApproved          = "Waiting for Requested Tenant to be approved"
-	successApproved             = "Approved"
-	messageRoleApproved         = "Requested Tenant approved successfully"
-	failureTenantCreation       = "Creation Failed"
-	messageTenantCreationFailed = "Tenant creation failed"
-	failureTenantExists         = "Conflicting"
-	messageTenantExists         = "Tenant already exists"
-	failure                     = "Failure"
-	pending                     = "Pending"
-	approved                    = "Approved"
+	successSynced         = "Synced"
+	successApproved       = "Approved"
+	failureTenantCreation = "Creation Failed"
+	failureTenantExists   = "Conflicting"
+
+	messageResourceSynced   = "Tenant Request synced successfully"
+	messageApproved         = "Tenant request approved successfully"
+	messageCreationFailed   = "Tenant creation failed"
+	messageExists           = "Tenant already exists"
+	messageCreated          = "Tenant created successfully"
+	messagePending          = "Waiting for approval"
+	messageOwnershipFailure = "Cluster Role Request ownership cannot be granted"
+
+	statusFailed   = "Failed"
+	statusPending  = "Pending"
+	statusApproved = "Approved"
+	statusCreated  = "Created"
 )
 
 // Controller is the controller implementation for Tenant Request resources
@@ -112,14 +115,11 @@ func NewController(
 		UpdateFunc: func(old, new interface{}) {
 			newTenantRequest := new.(*registrationv1alpha1.TenantRequest)
 			oldTenantRequest := old.(*registrationv1alpha1.TenantRequest)
-			if reflect.DeepEqual(newTenantRequest.Spec, oldTenantRequest.Spec) {
-				if (oldTenantRequest.Status.Expiry == nil && newTenantRequest.Status.Expiry != nil) ||
-					!oldTenantRequest.Status.Expiry.Time.Equal(newTenantRequest.Status.Expiry.Time) {
-					controller.enqueueTenantRequestAfter(newTenantRequest, time.Until(newTenantRequest.Status.Expiry.Time))
-				}
+			if (oldTenantRequest.Status.Expiry == nil && newTenantRequest.Status.Expiry != nil) ||
+				(oldTenantRequest.Status.Expiry != nil && newTenantRequest.Status.Expiry != nil && !oldTenantRequest.Status.Expiry.Time.Equal(newTenantRequest.Status.Expiry.Time)) {
+				controller.enqueueTenantRequestAfter(newTenantRequest, time.Until(newTenantRequest.Status.Expiry.Time))
 				return
 			}
-
 			controller.enqueueTenantRequest(new)
 		},
 	})
@@ -222,9 +222,7 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	if tenantrequest.Status.State != approved {
-		c.processTenantRequest(tenantrequest.DeepCopy())
-	}
+	c.processTenantRequest(tenantrequest.DeepCopy())
 	c.recorder.Event(tenantrequest, corev1.EventTypeNormal, successSynced, messageResourceSynced)
 	return nil
 }
@@ -256,18 +254,6 @@ func (c *Controller) enqueueTenantRequestAfter(obj interface{}, after time.Durat
 }
 
 func (c *Controller) processTenantRequest(tenantRequestCopy *registrationv1alpha1.TenantRequest) {
-	oldStatus := tenantRequestCopy.Status
-	statusUpdate := func() {
-		if !reflect.DeepEqual(oldStatus, tenantRequestCopy.Status) {
-			c.edgenetclientset.RegistrationV1alpha1().TenantRequests().UpdateStatus(context.TODO(), tenantRequestCopy, metav1.UpdateOptions{})
-		}
-	}
-	if _, err := c.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), tenantRequestCopy.GetName(), metav1.GetOptions{}); err == nil {
-		c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureTenantExists, messageTenantExists)
-		tenantRequestCopy.Status.State = failure
-		tenantRequestCopy.Status.Message = messageTenantExists
-		return
-	}
 	if tenantRequestCopy.Status.Expiry == nil {
 		// Set the approval timeout which is 72 hours
 		tenantRequestCopy.Status.Expiry = &metav1.Time{
@@ -277,44 +263,73 @@ func (c *Controller) processTenantRequest(tenantRequestCopy *registrationv1alpha
 		c.edgenetclientset.RegistrationV1alpha1().TenantRequests().Delete(context.TODO(), tenantRequestCopy.GetName(), metav1.DeleteOptions{})
 		return
 	}
-	defer statusUpdate()
-
-	_, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
-	if err != nil {
-		klog.V(4).Infoln(err)
-		c.edgenetclientset.RegistrationV1alpha1().TenantRequests().Delete(context.TODO(), tenantRequestCopy.GetName(), metav1.DeleteOptions{})
-		return
+	if tenant, err := c.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), tenantRequestCopy.GetName(), metav1.GetOptions{}); err == nil {
+		labels := tenant.GetLabels()
+		if labels["edge-net.io/request-uid"] != string(tenantRequestCopy.GetUID()) && tenantRequestCopy.Status.State != statusFailed {
+			c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureTenantExists, messageExists)
+			tenantRequestCopy.Status.State = statusFailed
+			tenantRequestCopy.Status.Message = messageExists
+			c.updateStatus(context.TODO(), tenantRequestCopy)
+			return
+		}
 	}
 
-	if !tenantRequestCopy.Spec.Approved {
-		if tenantRequestCopy.Status.State == pending && tenantRequestCopy.Status.Message == messageNotApproved {
+	switch tenantRequestCopy.Status.State {
+	case statusCreated:
+		c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, statusCreated, messageCreated)
+	case statusApproved:
+		if err := access.CreateTenant(tenantRequestCopy); err == nil || errors.IsAlreadyExists(err) {
+			c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, statusCreated, messageCreated)
+		} else {
+			klog.Infoln(err)
+			c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureTenantCreation, messageCreationFailed)
 			return
 		}
 
-		clusterRole, err := access.CreateObjectSpecificClusterRole("registration.edgenet.io", "tenantrequests", tenantRequestCopy.GetName(), "owner", []string{"get", "update", "patch", "delete"}, []metav1.OwnerReference{tenantRequestCopy.MakeOwnerReference()})
-		if err != nil && !errors.IsAlreadyExists(err) {
-			klog.Infof("Couldn't create owner cluster role %s: %s", tenantRequestCopy.GetName(), err)
-			// TODO: Provide err information in the EVENT
+		tenantRequestCopy.Status.State = statusCreated
+		tenantRequestCopy.Status.Message = messageCreated
+		c.updateStatus(context.TODO(), tenantRequestCopy)
+	case statusPending:
+		if tenantRequestCopy.Spec.Approved {
+			c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, statusApproved, messageApproved)
+			tenantRequestCopy.Status.State = statusApproved
+			tenantRequestCopy.Status.Message = messageApproved
+			c.updateStatus(context.TODO(), tenantRequestCopy)
 		}
-		if err := access.CreateObjectSpecificClusterRoleBinding(clusterRole, tenantRequestCopy.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{tenantRequestCopy.MakeOwnerReference()}); err != nil {
-			klog.Infof("Couldn't create cluster role binding %s: %s", tenantRequestCopy.GetName(), err)
-			// TODO: Provide err information in the EVENT
+	default:
+		if ownershipGranted := c.grantRequestOwnership(tenantRequestCopy); !ownershipGranted {
+			return
 		}
 
-		c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, warningNotApproved, messageNotApproved)
-		tenantRequestCopy.Status.State = pending
-		tenantRequestCopy.Status.Message = messageNotApproved
-	} else {
-		c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
-		tenantRequestCopy.Status.State = approved
-		tenantRequestCopy.Status.Message = messageRoleApproved
+		tenantRequestCopy.Status.State = statusPending
+		tenantRequestCopy.Status.Message = messagePending
+		c.updateStatus(context.TODO(), tenantRequestCopy)
+	}
+}
 
-		if err := access.CreateTenant(tenantRequestCopy); err == nil {
-			c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, successApproved, messageRoleApproved)
+func (c *Controller) grantRequestOwnership(tenantRequestCopy *registrationv1alpha1.TenantRequest) bool {
+	if clusterRole, err := access.CreateObjectSpecificClusterRole("registration.edgenet.io", "tenantrequests", tenantRequestCopy.GetName(), "owner", []string{"get", "update", "patch", "delete"}, []metav1.OwnerReference{tenantRequestCopy.MakeOwnerReference()}); err == nil || errors.IsAlreadyExists(err) {
+		if err := access.CreateObjectSpecificClusterRoleBinding(clusterRole, tenantRequestCopy.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{tenantRequestCopy.MakeOwnerReference()}); err == nil || errors.IsAlreadyExists(err) {
+			return true
 		} else {
-			c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureTenantCreation, messageTenantCreationFailed)
-			tenantRequestCopy.Status.State = failure
-			tenantRequestCopy.Status.Message = messageTenantCreationFailed
+			klog.Infof("Couldn't create cluster role binding %s: %s", tenantRequestCopy.GetName(), err)
 		}
+	} else {
+		klog.Infof("Couldn't create owner cluster role %s: %s", tenantRequestCopy.GetName(), err)
+	}
+
+	if tenantRequestCopy.Status.State != statusFailed {
+		tenantRequestCopy.Status.State = statusFailed
+		tenantRequestCopy.Status.Message = messageOwnershipFailure
+		c.updateStatus(context.TODO(), tenantRequestCopy)
+	}
+
+	return false
+}
+
+// updateStatus calls the API to update the cluster role request status.
+func (c *Controller) updateStatus(ctx context.Context, tenantRequestCopy *registrationv1alpha1.TenantRequest) {
+	if _, err := c.edgenetclientset.RegistrationV1alpha1().TenantRequests().UpdateStatus(ctx, tenantRequestCopy, metav1.UpdateOptions{}); err != nil {
+		klog.Infoln(err)
 	}
 }

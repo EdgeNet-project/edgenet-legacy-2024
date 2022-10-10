@@ -51,6 +51,7 @@ func CreateTenant(tenantRequest *registrationv1alpha1.TenantRequest) error {
 	tenant.Spec.URL = tenantRequest.Spec.URL
 	tenant.Spec.ClusterNetworkPolicy = tenantRequest.Spec.ClusterNetworkPolicy
 	tenant.Spec.Enabled = true
+	tenant.SetLabels(map[string]string{"edge-net.io/request-uid": string(tenantRequest.GetUID())})
 	tenant.SetAnnotations(tenantRequest.GetAnnotations())
 	if tenantRequest.GetOwnerReferences() != nil && len(tenantRequest.GetOwnerReferences()) > 0 {
 		tenant.SetOwnerReferences(tenantRequest.GetOwnerReferences())

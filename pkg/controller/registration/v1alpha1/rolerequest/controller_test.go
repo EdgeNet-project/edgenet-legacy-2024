@@ -149,8 +149,8 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, expected.Month(), roleRequest.Status.Expiry.Month())
 	util.Equals(t, expected.Year(), roleRequest.Status.Expiry.Year())
 
-	util.Equals(t, pending, roleRequest.Status.State)
-	util.Equals(t, messageRoleNotApproved, roleRequest.Status.Message)
+	util.Equals(t, statusPending, roleRequest.Status.State)
+	util.Equals(t, messagePending, roleRequest.Status.Message)
 
 	roleRequest.Spec.Approved = true
 	edgenetclientset.RegistrationV1alpha1().RoleRequests(roleRequestTest.GetNamespace()).Update(context.TODO(), roleRequest, metav1.UpdateOptions{})
@@ -158,8 +158,8 @@ func TestStartController(t *testing.T) {
 	roleRequest, err = edgenetclientset.RegistrationV1alpha1().RoleRequests(roleRequestTest.GetNamespace()).Get(context.TODO(), roleRequestTest.GetName(), metav1.GetOptions{})
 
 	util.OK(t, err)
-	util.Equals(t, approved, roleRequest.Status.State)
-	util.Equals(t, messageRoleApproved, roleRequest.Status.Message)
+	util.Equals(t, statusBound, roleRequest.Status.State)
+	util.Equals(t, messageRoleBound, roleRequest.Status.Message)
 }
 
 func TestTimeout(t *testing.T) {
