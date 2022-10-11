@@ -133,7 +133,7 @@ func checkNamespaceCreation(tenant string, created chan<- bool) {
 	close(created)
 }
 
-func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha1.RoleRequest, purpose, subject, clusterUID string, recipient []string) {
+func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha1.RoleRequest, purpose, subject, clusterUID string, recipient []string) error {
 	email := new(mailer.Content)
 	email.Cluster = clusterUID
 	email.User = roleRequestCopy.Spec.Email
@@ -144,10 +144,11 @@ func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha1.RoleRequest, 
 	email.RoleRequest = new(mailer.RoleRequest)
 	email.RoleRequest.Name = roleRequestCopy.GetName()
 	email.RoleRequest.Namespace = roleRequestCopy.GetNamespace()
-	email.Send(purpose)
+	err := email.Send(purpose)
+	return err
 }
 
-func SendEmailForTenantRequest(tenantRequestCopy *registrationv1alpha1.TenantRequest, purpose, subject, clusterUID string, recipient []string) {
+func SendEmailForTenantRequest(tenantRequestCopy *registrationv1alpha1.TenantRequest, purpose, subject, clusterUID string, recipient []string) error {
 	email := new(mailer.Content)
 	email.Cluster = clusterUID
 	email.User = tenantRequestCopy.Spec.Contact.Email
@@ -157,10 +158,11 @@ func SendEmailForTenantRequest(tenantRequestCopy *registrationv1alpha1.TenantReq
 	email.Recipient = recipient
 	email.TenantRequest = new(mailer.TenantRequest)
 	email.TenantRequest.Tenant = tenantRequestCopy.GetName()
-	email.Send(purpose)
+	err := email.Send(purpose)
+	return err
 }
 
-func SendEmailForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest, purpose, subject, clusterUID string, recipient []string) {
+func SendEmailForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest, purpose, subject, clusterUID string, recipient []string) error {
 	email := new(mailer.Content)
 	email.Cluster = clusterUID
 	email.User = clusterRoleRequestCopy.Spec.Email
@@ -170,11 +172,12 @@ func SendEmailForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha1
 	email.Recipient = recipient
 	email.ClusterRoleRequest = new(mailer.ClusterRoleRequest)
 	email.ClusterRoleRequest.Name = clusterRoleRequestCopy.GetName()
-	email.Send(purpose)
+	err := email.Send(purpose)
+	return err
 }
 
 // Send a slack notification for role request
-func SendSlackNotificationForRoleRequest(roleRequestCopy *registrationv1alpha1.RoleRequest, purpose, subject, clusterUID string) {
+func SendSlackNotificationForRoleRequest(roleRequestCopy *registrationv1alpha1.RoleRequest, purpose, subject, clusterUID string) error {
 	slackNotification := new(slack.Content)
 	slackNotification.Cluster = clusterUID
 	slackNotification.User = roleRequestCopy.Spec.Email
@@ -186,11 +189,12 @@ func SendSlackNotificationForRoleRequest(roleRequestCopy *registrationv1alpha1.R
 	slackNotification.RoleRequest = new(slack.RoleRequest)
 	slackNotification.RoleRequest.Name = roleRequestCopy.GetName()
 	slackNotification.RoleRequest.Namespace = roleRequestCopy.GetNamespace()
-	slackNotification.Send(purpose)
+	err := slackNotification.Send(purpose)
+	return err
 }
 
 // Send a slack notification for tenant request
-func SendSlackNotificationForTenantRequest(tenantRequestCopy *registrationv1alpha1.TenantRequest, purpose, subject, clusterUID string) {
+func SendSlackNotificationForTenantRequest(tenantRequestCopy *registrationv1alpha1.TenantRequest, purpose, subject, clusterUID string) error {
 	slackNotification := new(slack.Content)
 	slackNotification.Cluster = clusterUID
 	slackNotification.User = tenantRequestCopy.Spec.Contact.Email
@@ -201,11 +205,12 @@ func SendSlackNotificationForTenantRequest(tenantRequestCopy *registrationv1alph
 	slackNotification.ChannelId = os.Getenv(slack.CHANNEL_ID_IDENTIFIER)
 	slackNotification.TenantRequest = new(slack.TenantRequest)
 	slackNotification.TenantRequest.Tenant = tenantRequestCopy.GetName()
-	slackNotification.Send(purpose)
+	err := slackNotification.Send(purpose)
+	return err
 }
 
 // Send a slack notification for cluster role request
-func SendSlackNotificationForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest, purpose, subject, clusterUID string) {
+func SendSlackNotificationForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest, purpose, subject, clusterUID string) error {
 	slackNotification := new(slack.Content)
 	slackNotification.Cluster = clusterUID
 	slackNotification.User = clusterRoleRequestCopy.Spec.Email
@@ -216,5 +221,6 @@ func SendSlackNotificationForClusterRoleRequest(clusterRoleRequestCopy *registra
 	slackNotification.ChannelId = os.Getenv(slack.CHANNEL_ID_IDENTIFIER)
 	slackNotification.ClusterRolerequest = new(slack.ClusterRoleRequest)
 	slackNotification.ClusterRolerequest.Name = clusterRoleRequestCopy.GetName()
-	slackNotification.Send(purpose)
+	err := slackNotification.Send(purpose)
+	return err
 }

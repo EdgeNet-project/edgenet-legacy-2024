@@ -588,8 +588,6 @@ spec:
             status:
               type: object
               properties:
-                emailverified:
-                  type: boolean
                 expiry:
                   type: string
                   format: dateTime
@@ -598,6 +596,9 @@ spec:
                   type: string
                 message:
                   type: string
+                notified:
+                  type: boolean
+                  default: false
   scope: Cluster
   names:
     plural: tenantrequests
@@ -730,6 +731,9 @@ spec:
                   type: string
                 message:
                   type: string
+                notified:
+                  type: boolean
+                  default: false
   scope: Namespaced
   names:
     plural: rolerequests
@@ -867,6 +871,9 @@ spec:
                   type: string
                 message:
                   type: string
+                notified:
+                  type: boolean
+                  default: false
   scope: Cluster
   names:
     plural: clusterrolerequests

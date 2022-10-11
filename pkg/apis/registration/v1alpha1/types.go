@@ -70,6 +70,8 @@ type TenantRequestStatus struct {
 	State string `json:"state"`
 	// Description for additional information.
 	Message string `json:"message"`
+	// True if the notification send out
+	Notified bool `json:"notified"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -128,6 +130,8 @@ type ClusterRoleRequestStatus struct {
 	State string `json:"state"`
 	// Description for additional information.
 	Message string `json:"message"`
+	// True if the notification send out
+	Notified bool `json:"notified"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -192,6 +196,8 @@ type RoleRequestStatus struct {
 	State string `json:"state"`
 	// Description for additional information.
 	Message string `json:"message"`
+	// True if the notification send out
+	Notified bool `json:"notified"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

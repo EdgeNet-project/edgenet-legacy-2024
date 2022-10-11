@@ -294,7 +294,7 @@ func (c *Controller) ProcessTenant(tenantCopy *corev1alpha1.Tenant) {
 			rbSubjects := []rbacv1.Subject{{Kind: "User", Name: tenantCopy.Spec.Contact.Email, APIGroup: "rbac.authorization.k8s.io"}}
 			roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRoleName, Namespace: tenantCopy.GetName()},
 				Subjects: rbSubjects, RoleRef: roleRef}
-			roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
+			roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/notification": "true"}
 			roleBind.SetLabels(roleBindLabels)
 			if _, err := c.kubeclientset.RbacV1().RoleBindings(tenantCopy.GetName()).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)

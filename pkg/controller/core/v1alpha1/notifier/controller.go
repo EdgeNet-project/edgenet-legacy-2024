@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net/mail"
 	"reflect"
-	"regexp"
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
@@ -50,8 +49,10 @@ const controllerAgentName = "notifier-controller"
 
 // Definitions of the state of the tenantrequest resource
 const (
-	failure = "Failure"
-	pending = "Pending"
+	statusPending  = "Pending"
+	statusApproved = "Approved"
+	statusCreated  = "Created"
+	statusBound    = "Bound"
 )
 
 // The main structure of controller
@@ -383,25 +384,19 @@ func (c *Controller) enqueueNotifier(obj interface{}) {
 
 func (c *Controller) processTenantRequest(tenantrequest *registrationv1alpha1.TenantRequest) {
 	klog.Infoln("processTenantRequest")
-	//nodeObj := obj.(*corev1.Node)
 
 	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
 	if err != nil {
 		return
 	}
-	if tenantrequest.Status.State == failure || tenantrequest.Status.State == "" {
-		return
-	} else if tenantrequest.Status.State == pending {
+	switch tenantrequest.Status.State {
+	case statusCreated:
 		// The function below notifies those who have the right to approve this tenant request.
 		// As tenant requests are cluster-wide resources, we check the permissions granted by Cluster Role Binding following a pattern to avoid overhead.
-		// Furthermore, only those to which the system has granted permission, by attaching the "edge-net.io/generated=true" label, receive a notification email.
+		// Furthermore, only those that hold "edge-net.io/notification=true" label receive a notification email.
 		emailList := []string{}
-		if clusterRoleBindingRaw, err := c.kubeclientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
-			r, _ := regexp.Compile("(.*)(edgenet:clusteradministration)(.*)(admin|manager|deputy)(.*)")
+		if clusterRoleBindingRaw, err := c.kubeclientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/notification=true"}); err == nil {
 			for _, clusterRoleBindingRow := range clusterRoleBindingRaw.Items {
-				if match := r.MatchString(clusterRoleBindingRow.GetName()); !match {
-					continue
-				}
 				for _, subjectRow := range clusterRoleBindingRow.Subjects {
 					if subjectRow.Kind == "User" {
 						_, err := mail.ParseAddress(subjectRow.Name)
@@ -427,16 +422,31 @@ func (c *Controller) processTenantRequest(tenantrequest *registrationv1alpha1.Te
 		}
 		if len(emailList) > 0 {
 			klog.Infoln(emailList)
-			access.SendEmailForTenantRequest(tenantrequest, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
-				string(systemNamespace.GetUID()), emailList)
-			access.SendSlackNotificationForTenantRequest(tenantrequest, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
-				string(systemNamespace.GetUID()))
+			if errEmail := access.SendEmailForTenantRequest(tenantrequest, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
+				string(systemNamespace.GetUID()), emailList); errEmail == nil {
+				if errSlack := access.SendSlackNotificationForTenantRequest(tenantrequest, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
+					string(systemNamespace.GetUID())); errSlack == nil {
+					tenantrequestCopy := tenantrequest.DeepCopy()
+					tenantrequestCopy.Status.Notified = true
+					c.edgenetclientset.RegistrationV1alpha1().TenantRequests().UpdateStatus(context.TODO(), tenantrequestCopy, metav1.UpdateOptions{})
+				}
+			}
+
 		}
-	} else {
-		access.SendEmailForTenantRequest(tenantrequest, "tenant-request-approved", "[EdgeNet] Tenant request approved",
-			string(systemNamespace.GetUID()), []string{tenantrequest.Spec.Contact.Email})
-		access.SendSlackNotificationForTenantRequest(tenantrequest, "tenant-request-approved", "[EdgeNet] Tenant request approved",
-			string(systemNamespace.GetUID()))
+	case statusApproved:
+		tenantrequestCopy := tenantrequest.DeepCopy()
+		tenantrequestCopy.Status.Notified = false
+		c.edgenetclientset.RegistrationV1alpha1().TenantRequests().UpdateStatus(context.TODO(), tenantrequestCopy, metav1.UpdateOptions{})
+	case statusPending:
+		if errEmail := access.SendEmailForTenantRequest(tenantrequest, "tenant-request-approved", "[EdgeNet] Tenant request approved",
+			string(systemNamespace.GetUID()), []string{tenantrequest.Spec.Contact.Email}); errEmail == nil {
+			if errSlack := access.SendSlackNotificationForTenantRequest(tenantrequest, "tenant-request-approved", "[EdgeNet] Tenant request approved",
+				string(systemNamespace.GetUID())); errSlack == nil {
+				tenantrequestCopy := tenantrequest.DeepCopy()
+				tenantrequestCopy.Status.Notified = true
+				c.edgenetclientset.RegistrationV1alpha1().TenantRequests().UpdateStatus(context.TODO(), tenantrequestCopy, metav1.UpdateOptions{})
+			}
+		}
 	}
 }
 
@@ -447,19 +457,12 @@ func (c *Controller) processRoleRequest(rolerequest *registrationv1alpha1.RoleRe
 	if err != nil {
 		return
 	}
-	if rolerequest.Status.State == failure || rolerequest.Status.State == "" {
-		return
-	} else if rolerequest.Status.State == pending {
-		// The function below notifies those who have the right to approve this role request.
-		// As role requests run on the layer of namespaces, we here ignore the permissions granted by Cluster Role Binding to avoid email floods.
-		// Furthermore, only those to which the system has granted permission, by attaching the "edge-net.io/generated=true" label, receive a notification email.
+
+	switch rolerequest.Status.State {
+	case statusBound:
 		emailList := []string{}
-		if roleBindingRaw, err := c.kubeclientset.RbacV1().RoleBindings(rolerequest.GetNamespace()).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
-			r, _ := regexp.Compile("(.*)(owner|admin|manager|deputy)(.*)")
+		if roleBindingRaw, err := c.kubeclientset.RbacV1().RoleBindings(rolerequest.GetNamespace()).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/notification=true"}); err == nil {
 			for _, roleBindingRow := range roleBindingRaw.Items {
-				if match := r.MatchString(roleBindingRow.GetName()); !match {
-					continue
-				}
 				for _, subjectRow := range roleBindingRow.Subjects {
 					if subjectRow.Kind == "User" {
 						_, err := mail.ParseAddress(subjectRow.Name)
@@ -485,39 +488,41 @@ func (c *Controller) processRoleRequest(rolerequest *registrationv1alpha1.RoleRe
 			}
 		}
 		if len(emailList) > 0 {
-			access.SendEmailForRoleRequest(rolerequest, "role-request-made", "[EdgeNet] A role request made",
-				string(systemNamespace.GetUID()), emailList)
-			access.SendSlackNotificationForRoleRequest(rolerequest, "role-request-made", "[EdgeNet] A role request made",
-				string(systemNamespace.GetUID()))
+			if errEmail := access.SendEmailForRoleRequest(rolerequest, "role-request-made", "[EdgeNet] A role request made",
+				string(systemNamespace.GetUID()), emailList); errEmail == nil {
+				rolerequestCopy := rolerequest.DeepCopy()
+				rolerequestCopy.Status.Notified = true
+				c.edgenetclientset.RegistrationV1alpha1().RoleRequests(rolerequestCopy.GetNamespace()).UpdateStatus(context.TODO(), rolerequestCopy, metav1.UpdateOptions{})
+			}
+			// access.SendSlackNotificationForRoleRequest(rolerequest, "role-request-made", "[EdgeNet] A role request made", string(systemNamespace.GetUID()))
 		}
-	} else {
-		access.SendEmailForRoleRequest(rolerequest, "role-request-approved", "[EdgeNet] Role request approved",
-			string(systemNamespace.GetUID()), []string{rolerequest.Spec.Email})
-		access.SendSlackNotificationForRoleRequest(rolerequest, "role-request-approved", "[EdgeNet] Role request approved",
-			string(systemNamespace.GetUID()))
+	case statusApproved:
+		rolerequestCopy := rolerequest.DeepCopy()
+		rolerequestCopy.Status.Notified = false
+		c.edgenetclientset.RegistrationV1alpha1().RoleRequests(rolerequestCopy.GetNamespace()).UpdateStatus(context.TODO(), rolerequestCopy, metav1.UpdateOptions{})
+	case statusPending:
+		if errEmail := access.SendEmailForRoleRequest(rolerequest, "role-request-approved", "[EdgeNet] Role request approved",
+			string(systemNamespace.GetUID()), []string{rolerequest.Spec.Email}); errEmail == nil {
+			rolerequestCopy := rolerequest.DeepCopy()
+			rolerequestCopy.Status.Notified = true
+			c.edgenetclientset.RegistrationV1alpha1().RoleRequests(rolerequestCopy.GetNamespace()).UpdateStatus(context.TODO(), rolerequestCopy, metav1.UpdateOptions{})
+		}
+		// access.SendSlackNotificationForRoleRequest(rolerequest, "role-request-approved", "[EdgeNet] Role request approved", string(systemNamespace.GetUID()))
 	}
 }
 
-func (c *Controller) processClusterRoleRequest(clusterRolerequest *registrationv1alpha1.ClusterRoleRequest) {
+func (c *Controller) processClusterRoleRequest(clusterrolerequest *registrationv1alpha1.ClusterRoleRequest) {
 	klog.Infoln("processClusterRoleRequest")
 
 	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
 	if err != nil {
 		return
 	}
-	if clusterRolerequest.Status.State == failure || clusterRolerequest.Status.State == "" {
-		return
-	} else if clusterRolerequest.Status.State == pending {
-		// The function below notifies those who have the right to approve this role request.
-		// As role requests run on the layer of namespaces, we here ignore the permissions granted by Cluster Role Binding to avoid email floods.
-		// Furthermore, only those to which the system has granted permission, by attaching the "edge-net.io/generated=true" label, receive a notification email.
+	switch clusterrolerequest.Status.State {
+	case statusBound:
 		emailList := []string{}
-		if roleBindingRaw, err := c.kubeclientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/generated=true"}); err == nil {
-			r, _ := regexp.Compile("(.*)(owner|admin|manager|deputy)(.*)")
+		if roleBindingRaw, err := c.kubeclientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/notification=true"}); err == nil {
 			for _, roleBindingRow := range roleBindingRaw.Items {
-				if match := r.MatchString(roleBindingRow.GetName()); !match {
-					continue
-				}
 				for _, subjectRow := range roleBindingRow.Subjects {
 					if subjectRow.Kind == "User" {
 						_, err := mail.ParseAddress(subjectRow.Name)
@@ -528,7 +533,7 @@ func (c *Controller) processClusterRoleRequest(clusterRolerequest *registrationv
 							resourceAttributes.Version = "v1alpha1"
 							resourceAttributes.Resource = "clusterrolerequests"
 							resourceAttributes.Verb = "UPDATE"
-							resourceAttributes.Name = clusterRolerequest.GetName()
+							resourceAttributes.Name = clusterrolerequest.GetName()
 							subjectAccessReview.Spec.ResourceAttributes = resourceAttributes
 							subjectAccessReview.Spec.User = subjectRow.Name
 							if subjectAccessReviewResult, err := c.kubeclientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), subjectAccessReview, metav1.CreateOptions{}); err == nil {
@@ -542,15 +547,30 @@ func (c *Controller) processClusterRoleRequest(clusterRolerequest *registrationv
 			}
 		}
 		if len(emailList) > 0 {
-			access.SendEmailForClusterRoleRequest(clusterRolerequest, "clusterrole-request-made", "[EdgeNet] A cluster role request made",
-				string(systemNamespace.GetUID()), emailList)
-			access.SendSlackNotificationForClusterRoleRequest(clusterRolerequest, "clusterrole-request-made", "[EdgeNet] A cluster role request made",
-				string(systemNamespace.GetUID()))
+			if errEmail := access.SendEmailForClusterRoleRequest(clusterrolerequest, "clusterrole-request-made", "[EdgeNet] A cluster role request made",
+				string(systemNamespace.GetUID()), emailList); errEmail == nil {
+				if errSlack := access.SendSlackNotificationForClusterRoleRequest(clusterrolerequest, "clusterrole-request-made", "[EdgeNet] A cluster role request made",
+					string(systemNamespace.GetUID())); errSlack == nil {
+					clusterrolerequestCopy := clusterrolerequest.DeepCopy()
+					clusterrolerequestCopy.Status.Notified = true
+					c.edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().UpdateStatus(context.TODO(), clusterrolerequestCopy, metav1.UpdateOptions{})
+				}
+			}
+
 		}
-	} else {
-		access.SendEmailForClusterRoleRequest(clusterRolerequest, "clusterrole-request-approved", "[EdgeNet] Cluster role request approved",
-			string(systemNamespace.GetUID()), []string{clusterRolerequest.Spec.Email})
-		access.SendSlackNotificationForClusterRoleRequest(clusterRolerequest, "clusterrole-request-approved", "[EdgeNet] Cluster role request approved",
-			string(systemNamespace.GetUID()))
+	case statusApproved:
+		clusterrolerequestCopy := clusterrolerequest.DeepCopy()
+		clusterrolerequestCopy.Status.Notified = false
+		c.edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().UpdateStatus(context.TODO(), clusterrolerequestCopy, metav1.UpdateOptions{})
+	case statusPending:
+		if errEmail := access.SendEmailForClusterRoleRequest(clusterrolerequest, "clusterrole-request-approved", "[EdgeNet] Cluster role request approved",
+			string(systemNamespace.GetUID()), []string{clusterrolerequest.Spec.Email}); errEmail == nil {
+			if errSlack := access.SendSlackNotificationForClusterRoleRequest(clusterrolerequest, "clusterrole-request-approved", "[EdgeNet] Cluster role request approved",
+				string(systemNamespace.GetUID())); errSlack == nil {
+				clusterrolerequestCopy := clusterrolerequest.DeepCopy()
+				clusterrolerequestCopy.Status.Notified = true
+				c.edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().UpdateStatus(context.TODO(), clusterrolerequestCopy, metav1.UpdateOptions{})
+			}
+		}
 	}
 }
