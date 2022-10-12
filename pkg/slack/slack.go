@@ -9,24 +9,10 @@ import (
 )
 
 const (
-	AUTH_TOKEN_IDENTIFIER = "SLACK_AUTH_TOKEN"
-	CHANNEL_ID_IDENTIFIER = "SLACK_CHANNEL_ID"
-)
-
-const (
 	CLUSTER_ROLE_REQUEST_MADE = "kubectl patch clusterrolerequest %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./edgenet-kubeconfig.cfg"
 	ROLE_REQUEST_MADE         = "kubectl patch rolerequest %s -n %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./edgenet-kubeconfig.cfg"
 	TENANT_REQUEST_MADE       = "kubectl patch tenantrequest %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./admin.cfg"
 )
-
-// // "clusterrole-request-made"
-// // "role-request-made"
-// // "tenant-request-made"
-// const (
-// 	CLUSTER_ROLE_REQUEST_MADE = "kubectl patch clusterrolerequest %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./edgenet-kubeconfig.cfg"
-// 	ROLE_REQUEST_MADE   =        "kubectl patch rolerequest {{.CommonData.Username}} -n {{.CommonData.Namespace}} --type='json' -p='[{\"op\": \"replace\", \"path": \"/spec/approved\", \"value\":true}]' --kubeconfig ./edgenet-kubeconfig.cfg"
-// 	TENANT_REQUEST_MADE =      "kubectl patch tenantrequest {{.CommonData.Tenant}} --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./admin.cfg"
-// )
 
 type Content struct {
 	Cluster   string

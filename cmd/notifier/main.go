@@ -30,6 +30,8 @@ import (
 
 func main() {
 	klog.InitFlags(nil)
+	slackTokenPath := flag.String("slack-token-path", "/edgenet/credentials/slack/token", "Path to the auth token for Slack")
+	slackChannelIdPath := flag.String("slack-channel-id-path", "/edgenet/credentials/slack/channelid", "Path to Slack channel ID")
 	flag.Parse()
 
 	stopCh := signals.SetupSignalHandler()
@@ -54,7 +56,9 @@ func main() {
 		edgenetclientset,
 		edgenetInformerFactory.Registration().V1alpha1().TenantRequests(),
 		edgenetInformerFactory.Registration().V1alpha1().RoleRequests(),
-		edgenetInformerFactory.Registration().V1alpha1().ClusterRoleRequests())
+		edgenetInformerFactory.Registration().V1alpha1().ClusterRoleRequests(),
+		slackTokenPath,
+		slackChannelIdPath)
 
 	edgenetInformerFactory.Start(stopCh)
 

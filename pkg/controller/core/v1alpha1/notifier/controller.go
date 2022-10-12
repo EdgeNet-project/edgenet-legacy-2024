@@ -86,7 +86,9 @@ func NewController(
 	edgenetclientset clientset.Interface,
 	tenantrequestInformer informers.TenantRequestInformer,
 	rolerequestInformer informers.RoleRequestInformer,
-	clusterrolerequestInformer informers.ClusterRoleRequestInformer) *Controller {
+	clusterrolerequestInformer informers.ClusterRoleRequestInformer,
+	slackTokenPath *string,
+	slackChannelIdPath *string) *Controller {
 	// Create event broadcaster
 	utilruntime.Must(scheme.AddToScheme(scheme.Scheme))
 	klog.Infoln("Creating event broadcaster")

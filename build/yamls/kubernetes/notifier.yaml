@@ -36,6 +36,16 @@ stringData:
     # url: "<URL of the console>"
 ---
 apiVersion: v1
+kind: Secret
+metadata:
+  name: slack
+  namespace: edgenet
+type: Opaque
+data:
+  # token: auth token
+  # channelid: channel ID
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   labels:
@@ -113,6 +123,9 @@ spec:
         - name: configs
           readOnly: true
           mountPath: /edgenet/configs/
+        - name: slack-creds
+          readOnly: true
+          mountPath: /edgenet/credentials/slack
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -130,3 +143,6 @@ spec:
       - name: configs
         secret:
           secretName: configs-secret
+      - name: slack-creds
+        secret:
+          secretName: slack
