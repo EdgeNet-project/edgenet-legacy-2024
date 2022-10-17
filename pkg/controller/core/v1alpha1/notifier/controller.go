@@ -24,11 +24,11 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/access"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/registration/v1alpha1"
+	"github.com/EdgeNet-project/edgenet/pkg/notification"
 
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -77,7 +77,9 @@ type Controller struct {
 	workqueueRoleRequest        workqueue.RateLimitingInterface
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
-	recorder record.EventRecorder
+	recorder           record.EventRecorder
+	slackTokenPath     *string
+	slackChannelIdPath *string
 }
 
 // NewController returns a new controller
@@ -110,6 +112,8 @@ func NewController(
 		workqueueClusterRoleRequest: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NotifierClusterRoleRequest"),
 		workqueueRoleRequest:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NotifierRoleRequest"),
 		recorder:                    recorder,
+		slackTokenPath:              slackTokenPath,
+		slackChannelIdPath:          slackChannelIdPath,
 	}
 	klog.Infoln("Setting up event handlers")
 
@@ -391,6 +395,21 @@ func (c *Controller) processTenantRequest(tenantrequest *registrationv1alpha1.Te
 	if err != nil {
 		return
 	}
+
+	var sendNotification = func(subject, purpose string, recipient []string) {
+		content := new(notification.Content)
+		content.Init(tenantrequest.Spec.Contact.FirstName, tenantrequest.Spec.Contact.LastName, tenantrequest.Spec.Contact.Email, subject, string(systemNamespace.GetUID()), recipient)
+		content.TenantRequest = new(notification.TenantRequest)
+		content.TenantRequest.Tenant = tenantrequest.GetName()
+		content.AuthToken = c.slackTokenPath
+		content.ChannelId = c.slackChannelIdPath
+		if err := content.SendNotification(purpose); err == nil {
+			tenantrequestCopy := tenantrequest.DeepCopy()
+			tenantrequestCopy.Status.Notified = true
+			c.edgenetclientset.RegistrationV1alpha1().TenantRequests().UpdateStatus(context.TODO(), tenantrequestCopy, metav1.UpdateOptions{})
+		}
+	}
+
 	switch tenantrequest.Status.State {
 	case statusCreated:
 		// The function below notifies those who have the right to approve this tenant request.
@@ -424,31 +443,14 @@ func (c *Controller) processTenantRequest(tenantrequest *registrationv1alpha1.Te
 		}
 		if len(emailList) > 0 {
 			klog.Infoln(emailList)
-			if errEmail := access.SendEmailForTenantRequest(tenantrequest, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
-				string(systemNamespace.GetUID()), emailList); errEmail == nil {
-				if errSlack := access.SendSlackNotificationForTenantRequest(tenantrequest, "tenant-request-made", "[EdgeNet Admin] A tenant request made",
-					string(systemNamespace.GetUID())); errSlack == nil {
-					tenantrequestCopy := tenantrequest.DeepCopy()
-					tenantrequestCopy.Status.Notified = true
-					c.edgenetclientset.RegistrationV1alpha1().TenantRequests().UpdateStatus(context.TODO(), tenantrequestCopy, metav1.UpdateOptions{})
-				}
-			}
-
+			sendNotification("[EdgeNet] Tenant request approved", "tenant-request-approved", emailList)
 		}
 	case statusApproved:
 		tenantrequestCopy := tenantrequest.DeepCopy()
 		tenantrequestCopy.Status.Notified = false
 		c.edgenetclientset.RegistrationV1alpha1().TenantRequests().UpdateStatus(context.TODO(), tenantrequestCopy, metav1.UpdateOptions{})
 	case statusPending:
-		if errEmail := access.SendEmailForTenantRequest(tenantrequest, "tenant-request-approved", "[EdgeNet] Tenant request approved",
-			string(systemNamespace.GetUID()), []string{tenantrequest.Spec.Contact.Email}); errEmail == nil {
-			if errSlack := access.SendSlackNotificationForTenantRequest(tenantrequest, "tenant-request-approved", "[EdgeNet] Tenant request approved",
-				string(systemNamespace.GetUID())); errSlack == nil {
-				tenantrequestCopy := tenantrequest.DeepCopy()
-				tenantrequestCopy.Status.Notified = true
-				c.edgenetclientset.RegistrationV1alpha1().TenantRequests().UpdateStatus(context.TODO(), tenantrequestCopy, metav1.UpdateOptions{})
-			}
-		}
+		sendNotification("[EdgeNet Admin] A tenant request made", "tenant-request-made", []string{tenantrequest.Spec.Contact.Email})
 	}
 }
 
@@ -458,6 +460,21 @@ func (c *Controller) processRoleRequest(rolerequest *registrationv1alpha1.RoleRe
 	systemNamespace, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
 	if err != nil {
 		return
+	}
+
+	var sendNotification = func(subject, purpose string, recipient []string) {
+		content := new(notification.Content)
+		content.Init(rolerequest.Spec.FirstName, rolerequest.Spec.LastName, rolerequest.Spec.Email, subject, string(systemNamespace.GetUID()), recipient)
+		content.RoleRequest = new(notification.RoleRequest)
+		content.RoleRequest.Name = rolerequest.GetName()
+		content.RoleRequest.Namespace = rolerequest.GetNamespace()
+		content.AuthToken = c.slackTokenPath
+		content.ChannelId = c.slackChannelIdPath
+		if errNotification := content.SendNotification(purpose); errNotification == nil {
+			rolerequestCopy := rolerequest.DeepCopy()
+			rolerequestCopy.Status.Notified = true
+			c.edgenetclientset.RegistrationV1alpha1().RoleRequests(rolerequestCopy.GetNamespace()).UpdateStatus(context.TODO(), rolerequestCopy, metav1.UpdateOptions{})
+		}
 	}
 
 	switch rolerequest.Status.State {
@@ -490,26 +507,14 @@ func (c *Controller) processRoleRequest(rolerequest *registrationv1alpha1.RoleRe
 			}
 		}
 		if len(emailList) > 0 {
-			if errEmail := access.SendEmailForRoleRequest(rolerequest, "role-request-made", "[EdgeNet] A role request made",
-				string(systemNamespace.GetUID()), emailList); errEmail == nil {
-				rolerequestCopy := rolerequest.DeepCopy()
-				rolerequestCopy.Status.Notified = true
-				c.edgenetclientset.RegistrationV1alpha1().RoleRequests(rolerequestCopy.GetNamespace()).UpdateStatus(context.TODO(), rolerequestCopy, metav1.UpdateOptions{})
-			}
-			// access.SendSlackNotificationForRoleRequest(rolerequest, "role-request-made", "[EdgeNet] A role request made", string(systemNamespace.GetUID()))
+			sendNotification("[EdgeNet] Role request approved", "role-request-approved", emailList)
 		}
 	case statusApproved:
 		rolerequestCopy := rolerequest.DeepCopy()
 		rolerequestCopy.Status.Notified = false
 		c.edgenetclientset.RegistrationV1alpha1().RoleRequests(rolerequestCopy.GetNamespace()).UpdateStatus(context.TODO(), rolerequestCopy, metav1.UpdateOptions{})
 	case statusPending:
-		if errEmail := access.SendEmailForRoleRequest(rolerequest, "role-request-approved", "[EdgeNet] Role request approved",
-			string(systemNamespace.GetUID()), []string{rolerequest.Spec.Email}); errEmail == nil {
-			rolerequestCopy := rolerequest.DeepCopy()
-			rolerequestCopy.Status.Notified = true
-			c.edgenetclientset.RegistrationV1alpha1().RoleRequests(rolerequestCopy.GetNamespace()).UpdateStatus(context.TODO(), rolerequestCopy, metav1.UpdateOptions{})
-		}
-		// access.SendSlackNotificationForRoleRequest(rolerequest, "role-request-approved", "[EdgeNet] Role request approved", string(systemNamespace.GetUID()))
+		sendNotification("[EdgeNet Admin] A role request made", "role-request-made", []string{rolerequest.Spec.Email})
 	}
 }
 
@@ -520,6 +525,21 @@ func (c *Controller) processClusterRoleRequest(clusterrolerequest *registrationv
 	if err != nil {
 		return
 	}
+
+	var sendNotification = func(subject, purpose string, recipient []string) {
+		content := new(notification.Content)
+		content.Init(clusterrolerequest.Spec.FirstName, clusterrolerequest.Spec.LastName, clusterrolerequest.Spec.Email, subject, string(systemNamespace.GetUID()), recipient)
+		content.ClusterRoleRequest = new(notification.ClusterRoleRequest)
+		content.ClusterRoleRequest.Name = clusterrolerequest.GetName()
+		content.AuthToken = c.slackTokenPath
+		content.ChannelId = c.slackChannelIdPath
+		if errNotification := content.SendNotification(purpose); errNotification == nil {
+			clusterrolerequestCopy := clusterrolerequest.DeepCopy()
+			clusterrolerequestCopy.Status.Notified = true
+			c.edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().UpdateStatus(context.TODO(), clusterrolerequestCopy, metav1.UpdateOptions{})
+		}
+	}
+
 	switch clusterrolerequest.Status.State {
 	case statusBound:
 		emailList := []string{}
@@ -549,30 +569,13 @@ func (c *Controller) processClusterRoleRequest(clusterrolerequest *registrationv
 			}
 		}
 		if len(emailList) > 0 {
-			if errEmail := access.SendEmailForClusterRoleRequest(clusterrolerequest, "clusterrole-request-made", "[EdgeNet] A cluster role request made",
-				string(systemNamespace.GetUID()), emailList); errEmail == nil {
-				if errSlack := access.SendSlackNotificationForClusterRoleRequest(clusterrolerequest, "clusterrole-request-made", "[EdgeNet] A cluster role request made",
-					string(systemNamespace.GetUID())); errSlack == nil {
-					clusterrolerequestCopy := clusterrolerequest.DeepCopy()
-					clusterrolerequestCopy.Status.Notified = true
-					c.edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().UpdateStatus(context.TODO(), clusterrolerequestCopy, metav1.UpdateOptions{})
-				}
-			}
-
+			sendNotification("[EdgeNet] Cluster role request approved", "clusterrole-request-approved", emailList)
 		}
 	case statusApproved:
 		clusterrolerequestCopy := clusterrolerequest.DeepCopy()
 		clusterrolerequestCopy.Status.Notified = false
 		c.edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().UpdateStatus(context.TODO(), clusterrolerequestCopy, metav1.UpdateOptions{})
 	case statusPending:
-		if errEmail := access.SendEmailForClusterRoleRequest(clusterrolerequest, "clusterrole-request-approved", "[EdgeNet] Cluster role request approved",
-			string(systemNamespace.GetUID()), []string{clusterrolerequest.Spec.Email}); errEmail == nil {
-			if errSlack := access.SendSlackNotificationForClusterRoleRequest(clusterrolerequest, "clusterrole-request-approved", "[EdgeNet] Cluster role request approved",
-				string(systemNamespace.GetUID())); errSlack == nil {
-				clusterrolerequestCopy := clusterrolerequest.DeepCopy()
-				clusterrolerequestCopy.Status.Notified = true
-				c.edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().UpdateStatus(context.TODO(), clusterrolerequestCopy, metav1.UpdateOptions{})
-			}
-		}
+		sendNotification("[EdgeNet Admin] A cluster role request made", "clusterrole-request-made", []string{clusterrolerequest.Spec.Email})
 	}
 }

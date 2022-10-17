@@ -1,7 +1,8 @@
-package slack
+package notification
 
 import (
 	"fmt"
+	"io/ioutil"
 	"time"
 
 	"github.com/slack-go/slack"
@@ -14,37 +15,17 @@ const (
 	TENANT_REQUEST_MADE       = "kubectl patch tenantrequest %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./admin.cfg"
 )
 
-type Content struct {
-	Cluster   string
-	User      string
-	FirstName string
-	LastName  string
-	Subject   string
-	AuthToken string
-	ChannelId string
-	// There are not recipient since this the notification will only be sent to a channel.
-	// If requested this may be changed to support multiple Slack channels.
-	// Recipient     []string
-	ClusterRolerequest *ClusterRoleRequest
-	RoleRequest        *RoleRequest
-	TenantRequest      *TenantRequest
-}
+func (c Content) slack(purpose string) error {
+	authToken, err := ioutil.ReadFile(*c.AuthToken)
+	if err != nil {
+		return err
+	}
+	channelId, err := ioutil.ReadFile(*c.ChannelId)
+	if err != nil {
+		return err
+	}
 
-type ClusterRoleRequest struct {
-	Name string
-}
-
-type RoleRequest struct {
-	Name      string
-	Namespace string
-}
-
-type TenantRequest struct {
-	Tenant string
-}
-
-func (c *Content) Send(purpose string) error {
-	client := slack.New(c.AuthToken)
+	client := slack.New(string(authToken))
 
 	googleScholarLink := fmt.Sprintf("<https://scholar.google.com/scholar?hl=en&as_sdt=0%%2C5&q=%s+%s&oq=|Google Scholar>", c.FirstName, c.LastName)
 
@@ -71,7 +52,7 @@ func (c *Content) Send(purpose string) error {
 	if purpose == "clusterrole-request-made" {
 		fields = append(fields, slack.AttachmentField{
 			Title: "Console Command",
-			Value: fmt.Sprintf(CLUSTER_ROLE_REQUEST_MADE, c.ClusterRolerequest.Name),
+			Value: fmt.Sprintf(CLUSTER_ROLE_REQUEST_MADE, c.ClusterRoleRequest.Name),
 		})
 	} else if purpose == "rolerequest-made" {
 		fields = append(fields, slack.AttachmentField{
@@ -94,7 +75,7 @@ func (c *Content) Send(purpose string) error {
 	}
 
 	_, timestamp, err := client.PostMessage(
-		c.ChannelId,
+		string(channelId),
 		slack.MsgOptionAttachments(attachment),
 	)
 

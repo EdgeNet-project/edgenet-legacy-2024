@@ -20,13 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
-	"github.com/EdgeNet-project/edgenet/pkg/mailer"
-	slack "github.com/EdgeNet-project/edgenet/pkg/slack"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -133,123 +130,4 @@ func checkNamespaceCreation(tenant string, created chan<- bool) {
 	}
 	created <- false
 	close(created)
-}
-
-func SendEmailForRoleRequest(roleRequestCopy *registrationv1alpha1.RoleRequest, purpose, subject, clusterUID string, recipient []string) error {
-	email := new(mailer.Content)
-	email.Cluster = clusterUID
-	email.User = roleRequestCopy.Spec.Email
-	email.FirstName = roleRequestCopy.Spec.FirstName
-	email.LastName = roleRequestCopy.Spec.LastName
-	email.Subject = subject
-	email.Recipient = recipient
-	email.RoleRequest = new(mailer.RoleRequest)
-	email.RoleRequest.Name = roleRequestCopy.GetName()
-	email.RoleRequest.Namespace = roleRequestCopy.GetNamespace()
-	err := email.Send(purpose)
-	return err
-}
-
-func SendEmailForTenantRequest(tenantRequestCopy *registrationv1alpha1.TenantRequest, purpose, subject, clusterUID string, recipient []string) error {
-	email := new(mailer.Content)
-	email.Cluster = clusterUID
-	email.User = tenantRequestCopy.Spec.Contact.Email
-	email.FirstName = tenantRequestCopy.Spec.Contact.FirstName
-	email.LastName = tenantRequestCopy.Spec.Contact.LastName
-	email.Subject = subject
-	email.Recipient = recipient
-	email.TenantRequest = new(mailer.TenantRequest)
-	email.TenantRequest.Tenant = tenantRequestCopy.GetName()
-	err := email.Send(purpose)
-	return err
-}
-
-func SendEmailForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest, purpose, subject, clusterUID string, recipient []string) error {
-	email := new(mailer.Content)
-	email.Cluster = clusterUID
-	email.User = clusterRoleRequestCopy.Spec.Email
-	email.FirstName = clusterRoleRequestCopy.Spec.FirstName
-	email.LastName = clusterRoleRequestCopy.Spec.LastName
-	email.Subject = subject
-	email.Recipient = recipient
-	email.ClusterRoleRequest = new(mailer.ClusterRoleRequest)
-	email.ClusterRoleRequest.Name = clusterRoleRequestCopy.GetName()
-	err := email.Send(purpose)
-	return err
-}
-
-// Send a slack notification for role request
-func SendSlackNotificationForRoleRequest(roleRequestCopy *registrationv1alpha1.RoleRequest, purpose, subject, clusterUID string) error {
-	authToken, err := ioutil.ReadFile(*SlackTokenPath)
-	if err != nil {
-		return err
-	}
-	channelId, err := ioutil.ReadFile(*SlackChannelIdPath)
-	if err != nil {
-		return err
-	}
-
-	slackNotification := new(slack.Content)
-	slackNotification.Cluster = clusterUID
-	slackNotification.User = roleRequestCopy.Spec.Email
-	slackNotification.FirstName = roleRequestCopy.Spec.FirstName
-	slackNotification.LastName = roleRequestCopy.Spec.LastName
-	slackNotification.Subject = subject
-	slackNotification.AuthToken = string(authToken)
-	slackNotification.ChannelId = string(channelId)
-	slackNotification.RoleRequest = new(slack.RoleRequest)
-	slackNotification.RoleRequest.Name = roleRequestCopy.GetName()
-	slackNotification.RoleRequest.Namespace = roleRequestCopy.GetNamespace()
-	err = slackNotification.Send(purpose)
-	return err
-}
-
-// Send a slack notification for tenant request
-func SendSlackNotificationForTenantRequest(tenantRequestCopy *registrationv1alpha1.TenantRequest, purpose, subject, clusterUID string) error {
-	authToken, err := ioutil.ReadFile(*SlackTokenPath)
-	if err != nil {
-		return err
-	}
-	channelId, err := ioutil.ReadFile(*SlackChannelIdPath)
-	if err != nil {
-		return err
-	}
-
-	slackNotification := new(slack.Content)
-	slackNotification.Cluster = clusterUID
-	slackNotification.User = tenantRequestCopy.Spec.Contact.Email
-	slackNotification.FirstName = tenantRequestCopy.Spec.Contact.FirstName
-	slackNotification.LastName = tenantRequestCopy.Spec.Contact.LastName
-	slackNotification.Subject = subject
-	slackNotification.AuthToken = string(authToken)
-	slackNotification.ChannelId = string(channelId)
-	slackNotification.TenantRequest = new(slack.TenantRequest)
-	slackNotification.TenantRequest.Tenant = tenantRequestCopy.GetName()
-	err = slackNotification.Send(purpose)
-	return err
-}
-
-// Send a slack notification for cluster role request
-func SendSlackNotificationForClusterRoleRequest(clusterRoleRequestCopy *registrationv1alpha1.ClusterRoleRequest, purpose, subject, clusterUID string) error {
-	authToken, err := ioutil.ReadFile(*SlackTokenPath)
-	if err != nil {
-		return err
-	}
-	channelId, err := ioutil.ReadFile(*SlackChannelIdPath)
-	if err != nil {
-		return err
-	}
-
-	slackNotification := new(slack.Content)
-	slackNotification.Cluster = clusterUID
-	slackNotification.User = clusterRoleRequestCopy.Spec.Email
-	slackNotification.FirstName = clusterRoleRequestCopy.Spec.FirstName
-	slackNotification.LastName = clusterRoleRequestCopy.Spec.LastName
-	slackNotification.Subject = subject
-	slackNotification.AuthToken = string(authToken)
-	slackNotification.ChannelId = string(channelId)
-	slackNotification.ClusterRolerequest = new(slack.ClusterRoleRequest)
-	slackNotification.ClusterRolerequest.Name = clusterRoleRequestCopy.GetName()
-	err = slackNotification.Send(purpose)
-	return err
 }

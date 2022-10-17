@@ -1,4 +1,4 @@
-package mailer
+package notification
 
 import (
 	"flag"
