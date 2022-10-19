@@ -26,8 +26,6 @@ type Content struct {
 	RoleRequest        *RoleRequest
 	TenantRequest      *TenantRequest
 	ClusterRoleRequest *ClusterRoleRequest
-	AuthToken          *string
-	ChannelId          *string
 }
 type RoleRequest struct {
 	Name      string
@@ -52,7 +50,7 @@ func (c Content) Init(firstname, lastname, email, subject, clusterUID string, re
 func (c Content) SendNotification(purpose string) error {
 	var err error
 	err = c.email(purpose)
-	if c.RoleRequest == nil && c.AuthToken != nil && c.ChannelId != nil {
+	if c.RoleRequest == nil {
 		err = c.slack(purpose)
 	}
 	return err

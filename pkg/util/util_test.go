@@ -1,12 +1,16 @@
 package util
 
 import (
+	"flag"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestGetOperations(t *testing.T) {
+	flag.String("configs-path", "../../configs", "Set Namecheap path.")
+	flag.Parse()
+
 	t.Run("config view", func(t *testing.T) {
 		_, err := getConfigView()
 		OK(t, err)

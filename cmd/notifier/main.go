@@ -19,6 +19,8 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
+	"strings"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha1/notifier"
@@ -30,19 +32,24 @@ import (
 
 func main() {
 	klog.InitFlags(nil)
-	slackTokenPath := flag.String("slack-token-path", "/edgenet/credentials/slack/token", "Path to the auth token for Slack")
-	slackChannelIdPath := flag.String("slack-channel-id-path", "/edgenet/credentials/slack/channelid", "Path to Slack channel ID")
+	flag.String("kubeconfig-path", bootstrap.GetDefaultKubeconfigPath(), "Path to the kubeconfig file's directory")
+	flag.String("smtp-path", "/edgenet/credentials/smtp.yaml", "Path to the SMTP credentials to send email")
+	flag.String("slack-token-path", "/edgenet/credentials/slack/token", "Path to the auth token for Slack")
+	flag.String("slack-channel-id-path", "/edgenet/credentials/slack/channelid", "Path to Slack channel ID")
+	flag.String("template-path", "/edgenet/assets/templates/email", "Path to the email templates")
 	flag.Parse()
 
 	stopCh := signals.SetupSignalHandler()
-	// TODO: Pass an argument to select using kubeconfig or service account for clients
-	// bootstrap.SetKubeConfig()
-	kubeclientset, err := bootstrap.CreateClientset("serviceaccount")
+	var authentication string
+	if authentication := strings.TrimSpace(os.Getenv("AUTHENTICATION_STRATEGY")); authentication == "" {
+		authentication = "serviceaccount"
+	}
+	kubeclientset, err := bootstrap.CreateClientset(authentication)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	edgenetclientset, err := bootstrap.CreateEdgeNetClientset("serviceaccount")
+	edgenetclientset, err := bootstrap.CreateEdgeNetClientset(authentication)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -56,9 +63,7 @@ func main() {
 		edgenetclientset,
 		edgenetInformerFactory.Registration().V1alpha1().TenantRequests(),
 		edgenetInformerFactory.Registration().V1alpha1().RoleRequests(),
-		edgenetInformerFactory.Registration().V1alpha1().ClusterRoleRequests(),
-		slackTokenPath,
-		slackChannelIdPath)
+		edgenetInformerFactory.Registration().V1alpha1().ClusterRoleRequests())
 
 	edgenetInformerFactory.Start(stopCh)
 

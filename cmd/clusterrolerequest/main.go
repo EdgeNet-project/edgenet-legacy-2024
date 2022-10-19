@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
+	"strings"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha1/clusterrolerequest"
@@ -14,21 +16,25 @@ import (
 
 func main() {
 	klog.InitFlags(nil)
+	flag.String("kubeconfig-path", bootstrap.GetDefaultKubeconfigPath(), "Path to the kubeconfig file's directory")
 	flag.Parse()
 
 	stopCh := signals.SetupSignalHandler()
-	// TODO: Pass an argument to select using kubeconfig or service account for clients
-	// bootstrap.SetKubeConfig()
-	kubeclientset, err := bootstrap.CreateClientset("serviceaccount")
+	var authentication string
+	if authentication := strings.TrimSpace(os.Getenv("AUTHENTICATION_STRATEGY")); authentication == "" {
+		authentication = "serviceaccount"
+	}
+	kubeclientset, err := bootstrap.CreateClientset(authentication)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	edgenetclientset, err := bootstrap.CreateEdgeNetClientset("serviceaccount")
+	edgenetclientset, err := bootstrap.CreateEdgeNetClientset(authentication)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
+
 	// Start the controller to provide the functionalities of clusterrolerequest resource
 	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
 

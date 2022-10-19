@@ -18,6 +18,7 @@ package nodecontribution
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -116,7 +117,6 @@ type Controller struct {
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
 	recorder          record.EventRecorder
-	publicKey         ssh.Signer
 	route53hostedZone string
 	domainName        string
 }
@@ -136,19 +136,6 @@ func NewController(
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
-	// Get the SSH Private Key of the control plane node
-	key, err := ioutil.ReadFile("../../.ssh/id_rsa")
-	if err != nil {
-		klog.Info(err.Error())
-		panic(err.Error())
-	}
-
-	publicKey, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		klog.Info(err.Error())
-		panic(err.Error())
-	}
-
 	controller := &Controller{
 		kubeclientset:           kubeclientset,
 		edgenetclientset:        edgenetclientset,
@@ -158,7 +145,6 @@ func NewController(
 		nodecontributionsSynced: nodecontributionInformer.Informer().HasSynced,
 		workqueue:               workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NodeContributions"),
 		recorder:                recorder,
-		publicKey:               publicKey,
 		route53hostedZone:       hostedZone,
 		domainName:              domain,
 	}
@@ -318,9 +304,25 @@ func (c *Controller) init(nodecontribution *corev1alpha1.NodeContribution) {
 	}
 	// Set the client config according to the node contribution,
 	// with the maximum time of 15 seconds to establist the connection.
+	// Get the SSH Private Key of the control plane node
+	sshPath := "./.ssh"
+	if flag.Lookup("ssh-path") != nil {
+		sshPath = flag.Lookup("ssh-path").Value.(flag.Getter).Get().(string)
+	}
+	key, err := ioutil.ReadFile(sshPath)
+	if err != nil {
+		klog.Info(err.Error())
+		panic(err.Error())
+	}
+
+	publicKey, err := ssh.ParsePrivateKey(key)
+	if err != nil {
+		klog.Info(err.Error())
+		panic(err.Error())
+	}
 	config := &ssh.ClientConfig{
 		User:            nodecontributionCopy.Spec.User,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(c.publicKey)},
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(publicKey)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         15 * time.Second,
 	}

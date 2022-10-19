@@ -35,8 +35,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-var kubeconfig string
-
 func homeDir() string {
 	if h := os.Getenv("HOME"); h != "" {
 		return h
@@ -44,14 +42,22 @@ func homeDir() string {
 	return os.Getenv("USERPROFILE")
 }
 
-// SetKubeConfig declares the options and calls parse before using them to set kubeconfig variable
-func SetKubeConfig() {
+func GetDefaultKubeconfigPath() string {
+	var kubeconfigPath string
 	if home := homeDir(); home != "" {
-		flag.StringVar(&kubeconfig, "kubeconfig", filepath.Join(home, ".kube", "config"), "")
+		kubeconfigPath = filepath.Join(home, ".kube", "config")
 	} else {
-		flag.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
+		kubeconfigPath = "/edgenet/.kube"
 	}
-	flag.Parse()
+	return kubeconfigPath
+}
+
+func getKubeconfigPath() string {
+	var kubeconfigPath string = GetDefaultKubeconfigPath()
+	if flag.Lookup("kubeconfig-path") != nil {
+		kubeconfigPath = flag.Lookup("kubeconfig-path").Value.(flag.Getter).Get().(string)
+	}
+	return kubeconfigPath
 }
 
 // CreateEdgeNetClientset generates the clientset to interact with the custom resources
@@ -69,7 +75,7 @@ func CreateEdgeNetClientset(by string) (*clientset.Clientset, error) {
 
 	if by == "kubeconfig" {
 		// Use the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		config, err := clientcmd.BuildConfigFromFlags("", getKubeconfigPath())
 		if err != nil {
 			log.Println(err.Error())
 			panic(err.Error())
@@ -101,7 +107,7 @@ func CreateClientset(by string) (*kubernetes.Clientset, error) {
 
 	if by == "kubeconfig" {
 		// Use the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		config, err := clientcmd.BuildConfigFromFlags("", getKubeconfigPath())
 		if err != nil {
 			// TODO: Error handling
 			panic(err.Error())
@@ -145,7 +151,7 @@ func CreateAntreaClientset(by string) (*antrea.Clientset, error) {
 
 	if by == "kubeconfig" {
 		// Use the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		config, err := clientcmd.BuildConfigFromFlags("", getKubeconfigPath())
 		if err != nil {
 			log.Println(err.Error())
 			panic(err.Error())

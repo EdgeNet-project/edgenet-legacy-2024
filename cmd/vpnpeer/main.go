@@ -19,17 +19,20 @@ import (
 
 func main() {
 	klog.InitFlags(nil)
+	flag.String("kubeconfig-path", bootstrap.GetDefaultKubeconfigPath(), "Path to the kubeconfig file's directory")
 	flag.Parse()
 
 	stopCh := signals.SetupSignalHandler()
-	// TODO: Pass an argument to select using kubeconfig or service account for clients
-	// bootstrap.SetKubeConfig()
-	kubeclientset, err := bootstrap.CreateClientset("serviceaccount")
+	var authentication string
+	if authentication := strings.TrimSpace(os.Getenv("AUTHENTICATION_STRATEGY")); authentication == "" {
+		authentication = "serviceaccount"
+	}
+	kubeclientset, err := bootstrap.CreateClientset(authentication)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	edgenetclientset, err := bootstrap.CreateEdgeNetClientset("serviceaccount")
+	edgenetclientset, err := bootstrap.CreateEdgeNetClientset(authentication)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())

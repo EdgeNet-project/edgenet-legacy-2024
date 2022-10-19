@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"flag"
 	"path/filepath"
 	"testing"
 
@@ -18,9 +19,9 @@ func TestHomeDir(t *testing.T) {
 }
 
 func TestClientSetCreation(t *testing.T) {
-	SetKubeConfig()
+	kubeconfigPath := getKubeconfigPath()
 	t.Run("preparing kubeconfig file", func(t *testing.T) {
-		util.Equals(t, filepath.Join(homeDir(), ".kube", "config"), kubeconfig)
+		util.Equals(t, filepath.Join(homeDir(), ".kube", "config"), kubeconfigPath)
 	})
 	t.Run("create edgenet clientset", func(t *testing.T) {
 		_, err := CreateEdgeNetClientset("kubeconfig")
@@ -33,6 +34,8 @@ func TestClientSetCreation(t *testing.T) {
 }
 
 func TestNamecheapClient(t *testing.T) {
+	flag.String("configs-path", "../../configs", "Set Namecheap path.")
+	flag.Parse()
 	_, err := CreateNamecheapClient()
 	util.OK(t, err)
 }

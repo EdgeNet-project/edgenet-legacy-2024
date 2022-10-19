@@ -25,8 +25,6 @@ type smtpServer struct {
 	To       string `yaml:"to"`
 }
 
-var dir = "../.."
-
 func (c Content) email(purpose string) error {
 	server := mail.NewSMTPClient()
 
@@ -55,7 +53,11 @@ func (c Content) email(purpose string) error {
 		return err
 	}
 	var htmlBody bytes.Buffer
-	t, _ := template.ParseFiles(fmt.Sprintf("%s/assets/templates/email/%s.html", dir, purpose))
+	var pathTemplate string = "./email"
+	if flag.Lookup("template-path") != nil {
+		pathTemplate = flag.Lookup("template-path").Value.(flag.Getter).Get().(string)
+	}
+	t, _ := template.ParseFiles(fmt.Sprintf("%s/%s.html", pathTemplate, purpose))
 	t.Execute(&htmlBody, c)
 	// || c.TenantRequest != nil
 	if len(c.Recipient) == 0 {
@@ -80,16 +82,10 @@ func (c Content) email(purpose string) error {
 
 func getSMTPInformation() (*smtpServer, error) {
 	// The code below inits the SMTP configuration for sending emails
-	if flag.Lookup("dir") != nil {
-		dir = flag.Lookup("dir").Value.(flag.Getter).Get().(string)
-	}
 	// The path of the yaml config file of smtp server
-	var pathSMTP string
+	var pathSMTP string = "./token"
 	if flag.Lookup("smtp-path") != nil {
 		pathSMTP = flag.Lookup("smtp-path").Value.(flag.Getter).Get().(string)
-	}
-	if pathSMTP == "" {
-		pathSMTP = fmt.Sprintf("%s/configs/smtp.yaml", dir)
 	}
 	file, err := os.Open(pathSMTP)
 	if err != nil {

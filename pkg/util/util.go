@@ -17,6 +17,7 @@ limitations under the License.
 package util
 
 import (
+	"flag"
 	"fmt"
 	"hash/adler32"
 	"log"
@@ -174,7 +175,11 @@ func GetServerOfCurrentContext() (string, error) {
 // GetNamecheapCredentials provides authentication info to have API Access
 func GetNamecheapCredentials() (string, string, string, error) {
 	// The path of the yaml config file of namecheap
-	file, err := os.Open("../../configs/namecheap.yaml")
+	var namecheapPath string = "."
+	if flag.Lookup("configs-path") != nil {
+		namecheapPath = flag.Lookup("configs-path").Value.(flag.Getter).Get().(string)
+	}
+	file, err := os.Open(fmt.Sprintf("%s/namecheap.yaml", namecheapPath))
 	if err != nil {
 		log.Printf("unexpected error executing command: %v", err)
 		return "", "", "", err

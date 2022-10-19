@@ -113,12 +113,9 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 	}
 	server = strings.Trim(server, "https://")
 	server = strings.Trim(server, "http://")
-	var pathCA string
+	var pathCA string = "/etc/kubernetes/pki/ca.crt"
 	if flag.Lookup("ca-path") != nil {
 		pathCA = flag.Lookup("ca-path").Value.(flag.Getter).Get().(string)
-	}
-	if pathCA == "" {
-		pathCA = "/etc/kubernetes/pki/ca.crt"
 	}
 	// This reads CA cert to be hashed
 	certs, err := cert.CertsFromFile(pathCA)

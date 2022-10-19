@@ -18,21 +18,28 @@ import (
 
 func main() {
 	klog.InitFlags(nil)
+	flag.String("kubeconfig-path", bootstrap.GetDefaultKubeconfigPath(), "Path to the kubeconfig file's directory")
+	flag.String("ssh-path", "/edgenet/.ssh", "Path to the SSH keys")
+	flag.String("configs-path", "/edgenet/configs", "Path to the config files")
+	flag.String("ca-path", "/etc/kubernetes/pki/ca.crt", "Path to the CA")
 	flag.Parse()
 
 	stopCh := signals.SetupSignalHandler()
-	// TODO: Pass an argument to select using kubeconfig or service account for clients
-	// bootstrap.SetKubeConfig()
-	kubeclientset, err := bootstrap.CreateClientset("serviceaccount")
+	var authentication string
+	if authentication := strings.TrimSpace(os.Getenv("AUTHENTICATION_STRATEGY")); authentication == "" {
+		authentication = "serviceaccount"
+	}
+	kubeclientset, err := bootstrap.CreateClientset(authentication)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	edgenetclientset, err := bootstrap.CreateEdgeNetClientset("serviceaccount")
+	edgenetclientset, err := bootstrap.CreateEdgeNetClientset(authentication)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
+
 	// Start the controller to provide the functionalities of nodecontribution resource
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
 	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)

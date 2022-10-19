@@ -77,9 +77,7 @@ type Controller struct {
 	workqueueRoleRequest        workqueue.RateLimitingInterface
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
-	recorder           record.EventRecorder
-	slackTokenPath     *string
-	slackChannelIdPath *string
+	recorder record.EventRecorder
 }
 
 // NewController returns a new controller
@@ -88,9 +86,7 @@ func NewController(
 	edgenetclientset clientset.Interface,
 	tenantrequestInformer informers.TenantRequestInformer,
 	rolerequestInformer informers.RoleRequestInformer,
-	clusterrolerequestInformer informers.ClusterRoleRequestInformer,
-	slackTokenPath *string,
-	slackChannelIdPath *string) *Controller {
+	clusterrolerequestInformer informers.ClusterRoleRequestInformer) *Controller {
 	// Create event broadcaster
 	utilruntime.Must(scheme.AddToScheme(scheme.Scheme))
 	klog.Infoln("Creating event broadcaster")
@@ -112,8 +108,6 @@ func NewController(
 		workqueueClusterRoleRequest: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NotifierClusterRoleRequest"),
 		workqueueRoleRequest:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NotifierRoleRequest"),
 		recorder:                    recorder,
-		slackTokenPath:              slackTokenPath,
-		slackChannelIdPath:          slackChannelIdPath,
 	}
 	klog.Infoln("Setting up event handlers")
 
@@ -401,8 +395,6 @@ func (c *Controller) processTenantRequest(tenantrequest *registrationv1alpha1.Te
 		content.Init(tenantrequest.Spec.Contact.FirstName, tenantrequest.Spec.Contact.LastName, tenantrequest.Spec.Contact.Email, subject, string(systemNamespace.GetUID()), recipient)
 		content.TenantRequest = new(notification.TenantRequest)
 		content.TenantRequest.Tenant = tenantrequest.GetName()
-		content.AuthToken = c.slackTokenPath
-		content.ChannelId = c.slackChannelIdPath
 		if err := content.SendNotification(purpose); err == nil {
 			tenantrequestCopy := tenantrequest.DeepCopy()
 			tenantrequestCopy.Status.Notified = true
@@ -468,8 +460,6 @@ func (c *Controller) processRoleRequest(rolerequest *registrationv1alpha1.RoleRe
 		content.RoleRequest = new(notification.RoleRequest)
 		content.RoleRequest.Name = rolerequest.GetName()
 		content.RoleRequest.Namespace = rolerequest.GetNamespace()
-		content.AuthToken = c.slackTokenPath
-		content.ChannelId = c.slackChannelIdPath
 		if errNotification := content.SendNotification(purpose); errNotification == nil {
 			rolerequestCopy := rolerequest.DeepCopy()
 			rolerequestCopy.Status.Notified = true
@@ -531,8 +521,6 @@ func (c *Controller) processClusterRoleRequest(clusterrolerequest *registrationv
 		content.Init(clusterrolerequest.Spec.FirstName, clusterrolerequest.Spec.LastName, clusterrolerequest.Spec.Email, subject, string(systemNamespace.GetUID()), recipient)
 		content.ClusterRoleRequest = new(notification.ClusterRoleRequest)
 		content.ClusterRoleRequest.Name = clusterrolerequest.GetName()
-		content.AuthToken = c.slackTokenPath
-		content.ChannelId = c.slackChannelIdPath
 		if errNotification := content.SendNotification(purpose); errNotification == nil {
 			clusterrolerequestCopy := clusterrolerequest.DeepCopy()
 			clusterrolerequestCopy.Status.Notified = true
