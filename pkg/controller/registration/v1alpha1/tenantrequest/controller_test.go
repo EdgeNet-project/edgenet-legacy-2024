@@ -34,6 +34,11 @@ type TestGroup struct {
 
 var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
+var edgenetInformerFactory = informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
+
+var c = NewController(kubeclientset,
+	edgenetclientset,
+	edgenetInformerFactory.Registration().V1alpha().TenantRequests())
 
 func TestMain(m *testing.M) {
 	klog.SetOutput(ioutil.Discard)
@@ -194,4 +199,92 @@ func TestUpdate(t *testing.T) {
 			util.Equals(t, tenantRequestTest.Spec.ResourceAllocation, tenantResourceQuota.Spec.Claim["initial"].ResourceList)
 		})
 	})
+}
+
+//TODO: running failed
+/*
+panic: runtime error: invalid memory address or nil pointer dereference [recovered]
+*/
+func TestProcessTenantRequest(t *testing.T) {
+	tenantRequest := getTestResource("tenant-request-controller-test")
+	//case 1: tenantRequestCopy.Status.Expiry = nil
+	tenantRequest.Status.Expiry = nil
+	c.processTenantRequest(tenantRequest)
+	expected := metav1.Time{
+		Time: time.Now().Add(72 * time.Hour),
+	}
+	util.Equals(t, expected.Day(), tenantRequest.Status.Expiry.Day())
+	util.Equals(t, expected.Month(), tenantRequest.Status.Expiry.Month())
+	util.Equals(t, expected.Year(), tenantRequest.Status.Expiry.Year())
+	// case 2:
+	tenantRequest.Spec.Approved = false
+	c.processTenantRequest(tenantRequest)
+	util.Equals(t, pending, tenantRequest.Status.State)
+	util.Equals(t, messageNotApproved, tenantRequest.Status.Message)
+	// case 3: not sure if node access.CreateTenant(tenantRequestCopy) will be successful or not
+	tenantRequest.Spec.Approved = true
+	c.processTenantRequest(tenantRequest)
+	util.Equals(t, approved, tenantRequest.Status.State)
+	util.Equals(t, messageRoleApproved, tenantRequest.Status.Message)
+}
+
+func TestEnqueueTenantRequestAfter(t *testing.T) {
+	tenantRequest := getTestResource("tenant-request-controller-test")
+	c.enqueueTenantRequestAfter(tenantRequest, 10*time.Millisecond)
+	util.Equals(t, 0, c.workqueue.Len())
+	time.Sleep(250 * time.Millisecond)
+	util.Equals(t, 1, c.workqueue.Len())
+}
+
+func TestEnqueueTenantRequest(t *testing.T) {
+	tenantRequest_1 := getTestResource("tenant-request-controller-test")
+	tenantRequest_2 := getTestResource("tenant-request-controller-test-2")
+
+	c.enqueueTenantRequest(tenantRequest_1)
+	util.Equals(t, 1, c.workqueue.Len())
+	c.enqueueTenantRequest(tenantRequest_2)
+	util.Equals(t, 2, c.workqueue.Len())
+}
+
+// TODO: test failed
+/*
+=== RUN   TestSyncHandler
+        exp: "Approved"
+
+        got: "Pending"
+FAIL
+*/
+func TestSyncHandler(t *testing.T) {
+	key := "default/tenant-request-controller-test"
+	tenantRequest := getTestResource("tenant-request-controller-test")
+	tenantRequest.Status.State = pending
+	err := c.syncHandler(key)
+	util.OK(t, err)
+	util.Equals(t, approved, tenantRequest.Status.State)
+}
+
+// TODO: More test cases
+func TestProcessNextWorkItem(t *testing.T) {
+	tenantRequest := getTestResource("tenant-request-controller-test")
+	c.enqueueTenantRequest(tenantRequest)
+	util.Equals(t, 1, c.workqueue.Len())
+	c.processNextWorkItem()
+	util.Equals(t, 0, c.workqueue.Len())
+}
+
+//TODO: check: why return tenantRequestTestObj is null pointer
+func getTestResource(name string) *registrationv1alpha.TenantRequest {
+	g := TestGroup{}
+	g.Init()
+	tenantRequestTest := g.tenantRequestObj.DeepCopy()
+	tenantRequestTest.SetName(name)
+	tenantRequestTest.SetNamespace("default")
+	// Create a tenant request
+	edgenetclientset.RegistrationV1alpha().TenantRequests().Create(context.TODO(), tenantRequestTest, metav1.CreateOptions{})
+	// Wait for the status update of created object
+	time.Sleep(250 * time.Millisecond)
+	// Get the object and check the status
+	// tenantRequestTestObj, _ := edgenetclientset.RegistrationV1alpha().TenantRequests().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
+	// return tenantRequestTestObj
+	return tenantRequestTest
 }

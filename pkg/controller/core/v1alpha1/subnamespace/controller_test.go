@@ -470,3 +470,228 @@ func TestQuota(t *testing.T) {
 	_, err = kubeclientset.CoreV1().Namespaces().Get(context.TODO(), childName3, metav1.GetOptions{})
 	util.Equals(t, true, errors.IsNotFound(err))
 }
+
+func TestProcessNextWorkItem(t *testing.T) {
+	c := getController()
+	subNamespaceObj := getSubNameSpaceTestObj()
+	c.enqueueSubNamespace(subNamespaceObj)
+	c.processNextWorkItem()
+	util.Equals(t, 0, c.workqueue.Len())
+}
+func TestSyncHandler(t *testing.T) {
+	key := "edgenet/edgenet"
+	c := getController()
+	subNamespaceObj := getSubNameSpaceTestObj()
+	err := c.syncHandler(key)
+	util.OK(t, err)
+	util.Equals(t, established, subNamespaceObj.Status.State)
+	util.Equals(t, messageFormed, subNamespaceObj.Status.Message)
+}
+func TestEnqueueSubNamespace(t *testing.T) {
+	c := getController()
+	subNamespaceObj := getSubNameSpaceTestObj()
+	c.enqueueSubNamespace(subNamespaceObj)
+	util.Equals(t, 1, c.workqueue.Len())
+}
+
+func TestEnqueueSubNamespaceAfter(t *testing.T) {
+	c := getController()
+	subNamespaceObj := getSubNameSpaceTestObj()
+	c.enqueueSubNamespaceAfter(subNamespaceObj, 10*time.Millisecond)
+	util.Equals(t, 0, c.workqueue.Len())
+	time.Sleep(250 * time.Millisecond)
+	util.Equals(t, 1, c.workqueue.Len())
+}
+
+//TODO
+// func TestHandleObject(t *testing.T) {}
+
+//TODO MORE
+func TestProcessSubNamespace(t *testing.T) {
+	c := getController()
+	subNamespaceObj := getSubNameSpaceTestObj()
+	c.processSubNamespace(subNamespaceObj)
+	util.Equals(t, established, subNamespaceObj.Status.State)
+	util.Equals(t, messageFormed, subNamespaceObj.Status.Message)
+}
+
+// TODO: test failed
+func TestCheckSliceClaim(t *testing.T) {
+	c := getController()
+	subNamespaceObj := getSubNameSpaceTestObj()
+	sliceclaimObj := getSliceClaimTestObj()
+	sliceclaimObj.Status.State = bound
+	isBound, isApplied := c.checkSliceClaim(subNamespaceObj.GetName(), sliceclaimObj.GetName())
+	util.Equals(t, true, isBound)
+	util.Equals(t, false, isApplied)
+	sliceclaimObj.Status.State = applied
+	isBound, isApplied = c.checkSliceClaim(subNamespaceObj.GetName(), sliceclaimObj.GetName())
+	util.Equals(t, false, isBound)
+	util.Equals(t, true, isApplied)
+	sliceclaimObj.Status.State = established
+	isBound, isApplied = c.checkSliceClaim(subNamespaceObj.GetName(), sliceclaimObj.GetName())
+	util.Equals(t, false, isBound)
+	util.Equals(t, false, isApplied)
+}
+
+// TODO: test failed
+func TestCheckSlice(t *testing.T) {
+	c := getController()
+	sliceTestObj := getSliceClaimTestObj()
+	sliceTestObj.Status.State = provisioned
+	isProvisioned := c.checkSlice(sliceTestObj.GetName())
+	util.Equals(t, true, isProvisioned)
+	sliceTestObj.Status.State = established
+	isProvisioned = c.checkSlice(sliceTestObj.GetName())
+	util.Equals(t, false, isProvisioned)
+}
+
+func getController() *Controller {
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, 0)
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
+	controller := NewController(kubeclientset,
+		edgenetclientset,
+		kubeInformerFactory.Rbac().V1().Roles(),
+		kubeInformerFactory.Rbac().V1().RoleBindings(),
+		kubeInformerFactory.Networking().V1().NetworkPolicies(),
+		kubeInformerFactory.Core().V1().LimitRanges(),
+		kubeInformerFactory.Core().V1().Secrets(),
+		kubeInformerFactory.Core().V1().ConfigMaps(),
+		kubeInformerFactory.Core().V1().ServiceAccounts(),
+		edgenetInformerFactory.Core().V1alpha().SubNamespaces())
+	return controller
+}
+
+func getSubNameSpaceTestObj() *corev1alpha.SubNamespace {
+	g := TestGroup{}
+	g.Init()
+	subNamespaceObj := g.subNamespaceObj.DeepCopy()
+	edgenetclientset.CoreV1alpha().SubNamespaces("edgenet").Create(context.TODO(), subNamespaceObj, metav1.CreateOptions{})
+	time.Sleep(450 * time.Millisecond)
+	subNamespaceTestObj, _ := edgenetclientset.CoreV1alpha().SubNamespaces("edgenet").Get(context.TODO(), subNamespaceObj.GetName(), metav1.GetOptions{})
+	return subNamespaceTestObj
+}
+
+func getSliceClaimTestObj() *corev1alpha.SliceClaim {
+	sliceclaimObj := corev1alpha.SliceClaim{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "SliceClaim",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sliceclaim-subnamespace-test",
+			UID:       "sliceclaim-subnamespace-test",
+			Namespace: "edgenet",
+		},
+		Spec: corev1alpha.SliceClaimSpec{
+			SliceClassName: "Slice",
+			SliceName:      "slice-subnamespace-test",
+			NodeSelector: corev1alpha.NodeSelector{
+				Selector: corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      "edgenet",
+									Operator: corev1.NodeSelectorOpLt,
+									Values:   []string{"1"},
+								},
+							},
+							MatchFields: []corev1.NodeSelectorRequirement{},
+						},
+					},
+				},
+				Count: 2,
+				Resources: corev1.ResourceRequirements{
+					Limits: corev1.ResourceList{
+						corev1.ResourceMemory:           resource.MustParse("4Gi"),
+						corev1.ResourceCPU:              resource.MustParse("2"),
+						corev1.ResourceEphemeralStorage: resource.MustParse("51493088"),
+						corev1.ResourcePods:             resource.MustParse("100"),
+					},
+					Requests: corev1.ResourceList{
+						corev1.ResourceMemory:           resource.MustParse("2Gi"),
+						corev1.ResourceCPU:              resource.MustParse("1"),
+						corev1.ResourceEphemeralStorage: resource.MustParse("25746544"),
+						corev1.ResourcePods:             resource.MustParse("50"),
+					},
+				},
+			},
+			SliceExpiry: &metav1.Time{
+				Time: time.Now().Add(72 * time.Hour),
+			},
+		},
+	}
+	sliceClaimTest := sliceclaimObj.DeepCopy()
+
+	// Create a test object
+	edgenetclientset.CoreV1alpha().SliceClaims("edgenet-sub").Create(context.TODO(), sliceClaimTest, metav1.CreateOptions{})
+	// Wait for the status update of created object
+	time.Sleep(250 * time.Millisecond)
+	// Get the object and check the status
+	sliceClaimTestObj, _ := edgenetclientset.CoreV1alpha().SliceClaims("edgenet-sub").Get(context.TODO(), sliceClaimTest.GetName(), metav1.GetOptions{})
+	return sliceClaimTestObj
+}
+
+func getSliceTestObj() *corev1alpha.Slice {
+	sliceObj := corev1alpha.Slice{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Slice",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "edgenet",
+			UID:       "edgenet",
+			Namespace: "default",
+		},
+		Spec: corev1alpha.SliceSpec{
+			SliceClassName: "Slice",
+			ClaimRef: &corev1.ObjectReference{
+				Kind:            "Sclice",
+				Namespace:       "default",
+				Name:            "slice-controller-test",
+				UID:             "slice-controller-test",
+				APIVersion:      "apps.edgenet.io/v1alpha",
+				ResourceVersion: "",
+				FieldPath:       "",
+			},
+			NodeSelector: corev1alpha.NodeSelector{
+				Selector: corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      "edgenet",
+									Operator: corev1.NodeSelectorOpExists,
+									Values:   []string{},
+								},
+							},
+							MatchFields: []corev1.NodeSelectorRequirement{},
+						},
+					},
+				},
+				Count: 2,
+				Resources: corev1.ResourceRequirements{
+					Limits: corev1.ResourceList{
+						corev1.ResourceMemory:           resource.MustParse("4Gi"),
+						corev1.ResourceCPU:              resource.MustParse("2"),
+						corev1.ResourceEphemeralStorage: resource.MustParse("51493088"),
+						corev1.ResourcePods:             resource.MustParse("100"),
+					},
+					Requests: corev1.ResourceList{
+						corev1.ResourceMemory:           resource.MustParse("2Gi"),
+						corev1.ResourceCPU:              resource.MustParse("1"),
+						corev1.ResourceEphemeralStorage: resource.MustParse("25746544"),
+						corev1.ResourcePods:             resource.MustParse("100"),
+					},
+				},
+			},
+		},
+	}
+	sliceTest := sliceObj.DeepCopy()
+	// Create a test object
+	edgenetclientset.CoreV1alpha().Slices().Create(context.TODO(), sliceTest, metav1.CreateOptions{})
+	time.Sleep(250 * time.Millisecond)
+	sliceTestObj, _ := edgenetclientset.CoreV1alpha().Slices().Get(context.TODO(), sliceTest.GetName(), metav1.GetOptions{})
+	return sliceTestObj
+}

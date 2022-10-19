@@ -2,6 +2,7 @@ package remoteip
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"net/http"
 	"testing"
@@ -52,6 +53,133 @@ func TestIsPrivateSubnet(t *testing.T) {
 	for _, tc := range cases {
 		output := isPrivateSubnet(tc.input)
 		util.Equals(t, tc.expected, output)
+	}
+}
+
+/*
+   --- FAIL: FuzzIpRange (0.00s)
+       remoteip_test.go:126: ip range is {190.9.7.16, 190.9.7.16}, ipAddress is 190.9.7.16
+       remoteip_test.go:126: ip range is {190.9.7.16, 190.9.7.16}, ipAddress is 144.9.7.16
+*/
+func FuzzIpRange(f *testing.F) {
+	a1 := uint8(192)
+	b1 := uint8(168)
+	c1 := uint8(17)
+	d1 := uint8(0)
+	a2 := uint8(195)
+	b2 := uint8(111)
+	c2 := uint8(19)
+	d2 := uint8(3)
+	x4 := uint8(193)
+	getOrder := func(a, b uint8) (int, int) {
+		if a < b {
+			return int(a), int(b)
+		} else {
+			return int(b), int(a)
+		}
+	}
+	f.Add(a1, b1, c1, d1, a2, b2, c2, d2, x4)
+	f.Fuzz(func(t *testing.T, a1, b1, c1, d1, a2, b2, c2, d2, x4 uint8) {
+		x1, x2 := getOrder(a1, a2)
+		y1, y2 := getOrder(b1, b2)
+		z1, z2 := getOrder(c1, c2)
+		n1, n2 := getOrder(d1, d2)
+		start := net.ParseIP(fmt.Sprintf("%d.%d.%d.%d", x1, y1, z1, n1))
+		end := net.ParseIP(fmt.Sprintf("%d.%d.%d.%d", x2, y2, z2, n2))
+		var x3, y3, z3, n3 int
+		if x2 > x1 {
+			x3 = rand.Intn(x2-x1) + x1
+		} else {
+			x3 = x1
+		}
+		if y2 > y1 {
+			y3 = rand.Intn(y2-y1) + y1
+		} else {
+			y3 = y1
+		}
+		if z2 > z1 {
+			z3 = rand.Intn(z2-z1) + z1
+		} else {
+			z3 = z1
+		}
+		if n2 > n1 {
+			n3 = rand.Intn(n2-n1) + n1
+		} else {
+			n3 = n1
+		}
+		ip1 := net.ParseIP(fmt.Sprintf("%d.%d.%d.%d", x3, y3, z3, n3))
+		ip2 := net.ParseIP(fmt.Sprintf("%d.%d.%d.%d", int(x4), y3, z3, n3))
+		cases := []struct {
+			input    ipRange
+			adress   net.IP
+			expected bool
+		}{
+			{ipRange{start, end},
+				ip1,
+				true},
+			{ipRange{start, end},
+				ip2,
+				inBetween(x4, uint8(x1), uint8(x2))},
+		}
+		for _, tc := range cases {
+			output := inRange(tc.input, tc.adress)
+			util.Equals(t, tc.expected, output)
+			t.Logf("ip range is {%v, %v}, ipAddress is %v", tc.input.start, tc.input.end, tc.adress)
+		}
+	})
+}
+
+// TODO: wierd, run it failed, re-run success
+func FuzzIsPrivateSubnet(f *testing.F) {
+	a := uint8(192)
+	b := uint8(168)
+	c := uint8(17)
+	d := uint8(87)
+	expected := false
+	f.Add(a, b, c, d)
+	f.Fuzz(func(t *testing.T, a, b, c, d uint8) {
+		ipv4 := net.ParseIP(fmt.Sprintf("%d.%d.%d.%d", a, b, c, d))
+		t.Logf("%d.%d.%d.%d", a, b, c, d)
+		switch a {
+		case 10:
+			expected = true
+		case 100:
+			if inBetween(b, 64, 127) {
+				expected = true
+			} else {
+				expected = false
+			}
+		case 172:
+			if inBetween(b, 16, 31) {
+				expected = true
+			} else {
+				expected = false
+			}
+		case 192:
+			if b == 0 && c == 0 || b == 168 {
+				expected = true
+			} else {
+				expected = false
+			}
+		case 198:
+			if inBetween(b, 18, 19) {
+				expected = true
+			} else {
+				expected = false
+			}
+		default:
+			expected = false
+		}
+		output := isPrivateSubnet(ipv4)
+		util.Equals(t, expected, output)
+	})
+}
+
+func inBetween(i, min, max uint8) bool {
+	if (i >= min) && (i <= max) {
+		return true
+	} else {
+		return false
 	}
 }
 

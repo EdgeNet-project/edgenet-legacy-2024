@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -1010,4 +1011,165 @@ func TestGetByNode(t *testing.T) {
 	util.Equals(t, true, status)
 	util.Equals(t, "getbynode", ownerList[0][0])
 	util.Equals(t, sdObj.GetName(), ownerList[0][1])
+}
+
+func TestProcessNextWorkItem(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	sdObj := g.sdObj.DeepCopy()
+	controller.enqueueSelectiveDeployment(sdObj)
+	sdObj2 := g.sdObj.DeepCopy()
+	sdObj2.SetName("sdObj2")
+	controller.enqueueSelectiveDeployment(sdObj2)
+	controller.processNextWorkItem()
+	util.Equals(t, 1, controller.workqueue.Len())
+	util.Equals(t, success, sdObj.Status.State)
+	util.Equals(t, []string{statusDict["sd-success"]}, sdObj.Status.Message)
+	util.Equals(t, "5/5", sdObj.Status.Ready)
+	controller.processNextWorkItem()
+	util.Equals(t, 0, controller.workqueue.Len())
+}
+
+// TODO: test failed!
+func TestSyncHandler(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	sdObj := g.sdObj.DeepCopy()
+	sdObj.SetName("edgenet-sd-test")
+	sdObj.SetNamespace("edgenet")
+	key := "edgenet/edgenet-sd-test"
+	err := controller.syncHandler(key)
+	util.OK(t, err)
+	util.Equals(t, success, sdObj.Status.State)
+	util.Equals(t, []string{statusDict["sd-success"]}, sdObj.Status.Message)
+	util.Equals(t, "5/5", sdObj.Status.Ready)
+}
+
+func TestEnqueueSelectiveDeployment(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	sdObj := g.sdObj.DeepCopy()
+	controller.enqueueSelectiveDeployment(sdObj)
+	util.Equals(t, 1, controller.workqueue.Len())
+	sdObj2 := g.sdObj.DeepCopy()
+	sdObj2.SetName("sdObj2")
+	controller.enqueueSelectiveDeployment(sdObj2)
+	util.Equals(t, 2, controller.workqueue.Len())
+}
+
+//TODO: failed to run
+func TestHandleObject(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	sdObjV := [5]*apps_v1alpha.SelectiveDeployment{}
+	for i := 0; i < 5; i++ {
+		sdObjV[i] = g.sdObj.DeepCopy()
+		sdObjV[i].SetName("sdObj" + strconv.Itoa(i))
+		edgenetclientset.AppsV1alpha().SelectiveDeployments("default").Create(context.TODO(), sdObjV[i], metav1.CreateOptions{})
+	}
+	time.Sleep(time.Millisecond * 500)
+	sdObjCopyV := [5]*apps_v1alpha.SelectiveDeployment{}
+	for i := 0; i < 5; i++ {
+		sdObjCopyV[i], _ = edgenetclientset.AppsV1alpha().SelectiveDeployments("default").Get(context.TODO(), sdObjV[i].GetName(), metav1.GetOptions{})
+	}
+	deploymentObj := g.deploymentObj.DeepCopy()
+	deploymentObj.ObjectMeta.OwnerReferences = SetAsOwnerReference(sdObjCopyV[0])
+	controller.handleObject(deploymentObj)
+	util.Equals(t, 1, controller.workqueue.Len())
+	sdDaemonset := g.daemonsetObj.DeepCopy()
+	sdDaemonset.ObjectMeta.OwnerReferences = SetAsOwnerReference(sdObjCopyV[1])
+	controller.handleObject(sdDaemonset)
+	util.Equals(t, 2, controller.workqueue.Len())
+	sdStatefulSet := g.statefulsetObj.DeepCopy()
+	sdDaemonset.ObjectMeta.OwnerReferences = SetAsOwnerReference(sdObjCopyV[2])
+	controller.handleObject(sdStatefulSet)
+	util.Equals(t, 3, controller.workqueue.Len())
+	sdJob := g.jobObj.DeepCopy()
+	sdDaemonset.ObjectMeta.OwnerReferences = SetAsOwnerReference(sdObjCopyV[3])
+	controller.handleObject(sdJob)
+	util.Equals(t, 4, controller.workqueue.Len())
+	sdCronJob := g.cronjobObj.DeepCopy()
+	sdDaemonset.ObjectMeta.OwnerReferences = SetAsOwnerReference(sdObjCopyV[4])
+	controller.handleObject(sdCronJob)
+	util.Equals(t, 5, controller.workqueue.Len())
+}
+
+//TODO: run failed
+func TestRecoverSelectiveDeployments(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	// Creating nodes
+	nodeParis := g.nodeObj.DeepCopy()
+	nodeParis.SetName("edgenet.planet-lab.eu")
+	nodeParis.ObjectMeta.Labels = map[string]string{
+		"kubernetes.io/hostname":  "edgenet.planet-lab.eu",
+		"edge-net.io/city":        "Paris",
+		"edge-net.io/country-iso": "FR",
+		"edge-net.io/state-iso":   "IDF",
+		"edge-net.io/continent":   "Europe",
+		"edge-net.io/lon":         "e2.34",
+		"edge-net.io/lat":         "n48.86",
+	}
+	kubeclientset.CoreV1().Nodes().Create(context.TODO(), nodeParis.DeepCopy(), metav1.CreateOptions{})
+	// Invoke the create function
+	sdObj := g.sdObj.DeepCopy()
+	sdObj.SetName("getbynode")
+	useu := g.selector
+	useu.Value = []string{"US", "FR"}
+	useu.Quantity = 2
+	useu.Name = "Country"
+	sdObj.Spec.Selector = []apps_v1alpha.Selector{useu}
+	edgenetclientset.AppsV1alpha().SelectiveDeployments("getbynode").Create(context.TODO(), sdObj.DeepCopy(), metav1.CreateOptions{})
+	time.Sleep(time.Millisecond * 500)
+	edgenetclientset.AppsV1alpha().SelectiveDeployments("getbynode").Get(context.TODO(), sdObj.GetName(), metav1.GetOptions{})
+	controller.recoverSelectiveDeployments(nodeParis)
+	util.Equals(t, 1, controller.workqueue.Len())
+}
+
+// TODO: check workloadCopy
+func TestConfigureWorkload(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	sdObj := g.sdObj.DeepCopy()
+	ownerReferences := SetAsOwnerReference(sdObj)
+	for _, deploymentObj := range sdObj.Spec.Workloads.Deployment {
+		_, failureCount := controller.configureWorkload(sdObj, deploymentObj, ownerReferences)
+		util.Equals(t, 0, failureCount)
+	}
+	for _, sdDaemonset := range sdObj.Spec.Workloads.DaemonSet {
+		_, failureCount := controller.configureWorkload(sdObj, sdDaemonset, ownerReferences)
+		util.Equals(t, 0, failureCount)
+	}
+	for _, sdStatefulSet := range sdObj.Spec.Workloads.StatefulSet {
+		_, failureCount := controller.configureWorkload(sdObj, sdStatefulSet, ownerReferences)
+		util.Equals(t, 0, failureCount)
+	}
+	for _, sdJob := range sdObj.Spec.Workloads.Job {
+		_, failureCount := controller.configureWorkload(sdObj, sdJob, ownerReferences)
+		util.Equals(t, 0, failureCount)
+	}
+	for _, sdCronJob := range sdObj.Spec.Workloads.CronJob {
+		_, failureCount := controller.configureWorkload(sdObj, sdCronJob, ownerReferences)
+		util.Equals(t, 0, failureCount)
+	}
+}
+
+func TestApplyCriteria(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	sdObj := g.sdObj.DeepCopy()
+	controller.applyCriteria(sdObj)
+	util.Equals(t, success, sdObj.Status.State)
+	util.Equals(t, []string{statusDict["sd-success"]}, sdObj.Status.Message)
+	util.Equals(t, "5/5", sdObj.Status.Ready)
+}
+
+// TODO: test nodeSelectorTermList
+func TestSetFilter(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	sdObj := g.sdObj.DeepCopy()
+	_, failureCounter := controller.setFilter(sdObj, "addOrUpdate")
+	util.Equals(t, 0, failureCounter)
+
 }

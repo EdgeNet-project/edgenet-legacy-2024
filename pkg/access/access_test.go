@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
@@ -316,6 +317,8 @@ func TestPermissionSystem(t *testing.T) {
 	}
 }
 
+var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
+
 func TestApplyTenantResourceQuota(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
@@ -333,4 +336,84 @@ func TestApplyTenantResourceQuota(t *testing.T) {
 	util.OK(t, <-applied)
 	_, err = EdgenetClientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
+}
+
+func TestCreateTenant(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	tenantRequestObj := g.tenantRequest
+	err := CreateTenant(&tenantRequestObj)
+	util.OK(t, err)
+	tenantObj, err := EdgenetClientset.CoreV1alpha().Tenants().Get(context.TODO(), tenantRequestObj.GetName(), metav1.GetOptions{})
+	util.OK(t, err)
+	util.Equals(t, tenantRequestObj.GetName(), tenantObj.GetName())
+	util.Equals(t, tenantRequestObj.Spec.Address, tenantObj.Spec.Address)
+	util.Equals(t, tenantRequestObj.Spec.Contact, tenantObj.Spec.Contact)
+	util.Equals(t, tenantRequestObj.Spec.FullName, tenantObj.Spec.FullName)
+	util.Equals(t, tenantRequestObj.Spec.ShortName, tenantObj.Spec.ShortName)
+	util.Equals(t, tenantRequestObj.Spec.URL, tenantObj.Spec.URL)
+	util.Equals(t, tenantRequestObj.Spec.ClusterNetworkPolicy, tenantObj.Spec.ClusterNetworkPolicy)
+	util.Equals(t, true, tenantObj.Spec.Enabled)
+	util.Equals(t, tenantRequestObj.GetAnnotations(), tenantObj.GetAnnotations())
+}
+
+//TODO: panic: test timed out after 10m0s
+func TestCheckNamespaceCreation(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	tenantObj := g.tenantObj
+	created := make(chan bool)
+	checkNamespaceCreation(tenantObj.GetName(), created)
+	util.Equals(t, false, created)
+	util.Equals(t, true, created)
+}
+
+func TestSendEmailForRoleRequest(t *testing.T) {
+	roleRequestObj := getTestResource().DeepCopy()
+	purpose := "role-request-approved"
+	subject := "Role Request Approval"
+	clusterUID := "clusterUID"
+	recipient := []string{"john.doe@edge-net.org"}
+	SendEmailForRoleRequest(roleRequestObj, purpose, subject, clusterUID, recipient)
+}
+
+func TestSendEmailForTenantRequest(t *testing.T) {
+	g := TestGroup{}
+	g.Init()
+	tenantRequest := g.tenantRequest.DeepCopy()
+	purpose := "role-request-approved"
+	subject := "Role Request Approval"
+	clusterUID := "clusterUID"
+	// recipient := []string{"john.doe@edge-net.org"}
+	recipient := []string{"atf828@gmail.com"}
+	SendEmailForTenantRequest(tenantRequest, purpose, subject, clusterUID, recipient)
+}
+
+func getTestResource() *registrationv1alpha.RoleRequest {
+	roleRequest := registrationv1alpha.RoleRequest{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "RoleRequest",
+			APIVersion: "apps.edgenet.io/v1alpha",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "johnsmith",
+			Namespace: "edgenet",
+		},
+		Spec: registrationv1alpha.RoleRequestSpec{
+			FirstName: "John",
+			LastName:  "Smith",
+			Email:     "john.smith@edge-net.org",
+			RoleRef: registrationv1alpha.RoleRefSpec{
+				Kind: "ClusterRole",
+				Name: "edgenet:tenant-admin",
+			},
+		},
+	}
+	// EdgenetClientset.RegistrationV1alpha().RoleRequests(roleRequest.GetNamespace()).Create(context.TODO(), &roleRequest, metav1.CreateOptions{})
+	edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequest.GetNamespace()).Create(context.TODO(), &roleRequest, metav1.CreateOptions{})
+	// Wait for the status update of created object
+	time.Sleep(time.Millisecond * 500)
+	// Get the object and check the status
+	roleRequestObj, _ := edgenetclientset.RegistrationV1alpha().RoleRequests(roleRequest.GetNamespace()).Get(context.TODO(), roleRequest.GetName(), metav1.GetOptions{})
+	return roleRequestObj
 }

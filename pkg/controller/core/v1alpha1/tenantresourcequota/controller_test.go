@@ -40,6 +40,13 @@ type TestGroup struct {
 
 var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
+var kubeInformerFactory = kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
+var edgenetInformerFactory = informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
+
+var c = NewController(kubeclientset,
+	edgenetclientset,
+	kubeInformerFactory.Core().V1().Nodes(),
+	edgenetInformerFactory.Core().V1alpha().TenantResourceQuotas())
 
 func TestMain(m *testing.M) {
 	klog.SetOutput(ioutil.Discard)
@@ -477,6 +484,45 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
+func TestEnqueueTenantResourceQuotaAfter(t *testing.T) {
+	tenantResourceQuota := getTenantResourceQuota()
+	c.enqueueTenantResourceQuotaAfter(tenantResourceQuota, 10*time.Millisecond)
+	util.Equals(t, 1, c.workqueue.Len())
+	time.Sleep(250 * time.Millisecond)
+	util.Equals(t, 0, c.workqueue.Len())
+}
+
+func TestEnqueueTenantResourceQuota(t *testing.T) {
+	tenantResourceQuota_1 := getTenantResourceQuota()
+	tenantResourceQuota_2 := getTenantResourceQuota()
+
+	c.enqueueTenantResourceQuota(tenantResourceQuota_1)
+	util.Equals(t, 1, c.workqueue.Len())
+	c.enqueueTenantResourceQuota(tenantResourceQuota_2)
+	util.Equals(t, 2, c.workqueue.Len())
+}
+
+func TestProcessNextWorkItem(t *testing.T) {
+	tenantResourceQuota := getTenantResourceQuota()
+	c.enqueueTenantResourceQuota(tenantResourceQuota)
+	c.processNextWorkItem()
+	util.Equals(t, 0, c.workqueue.Len())
+}
+
+func TestProcessTenantResourceQuota(t *testing.T) {
+	tenantResourceQuota := getTenantResourceQuota()
+	c.processTenantResourceQuota(tenantResourceQuota)
+	util.Equals(t, success, tenantResourceQuota.Status.State)
+	util.Equals(t, messageApplied, tenantResourceQuota.Status.Message)
+}
+
+// TODO:
+// func TestAccumulateQuota(t *testing.T) {}
+// func TestSyncHandler(t *testing.T) {}
+// func TestTuneResourceQuotaAcrossNamespaces(t *testing.T){}
+// func TestNamespaceTraversal(t *testing.T){}
+// func TestTraverse(t *testing.T){}
+
 func getQuotas(claimRaw map[string]corev1alpha.ResourceTuning) (int64, int64) {
 	var cpuQuota int64
 	var memoryQuota int64
@@ -487,4 +533,23 @@ func getQuotas(claimRaw map[string]corev1alpha.ResourceTuning) (int64, int64) {
 		memoryQuota += memoryResource.Value()
 	}
 	return cpuQuota, memoryQuota
+}
+
+func getTenantResourceQuota() *corev1alpha.TenantResourceQuota {
+	g := TestGroup{}
+	g.Init()
+	randomString := util.GenerateRandomString(6)
+	g.CreateTenant(randomString)
+	// Create a resource request
+	tenantResourceQuotaObj := g.tenantResourceQuotaObj
+	tenantResourceQuotaObj.SetName(randomString)
+	tenantResourceQuotaObj.SetUID(types.UID(randomString))
+	tenantResourceQuotaObj.Spec.Claim = make(map[string]corev1alpha.ResourceTuning)
+	tenantResourceQuotaObj.Spec.Claim["initial"] = g.claimObj
+	edgenetclientset.CoreV1alpha().TenantResourceQuotas().Create(context.TODO(), tenantResourceQuotaObj.DeepCopy(), metav1.CreateOptions{})
+	// Wait for the status update of created object
+	time.Sleep(250 * time.Millisecond)
+	// Get the object and check the status
+	tenantResourceQuota, _ := edgenetclientset.CoreV1alpha().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
+	return tenantResourceQuota
 }
