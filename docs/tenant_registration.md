@@ -99,6 +99,8 @@ spec:
 
 Using ``kubectl``, create a tenant request object:
 
+You will be unable to change the name of a tenant request after creating it. Before continuing, ensure that your file is correct. A non-approved request will be deleted after 72 hours. Once that is done, you can use the same name again.
+
 ```
 kubectl create -f ./tenantrequest.yaml --kubeconfig ./edgenet.cfg
 ```
