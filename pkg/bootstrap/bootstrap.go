@@ -81,7 +81,7 @@ func CreateEdgeNetClientset(by string) (*clientset.Clientset, error) {
 			panic(err.Error())
 		}
 		edgenetclientset = generateClientset(config)
-	} else if by == "serviceaccount" {
+	} else {
 		// Creates the in-cluster config
 		config, err := rest.InClusterConfig()
 		if err != nil {
@@ -113,7 +113,7 @@ func CreateClientset(by string) (*kubernetes.Clientset, error) {
 			panic(err.Error())
 		}
 		kubeclientset = generateClientset(config)
-	} else if by == "serviceaccount" {
+	} else {
 		// Creates the in-cluster config
 		config, err := rest.InClusterConfig()
 		if err != nil {
@@ -157,7 +157,7 @@ func CreateAntreaClientset(by string) (*antrea.Clientset, error) {
 			panic(err.Error())
 		}
 		antreaclientset = generateClientset(config)
-	} else if by == "serviceaccount" {
+	} else {
 		// Creates the in-cluster config
 		config, err := rest.InClusterConfig()
 		if err != nil {

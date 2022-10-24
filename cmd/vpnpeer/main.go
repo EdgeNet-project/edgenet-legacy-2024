@@ -24,7 +24,7 @@ func main() {
 
 	stopCh := signals.SetupSignalHandler()
 	var authentication string
-	if authentication := strings.TrimSpace(os.Getenv("AUTHENTICATION_STRATEGY")); authentication == "" {
+	if authentication = strings.TrimSpace(os.Getenv("AUTHENTICATION_STRATEGY")); authentication != "kubeconfig" {
 		authentication = "serviceaccount"
 	}
 	kubeclientset, err := bootstrap.CreateClientset(authentication)
