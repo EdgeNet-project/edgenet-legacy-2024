@@ -38,8 +38,7 @@ func (c *Content) slack(purpose string) error {
 	client := slack.New(strings.TrimSpace(string(authToken)))
 
 	googleScholarLink := fmt.Sprintf("<https://scholar.google.com/scholar?hl=en&as_sdt=0%%2C5&q=%s+%s&oq=|Google Scholar>", c.FirstName, c.LastName)
-	currentTime := time.Now()
-	currentTime.Format(time.RFC1123)
+
 	fields := []slack.AttachmentField{
 		{
 			Title: "User Information",
@@ -51,7 +50,7 @@ func (c *Content) slack(purpose string) error {
 		},
 		{
 			Title: "Notification Date",
-			Value: currentTime.String(),
+			Value: time.Now().Format(time.RFC1123),
 		},
 		{
 			Title: "Approve via Console",
