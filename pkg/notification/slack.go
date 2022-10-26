@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"strings"
 	"time"
 
 	"github.com/slack-go/slack"
@@ -16,7 +17,7 @@ const (
 	TENANT_REQUEST_MADE       = "kubectl patch tenantrequest %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./admin.cfg"
 )
 
-func (c Content) slack(purpose string) error {
+func (c *Content) slack(purpose string) error {
 	authTokenPath := "./token"
 	if flag.Lookup("slack-token-path") != nil {
 		authTokenPath = flag.Lookup("slack-token-path").Value.(flag.Getter).Get().(string)
@@ -34,43 +35,44 @@ func (c Content) slack(purpose string) error {
 		return err
 	}
 
-	client := slack.New(string(authToken))
+	client := slack.New(strings.TrimSpace(string(authToken)))
 
 	googleScholarLink := fmt.Sprintf("<https://scholar.google.com/scholar?hl=en&as_sdt=0%%2C5&q=%s+%s&oq=|Google Scholar>", c.FirstName, c.LastName)
-
+	currentTime := time.Now()
+	currentTime.Format(time.RFC1123)
 	fields := []slack.AttachmentField{
 		{
 			Title: "User Information",
-			Value: fmt.Sprintf("%s (%s %s) Google Scholar: %s", c.User, c.FirstName, c.LastName, googleScholarLink),
+			Value: fmt.Sprintf("%s %s, %s, %s", c.FirstName, c.LastName, c.User, googleScholarLink),
 		},
 		{
 			Title: "Cluster Information",
 			Value: c.Cluster,
 		},
 		{
-			Title: "Date",
-			Value: time.Now().String(),
+			Title: "Notification Date",
+			Value: currentTime.String(),
 		},
 		{
-			Title: "Console Link",
-			Value: "Use this <https://www.edge-net.org/|link>",
+			Title: "Approve via Console",
+			Value: "Please click on this <https://console.edge-net.org/|link> to access the web console.",
 		},
 	}
 
 	// If the command for approval exists also add it to the slack notification
 	if purpose == "clusterrole-request-made" {
 		fields = append(fields, slack.AttachmentField{
-			Title: "Console Command",
+			Title: "Approve via Kubectl Command",
 			Value: fmt.Sprintf(CLUSTER_ROLE_REQUEST_MADE, c.ClusterRoleRequest.Name),
 		})
 	} else if purpose == "rolerequest-made" {
 		fields = append(fields, slack.AttachmentField{
-			Title: "Console Command",
+			Title: "Approve via Kubectl Command",
 			Value: fmt.Sprintf(ROLE_REQUEST_MADE, c.RoleRequest.Name, c.RoleRequest.Namespace),
 		})
 	} else if purpose == "tenant-request-made" {
 		fields = append(fields, slack.AttachmentField{
-			Title: "Console Command",
+			Title: "Approve via Kubectl Command",
 			Value: fmt.Sprintf(TENANT_REQUEST_MADE, c.TenantRequest.Tenant),
 		})
 	}
@@ -78,13 +80,13 @@ func (c Content) slack(purpose string) error {
 	// Set edgenet colors
 	attachment := slack.Attachment{
 		Pretext: c.Subject,
-		Text:    purpose,
+		Text:    "Please review the following details to make sure that they are corresponding information to the tenant and correct.",
 		Color:   "#3e7fb8",
 		Fields:  fields,
 	}
 
 	_, timestamp, err := client.PostMessage(
-		string(channelId),
+		strings.TrimSpace(string(channelId)),
 		slack.MsgOptionAttachments(attachment),
 	)
 

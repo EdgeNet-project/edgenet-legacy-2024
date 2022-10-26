@@ -25,7 +25,7 @@ type smtpServer struct {
 	To       string `yaml:"to"`
 }
 
-func (c Content) email(purpose string) error {
+func (c *Content) email(purpose string) error {
 	server := mail.NewSMTPClient()
 
 	// Prepare SMTP server configuration

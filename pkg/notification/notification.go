@@ -38,7 +38,7 @@ type TenantRequest struct {
 	Tenant string
 }
 
-func (c Content) Init(firstname, lastname, email, subject, clusterUID string, recipient []string) {
+func (c *Content) Init(firstname, lastname, email, subject, clusterUID string, recipient []string) {
 	c.Cluster = clusterUID
 	c.User = email
 	c.FirstName = firstname
@@ -47,7 +47,7 @@ func (c Content) Init(firstname, lastname, email, subject, clusterUID string, re
 	c.Recipient = recipient
 }
 
-func (c Content) SendNotification(purpose string) error {
+func (c *Content) SendNotification(purpose string) error {
 	var err error
 	err = c.email(purpose)
 	if c.RoleRequest == nil {
