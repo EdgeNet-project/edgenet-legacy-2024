@@ -19,7 +19,7 @@ import (
 func main() {
 	klog.InitFlags(nil)
 	flag.String("kubeconfig-path", bootstrap.GetDefaultKubeconfigPath(), "Path to the kubeconfig file's directory")
-	flag.String("ssh-path", "/edgenet/.ssh", "Path to the SSH keys")
+	flag.String("ssh-path", "/edgenet/.ssh/id_rsa", "Path to the SSH keys")
 	flag.String("configs-path", "/edgenet/configs", "Path to the config files")
 	flag.String("ca-path", "/etc/kubernetes/pki/ca.crt", "Path to the CA")
 	flag.Parse()
