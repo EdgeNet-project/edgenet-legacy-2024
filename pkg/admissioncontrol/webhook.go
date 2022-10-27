@@ -33,6 +33,7 @@ type Webhook struct {
 	KeyFile  string
 	Codecs   serializer.CodecFactory
 	Runtime  string
+	Port     string
 }
 
 func (wh *Webhook) RunServer() {
@@ -52,7 +53,7 @@ func (wh *Webhook) RunServer() {
 	http.HandleFunc("/validate/slice-claim", wh.validateSliceClaim)
 
 	server := http.Server{
-		Addr: ":443",
+		Addr: ":8080",
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{cert},
 		},
