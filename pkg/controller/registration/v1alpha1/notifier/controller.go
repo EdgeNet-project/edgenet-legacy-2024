@@ -162,7 +162,9 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 
 	klog.Infoln("Starting workers")
 	for i := 0; i < threadiness; i++ {
-		go wait.Until(c.runWorker, time.Second, stopCh)
+		go wait.Until(c.runWorkerTenantRequest, time.Second, stopCh)
+		go wait.Until(c.runWorkerClusterRoleRequest, time.Second, stopCh)
+		go wait.Until(c.runWorkerRoleRequest, time.Second, stopCh)
 	}
 
 	klog.Infoln("Started workers")
@@ -172,20 +174,19 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	return nil
 }
 
-func (c *Controller) runWorker() {
-	for c.processNextWorkItem() {
+func (c *Controller) runWorkerTenantRequest() {
+	for c.processNextTenantRequestItem() {
 	}
 }
 
-func (c *Controller) processNextWorkItem() bool {
-	isSyncedTenant := c.processNextTenantRequestItem()
-	isSyncedClusterRoleRequest := c.processNextClusterRoleRequestItem()
-	isSyncedRoleRequest := c.processNextRoleRequestItem()
-
-	if !isSyncedTenant && !isSyncedClusterRoleRequest && !isSyncedRoleRequest {
-		return false
+func (c *Controller) runWorkerClusterRoleRequest() {
+	for c.processNextClusterRoleRequestItem() {
 	}
-	return true
+}
+
+func (c *Controller) runWorkerRoleRequest() {
+	for c.processNextRoleRequestItem() {
+	}
 }
 
 func (c *Controller) processNextTenantRequestItem() bool {
@@ -371,14 +372,13 @@ func (c *Controller) enqueueNotifier(obj interface{}) {
 		utilruntime.HandleError(err)
 		return
 	}
-	klog.Infoln(obj)
 	switch obj.(type) {
-	case *registrationv1alpha1.TenantRequest:
-		c.workqueueTenantRequest.Add(key)
 	case *registrationv1alpha1.ClusterRoleRequest:
 		c.workqueueClusterRoleRequest.Add(key)
 	case *registrationv1alpha1.RoleRequest:
 		c.workqueueRoleRequest.Add(key)
+	default:
+		c.workqueueTenantRequest.Add(key)
 	}
 }
 
