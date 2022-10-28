@@ -351,15 +351,15 @@ func (c *Controller) grantRequestOwnership(roleRequestCopy *registrationv1alpha1
 	policyRule := []rbacv1.PolicyRule{{APIGroups: []string{"registration.edgenet.io"}, Resources: []string{"rolerequests"}, ResourceNames: []string{roleRequestCopy.GetName()}, Verbs: []string{"get", "update", "patch", "delete"}},
 		{APIGroups: []string{"registration.edgenet.io"}, Resources: []string{fmt.Sprintf("%s/status", "rolerequests")}, ResourceNames: []string{roleRequestCopy.GetName()}, Verbs: []string{"get", "list", "watch"}},
 	}
-	role := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: objectName, OwnerReferences: []metav1.OwnerReference{roleRequestCopy.MakeOwnerReference()}},
+	role := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: objectName, OwnerReferences: []metav1.OwnerReference{roleRequestCopy.MakeOwnerReference()}},
 		Rules: policyRule}
-	if _, err := c.kubeclientset.RbacV1().ClusterRoles().Create(context.TODO(), role, metav1.CreateOptions{}); err == nil || errors.IsAlreadyExists(err) {
+	if _, err := c.kubeclientset.RbacV1().Roles(roleRequestCopy.GetNamespace()).Create(context.TODO(), role, metav1.CreateOptions{}); err == nil || errors.IsAlreadyExists(err) {
 		roleRef := rbacv1.RoleRef{Kind: "Role", Name: objectName}
 		rbSubjects := []rbacv1.Subject{{Kind: "User", Name: roleRequestCopy.Spec.Email, APIGroup: "rbac.authorization.k8s.io"}}
-		roleBind := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName},
+		roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: objectName},
 			Subjects: rbSubjects, RoleRef: roleRef}
 		roleBind.ObjectMeta.OwnerReferences = []metav1.OwnerReference{roleRequestCopy.MakeOwnerReference()}
-		if _, err := c.kubeclientset.RbacV1().ClusterRoleBindings().Create(context.TODO(), roleBind, metav1.CreateOptions{}); err == nil || errors.IsAlreadyExists(err) {
+		if _, err := c.kubeclientset.RbacV1().RoleBindings(roleRequestCopy.GetNamespace()).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err == nil || errors.IsAlreadyExists(err) {
 			return true
 		} else {
 			klog.Infof("Couldn't create %s  role binding: %s", objectName, err)
