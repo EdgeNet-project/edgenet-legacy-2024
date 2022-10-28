@@ -11,8 +11,7 @@ RUN go build -o vpnpeer ./cmd/vpnpeer/
 
 FROM alpine:3.16.2
 
-RUN adduser -D -u 8118 edgenet
-USER edgenet:edgenet
+USER root
 
 WORKDIR /edgenet/vpnpeer/
 COPY --from=build --chown=edgenet:edgenet /edgenet/vpnpeer ./
