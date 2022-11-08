@@ -45,6 +45,10 @@ func (c *Content) slack(purpose string) error {
 			Value: fmt.Sprintf("%s %s, %s, %s", c.FirstName, c.LastName, c.User, googleScholarLink),
 		},
 		{
+			Title: "Request Information",
+			Value: c.getRequestInformation(),
+		},
+		{
 			Title: "Cluster Information",
 			Value: c.Cluster,
 		},
@@ -55,32 +59,20 @@ func (c *Content) slack(purpose string) error {
 	}
 
 	// If the command for approval exists also add it to the slack notification
-	var kubectlCommand string
-	var isRequestMade bool
-	if purpose == "clusterrole-request-made" {
-		isRequestMade = true
-		kubectlCommand = fmt.Sprintf(CLUSTER_ROLE_REQUEST_MADE, c.ClusterRoleRequest.Name)
-	} else if purpose == "rolerequest-made" {
-		isRequestMade = true
-		kubectlCommand = fmt.Sprintf(ROLE_REQUEST_MADE, c.RoleRequest.Name, c.RoleRequest.Namespace)
-	} else if purpose == "tenant-request-made" {
-		isRequestMade = true
-		kubectlCommand = fmt.Sprintf(TENANT_REQUEST_MADE, c.TenantRequest.Tenant)
-	}
-	if isRequestMade {
+	if command, isRequestMade := c.getCommand(purpose); isRequestMade {
 		fields = append(fields, slack.AttachmentField{
 			Title: "Approve via Console",
 			Value: "Please click on this <https://console.edge-net.org/|link> to access the web console.",
 		}, slack.AttachmentField{
 			Title: "Approve via Kubectl Command",
-			Value: kubectlCommand,
+			Value: command,
 		})
 	}
 
 	// Set edgenet colors
 	attachment := slack.Attachment{
 		Pretext: c.Subject,
-		Text:    "Please review the following details to make sure that they are corresponding information to the tenant and correct.",
+		Text:    "Please review the following details to make sure that they are corresponding information to the request owner and correct.",
 		Color:   "#3e7fb8",
 		Fields:  fields,
 	}
@@ -97,4 +89,26 @@ func (c *Content) slack(purpose string) error {
 	klog.V(4).Infof("Slack notification sent on %q", timestamp)
 
 	return nil
+}
+
+func (c *Content) getRequestInformation() string {
+	if c.RoleRequest != nil {
+		return fmt.Sprintf("Name: %s, Namespace: %s", c.RoleRequest.Name, c.RoleRequest.Namespace)
+	} else if c.TenantRequest != nil {
+		return fmt.Sprintf("Name: %s", c.TenantRequest.Tenant)
+	} else {
+		return fmt.Sprintf("Name: %s", c.ClusterRoleRequest.Name)
+	}
+}
+
+func (c *Content) getCommand(purpose string) (string, bool) {
+	if purpose == "clusterrole-request-made" {
+		return fmt.Sprintf(CLUSTER_ROLE_REQUEST_MADE, c.ClusterRoleRequest.Name), true
+	} else if purpose == "rolerequest-made" {
+		return fmt.Sprintf(ROLE_REQUEST_MADE, c.RoleRequest.Name, c.RoleRequest.Namespace), true
+	} else if purpose == "tenant-request-made" {
+		return fmt.Sprintf(TENANT_REQUEST_MADE, c.TenantRequest.Tenant), true
+	} else {
+		return "", false
+	}
 }
