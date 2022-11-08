@@ -63,17 +63,17 @@ func (c *Content) slack(purpose string) error {
 	} else if purpose == "rolerequest-made" {
 		isRequestMade = true
 		kubectlCommand = fmt.Sprintf(ROLE_REQUEST_MADE, c.RoleRequest.Name, c.RoleRequest.Namespace)
-	} else {
+	} else if purpose == "tenant-request-made" {
 		isRequestMade = true
 		kubectlCommand = fmt.Sprintf(TENANT_REQUEST_MADE, c.TenantRequest.Tenant)
 	}
 	if isRequestMade {
 		fields = append(fields, slack.AttachmentField{
-			Title: "Approve via Kubectl Command",
-			Value: kubectlCommand,
-		}, slack.AttachmentField{
 			Title: "Approve via Console",
 			Value: "Please click on this <https://console.edge-net.org/|link> to access the web console.",
+		}, slack.AttachmentField{
+			Title: "Approve via Kubectl Command",
+			Value: kubectlCommand,
 		})
 	}
 
