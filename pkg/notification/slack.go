@@ -52,27 +52,28 @@ func (c *Content) slack(purpose string) error {
 			Title: "Notification Date",
 			Value: time.Now().Format(time.RFC1123),
 		},
-		{
-			Title: "Approve via Console",
-			Value: "Please click on this <https://console.edge-net.org/|link> to access the web console.",
-		},
 	}
 
 	// If the command for approval exists also add it to the slack notification
+	var kubectlCommand string
+	var isRequestMade bool
 	if purpose == "clusterrole-request-made" {
-		fields = append(fields, slack.AttachmentField{
-			Title: "Approve via Kubectl Command",
-			Value: fmt.Sprintf(CLUSTER_ROLE_REQUEST_MADE, c.ClusterRoleRequest.Name),
-		})
+		isRequestMade = true
+		kubectlCommand = fmt.Sprintf(CLUSTER_ROLE_REQUEST_MADE, c.ClusterRoleRequest.Name)
 	} else if purpose == "rolerequest-made" {
+		isRequestMade = true
+		kubectlCommand = fmt.Sprintf(ROLE_REQUEST_MADE, c.RoleRequest.Name, c.RoleRequest.Namespace)
+	} else {
+		isRequestMade = true
+		kubectlCommand = fmt.Sprintf(TENANT_REQUEST_MADE, c.TenantRequest.Tenant)
+	}
+	if isRequestMade {
 		fields = append(fields, slack.AttachmentField{
 			Title: "Approve via Kubectl Command",
-			Value: fmt.Sprintf(ROLE_REQUEST_MADE, c.RoleRequest.Name, c.RoleRequest.Namespace),
-		})
-	} else if purpose == "tenant-request-made" {
-		fields = append(fields, slack.AttachmentField{
-			Title: "Approve via Kubectl Command",
-			Value: fmt.Sprintf(TENANT_REQUEST_MADE, c.TenantRequest.Tenant),
+			Value: kubectlCommand,
+		}, slack.AttachmentField{
+			Title: "Approve via Console",
+			Value: "Please click on this <https://console.edge-net.org/|link> to access the web console.",
 		})
 	}
 
