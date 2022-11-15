@@ -177,6 +177,10 @@ type SubNamespaceStatus struct {
 	State string `json:"state"`
 	// Message contains additional information.
 	Message string `json:"message"`
+	// Failed sets the backoff limit.
+	Failed int `json:"failed"`
+	// Child is the name of the child namespace.
+	Child *string `json:"child"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

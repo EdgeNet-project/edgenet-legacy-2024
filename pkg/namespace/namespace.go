@@ -80,32 +80,29 @@ func SetAsOwnerReference(namespace *corev1.Namespace) []metav1.OwnerReference {
 	return namespaceOwnerReferences
 }
 
-// EligibilityCheck checks whether namespace, in which role request made, is local to the cluster or is propagated along with a federated deployment.
+// EligibilityCheck checks whether namespace, in which object exists, is local to the cluster or is propagated along with a federated deployment.
 // If another cluster propagates the namespace, we skip checking the owner tenant's status as the Selective Deployment entity manages this life-cycle.
-func EligibilityCheck(objName string, objNamespace string) bool {
-	permitted := false
+func EligibilityCheck(objNamespace string) (bool, *corev1.Namespace, map[string]string) {
 	systemNamespace, err := Clientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
 	if err != nil {
 		klog.Infoln(err)
-		return permitted
+		return false, nil, nil
 	}
 	namespace, err := Clientset.CoreV1().Namespaces().Get(context.TODO(), objNamespace, metav1.GetOptions{})
 	if err != nil {
 		klog.Infoln(err)
-		return permitted
+		return false, nil, nil
 	}
 	namespaceLabels := namespace.GetLabels()
-	if systemNamespace.GetUID() != types.UID(namespaceLabels["edge-net.io/cluster-uid"]) {
-		permitted = true
-	} else {
+	if systemNamespace.GetUID() == types.UID(namespaceLabels["edge-net.io/cluster-uid"]) {
 		tenant, err := EdgenetClientset.CoreV1alpha1().Tenants().Get(context.TODO(), strings.ToLower(namespaceLabels["edge-net.io/tenant"]), metav1.GetOptions{})
 		if err != nil {
 			klog.Infoln(err)
-			return permitted
+			return false, nil, nil
 		}
-		if tenant.GetUID() == types.UID(namespaceLabels["edge-net.io/tenant-uid"]) && tenant.Spec.Enabled {
-			permitted = true
+		if tenant.GetUID() != types.UID(namespaceLabels["edge-net.io/tenant-uid"]) || !tenant.Spec.Enabled {
+			return false, nil, nil
 		}
 	}
-	return permitted
+	return true, namespace, namespaceLabels
 }

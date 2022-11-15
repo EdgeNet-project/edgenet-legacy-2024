@@ -29,6 +29,7 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/registration/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/namespace"
+	namespacev1 "github.com/EdgeNet-project/edgenet/pkg/namespace"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -269,8 +270,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha1.Ro
 		return
 	}
 
-	permitted := namespace.EligibilityCheck(roleRequestCopy.GetName(), roleRequestCopy.GetNamespace())
-
+	permitted, _, _ := namespacev1.EligibilityCheck(roleRequestCopy.GetNamespace())
 	if permitted {
 		// Below is to ensure that the requested Role / ClusterRole exists before moving forward in the procedure.
 		// If not, the status of the object falls into an error state.

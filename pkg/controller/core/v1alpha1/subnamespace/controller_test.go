@@ -150,6 +150,7 @@ func (g *TestGroup) Init() {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "edgenet-sub",
 			Namespace: "edgenet",
+			UID:       "edgenet-sub",
 		},
 		Spec: corev1alpha.SubNamespaceSpec{
 			Workspace: &corev1alpha.Workspace{
@@ -235,6 +236,7 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, int64(6442450944), subQuotaMemory)
 
 	subNamespaceControllerNestedTest := g.subNamespaceObj.DeepCopy()
+	subNamespaceControllerNestedTest.SetUID("subnamespace-controller-nested")
 	subNamespaceControllerNestedTest.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
 	subNamespaceControllerNestedTest.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
 	subNamespaceControllerNestedTest.SetName("subnamespace-controller-nested")
@@ -243,7 +245,7 @@ func TestStartController(t *testing.T) {
 	_, err = edgenetclientset.CoreV1alpha1().SubNamespaces(subNamespaceControllerNestedTest.GetNamespace()).Create(context.TODO(), subNamespaceControllerNestedTest, metav1.CreateOptions{})
 	util.OK(t, err)
 	// Wait for the status update of the created object
-	time.Sleep(450 * time.Millisecond)
+	time.Sleep(750 * time.Millisecond)
 
 	subResourceQuota, err = kubeclientset.CoreV1().ResourceQuotas(childName).Get(context.TODO(), fmt.Sprintf("sub-quota"), metav1.GetOptions{})
 	util.OK(t, err)
@@ -285,29 +287,34 @@ func TestCreate(t *testing.T) {
 
 	subnamespace1 := g.subNamespaceObj.DeepCopy()
 	subnamespace1.SetName("all")
+	subnamespace1.SetUID("all")
 	subnamespace1.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("2000m")
 	subnamespace1.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("2Gi")
 	childName1 := subnamespace1.GenerateChildName("")
 	subnamespace1nested := g.subNamespaceObj.DeepCopy()
 	subnamespace1nested.SetName("all-nested")
+	subnamespace1nested.SetUID("all-nested")
 	subnamespace1nested.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
 	subnamespace1nested.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
 	subnamespace1nested.SetNamespace(childName1)
 	childName1nested := subnamespace1nested.GenerateChildName("")
 	subnamespace2 := g.subNamespaceObj.DeepCopy()
 	subnamespace2.SetName("rbac")
+	subnamespace2.SetUID("rbac")
 	subnamespace2.Spec.Workspace.Inheritance["networkpolicy"] = false
 	subnamespace2.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
 	subnamespace2.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
 	childName2 := subnamespace2.GenerateChildName("")
 	subnamespace3 := g.subNamespaceObj.DeepCopy()
 	subnamespace3.SetName("networkpolicy")
+	subnamespace3.SetUID("networkpolicy")
 	subnamespace3.Spec.Workspace.Inheritance["rbac"] = false
 	subnamespace3.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
 	subnamespace3.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
 	childName3 := subnamespace3.GenerateChildName("")
 	subnamespace4 := g.subNamespaceObj.DeepCopy()
 	subnamespace4.SetName("expiry")
+	subnamespace4.SetUID("expiry")
 	subnamespace4.Spec.Workspace.ResourceAllocation["cpu"] = resource.MustParse("1000m")
 	subnamespace4.Spec.Workspace.ResourceAllocation["memory"] = resource.MustParse("1Gi")
 	childName4 := subnamespace4.GenerateChildName("")
@@ -441,20 +448,23 @@ func TestQuota(t *testing.T) {
 	g.Init()
 
 	subnamespace1 := g.subNamespaceObj.DeepCopy()
-	subnamespace1.SetName("all")
+	subnamespace1.SetName("all-quota")
+	subnamespace1.SetUID("all-quota")
 	childName1 := subnamespace1.GenerateChildName("")
 	subnamespace2 := g.subNamespaceObj.DeepCopy()
-	subnamespace2.SetName("rbac")
+	subnamespace2.SetName("rbac-quota")
+	subnamespace2.SetUID("rbac-quota")
 	subnamespace2.Spec.Workspace.Inheritance["networkpolicy"] = false
 	childName2 := subnamespace2.GenerateChildName("")
 	subnamespace3 := g.subNamespaceObj.DeepCopy()
-	subnamespace3.SetName("networkpolicy")
+	subnamespace3.SetName("networkpolicy-quota")
+	subnamespace3.SetUID("networkpolicy-quota")
 	subnamespace3.Spec.Workspace.Inheritance["rbac"] = false
 	childName3 := subnamespace3.GenerateChildName("")
 
 	_, err := edgenetclientset.CoreV1alpha1().SubNamespaces(g.tenantObj.GetName()).Create(context.TODO(), subnamespace1, metav1.CreateOptions{})
 	util.OK(t, err)
-	time.Sleep(450 * time.Millisecond)
+	time.Sleep(750 * time.Millisecond)
 	_, err = kubeclientset.CoreV1().Namespaces().Get(context.TODO(), childName1, metav1.GetOptions{})
 	util.OK(t, err)
 
