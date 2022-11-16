@@ -16,39 +16,26 @@ There are two stages for installing EdgeNet to a kubernetes cluster. First, it i
 ## Steps
 
 ### Install the required CRDs and other objects
-There are a handful of custom resources required for EdgeNet to function. Additionally, there are others used for configuration. The basic objects that is required for all of the EdgeNet clusters are organized in *all-in-one.yaml*. 
+A handful of CRDs, controllers and additional objects  required are for EdgeNet to function. All of these declerations are orgainzed in *all-in-one.yaml* file.
 
-Before applying this yaml it is required to edit the file for adding the secret information. Note that [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/) in kubernetes uses base64 encoding.
+The CRDs are special objects of EdgeNet in edgenet namespace that defines EdgeNet specific objects. The objects are discussed in [here](custom_resources.md).
 
-<!-- *TODO: all-in-one.yaml analysis* -->
+The controllers are used by kubernetes to controll the state of the objects and thus the state of the cluster. Custom controllers allows EdgeNet to implement it's logic to maintain custom objects. For example, to create a tenant in EdgeNet, user should create a Tenant Request which when created signals the Tenant Request Controller and then processed. If the request is valid, then a mail is sent to the cluster administrators.
 
-You can use the following command to create these auxiliary objects and the CRDs.
+Other auxiliary objects in includes [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/) that require configuration for elements in EdgeNet to work. Note that before applying this yaml it is required to edit the file for adding the secret information which the it requires a base64 enconding. To convert a token the following code can be used.
 
-```sh
+```
+    echo "<token-or-secret>" | base64
+```
+
+You can use the following command to create these auxiliary objects, the CRDs and the deployment of the custom controllers.
+
+```
     kubectl -f apply ./build/yamls/kubernetes/all-in-one.yaml
 ```
 
-<!-- Now we have created the objects necessary for EdgeNet to work. As discussed kubernetes uses controllers to control the state of the objects and thus clusters. Custom controllers allows EdgeNet to implement it's logic for custom objects. For example, a basic mechanism in EdgeNet is about creating Tenants. To create a tenant user should create a Tenant Request which when created signals the Tenant Request Controller and then processed. If the request is valid, then a mail is sent to the cluster administrators.
+This command creates all of the objects in kubernetes including the deployments. Thus, it takes some time for them to start working.
 
-To enable this functionality there are two options:
+<!-- *TODO: all-in-one.yaml analysis* -->
 
-* The pre-compiled binaries can be deployed to the cluster. 
-* The source can be compiled from source (still testing).
-
-### Option 1: Download EdgeNet contoller images from Docker Hub
-[Docker Hub](https://www.docker.com/products/docker-hub/#:~:text=Docker%20Hub%20is%20a%20hosted,push%20them%20to%20Docker%20Hub) is a marketplace for container images. It allows to create and share custom container images. The official Docker Hub name of EdgeNet is [edgenetio](https://hub.docker.com/u/edgenetio).  -->
-
-<!-- ### Option 2: Compile EdgeNet contollers from source
-EdgeNet is an open-source which means it can be compiled and deployed. With downloading the soruce code from the [official github repository](https://github.com/EdgeNet-Project/edgenet/). Using the docker-compose file and kompose command-line tool, the controllers can be created.
-
-First, create the yaml files with kompose by the following command:
-
-```sh
-    
-```
-
-Note that to use a stable versions of EgeNet please build from the *release-X.X* branches such as *release-1.0*.
-
-```sh
-    docker-compose up -d
-``` -->
+<!-- *TODO: How to compile EdgeNet from source?* -->
