@@ -26,8 +26,7 @@ EdgeNet also provides custom [controllers](https://kubernetes.io/docs/concepts/a
 These controllers usually run inside the cluster and communicates with the kube-api server to fulfill certain functionalities.
 
 ## How to use EdgeNet?
-EdgeNet is an open source kuber
-To use EdgeNet, we have provided tutorials for different putposes. 
+EdgeNet is an open source kubernetes cluster extension. You can install EdgeNet to your local cluster for testing or use the global EdgeNet testbed. We have provided tutorials for different putposes below:
 
 * [Create my own EdgeNet cluster](cluster_creation.md)
 * [Registering a tenant into EdgeNet](tenant_registration.md)
