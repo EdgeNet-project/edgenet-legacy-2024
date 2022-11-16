@@ -1,6 +1,6 @@
 # Registering an EdgeNet tenant
 
-This tutorial describes whether and how you can set up a *tenant* on EdgeNet, with yourself as the tenant owner. A tenant owner takes responsibility for the approval of EdgeNet users who they can vouch for.
+This tutorial describes whether and how you can set up a *tenant* on EdgeNet, with yourself as the tenant owner. A tenant owner takes responsibility for the approval of EdgeNet users whom they can vouch for.
 
 Authorizations to use EdgeNet are handed out hierarchically, establishing a chain of responsibility. We, as the central administrators of EdgeNet, approve the establishment of tenants and their owners. An owner, in turn, approves the creation of individual user accounts. The owner can give some of those users administrative rights to, in turn, approve other users.
 
@@ -58,7 +58,7 @@ The [``.yaml`` format](https://kubernetes.io/docs/concepts/overview/working-with
   - a **city** name
   - a **region**, or state name (not mandatory)
   - a **country** name
-- the **contact person** who is the responsible for this tenant; this is the tenant's first administrator, who is typically yourself; the information provided for this person consists of:
+- the **contact person** who is responsible for this tenant; this is the tenant's first administrator, who is typically yourself; the information provided for this person consists of:
   - a **first name** (human readable)
   - a **last name** (human readable)
   - an **e-mail address**, which should be an institutional e-mail address
