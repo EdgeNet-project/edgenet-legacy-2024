@@ -19,6 +19,8 @@ EdgeNet adds [custom resource definitions](https://kubernetes.io/docs/concepts/e
 * Tenant Resource Quota
 * VPN Peer
 
+<!-- Individual explainations of the CRDs can be found [here](custom_resources.md). -->
+
 EdgeNet also provides custom [controllers](https://kubernetes.io/docs/concepts/architecture/controller/) for these resources. These controllers checks the states of the CRDs in a loop and tries to make it closer to their specs. In kubernetes world status represents the current state of the objects and specs represents the desired states.
 
 These controllers usually run inside the cluster and communicates with the kube-api server to fulfill certain functionalities.
