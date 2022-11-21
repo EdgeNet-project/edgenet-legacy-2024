@@ -1,9 +1,9 @@
 # EdgeNet Documentation
 
 ## What is EdgeNet?
-EdgeNet, the open-source globally distributed edge cloud for Internet researchers, is based on industry-standard Cloud software, using [Docker](https://www.docker.com/) for containerization and [Kubernetes](https://kubernetes.io/) for deployment and node management. The source code of EdgeNet can be found [here](https://github.com/EdgeNet-project/edgenet). 
+EdgeNet is an open-source edge cloud orchestration software that is built on top of industry-standard Cloud software [Kubernetes](https://kubernetes.io/) and also using [Docker](https://www.docker.com/) for containerization and  for deployment and node management. The source code of EdgeNet can be found [here](https://github.com/EdgeNet-project/edgenet).
 
-Additionally, we provide a testbed for all researchers. To open an account please refer to the [Registering a tenant into EdgeNet](tenant_registration.md). For getting more info about the project visit the official [EdgeNet-Project](https://www.edge-net.org/) website.
+In the [EdgeNet Testbed](https://edge-net.org) we provide a globally distributed edge cloud for Internet researchers. We encourage everybody to contribute node to the testbed. For more info please visit the website.
 
 ## Components of EdgeNet
 EdgeNet adds [custom resource definitions](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) (CRDs) to Kubernetes to extend its capabilities to edge computing. It adds the following list of components as CRDs:
