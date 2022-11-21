@@ -1,12 +1,11 @@
 # EdgeNet Documentation for Custom Resources
-In EdgeNet there are 11 custom resources. Each of them will be explained here.
 
 ## Multitenancy
 
 Multitenancy means in cloud computing context, multiple customers of a provider in a cluster shares resources. This is a difficult task since generally the programs of different customers runs on same physical machines. EdgeNet aims to provide multitenancy by adding custom resources. They are explained below.
 
 ### Tenant 
-A tenant in EdgeNet is a party that occupies certain resources and has users who have access to these resources. Tenants give roles to users that enable them to restrict or allow access to certain operations. The users may access different subnamespaces depending on their roles.
+A tenant in EdgeNet is a party that owns certain resources and has users who have access to these resources. Tenants give roles to users that enable them to restrict or allow access to certain operations. The users may access different subnamespaces depending on their roles.
 
 A tenant also holds the institutions' addresses and the administrator's contact data.
 
@@ -17,7 +16,7 @@ In EdgeNet each tenant owns a set of resources. This means tenants shares resour
 Subnamespace is a special type of namespace that allows users of a tenant to create an arbitrary amount of nested namespaces which allows the inheritance of RBAC and network policy configurations.
 
 ### Slice
-Slice describes the ownership of a tenant's resources. Each slice references resources such as memory, CPU or disk, or a node. Slices also have expiration dates.
+Slice describes the repartitioning of resources. A slice object claims certain types of resources such as memory, CPU or disk, or a node until the expiration.
 
 ### Slice Claim
 Slice claim is the request of a tenant for described slices. It also contains a node selector where the inapplicable or unwanted nodes can be filtered out before granting the slice to the tenant.
@@ -33,15 +32,21 @@ Roles are composed of operations or actions that the holder can perform. These r
 ### Cluster Role Request
 Cluster roles are composed of operations or actions that the holder can perform. These roles have cluster-wide capabilities. Cluster role requests of the user with the associated user email address, are sent to the EdgeNet administrators. If EdgeNet admins accept the action space of the user changes accordingly. 
 
+---
+
 ## Multi-provider
 
 In a multi-provider environment different from conventional single-provider environments, there are multiple vendors for resources to be used in the cluster. In EdgeNet it is possible to easily add a node to the cluster.
 
 ### Node Contribution
-<!-- EdgeNet allows institutions and individuals from every part of the world to contribute nodes to the global cluster. When a new node is added to the cluster which is done by a bootstrap script, it is necessary to configure connection settings. Node Contribution objects are used for setting up the ssh communication channel. -->
+EdgeNet is designed in such a way that it allows multiple providers to contribute their own nodes in a single cluster. This information is held in cluster by node contribution objects.
+
+When a new node is added to the cluster which is done by a bootstrap script, it is necessary to configure connection settings. Node Contribution objects are used for setting up the ssh communication channel.
 
 ### VPN Peer
 EdgeNet nodes are distributed around the world. To connect these nodes in the same network a VPN connection is used. Additionally, VPN is used for overcoming the limitations od NAT.
+
+---
 
 ## Location-based node selection
 
