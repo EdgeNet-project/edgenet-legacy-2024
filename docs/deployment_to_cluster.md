@@ -1,6 +1,6 @@
-# Cluster creation from EdgeNet source code
+# Deploying EdgeNet to a Kubernetes Cluster
 
-This documentation describes how to create a working EdgeNet cluster in your environment. You can refer to this tutorial for creating a sandbox, local, or production cluster for your desires.
+This documentation describes how to create a working EdgeNet cluster in your environment. You can refer to this tutorial for deploying EdgeNet software to a local, sandbox or a production cluster.
 
 ## Technologies you will use
 You will need a Kubernetes cluster to extend it to support EdgeNet. There are many ways to setup a Kubernetes cluster all of which require different knowledge. You can refer [here](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/) for how to set up a Kubernetes cluster with `kubeadm`. Also, to set up a local cluster you can use [minikube](https://minikube.sigs.k8s.io/docs/) or [k3s](https://docs.k3s.io/installation) (be aware EdgeNet is not yet tested with k3s).
