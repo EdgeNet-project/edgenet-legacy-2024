@@ -13,7 +13,7 @@ A tenant also holds the institutions' addresses and the administrator's contact 
 In EdgeNet each tenant owns a set of resources. This means tenants shares resources in a multi-tenant cluster. each tenant resource quota describes a set of resources to be added and removed from the access of the tenant.
 
 ### Subnamespace
-Subnamespace is a special type of namespace that allows users of a tenant to create an arbitrary amount of nested namespaces which allows the inheritance of RBAC and network policy configurations.
+Subnamespace is a special type of namespace that allows users of a tenant to create an arbitrary amount of nested namespaces. It allows the inheritance of RBAC and network policy configurations.
 
 ### Slice
 Slice describes the repartitioning of resources. A slice object claims certain types of resources such as memory, CPU or disk, or a node until the expiration.
