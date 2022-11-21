@@ -94,6 +94,8 @@ type TenantStatus struct {
 	State string `json:"state"`
 	// Additional description can be located here.
 	Message string `json:"message"`
+	// Failed sets the backoff limit.
+	Failed int `json:"failed"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
