@@ -3,8 +3,6 @@ package tenantresourcequota
 import (
 	"context"
 	"flag"
-	"io/ioutil"
-	"log"
 	"os"
 	"testing"
 	"time"
@@ -16,7 +14,6 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -42,9 +39,9 @@ var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
 
 func TestMain(m *testing.M) {
-	klog.SetOutput(ioutil.Discard)
-	log.SetOutput(ioutil.Discard)
-	logrus.SetOutput(ioutil.Discard)
+	//klog.SetOutput(ioutil.Discard)
+	//log.SetOutput(ioutil.Discard)
+	//logrus.SetOutput(ioutil.Discard)
 
 	flag.String("dir", "../../../../..", "Override the directory.")
 	flag.String("smtp-path", "../../../../../configs/smtp_test.yaml", "Set SMTP path.")
@@ -155,6 +152,9 @@ func (g *TestGroup) Init() {
 				Scope: "local",
 			},
 		},
+		Status: corev1alpha.SubNamespaceStatus{
+			State: statusEstablished,
+		},
 	}
 	nodeObj := corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -242,10 +242,8 @@ func TestStartController(t *testing.T) {
 	// Get the object and check the status
 	tenantResourceQuota, err := edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	util.Equals(t, success, tenantResourceQuota.Status.State)
-	// TODO: Problem here
-	// exp: "Applied"
-	// got: ""
+	util.Equals(t, statusApplied, tenantResourceQuota.Status.State)
+
 	// Update the tenant resource quota
 	drop := g.dropObj
 	drop.Expiry = &metav1.Time{
@@ -283,7 +281,6 @@ func TestStartController(t *testing.T) {
 	}
 	subResourceQuota, err := kubeclientset.CoreV1().ResourceQuotas(namespace.GetName()).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{})
 	util.OK(t, err)
-
 	time.Sleep(time.Millisecond * 250)
 	tenantResourceQuota, err = edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuota.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
@@ -291,10 +288,12 @@ func TestStartController(t *testing.T) {
 	coreResourceQuota, err = kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuota.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{})
 	util.OK(t, err)
 	assignedQuota = tenantResourceQuota.Fetch()
+
 	for key, value := range coreResourceQuota.Spec.Hard {
 		if assignedQuantity, elementExists := assignedQuota[key]; elementExists {
 			subQuotaValue := subResourceQuota.Spec.Hard[key]
 			value.Add(subQuotaValue)
+
 			util.Equals(t, true, assignedQuantity.Equal(value))
 		}
 	}
