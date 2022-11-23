@@ -175,7 +175,6 @@ func NewController(
 				tenantResourceQuota, err := edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
 				if err == nil {
 					tenantResourceQuotaCopy := tenantResourceQuota.DeepCopy()
-
 					if kind == "incentive" {
 						cpuCapacityCopy := cpuCapacity.DeepCopy()
 						memoryCapacityCopy := memoryCapacity.DeepCopy()
