@@ -31,7 +31,6 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha1"
 	namespacev1 "github.com/EdgeNet-project/edgenet/pkg/namespace"
-	"github.com/EdgeNet-project/edgenet/pkg/node"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -173,90 +172,6 @@ func NewController(
 				}
 			}
 			controller.enqueueTenantResourceQuota(new)
-		},
-	})
-
-	// Below sets incentives for those who contribute nodes to the cluster by indicating tenant.
-	// The goal is to attach a resource quota claim based on the capacity of the contributed node.
-	// The mechanism removes the quota increment when the node is unavailable or removed.
-	// TODO: Contribution incentives should not be limited to CPU and Memory. It should cover any
-	// resource the node has.
-	// TODO: Be sure that the node is exactly unavailable before removing the quota increment.
-	var setIncentives = func(kind, nodeName string, ownerReferences []metav1.OwnerReference, cpuCapacity, memoryCapacity *resource.Quantity) {
-		for _, owner := range ownerReferences {
-			if owner.Kind == "Tenant" {
-				tenantResourceQuota, err := edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
-				if err == nil {
-					tenantResourceQuotaCopy := tenantResourceQuota.DeepCopy()
-
-					if kind == "incentive" {
-						cpuCapacityCopy := cpuCapacity.DeepCopy()
-						memoryCapacityCopy := memoryCapacity.DeepCopy()
-						cpuAward := int64(float64(cpuCapacity.Value()) * 1.5)
-						cpuCapacityCopy.Set(cpuAward)
-						memoryAward := int64(float64(memoryCapacity.Value()) * 1.3)
-						memoryCapacityCopy.Set(memoryAward)
-
-						if _, elementExists := tenantResourceQuotaCopy.Spec.Claim[nodeName]; elementExists {
-							if tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["cpu"].Equal(cpuCapacityCopy) ||
-								tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["memory"].Equal(memoryCapacityCopy) {
-								tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["cpu"] = cpuCapacityCopy
-								tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["memory"] = memoryCapacityCopy
-								edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuotaCopy, metav1.UpdateOptions{})
-							}
-						} else {
-							claim := corev1alpha1.ResourceTuning{
-								ResourceList: corev1.ResourceList{
-									corev1.ResourceCPU:    cpuCapacityCopy,
-									corev1.ResourceMemory: memoryCapacityCopy,
-								},
-							}
-							tenantResourceQuotaCopy.Spec.Claim[nodeName] = claim
-							edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuotaCopy, metav1.UpdateOptions{})
-						}
-					} else if kind == "disincentive" {
-						if _, elementExists := tenantResourceQuota.Spec.Claim[nodeName]; elementExists {
-							delete(tenantResourceQuota.Spec.Claim, nodeName)
-							edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
-						}
-					}
-				}
-			}
-		}
-
-	}
-	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			nodeObj := obj.(*corev1.Node)
-			for key := range nodeObj.Labels {
-				if key == "node-role.kubernetes.io/master" {
-					return
-				}
-			}
-			ready := node.GetConditionReadyStatus(nodeObj)
-			if ready == trueStr {
-				setIncentives("incentive", nodeObj.GetName(), nodeObj.GetOwnerReferences(), nodeObj.Status.Capacity.Cpu(), nodeObj.Status.Capacity.Memory())
-			}
-		},
-		UpdateFunc: func(old, new interface{}) {
-			oldObj := old.(*corev1.Node)
-			newObj := new.(*corev1.Node)
-			oldReady := node.GetConditionReadyStatus(oldObj)
-			newReady := node.GetConditionReadyStatus(newObj)
-			if (oldReady == falseStr && newReady == trueStr) ||
-				(oldReady == unknownStr && newReady == trueStr) {
-				setIncentives("incentive", newObj.GetName(), newObj.GetOwnerReferences(), newObj.Status.Capacity.Cpu(), newObj.Status.Capacity.Memory())
-			} else if (oldReady == trueStr && newReady == falseStr) ||
-				(oldReady == trueStr && newReady == unknownStr) {
-				setIncentives("disincentive", newObj.GetName(), newObj.GetOwnerReferences(), nil, nil)
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			nodeObj := obj.(*corev1.Node)
-			ready := node.GetConditionReadyStatus(nodeObj)
-			if ready == trueStr {
-				setIncentives("disincentive", nodeObj.GetName(), nodeObj.GetOwnerReferences(), nil, nil)
-			}
 		},
 	})
 
