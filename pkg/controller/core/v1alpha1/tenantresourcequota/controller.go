@@ -65,9 +65,10 @@ const (
 	messageResourceSynced   = "Tenant Resource Quota synced successfully"
 	messageTraversalStarted = "Namespace traversal initiated successfully"
 	messageTuned            = "Core resource quota tuned"
-	messageDeleted          = "Subnamespace created latest deleted to balance resource consumption"
+	messageDeleted          = "Last created subnamespace deleted to balance resource consumption"
 	messageRemoved          = "Expired Claim / Drop removed smoothly"
 	messageNotFound         = "There is no resource quota in the core namespace"
+	messageNotUpdated       = "Resource quota cannot be updated"
 	messageQuotaCreated     = "Core resource quota created"
 	messageReconciliation   = "Reconciliation in progress"
 	messageApplied          = "Tenant Resource Quota applied to tenant's namespaces"
@@ -87,6 +88,12 @@ const (
 	falseStr   = "False"
 	unknownStr = "Unknown"
 )
+
+type traverseStatus struct {
+	deleted bool
+	failed  bool
+	done    bool
+}
 
 // Controller is the controller implementation for Tenant Resource Quota resources
 type Controller struct {
@@ -328,7 +335,12 @@ func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1a
 		case statusApplied:
 			c.reconcile(tenantResourceQuotaCopy, parentNamespaceLabels["edge-net.io/cluster-uid"])
 		case statusQuotaCreated:
-			c.tuneHierarchicalResourceQuota(tenantResourceQuotaCopy, parentNamespaceLabels["edge-net.io/cluster-uid"])
+			if ok := c.tuneHierarchicalResourceQuota(tenantResourceQuotaCopy, parentNamespaceLabels["edge-net.io/cluster-uid"]); !ok {
+				c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeWarning, statusFailed, messageNotUpdated)
+				tenantResourceQuotaCopy.Status.State = statusFailed
+				tenantResourceQuotaCopy.Status.Message = messageNotUpdated
+				return
+			}
 			c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, statusApplied, messageApplied)
 			tenantResourceQuotaCopy.Status.State = statusApplied
 			tenantResourceQuotaCopy.Status.Message = messageApplied
@@ -356,48 +368,49 @@ func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1a
 }
 
 func (c *Controller) reconcile(tenantResourceQuotaCopy *corev1alpha1.TenantResourceQuota, clusterUID string) {
-	c.tuneHierarchicalResourceQuota(tenantResourceQuotaCopy, clusterUID)
-
+	if ok := c.tuneHierarchicalResourceQuota(tenantResourceQuotaCopy, clusterUID); !ok {
+		tenantResourceQuotaCopy.Status.State = statusQuotaCreated
+		tenantResourceQuotaCopy.Status.Message = messageQuotaCreated
+	}
 	if _, err := c.kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuotaCopy.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{}); err != nil {
 		tenantResourceQuotaCopy.Status.State = statusReconciliation
 		tenantResourceQuotaCopy.Status.Message = messageReconciliation
 	}
-
 	if tenantResourceQuotaCopy.Status.State != statusApplied {
 		c.updateStatus(context.TODO(), tenantResourceQuotaCopy)
 	}
 }
 
-func (c *Controller) tuneHierarchicalResourceQuota(tenantResourceQuotaCopy *corev1alpha1.TenantResourceQuota, clusterUID string) {
+func (c *Controller) tuneHierarchicalResourceQuota(tenantResourceQuotaCopy *corev1alpha1.TenantResourceQuota, clusterUID string) bool {
 	c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successTraversalStarted, messageTraversalStarted)
-
-	c.traverse(tenantResourceQuotaCopy.GetName(), clusterUID, "core-quota", tenantResourceQuotaCopy.Fetch())
-}
-
-func (c *Controller) tuneResourceQuota(namespace, quotaName string, remainingQuotaResourceList map[corev1.ResourceName]resource.Quantity) bool {
-	if resourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(namespace).Get(context.TODO(), quotaName, metav1.GetOptions{}); err == nil {
-		remainingQuotaResourceList, lastInSubnamespace, isQuotaSufficient := c.subtractSubnamespaceQuotas(namespace, remainingQuotaResourceList)
-		if !isQuotaSufficient {
-			c.edgenetclientset.CoreV1alpha1().SubNamespaces(namespace).Delete(context.TODO(), lastInSubnamespace, metav1.DeleteOptions{})
-			//c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeWarning, statusFailed, messageDeleted)
-		}
-		if !reflect.DeepEqual(remainingQuotaResourceList, resourceQuota.Spec.Hard) {
-			resourceQuota.Spec.Hard = remainingQuotaResourceList
-			if _, err := c.kubeclientset.CoreV1().ResourceQuotas(namespace).Update(context.TODO(), resourceQuota, metav1.UpdateOptions{}); err != nil {
-				return true
+	ok := true
+	statusChannel := make(chan traverseStatus, 1)
+	go c.traverse(tenantResourceQuotaCopy.GetName(), "core", clusterUID, tenantResourceQuotaCopy.Fetch(), statusChannel)
+traverseNamespaces:
+	for {
+		select {
+		case status, ok := <-statusChannel:
+			if !ok || (ok && status.done) {
+				break traverseNamespaces
+			}
+			if status.deleted {
+				c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeWarning, successDeleted, messageDeleted)
+			}
+			if status.failed {
+				ok = false
 			}
 		}
-		return false
 	}
-	return false
+	close(statusChannel)
+	return ok
 }
 
-func (c *Controller) traverse(namespace, clusterUID, quotaName string, remainingQuotaResourceList map[corev1.ResourceName]resource.Quantity) bool {
+func (c *Controller) traverse(namespace, namespaceKind, clusterUID string, remainingQuotaResourceList map[corev1.ResourceName]resource.Quantity, statusChannel chan<- traverseStatus) {
 	// This task becomes expensive when the hierarchy chain is gigantic with a substantial depth.
 	// So Goroutines come into play.
 	var wg sync.WaitGroup
-	var isFailed = false
-	isFailed = c.tuneResourceQuota(namespace, quotaName, remainingQuotaResourceList)
+	isDeleted, isFailed := c.tuneResourceQuota(namespace, namespaceKind, remainingQuotaResourceList)
+	statusChannel <- traverseStatus{deleted: isDeleted, failed: isFailed}
 	if !isFailed {
 		subNamespaceRaw, _ := c.edgenetclientset.CoreV1alpha1().SubNamespaces(namespace).List(context.TODO(), metav1.ListOptions{})
 		if len(subNamespaceRaw.Items) != 0 {
@@ -406,14 +419,33 @@ func (c *Controller) traverse(namespace, clusterUID, quotaName string, remaining
 					wg.Add(1)
 					go func(subnamespace corev1alpha1.SubNamespace) {
 						defer wg.Done()
-						isFailed = c.traverse(subnamespace.GenerateChildName(clusterUID), clusterUID, "sub-quota", subnamespace.GetResourceAllocation())
+						c.traverse(subnamespace.GenerateChildName(clusterUID), "sub", clusterUID, subnamespace.GetResourceAllocation(), statusChannel)
 					}(subnamespaceRow)
 				}
 			}
 			wg.Wait()
 		}
 	}
-	return isFailed
+	if namespaceKind == "core" {
+		statusChannel <- traverseStatus{done: true}
+	}
+}
+
+func (c *Controller) tuneResourceQuota(namespace, namespaceKind string, remainingQuotaResourceList map[corev1.ResourceName]resource.Quantity) (bool, bool) {
+	if resourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(namespace).Get(context.TODO(), fmt.Sprintf("%s-quota", namespaceKind), metav1.GetOptions{}); err == nil {
+		remainingQuotaResourceList, lastInSubnamespace, isQuotaSufficient := c.subtractSubnamespaceQuotas(namespace, remainingQuotaResourceList)
+		if !isQuotaSufficient {
+			c.edgenetclientset.CoreV1alpha1().SubNamespaces(namespace).Delete(context.TODO(), lastInSubnamespace, metav1.DeleteOptions{})
+		}
+		if !reflect.DeepEqual(remainingQuotaResourceList, resourceQuota.Spec.Hard) {
+			resourceQuota.Spec.Hard = remainingQuotaResourceList
+			if _, err := c.kubeclientset.CoreV1().ResourceQuotas(namespace).Update(context.TODO(), resourceQuota, metav1.UpdateOptions{}); err != nil {
+				return !isQuotaSufficient, true
+			}
+		}
+		return !isQuotaSufficient, false
+	}
+	return false, false
 }
 
 func (c *Controller) subtractSubnamespaceQuotas(namespace string, remainingQuotaResourceList map[corev1.ResourceName]resource.Quantity) (map[corev1.ResourceName]resource.Quantity, string, bool) {
