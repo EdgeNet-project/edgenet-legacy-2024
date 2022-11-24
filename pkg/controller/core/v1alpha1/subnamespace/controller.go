@@ -600,8 +600,9 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 			subnamespaceCopy.Status.Message = messageCreation
 			c.updateStatus(context.TODO(), subnamespaceCopy)
 		default:
-			if sliceclaim := subnamespaceCopy.GetSliceClaim(); sliceclaim != nil {
-				if ok := c.checkSliceClaim(subnamespaceCopy.GetNamespace(), *sliceclaim); !ok {
+			if sliceclaimName := subnamespaceCopy.GetSliceClaim(); sliceclaimName != nil {
+				sliceclaimCopy, ok := c.checkSliceClaim(subnamespaceCopy.GetNamespace(), *sliceclaimName)
+				if !ok {
 					c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailure)
 					subnamespaceCopy.Status.State = statusFailed
 					subnamespaceCopy.Status.Message = failureSlice
@@ -610,7 +611,7 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 				}
 				if subnamespaceCopy.GetResourceAllocation() == nil {
 					childQuota := make(map[corev1.ResourceName]resource.Quantity)
-					labelSelector := fmt.Sprintf("edge-net.io/access=public,edge-net.io/pre-reservation=%s", *sliceclaim)
+					labelSelector := fmt.Sprintf("edge-net.io/access=public,edge-net.io/pre-reservation=%s", *sliceclaimName)
 					if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector}); err == nil {
 						for _, nodeRow := range nodeRaw.Items {
 							for key, capacity := range nodeRow.Status.Capacity {
@@ -623,14 +624,27 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 								}
 							}
 						}
-					} else {
-						c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailure)
-						subnamespaceCopy.Status.State = statusFailed
-						subnamespaceCopy.Status.Message = failureSlice
-						c.updateStatus(context.TODO(), subnamespaceCopy)
-						klog.Infoln(err)
+						subnamespaceCopy.SetResourceAllocation(childQuota)
+						if _, err := c.edgenetclientset.CoreV1alpha1().SubNamespaces(subnamespaceCopy.GetNamespace()).Update(context.TODO(), subnamespaceCopy, metav1.UpdateOptions{}); err == nil {
+							c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailure)
+							subnamespaceCopy.Status.State = statusFailed
+							subnamespaceCopy.Status.Message = failureSlice
+							c.updateStatus(context.TODO(), subnamespaceCopy)
+							return
+						}
 					}
-					subnamespaceCopy.SetResourceAllocation(childQuota)
+					c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailure)
+					subnamespaceCopy.Status.State = statusFailed
+					subnamespaceCopy.Status.Message = failureSlice
+					c.updateStatus(context.TODO(), subnamespaceCopy)
+					return
+				}
+				sliceclaimCopy.SetOwnerReferences([]metav1.OwnerReference{subnamespaceCopy.MakeOwnerReference()})
+				if _, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(subnamespaceCopy.GetNamespace()).Update(context.TODO(), sliceclaimCopy, metav1.UpdateOptions{}); err != nil {
+					c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailure)
+					subnamespaceCopy.Status.State = statusFailed
+					subnamespaceCopy.Status.Message = failureSlice
+					c.updateStatus(context.TODO(), subnamespaceCopy)
 					return
 				}
 			}
@@ -802,13 +816,13 @@ func (c *Controller) subtractSubnamespaceQuotas(subnamespaceCopy *corev1alpha1.S
 	return remainingQuotaResourceList, lastInSubnamespace, true
 }
 
-func (c *Controller) checkSliceClaim(namespace, name string) bool {
-	if sliceClaim, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err == nil {
-		if sliceClaim.Status.State == sliceClaimBound || sliceClaim.Status.State == sliceClaimApplied {
-			return true
+func (c *Controller) checkSliceClaim(namespace, name string) (*corev1alpha1.SliceClaim, bool) {
+	if sliceclaimCopy, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err == nil {
+		if sliceclaimCopy.Status.State == sliceClaimBound || sliceclaimCopy.Status.State == sliceClaimApplied {
+			return sliceclaimCopy, true
 		}
 	}
-	return false
+	return nil, false
 }
 
 func (c *Controller) checkNamespaceCollision(subnamespaceCopy *corev1alpha1.SubNamespace, parentNamespace *corev1.Namespace, childNameHashed string) bool {

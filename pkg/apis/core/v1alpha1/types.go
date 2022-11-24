@@ -198,36 +198,40 @@ type SubNamespaceList struct {
 	Items []SubNamespace `json:"items"`
 }
 
+func (sn SubNamespace) MakeOwnerReference() metav1.OwnerReference {
+	return *metav1.NewControllerRef(&sn.ObjectMeta, SchemeGroupVersion.WithKind("SubNamespace"))
+}
+
 // Retrieves quantity value from given resource name.
-func (s SubNamespace) RetrieveQuantity(key corev1.ResourceName) resource.Quantity {
+func (sn SubNamespace) RetrieveQuantity(key corev1.ResourceName) resource.Quantity {
 	var quantity resource.Quantity
-	if s.Spec.Workspace != nil {
-		if _, elementExists := s.Spec.Workspace.ResourceAllocation[key]; elementExists {
-			quantity = s.Spec.Workspace.ResourceAllocation[key]
+	if sn.Spec.Workspace != nil {
+		if _, elementExists := sn.Spec.Workspace.ResourceAllocation[key]; elementExists {
+			quantity = sn.Spec.Workspace.ResourceAllocation[key]
 		}
 	} else {
-		if _, elementExists := s.Spec.Subtenant.ResourceAllocation[key]; elementExists {
-			quantity = s.Spec.Subtenant.ResourceAllocation[key]
+		if _, elementExists := sn.Spec.Subtenant.ResourceAllocation[key]; elementExists {
+			quantity = sn.Spec.Subtenant.ResourceAllocation[key]
 		}
 	}
 	return quantity
 }
 
 // GenerateChildName forms a name for child according to the mode, Workspace or Subtenant.
-func (s SubNamespace) GenerateChildName(clusterUID string) string {
-	childName := s.GetName()
-	if s.Spec.Workspace != nil && s.Spec.Workspace.Scope == "federation" {
+func (sn SubNamespace) GenerateChildName(clusterUID string) string {
+	childName := sn.GetName()
+	if sn.Spec.Workspace != nil && sn.Spec.Workspace.Scope == "federation" {
 		childName = fmt.Sprintf("%s-%s", clusterUID, childName)
 	}
 
-	childNameHashed := util.Hash(s.GetNamespace(), childName)
+	childNameHashed := util.Hash(sn.GetNamespace(), childName)
 	childName = strings.Join([]string{childName, childNameHashed}, "-")
 	return childName
 }
 
 // GetMode return the mode as workspace or subtenant.
-func (s SubNamespace) GetMode() string {
-	if s.Spec.Workspace != nil {
+func (sn SubNamespace) GetMode() string {
+	if sn.Spec.Workspace != nil {
 		return "workspace"
 	} else {
 		return "subtenant"
@@ -235,29 +239,29 @@ func (s SubNamespace) GetMode() string {
 }
 
 // GetResourceAllocation return the allocated resources at workspace or subtenant.
-func (s SubNamespace) GetResourceAllocation() map[corev1.ResourceName]resource.Quantity {
-	if s.Spec.Workspace != nil {
-		return s.Spec.Workspace.ResourceAllocation
+func (sn SubNamespace) GetResourceAllocation() map[corev1.ResourceName]resource.Quantity {
+	if sn.Spec.Workspace != nil {
+		return sn.Spec.Workspace.ResourceAllocation
 	} else {
-		return s.Spec.Subtenant.ResourceAllocation
+		return sn.Spec.Subtenant.ResourceAllocation
 	}
 }
 
 // SetResourceAllocation set the allocated resources at workspace or subtenant.
-func (s SubNamespace) SetResourceAllocation(resource map[corev1.ResourceName]resource.Quantity) {
-	if s.Spec.Workspace != nil {
-		s.Spec.Workspace.ResourceAllocation = resource
+func (sn SubNamespace) SetResourceAllocation(resource map[corev1.ResourceName]resource.Quantity) {
+	if sn.Spec.Workspace != nil {
+		sn.Spec.Workspace.ResourceAllocation = resource
 	} else {
-		s.Spec.Subtenant.ResourceAllocation = resource
+		sn.Spec.Subtenant.ResourceAllocation = resource
 	}
 }
 
 // GetSliceClaim return the assigned slice claim at workspace or subtenant.
-func (s SubNamespace) GetSliceClaim() *string {
-	if s.Spec.Workspace != nil {
-		return s.Spec.Workspace.SliceClaim
+func (sn SubNamespace) GetSliceClaim() *string {
+	if sn.Spec.Workspace != nil {
+		return sn.Spec.Workspace.SliceClaim
 	} else {
-		return s.Spec.Subtenant.SliceClaim
+		return sn.Spec.Subtenant.SliceClaim
 	}
 }
 
@@ -530,6 +534,8 @@ type SliceClaimStatus struct {
 	State string `json:"state"`
 	// Message contains additional information.
 	Message string `json:"message"`
+	// Failed sets the backoff limit.
+	Failed int `json:"failed"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
