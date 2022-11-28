@@ -1,7 +1,7 @@
 # EdgeNet Documentation
 
 ## What is EdgeNet?
-EdgeNet is an open-source edge cloud orchestration software that is built on top of industry-standard cloud software [Kubernetes](https://kubernetes.io/) and utilizes [Docker](https://www.docker.com/) for containerization. The source code of EdgeNet can be found [here](https://github.com/EdgeNet-project/edgenet).
+EdgeNet is an open-source edge cloud orchestration software that is built on top of industry-standard cloud software [Kubernetes](https://kubernetes.io/) and utilizes [Docker](https://www.docker.com/) for containerization. The source code can be found [here](https://github.com/EdgeNet-project/edgenet).
 
 In the EdgeNet Project, we provide [EdgeNet Testbed](https://edge-net.org) which is a globally distributed edge cloud for Internet researchers. We encourage everybody to contribute a node to the testbed. For more info please visit the [website](https://edge-net.org).
 
@@ -27,10 +27,10 @@ EdgeNet also provides custom [controllers](https://kubernetes.io/docs/concepts/a
 These controllers usually run inside the cluster and communicate with the kube-api server to fulfill certain functionalities.
 
 ## How to use EdgeNet?
-EdgeNet is an open-source extension for Kubernetes clusters. You can install EdgeNet to your Kubernetes cluster and start using the functionalities of EdgeNet easily. We have provided tutorials for different purposes below:
+EdgeNet is an open-source extension for Kubernetes clusters. You can install EdgeNet to your Kubernetes cluster and start using the functionalities. We have provided tutorials for different purposes below:
 
 * [Deploy EdgeNet on a Kubernetes cluster](getting_started.md)
-* [Registering a tenant into EdgeNet](tenant_registration.md)
+* [Registering a tenant](tenant_registration.md)
 * [Creating a node-level slice for your tenant](slice_creation.md)
 * [Subnamespace creation for your tenant](subnamespace_creation.md)
 * [Configure user permissions](user_permissions.md)

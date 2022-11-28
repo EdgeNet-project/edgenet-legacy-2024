@@ -10,11 +10,11 @@ There are many alternatives for creating a cluster for test purposes you can use
 
 ## What will you do
 
-EdgeNet extension for Kubernetes consists of two parts, the custom resource definitions ([CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/)) and EdgeNet controllers. 
+EdgeNet extension for Kubernetes consists of two parts, the custom resource definitions ([CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/)) and custom controllers. 
 
-EdgeNet CRDs (discussed [here](custom_resources.md)) are custom objects that are manipulated, created and destroyed by EdgeNet custom controllers.
+CRDs (discussed [here](custom_resources.md)) are custom objects that are manipulated, created and destroyed by custom controllers.
 
-You will be creating an EdgeNet CRDs and deploy custom controllers to the cluster. <!-- There are 5 files in the `build/yamls/kubernetes` directory. -->
+You will be creating CRDs and deploy custom controllers to the cluster. <!-- There are 5 files in the `build/yamls/kubernetes` directory. -->
 
 ## Install the required CRDs and deploying controllers from `all-in-one.yaml`
 
@@ -28,7 +28,7 @@ Secrets in Kubernetes requires base 64 encoding. To achieve this you can use the
     echo "<token-or-secret>" | base64
 ```
 
-The following secrets needs to be edited for EdgeNet features to work properly:
+The following secrets needs to be edited for features to work properly:
 
 ```yaml
 
