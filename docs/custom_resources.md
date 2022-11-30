@@ -2,15 +2,17 @@
 
 ## Multitenancy
 
-Multitenancy means in cloud computing context, multiple customers of a provider in a cluster shares resources. This is a difficult task since generally the programs of different customers runs on same physical machines. EdgeNet aims to provide multitenancy by adding custom resources. They are explained below.
+Multitenancy is defined in cloud software context as a single instance of a program serving multiple customers. Each customer is called a *tenant*. These tenants operates in a shared environment.
+
+EdgeNet aims to provides this functionality by adding *tenant* custom resources. CRDs related to multitenancy are explained below.
 
 ### Tenant 
-A tenant in EdgeNet is a party that owns certain resources and has users who have access to these resources. Tenants give roles to users that enable them to restrict or allow access to certain operations. The users may access different subnamespaces depending on their roles.
+Tenant is a customer of a multi-tenant cluster. In a shared environment one or more tenant operate on a multi-tenant cluster. 
 
-A tenant also holds the institutions' addresses and the administrator's contact data.
+In EdgeNet's context, Tenants represents organizations or institutions. They own certain resources which they distribute by creating and assigning resources to subnamespaces. 
 
 ### Tenant Resource Quota
-In EdgeNet each tenant owns a set of resources. This means tenants shares resources in a multi-tenant cluster. each tenant resource quota describes a set of resources to be added and removed from the access of the tenant.
+Each tenant owns a set of resources. These resources can be cpu, memory, bandwith, disk space. The quotas of the tenants are determined by this CRD.
 
 ### Subnamespace
 Subnamespace is a special type of namespace that allows users of a tenant to create an arbitrary amount of nested namespaces. It allows the inheritance of RBAC and network policy configurations.
@@ -19,10 +21,10 @@ Subnamespace is a special type of namespace that allows users of a tenant to cre
 Slice describes the repartitioning of resources. A slice object claims certain types of resources such as memory, CPU or disk, or a node until the expiration.
 
 ### Slice Claim
-Slice claim is the request of a tenant for described slices. It also contains a node selector where the inapplicable or unwanted nodes can be filtered out before granting the slice to the tenant.
+Slice Claim represents a request for certain resources that a tenant describes. It also contains a node selector where the inapplicable or unwanted nodes can be filtered out before granting the slice to the tenant.
 
 ### Tenant Request
-Tenant request is sent to any user with the aim of joining the cluster for research purposes. The request should contain the contact information of the tenant as well as the address of the establishment or research institution. 
+Currently, Tenant request represents an organization with a person as a contact details who wants to joint the EdgeNet cluster. The request should contain the contact information of the tenant as well as the address of the establishment or research institution. 
 
 To create a tenant request in EdgeNet refer to the [tutorial](tenant_registration.md).
 
@@ -35,8 +37,9 @@ Cluster roles are composed of operations or actions that the holder can perform.
 ---
 
 ## Multi-provider
+A multi-provider environment differs from conventional single-provider environments by the number of vendors. There are more than more providers providing node resources to the cluster.
 
-In a multi-provider environment different from conventional single-provider environments, there are multiple vendors for resources to be used in the cluster. In EdgeNet it is possible to easily add a node to the cluster.
+With EdgeNet, tt is possible to easily contribute a node to the cluster.
 
 ### Node Contribution
 EdgeNet is designed in such a way that it allows multiple providers to contribute their own nodes in a single cluster. This information is held in cluster by node contribution objects.
@@ -49,8 +52,7 @@ EdgeNet nodes are distributed around the world. To connect these nodes in the sa
 ---
 
 ## Location-based node selection
-
-Majority of the use cases of edge computing require low latency. This is why physical location of the nodes that are running the programs are extreemly important. EdgeNet provides this meachanism by allowing location based deployment.
+Edge computing requires low latency. This is why physical location of the nodes that are running the programs are extreemly important. EdgeNet provides this meachanism by allowing location based deployment.
 
 ### Selective Deployment
 Selective deployment as the name suggests allows deployments to be run in nodes where the geographic information is specified.
