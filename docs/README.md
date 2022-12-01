@@ -45,6 +45,11 @@ pull requests, etc. You are in the right place for documentation-related contrib
 
 Spelling fixes are most welcomed, as are contributions and edits to longer sections of the documentation.
 
+
+### Unit tests
+
+To make sure the code works correctly it is important to have high-quality unit tests. [Here](unit_tests.md) you can find the guide for creating unit tests.
+
 ## Branches
 
 * The `master` branch reflects the currently-deployed version of EdgeNet.
