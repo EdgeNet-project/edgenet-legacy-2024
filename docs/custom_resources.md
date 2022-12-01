@@ -2,17 +2,17 @@
 
 ## Multitenancy
 
-Multitenancy is defined in cloud software context as a single instance of a program serving multiple customers. Each customer is called a *tenant*. These tenants operates in a shared environment.
+Multitenancy is defined in the cloud software context as a single instance of a program serving multiple customers. Each customer is called a *tenant*. These tenants operate in a shared environment.
 
-EdgeNet aims to provides this functionality by adding *tenant* custom resources. CRDs related to multitenancy are explained below.
+EdgeNet aims to provide this functionality by adding *tenant* custom resources. CRDs related to multitenancy are explained below.
 
 ### Tenant 
-Tenant is a customer of a multi-tenant cluster. In a shared environment one or more tenant operate on a multi-tenant cluster. 
+A tenant is a customer of a multi-tenant cluster. In a shared environment, one or more tenants operate on a multi-tenant cluster. 
 
-In EdgeNet's context, Tenants represents organizations or institutions. They own certain resources which they distribute by creating and assigning resources to subnamespaces. 
+In EdgeNet's context, Tenants represent organizations or institutions. They own certain resources which they distribute by creating and assigning resources to subnamespaces. 
 
 ### Tenant Resource Quota
-Each tenant owns a set of resources. These resources can be cpu, memory, bandwith, disk space. The quotas of the tenants are determined by this CRD.
+Each tenant owns a set of resources. These resources can be CPU, memory, bandwidth, and disk space. The quotas of the tenants are determined by this CRD.
 
 ### Subnamespace
 Subnamespace is a special type of namespace that allows users of a tenant to create an arbitrary amount of nested namespaces. It allows the inheritance of RBAC and network policy configurations.
@@ -24,7 +24,7 @@ Slice describes the repartitioning of resources. A slice object claims certain t
 Slice Claim represents a request for certain resources that a tenant describes. It also contains a node selector where the inapplicable or unwanted nodes can be filtered out before granting the slice to the tenant.
 
 ### Tenant Request
-Currently, Tenant request represents an organization with a person as a contact details who wants to joint the EdgeNet cluster. The request should contain the contact information of the tenant as well as the address of the establishment or research institution. 
+Currently, the tenant request represents an organization with a person as a contact detail who wants to join the EdgeNet cluster. The request should contain the contact information of the tenant as well as the address of the establishment or research institution. 
 
 To create a tenant request in EdgeNet refer to the [tutorial](tenant_registration.md).
 
@@ -39,20 +39,20 @@ Cluster roles are composed of operations or actions that the holder can perform.
 ## Multi-provider
 A multi-provider environment differs from conventional single-provider environments by the number of vendors. There are more than more providers providing node resources to the cluster.
 
-With EdgeNet, tt is possible to easily contribute a node to the cluster.
+With EdgeNet, it is possible to easily contribute a node to the cluster.
 
 ### Node Contribution
-EdgeNet is designed in such a way that it allows multiple providers to contribute their own nodes in a single cluster. This information is held in cluster by node contribution objects.
+EdgeNet is designed in such a way that it allows multiple providers to contribute their nodes in a single cluster. This information is held in the cluster by node contribution objects.
 
 When a new node is added to the cluster which is done by a bootstrap script, it is necessary to configure connection settings. Node Contribution objects are used for setting up the ssh communication channel.
 
 ### VPN Peer
-EdgeNet nodes are distributed around the world. To connect these nodes in the same network a VPN connection is used. Additionally, VPN is used for overcoming the limitations od NAT.
+EdgeNet nodes are distributed around the world. To connect these nodes in the same network a VPN connection is used. Additionally, VPN is used for overcoming the limitations of NAT.
 
 ---
 
 ## Location-based node selection
-Edge computing requires low latency. This is why physical location of the nodes that are running the programs are extreemly important. EdgeNet provides this meachanism by allowing location based deployment.
+Edge computing requires low latency. This is why the physical location of the nodes that are running the programs is extremely important. EdgeNet provides this mechanism by allowing location-based deployment.
 
 ### Selective Deployment
 Selective deployment as the name suggests allows deployments to be run in nodes where the geographic information is specified.
