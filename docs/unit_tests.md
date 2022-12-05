@@ -31,7 +31,8 @@ There is also a library for testing http requests.
 
 - [sshtest](https://github.com/folbricht/sshtest): A testing library that implements an ssh server communication.
 
-<!-- ## How to test with Kubernetes Clientset -->
+## Testing Custom Controllers
+While writing unit tests for custom controllers please apply the mentioned practices. Additionally, Kubernetes example [sample-controller](https://github.com/kubernetes/sample-controller) provides a good basis for testing controller code. 
 
 ## Benchmarking
 While testing the code it is also important to see how fast the code executes. For this go provides benchmarking inside the testing package. The following code contains an example for benchmarking:
