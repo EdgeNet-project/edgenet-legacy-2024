@@ -40,11 +40,11 @@ EdgeNet is an open-source extension for Kubernetes clusters. You can install Edg
 ## Contributing
 
 We welcome contributions to EdgeNet of any kind, including documentation, suggestions, bug reports,
-pull requests, etc. You are in the right place for documentation-related contributions.
-<!-- Also check out our [contribution guide](). --> 
+pull requests, etc. You are in the right place for documentation-related contributions. You can start how open-source works from this [guide](https://opensource.guide/how-to-contribute/#how-to-submit-a-contribution).
 
 Spelling fixes are most welcomed, as are contributions and edits to longer sections of the documentation.
 
+For issues and pull requests please refer to open-source [contribution guidelines](contribution_guidelines.md). 
 
 ### Unit tests
 
