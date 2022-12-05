@@ -110,6 +110,7 @@ type TenantList struct {
 	Items []Tenant `json:"items"`
 }
 
+// MakeOwnerReference creates an owner reference for the given object.
 func (t Tenant) MakeOwnerReference() metav1.OwnerReference {
 	return *metav1.NewControllerRef(&t.ObjectMeta, SchemeGroupVersion.WithKind("Tenant"))
 }
@@ -198,11 +199,12 @@ type SubNamespaceList struct {
 	Items []SubNamespace `json:"items"`
 }
 
+// MakeOwnerReference creates an owner reference for the given object.
 func (sn SubNamespace) MakeOwnerReference() metav1.OwnerReference {
 	return *metav1.NewControllerRef(&sn.ObjectMeta, SchemeGroupVersion.WithKind("SubNamespace"))
 }
 
-// Retrieves quantity value from given resource name.
+// RetrieveQuantity gets quantity value from given resource name.
 func (sn SubNamespace) RetrieveQuantity(key corev1.ResourceName) resource.Quantity {
 	var quantity resource.Quantity
 	if sn.Spec.Workspace != nil {
@@ -233,18 +235,16 @@ func (sn SubNamespace) GenerateChildName(clusterUID string) string {
 func (sn SubNamespace) GetMode() string {
 	if sn.Spec.Workspace != nil {
 		return "workspace"
-	} else {
-		return "subtenant"
 	}
+	return "subtenant"
 }
 
 // GetResourceAllocation return the allocated resources at workspace or subtenant.
 func (sn SubNamespace) GetResourceAllocation() map[corev1.ResourceName]resource.Quantity {
 	if sn.Spec.Workspace != nil {
 		return sn.Spec.Workspace.ResourceAllocation
-	} else {
-		return sn.Spec.Subtenant.ResourceAllocation
 	}
+	return sn.Spec.Subtenant.ResourceAllocation
 }
 
 // SetResourceAllocation set the allocated resources at workspace or subtenant.
@@ -260,9 +260,8 @@ func (sn SubNamespace) SetResourceAllocation(resource map[corev1.ResourceName]re
 func (sn SubNamespace) GetSliceClaim() *string {
 	if sn.Spec.Workspace != nil {
 		return sn.Spec.Workspace.SliceClaim
-	} else {
-		return sn.Spec.Subtenant.SliceClaim
 	}
+	return sn.Spec.Subtenant.SliceClaim
 }
 
 // +genclient
@@ -385,8 +384,8 @@ type TenantResourceQuotaList struct {
 	Items []TenantResourceQuota `json:"items"`
 }
 
-// Fetches the net value of the resources. For example, 1Gb memory is claimed and 100 milliCPU
-// are dropped. Then the function returns the net resources as '+1Gb', '-100m'.
+// Fetch as its name indicates, it fetches the net value of the resources. For example,
+// 1Gb memory is claimed and 100 milliCPU are dropped. Then the function returns the net resources as '+1Gb', '-100m'.
 func (t TenantResourceQuota) Fetch() map[corev1.ResourceName]resource.Quantity {
 	assignedQuota := make(map[corev1.ResourceName]resource.Quantity)
 	if len(t.Spec.Claim) > 0 {
@@ -465,6 +464,7 @@ type SliceSpec struct {
 	NodeSelector NodeSelector `json:"nodeselector"`
 }
 
+// NodeSelector is a selector for nodes to reserve.
 type NodeSelector struct {
 	// A label query over nodes to consider for choosing.
 	Selector corev1.NodeSelector `json:"selector"`
@@ -480,6 +480,8 @@ type SliceStatus struct {
 	State string `json:"state"`
 	// Message contains additional information.
 	Message string `json:"message"`
+	// Failed sets the backoff limit.
+	Failed int `json:"failed"`
 	// Expiration date of the slice.
 	Expiry *metav1.Time `json:"expiry"`
 }
@@ -497,6 +499,7 @@ type SliceList struct {
 	Items []Slice `json:"items"`
 }
 
+// MakeOwnerReference creates an owner reference for the given object.
 func (s Slice) MakeOwnerReference() metav1.OwnerReference {
 	return *metav1.NewControllerRef(&s.ObjectMeta, SchemeGroupVersion.WithKind("Slice"))
 }
@@ -551,6 +554,7 @@ type SliceClaimList struct {
 	Items []SliceClaim `json:"items"`
 }
 
+// MakeObjectReference creates an object reference for the given object.
 func (sc SliceClaim) MakeObjectReference() *corev1.ObjectReference {
 	objectReference := corev1.ObjectReference{}
 	groupVersionKind := SchemeGroupVersion.WithKind("SliceClaim")
@@ -562,6 +566,7 @@ func (sc SliceClaim) MakeObjectReference() *corev1.ObjectReference {
 	return &objectReference
 }
 
+// MakeOwnerReference creates an owner reference for the given object.
 func (sc SliceClaim) MakeOwnerReference() metav1.OwnerReference {
 	return *metav1.NewControllerRef(&sc.ObjectMeta, SchemeGroupVersion.WithKind("SliceClaim"))
 }
