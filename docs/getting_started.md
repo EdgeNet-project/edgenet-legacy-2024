@@ -14,7 +14,13 @@ EdgeNet extension for Kubernetes consists of two parts, the custom resource defi
 
 CRDs (discussed [here](custom_resources.md)) are custom objects that are manipulated, created and destroyed by custom controllers.
 
-You will be creating CRDs and deploy custom controllers to the cluster. <!-- There are 5 files in the `build/yamls/kubernetes` directory. -->
+You will be creating CRDs and deploy custom controllers to the cluster.
+
+### Other yaml files
+* `multi-tenancy.yaml` contains the feature pack for enabling multiple tenants. Please refer to [multi-tenancy](custom_resources.md#multitenancy) documentation for more information.
+* `notifier.yaml` contains the notification such as mailer & slack notifier.
+* `multi-provider.yaml` enables the cluster to have multi-provider functionality. For example, node contribution is contained in this file. Please refer to [multi-provider](custom_resources.md#multi-provider) to have more information.
+* `location-based-node-selection.yaml` contains a set of features that allows deployments to be made using the node's geographical information. Please refer to the [location-based node selection](custom_resources.md#location-based-node-selection) section for additional information.
 
 ## Install the required CRDs and deploying controllers from `all-in-one.yaml`
 
@@ -63,13 +69,4 @@ After you edit the file, you can use the following command to apply, the CRDs, a
 
 This command creates all of the objects in Kubernetes including the deployments. Thus, it takes some time for them to start working.
 
-<!-- *TODO: How to compile EdgeNet from source?* -->
-<!-- 
-## `notifier.yaml`
-
-## `multi-tenancy.yaml`
-
-## `multi-provider.yaml`
-
-## `location-based-node-selection.yaml` -->
 
