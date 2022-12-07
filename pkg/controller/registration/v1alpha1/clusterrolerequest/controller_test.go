@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
+	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
@@ -80,7 +81,7 @@ func (g *TestGroup) Init() {
 			FirstName: "John",
 			LastName:  "Smith",
 			Email:     "john.smith@edge-net.org",
-			RoleName:  "edgenet:tenant-admin",
+			RoleName:  corev1alpha1.TenantOwnerClusterRoleName,
 		},
 	}
 	g.roleRequestObj = roleRequestObj
@@ -106,7 +107,7 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, expected.Month(), roleRequest.Status.Expiry.Month())
 	util.Equals(t, expected.Year(), roleRequest.Status.Expiry.Year())
 
-	util.Equals(t, statusPending, roleRequest.Status.State)
+	util.Equals(t, registrationv1alpha1.StatusPending, roleRequest.Status.State)
 	util.Equals(t, messagePending, roleRequest.Status.Message)
 
 	roleRequest.Spec.Approved = true
@@ -115,7 +116,7 @@ func TestStartController(t *testing.T) {
 	roleRequest, err = edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().Get(context.TODO(), roleRequestTest.GetName(), metav1.GetOptions{})
 
 	util.OK(t, err)
-	util.Equals(t, statusBound, roleRequest.Status.State)
+	util.Equals(t, registrationv1alpha1.StatusBound, roleRequest.Status.State)
 	util.Equals(t, messageRoleBound, roleRequest.Status.Message)
 }
 

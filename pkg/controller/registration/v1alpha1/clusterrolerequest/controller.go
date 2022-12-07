@@ -60,11 +60,6 @@ const (
 	messagePending          = "Waiting for approval"
 	messageBindingFailed    = "Role binding failed"
 	messageOwnershipFailure = "Cluster Role Request ownership cannot be granted"
-
-	statusFailed   = "Failed"
-	statusPending  = "Pending"
-	statusApproved = "Approved"
-	statusBound    = "Bound"
 )
 
 // Controller is the controller implementation for Cluster Role Request resources
@@ -273,9 +268,9 @@ func (c *Controller) processClusterRoleRequest(clusterRoleRequestCopy *registrat
 	}
 
 	switch clusterRoleRequestCopy.Status.State {
-	case statusBound:
-		c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeNormal, statusBound, messageRoleBound)
-	case statusApproved:
+	case registrationv1alpha1.StatusBound:
+		c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeNormal, registrationv1alpha1.StatusBound, messageRoleBound)
+	case registrationv1alpha1.StatusApproved:
 		// The following section handles cluster role binding. There are two basic logical steps here.
 		// Try to create a cluster role binding for the user.
 		// If cluster role binding exists, check if the user already holds the role. If not, pin the cluster role to the user.
@@ -313,13 +308,13 @@ func (c *Controller) processClusterRoleRequest(clusterRoleRequestCopy *registrat
 			}
 		}
 
-		clusterRoleRequestCopy.Status.State = statusBound
+		clusterRoleRequestCopy.Status.State = registrationv1alpha1.StatusBound
 		clusterRoleRequestCopy.Status.Message = messageRoleBound
 		c.updateStatus(context.TODO(), clusterRoleRequestCopy)
-	case statusPending:
+	case registrationv1alpha1.StatusPending:
 		if clusterRoleRequestCopy.Spec.Approved {
-			c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeNormal, statusApproved, messageRoleApproved)
-			clusterRoleRequestCopy.Status.State = statusApproved
+			c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeNormal, registrationv1alpha1.StatusApproved, messageRoleApproved)
+			clusterRoleRequestCopy.Status.State = registrationv1alpha1.StatusApproved
 			clusterRoleRequestCopy.Status.Message = messageRoleApproved
 			c.updateStatus(context.TODO(), clusterRoleRequestCopy)
 		}
@@ -328,7 +323,7 @@ func (c *Controller) processClusterRoleRequest(clusterRoleRequestCopy *registrat
 			return
 		}
 
-		clusterRoleRequestCopy.Status.State = statusPending
+		clusterRoleRequestCopy.Status.State = registrationv1alpha1.StatusPending
 		clusterRoleRequestCopy.Status.Message = messagePending
 		c.updateStatus(context.TODO(), clusterRoleRequestCopy)
 	}
@@ -345,8 +340,8 @@ func (c *Controller) grantRequestOwnership(clusterRoleRequestCopy *registrationv
 		klog.Infof("Couldn't create owner cluster role %s: %s", clusterRoleRequestCopy.GetName(), err)
 	}
 
-	if clusterRoleRequestCopy.Status.State != statusFailed {
-		clusterRoleRequestCopy.Status.State = statusFailed
+	if clusterRoleRequestCopy.Status.State != registrationv1alpha1.StatusFailed {
+		clusterRoleRequestCopy.Status.State = registrationv1alpha1.StatusFailed
 		clusterRoleRequestCopy.Status.Message = messageOwnershipFailure
 		c.updateStatus(context.TODO(), clusterRoleRequestCopy)
 	}
@@ -366,8 +361,8 @@ func (c *Controller) checkForRequestedRole(clusterRoleRequestCopy *registrationv
 
 	c.recorder.Event(clusterRoleRequestCopy, corev1.EventTypeWarning, failureFound, messageRoleNotFound)
 
-	if clusterRoleRequestCopy.Status.State != statusFailed {
-		clusterRoleRequestCopy.Status.State = statusFailed
+	if clusterRoleRequestCopy.Status.State != registrationv1alpha1.StatusFailed {
+		clusterRoleRequestCopy.Status.State = registrationv1alpha1.StatusFailed
 		clusterRoleRequestCopy.Status.Message = messageRoleNotFound
 		c.updateStatus(context.TODO(), clusterRoleRequestCopy)
 	}
