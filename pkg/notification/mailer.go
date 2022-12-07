@@ -53,7 +53,7 @@ func (c *Content) email(purpose string) error {
 		return err
 	}
 	var htmlBody bytes.Buffer
-	var pathTemplate string = "./email"
+	pathTemplate := "./email"
 	if flag.Lookup("template-path") != nil {
 		pathTemplate = flag.Lookup("template-path").Value.(flag.Getter).Get().(string)
 	}
@@ -83,7 +83,7 @@ func (c *Content) email(purpose string) error {
 func getSMTPInformation() (*smtpServer, error) {
 	// The code below inits the SMTP configuration for sending emails
 	// The path of the yaml config file of smtp server
-	var pathSMTP string = "./token"
+	pathSMTP := "./token"
 	if flag.Lookup("smtp-path") != nil {
 		pathSMTP = flag.Lookup("smtp-path").Value.(flag.Getter).Get().(string)
 	}

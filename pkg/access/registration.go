@@ -34,11 +34,11 @@ import (
 
 // Clientset to be synced by the custom resources
 var Clientset kubernetes.Interface
-var EdgenetClientset clientset.Interface
-var SlackTokenPath *string
-var SlackChannelIdPath *string
 
-// Create function is for being used by other resources to create a tenant
+// EdgenetClientset to be synced by the custom resources
+var EdgenetClientset clientset.Interface
+
+// CreateTenant function is for being used by other resources to create a tenant
 func CreateTenant(tenantRequest *registrationv1alpha1.TenantRequest) error {
 	// Create a tenant on the cluster
 	tenant := new(corev1alpha1.Tenant)
@@ -56,21 +56,20 @@ func CreateTenant(tenantRequest *registrationv1alpha1.TenantRequest) error {
 		tenant.SetOwnerReferences(tenantRequest.GetOwnerReferences())
 	}
 
-	if tenantCreated, err := EdgenetClientset.CoreV1alpha1().Tenants().Create(context.TODO(), tenant, metav1.CreateOptions{}); err != nil {
+	tenantCreated, err := EdgenetClientset.CoreV1alpha1().Tenants().Create(context.TODO(), tenant, metav1.CreateOptions{})
+	if err != nil {
 		klog.Infof("Couldn't create tenant %s: %s", tenant.GetName(), err)
 		return err
-	} else {
-		if tenantRequest.Spec.ResourceAllocation != nil {
-			claim := corev1alpha1.ResourceTuning{
-				ResourceList: tenantRequest.Spec.ResourceAllocation,
-			}
-			applied := make(chan error, 1)
-			go ApplyTenantResourceQuota(tenant.GetName(), []metav1.OwnerReference{tenantCreated.MakeOwnerReference()}, claim, applied)
-			return <-applied
-		}
-		return nil
 	}
-
+	if tenantRequest.Spec.ResourceAllocation != nil {
+		claim := corev1alpha1.ResourceTuning{
+			ResourceList: tenantRequest.Spec.ResourceAllocation,
+		}
+		applied := make(chan error, 1)
+		go ApplyTenantResourceQuota(tenant.GetName(), []metav1.OwnerReference{tenantCreated.MakeOwnerReference()}, claim, applied)
+		return <-applied
+	}
+	return nil
 }
 
 // ApplyTenantResourceQuota generates a tenant resource quota with the name provided
@@ -109,23 +108,22 @@ func checkNamespaceCreation(tenant string, created chan<- bool) {
 		created <- true
 		close(created)
 		return
-	} else {
-		timeout := int64(300)
-		watchNamespace, err := Clientset.CoreV1().Namespaces().Watch(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/tenant=%s", tenant), TimeoutSeconds: &timeout})
-		if err == nil {
-			// Get events from watch interface
-			for namespaceEvent := range watchNamespace.ResultChan() {
-				namespace, status := namespaceEvent.Object.(*corev1.Namespace)
-				if status {
-					if namespace.Status.Phase != "Terminating" {
-						created <- true
-						close(created)
-						watchNamespace.Stop()
-						return
-					}
+	}
+	timeout := int64(300)
+	watchNamespace, err := Clientset.CoreV1().Namespaces().Watch(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/tenant=%s", tenant), TimeoutSeconds: &timeout})
+	if err == nil {
+		// Get events from watch interface
+		for namespaceEvent := range watchNamespace.ResultChan() {
+			namespace, status := namespaceEvent.Object.(*corev1.Namespace)
+			if status {
+				if namespace.Status.Phase != "Terminating" {
+					created <- true
+					close(created)
+					watchNamespace.Stop()
+					return
 				}
-
 			}
+
 		}
 	}
 	created <- false

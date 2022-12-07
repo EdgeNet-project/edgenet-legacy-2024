@@ -175,7 +175,7 @@ func GetServerOfCurrentContext() (string, error) {
 // GetNamecheapCredentials provides authentication info to have API Access
 func GetNamecheapCredentials() (string, string, string, error) {
 	// The path of the yaml config file of namecheap
-	var namecheapPath string = "."
+	namecheapPath := "."
 	if flag.Lookup("configs-path") != nil {
 		namecheapPath = flag.Lookup("configs-path").Value.(flag.Getter).Get().(string)
 	}
@@ -329,6 +329,7 @@ func EqualsMultipleExp(tb testing.TB, exp interface{}, act interface{}) {
 	}
 }
 
+// Hash returns a hash of the strings passed in.
 func Hash(strs ...string) string {
 	str := strings.Join(strs, "-")
 	adler32 := adler32.Checksum([]byte(str))

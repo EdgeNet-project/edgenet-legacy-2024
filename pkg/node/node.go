@@ -39,7 +39,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/route53"
 	namecheap "github.com/billputer/go-namecheap"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -103,19 +102,6 @@ func Boundbox(points [][]float64) []float64 {
 
 	bounding := []float64{minX, maxX, minY, maxY}
 	return bounding
-}
-
-// GetKubeletVersion looks at the head node to decide which version of Kubernetes to install
-func GetKubeletVersion() string {
-	nodeRaw, err := Clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master"})
-	if err != nil {
-		log.Println(err.Error())
-	}
-	kubeletVersion := ""
-	for _, nodeRow := range nodeRaw.Items {
-		kubeletVersion = nodeRow.Status.NodeInfo.KubeletVersion
-	}
-	return kubeletVersion
 }
 
 // SetOwnerReferences make the references owner of the node
@@ -189,12 +175,12 @@ func sanitizeNodeLabel(s string) string {
 }
 
 // getMaxmindLocation is similar to geoip2.fetch(...) but allows to specify a custom URL for testing.
-func getMaxmindLocation(url string, accountId string, licenseKey string, address string) (*geoip2.Response, error) {
+func getMaxmindLocation(url string, accountID string, licenseKey string, address string) (*geoip2.Response, error) {
 	req, err := http.NewRequest("GET", url+address, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.SetBasicAuth(accountId, licenseKey)
+	req.SetBasicAuth(accountID, licenseKey)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -215,14 +201,14 @@ func getMaxmindLocation(url string, accountId string, licenseKey string, address
 
 // GetGeolocationByIP returns geolabels from the MaxMind GeoIP2 precision service
 func GetGeolocationByIP(
-	maxmindUrl string,
-	maxmindAccountId string,
+	maxmindURL string,
+	maxmindAccountID string,
 	maxmindLicenseKey string,
 	hostname string,
 	address string,
 ) bool {
 	// Fetch geolocation information
-	record, err := getMaxmindLocation(maxmindUrl, maxmindAccountId, maxmindLicenseKey, address)
+	record, err := getMaxmindLocation(maxmindURL, maxmindAccountID, maxmindLicenseKey, address)
 	if err != nil {
 		log.Println(err)
 		return false
@@ -326,6 +312,7 @@ func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
 	return result, state
 }
 
+// SetHostnameRoute53 add a DNS record to a Route53 hosted zone
 func SetHostnameRoute53(hostedZone, nodeName, address, recordType string) (bool, string) {
 	input := &route53.ChangeResourceRecordSetsInput{
 		ChangeBatch: &route53.ChangeBatch{
@@ -363,21 +350,6 @@ func CreateJoinToken(ttl string, hostname string) string {
 	return token
 }
 
-// GetList uses clientset to get node list of the cluster
-func GetList() []string {
-	nodesRaw, err := Clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	}
-	nodes := make([]string, len(nodesRaw.Items))
-	for i, nodeRow := range nodesRaw.Items {
-		nodes[i] = nodeRow.Name
-	}
-
-	return nodes
-}
-
 // GetConditionReadyStatus picks the ready status of node
 func GetConditionReadyStatus(node *corev1.Node) string {
 	for _, conditionRow := range node.Status.Conditions {
@@ -388,39 +360,4 @@ func GetConditionReadyStatus(node *corev1.Node) string {
 		}
 	}
 	return ""
-}
-
-// getNodeByHostname uses clientset to get namespace requested
-func getNodeByHostname(hostname string) (string, error) {
-	// Examples for error handling:
-	// - Use helper functions like e.g. errors.IsNotFound()
-	// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
-	_, err := Clientset.CoreV1().Nodes().Get(context.TODO(), hostname, metav1.GetOptions{})
-	if errors.IsNotFound(err) {
-		log.Printf("Node %s not found", hostname)
-		return "false", err
-	} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
-		log.Printf("Error getting node %s: %v", hostname, statusError.ErrStatus)
-		return "error", err
-	} else if err != nil {
-		log.Println(err.Error())
-		panic(err.Error())
-	} else {
-		return "true", nil
-	}
-}
-
-// unique function remove duplicate values from slice.
-func unique(slice []string) []string {
-	duplicateList := map[string]bool{}
-	uniqueSlice := []string{}
-
-	for _, ele := range slice {
-		if _, exist := duplicateList[ele]; exist != true &&
-			ele != "default" && ele != "kube-system" && ele != "kube-public" {
-			duplicateList[ele] = true
-			uniqueSlice = append(uniqueSlice, ele)
-		}
-	}
-	return uniqueSlice
 }

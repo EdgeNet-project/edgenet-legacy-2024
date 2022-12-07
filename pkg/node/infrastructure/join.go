@@ -68,15 +68,7 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 	bootstrapToken.Usages = []string{"authentication", "signing"}
 	bootstrapToken.Groups = []string{"system:bootstrappers:kubeadm:default-node-token"}
 	bootstrapToken.Token = token
-	/*tokens := []kubeadmapi.BootstrapToken{{
-		Token:       token,
-		Description: fmt.Sprintf("EdgeNet token for adding node called %s", hostname),
-		TTL: &metav1.Duration{
-			Duration: duration,
-		},
-		Usages: []string{"authentication", "signing"},
-		Groups: []string{"system:bootstrappers:kubeadm:default-node-token"},
-	}}*/
+
 	secret, err := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(context.TODO(), token.ID, metav1.GetOptions{})
 	if secret != nil && err == nil {
 		return "", err
@@ -100,11 +92,6 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 		}
 	}
 
-	/*if err := nodebootstraptokenphase.CreateNewTokens(clientset, tokens); err != nil {
-		log.Printf("Error creating token: %s", err)
-		return "", err
-	}*/
-
 	// This reads server info of the current context from the config file
 	server, err := util.GetServerOfCurrentContext()
 	if err != nil {
@@ -113,7 +100,7 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 	}
 	server = strings.Trim(server, "https://")
 	server = strings.Trim(server, "http://")
-	var pathCA string = "/etc/kubernetes/pki/ca.crt"
+	pathCA := "/etc/kubernetes/pki/ca.crt"
 	if flag.Lookup("ca-path") != nil {
 		pathCA = flag.Lookup("ca-path").Value.(flag.Getter).Get().(string)
 	}
@@ -180,6 +167,7 @@ func SetHostname(client *namecheap.Client, hostRecord namecheap.DomainDNSHost) (
 	return true, ""
 }
 
+// AddARecordRoute53 adds a new A record to the Route53
 func AddARecordRoute53(input *route53.ChangeResourceRecordSetsInput) (bool, string) {
 	svc := route53.New(session.New())
 	_, err := svc.ChangeResourceRecordSets(input)

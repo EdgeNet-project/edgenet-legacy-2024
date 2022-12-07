@@ -13,7 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -58,39 +57,12 @@ func (g *testGroup) Init() {
 				corev1.ResourcePods:             resource.MustParse("100"),
 			},
 			Conditions: []corev1.NodeCondition{
-				corev1.NodeCondition{
+				{
 					Type:   "Ready",
 					Status: "True",
 				},
 			},
 		},
-	}
-}
-
-func TestUnique(t *testing.T) {
-	cases := []struct {
-		input    []string
-		expected []string
-	}{
-		{
-			[]string{"test1", "test1", "test2", "test2", "test3", "t", "test-1"},
-			[]string{"test1", "test2", "test3", "t", "test-1"},
-		},
-		{
-			[]string{"test1", "test1", "test3", "test2", "test3", "test4", "test444", "r"},
-			[]string{"test1", "test3", "test2", "test4", "test444", "r"},
-		},
-		{
-			[]string{"test2", "test4", "test4", "test4", "test5", "test7", "test"},
-			[]string{"test2", "test4", "test5", "test7", "test"},
-		},
-		{
-			[]string{"test3", "test33", "ttest6", "test-2", "test6", "test6", "test-2"},
-			[]string{"test3", "test33", "ttest6", "test-2", "test6"},
-		},
-	}
-	for _, tc := range cases {
-		util.Equals(t, tc.expected, unique(tc.input))
 	}
 }
 
@@ -189,104 +161,17 @@ func TestGeofence(t *testing.T) {
 	}
 }
 
-func TestGetList(t *testing.T) {
-	g := testGroup{}
-	g.Init()
-	node1 := g.nodeObj
-	node1.SetName("node-1")
-	node2 := g.nodeObj
-	node2.SetName("node-2")
-	node3 := g.nodeObj
-	node3.SetName("node-3")
-	node4 := g.nodeObj
-	node4.SetName("node-4")
-
-	cases := []struct {
-		node     corev1.Node
-		expected []string
-	}{
-		{
-			node1,
-			[]string{"node-1"},
-		},
-		{
-			node2,
-			[]string{"node-1", "node-2"},
-		},
-		{
-			node3,
-			[]string{"node-1", "node-2", "node-3"},
-		},
-		{
-			node4,
-			[]string{"node-1", "node-2", "node-3", "node-4"},
-		},
-	}
-	for _, tc := range cases {
-		_, err := g.client.CoreV1().Nodes().Create(context.TODO(), tc.node.DeepCopy(), metav1.CreateOptions{})
-		util.OK(t, err)
-		util.Equals(t, tc.expected, GetList())
-	}
-}
-
-func TestGetNodeByHostname(t *testing.T) {
-	g := testGroup{}
-	g.Init()
-	node1 := g.nodeObj
-	node1.SetName("node-1")
-	node2 := g.nodeObj
-	node2.SetName("node-2")
-	node3 := g.nodeObj
-	node3.SetName("node-3")
-	node4 := g.nodeObj
-	node4.SetName("node-4")
-
-	cases := []struct {
-		node     corev1.Node
-		name     string
-		expected bool
-	}{
-		{
-			node1,
-			"node-1",
-			true,
-		},
-		{
-			node2,
-			"node-2",
-			true,
-		},
-		{
-			node3,
-			"node-3",
-			true,
-		},
-		{
-			node4,
-			"node5",
-			false,
-		},
-	}
-	for _, tc := range cases {
-		_, err := g.client.CoreV1().Nodes().Create(context.TODO(), tc.node.DeepCopy(), metav1.CreateOptions{})
-		util.OK(t, err)
-
-		_, err = getNodeByHostname(tc.name)
-		util.Equals(t, tc.expected, !errors.IsNotFound(err))
-	}
-}
-
 func TestGetNodeIPAddresses(t *testing.T) {
 	g := testGroup{}
 	g.Init()
 	node1 := g.nodeObj
 	node1.SetName("node-1")
 	node1.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
+		{
 			Type:    "InternalIP",
 			Address: "192.168.0.1",
 		},
-		corev1.NodeAddress{
+		{
 			Type:    "ExternalIP",
 			Address: "10.0.0.1",
 		},
@@ -294,11 +179,11 @@ func TestGetNodeIPAddresses(t *testing.T) {
 	node2 := g.nodeObj
 	node2.SetName("node-2")
 	node2.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
+		{
 			Type:    "InternalIP",
 			Address: "192.168.0.2",
 		},
-		corev1.NodeAddress{
+		{
 			Type:    "ExternalIP",
 			Address: "10.0.0.2",
 		},
@@ -306,11 +191,11 @@ func TestGetNodeIPAddresses(t *testing.T) {
 	node3 := g.nodeObj
 	node3.SetName("node-3")
 	node3.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
+		{
 			Type:    "InternalIP",
 			Address: "192.168.0.3",
 		},
-		corev1.NodeAddress{
+		{
 			Type:    "ExternalIP",
 			Address: "10.0.0.3",
 		},
@@ -318,11 +203,11 @@ func TestGetNodeIPAddresses(t *testing.T) {
 	node4 := g.nodeObj
 	node4.SetName("node-4")
 	node4.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
+		{
 			Type:    "InternalIP",
 			Address: "192.168.0.4",
 		},
-		corev1.NodeAddress{
+		{
 			Type:    "ExternalIP",
 			Address: "10.0.0.4",
 		},
@@ -362,22 +247,22 @@ func TestCompareIPAddresses(t *testing.T) {
 	node1.SetName("node-1")
 	node1.SetUID("01")
 	node1.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
+		{
 			Type:    "InternalIP",
 			Address: "192.168.0.1",
 		},
-		corev1.NodeAddress{
+		{
 			Type:    "ExternalIP",
 			Address: "10.0.0.1",
 		},
 	}
 	node1Updated := node1
 	node1Updated.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
+		{
 			Type:    "InternalIP",
 			Address: "192.168.0.10",
 		},
-		corev1.NodeAddress{
+		{
 			Type:    "ExternalIP",
 			Address: "10.0.0.10",
 		},
@@ -386,14 +271,14 @@ func TestCompareIPAddresses(t *testing.T) {
 	node2.SetName("node-2")
 	node2.SetUID("02")
 	node2.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
+		{
 			Type:    "InternalIP",
 			Address: "192.168.0.2",
 		},
 	}
 	node2Updated := node2
 	node2Updated.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
+		{
 			Type:    "InternalIP",
 			Address: "192.168.0.3",
 		},
@@ -402,14 +287,14 @@ func TestCompareIPAddresses(t *testing.T) {
 	node3.SetName("node-3")
 	node3.SetUID("03")
 	node3.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
+		{
 			Type:    "ExternalIP",
 			Address: "10.0.0.3",
 		},
 	}
 	node3Updated := node3
 	node3Updated.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
+		{
 			Type:    "ExternalIP",
 			Address: "10.0.0.30",
 		},
@@ -463,11 +348,11 @@ func TestGetConditionReadyStatus(t *testing.T) {
 	node1.SetName("node-1")
 	node1.SetUID("01")
 	node1.Status.Addresses = []corev1.NodeAddress{
-		corev1.NodeAddress{
+		{
 			Type:    "InternalIP",
 			Address: "192.168.0.1",
 		},
-		corev1.NodeAddress{
+		{
 			Type:    "ExternalIP",
 			Address: "10.0.0.1",
 		},
