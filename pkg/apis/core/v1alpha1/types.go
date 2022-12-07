@@ -31,6 +31,46 @@ import (
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+// Values of Status.State
+const (
+	StatusFailed         = "Failure"
+	StatusReconciliation = "Reconciliation"
+	// Slice claim
+	StatusPending   = "Pending"
+	StatusRequested = "Requested"
+	StatusEmployed  = "Employed"
+	// Slice
+	StatusBound       = "Bound" // Also used for slice claim
+	StatusReserved    = "Reserved"
+	StatusProvisioned = "Provisioned"
+	// Subnamespace
+	StatusPartitioned         = "Partitioned"
+	StatusSubnamespaceCreated = "Created"
+	StatusQuotaSet            = "Set"
+	// Tenant
+	StatusCoreNamespaceCreated = "Created"
+	StatusEstablished          = "Established" // Also used for subnamespace
+	// Tenant resource quota
+	StatusQuotaCreated = "Created"
+	StatusApplied      = "Applied"
+	// Node contribution
+	StatusAccessed      = "Node Accessed"
+	StatusInQueue       = "In Queue"
+	StatusDNSConfigured = "DNS Configured"
+	StatusNodePatched   = "Node Patched"
+	StatusInProgress    = "In Progress"
+	StatusIncomplete    = "Incomplete"
+	StatusJoined        = "Joined"
+)
+
+// Values of string constants subject to repetitive use
+const (
+	DynamicStr                        = "Dynamic"
+	TenantOwnerClusterRoleName        = "edgenet:tenant-owner"
+	TenantAdminClusterRoleName        = "edgenet:tenant-admin"
+	TenantCollaboratorClusterRoleName = "edgenet:tenant-collaborator"
+)
+
 // Tenant describes a tenant that consumes the cluster resources in an isolated environment
 type Tenant struct {
 	// TypeMeta is the metadata for the resource, like kind and apiversion
@@ -312,6 +352,8 @@ type NodeContributionStatus struct {
 	State string `json:"state"`
 	// Message contains additional information.
 	Message string `json:"message"`
+	// Failed sets the backoff limit.
+	Failed int `json:"failed"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -325,6 +367,11 @@ type NodeContributionList struct {
 	// NodeContributionList is a list of NodeContribution resources. This element contains
 	// NodeContribution resources.
 	Items []NodeContribution `json:"items"`
+}
+
+// MakeOwnerReference creates an owner reference for the given object.
+func (nc NodeContribution) MakeOwnerReference() metav1.OwnerReference {
+	return *metav1.NewControllerRef(&nc.ObjectMeta, SchemeGroupVersion.WithKind("NodeContribution"))
 }
 
 // +genclient

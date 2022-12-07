@@ -67,15 +67,6 @@ const (
 	messageSliceFailed    = "There are no adequate resources to slice"
 	messagePatchFailed    = "Node patch operation has failed"
 	messageReconciliation = "Reconciliation in progress"
-
-	statusFailed         = "Failure"
-	statusReserved       = "Reserved"
-	statusBound          = "Bound"
-	statusReconciliation = "Reconciliation"
-	statusProvisioned    = "Provisioned"
-
-	statusRequested = "Requested"
-	statusEmployed  = "Employed"
 )
 
 // Controller is the controller implementation for Slice resources
@@ -142,14 +133,14 @@ func NewController(
 		},
 		DeleteFunc: func(obj interface{}) {
 			sliceCopy := obj.(*corev1alpha1.Slice).DeepCopy()
-			if sliceCopy.Status.State == statusReserved || sliceCopy.Status.State == statusBound {
+			if sliceCopy.Status.State == corev1alpha1.StatusReserved || sliceCopy.Status.State == corev1alpha1.StatusBound {
 				if nodeRaw, err := controller.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/pre-reservation=%s", sliceCopy.GetName())}); err == nil {
 					for _, nodeRow := range nodeRaw.Items {
 						controller.patchNode("return", "", nodeRow.GetName())
 					}
 				}
 			}
-			if sliceCopy.Status.State == statusProvisioned {
+			if sliceCopy.Status.State == corev1alpha1.StatusProvisioned {
 				if nodeRaw, err := controller.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/slice=%s", sliceCopy.GetName())}); err == nil {
 					for _, nodeRow := range nodeRaw.Items {
 						controller.patchNode("return", "", nodeRow.GetName())
@@ -344,14 +335,14 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha1.Slice) {
 	}
 	if exceedsBackoffLimit := sliceCopy.Status.Failed >= backoffLimit; exceedsBackoffLimit {
 		sliceClaimCopy, _ := c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceCopy.Spec.ClaimRef.Namespace).Get(context.TODO(), sliceCopy.Spec.ClaimRef.Name, metav1.GetOptions{})
-		sliceClaimCopy.Status.State = statusFailed
+		sliceClaimCopy.Status.State = corev1alpha1.StatusFailed
 		sliceClaimCopy.Status.Message = messageNotBound
 		c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceClaimCopy.GetNamespace()).UpdateStatus(context.TODO(), sliceClaimCopy, metav1.UpdateOptions{})
 		return
 	}
 
 	switch sliceCopy.Status.State {
-	case statusProvisioned:
+	case corev1alpha1.StatusProvisioned:
 		if ok := c.checkSliceStatus(sliceCopy, "slice"); ok {
 			if sliceCopy.Spec.ClaimRef != nil {
 				if sliceClaimCopy, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceCopy.Spec.ClaimRef.Namespace).Get(context.TODO(), sliceCopy.Spec.ClaimRef.Name, metav1.GetOptions{}); err == nil {
@@ -364,14 +355,14 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha1.Slice) {
 				}
 			}
 		}
-		c.recorder.Event(sliceCopy, corev1.EventTypeNormal, statusReconciliation, messageReconciliation)
-		sliceCopy.Status.State = statusReconciliation
+		c.recorder.Event(sliceCopy, corev1.EventTypeNormal, corev1alpha1.StatusReconciliation, messageReconciliation)
+		sliceCopy.Status.State = corev1alpha1.StatusReconciliation
 		sliceCopy.Status.Message = messageReconciliation
 		c.updateStatus(context.TODO(), sliceCopy)
-	case statusBound:
+	case corev1alpha1.StatusBound:
 		if ok := c.checkSliceStatus(sliceCopy, "pre-reservation"); !ok {
-			c.recorder.Event(sliceCopy, corev1.EventTypeNormal, statusReconciliation, messageReconciliation)
-			sliceCopy.Status.State = statusReconciliation
+			c.recorder.Event(sliceCopy, corev1.EventTypeNormal, corev1alpha1.StatusReconciliation, messageReconciliation)
+			sliceCopy.Status.State = corev1alpha1.StatusReconciliation
 			sliceCopy.Status.Message = messageReconciliation
 			c.updateStatus(context.TODO(), sliceCopy)
 			return
@@ -379,11 +370,11 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha1.Slice) {
 		if sliceCopy.Spec.ClaimRef != nil {
 			if sliceClaimCopy, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceCopy.Spec.ClaimRef.Namespace).Get(context.TODO(), sliceCopy.Spec.ClaimRef.Name, metav1.GetOptions{}); err == nil {
 				isFailed := false
-				if sliceClaimCopy.Status.State == statusEmployed {
+				if sliceClaimCopy.Status.State == corev1alpha1.StatusEmployed {
 					if isIsolated, ok := c.provisionSlice(sliceCopy); ok {
 						if isIsolated {
 							c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messageBound)
-							sliceCopy.Status.State = statusProvisioned
+							sliceCopy.Status.State = corev1alpha1.StatusProvisioned
 							sliceCopy.Status.Message = messageProvisioned
 							c.updateStatus(context.TODO(), sliceCopy)
 						} else {
@@ -393,25 +384,25 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha1.Slice) {
 					}
 					isFailed = true
 				}
-				if sliceClaimCopy.Status.State == statusFailed || isFailed {
+				if sliceClaimCopy.Status.State == corev1alpha1.StatusFailed || isFailed {
 					c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failureBound, messageNotBound)
-					sliceCopy.Status.State = statusFailed
+					sliceCopy.Status.State = corev1alpha1.StatusFailed
 					sliceCopy.Status.Message = messageNotBound
 					c.updateStatus(context.TODO(), sliceCopy)
 				}
 			}
 		}
-	case statusReserved:
+	case corev1alpha1.StatusReserved:
 		if ok := c.checkSliceStatus(sliceCopy, "pre-reservation"); !ok {
-			c.recorder.Event(sliceCopy, corev1.EventTypeNormal, statusReconciliation, messageReconciliation)
-			sliceCopy.Status.State = statusReconciliation
+			c.recorder.Event(sliceCopy, corev1.EventTypeNormal, corev1alpha1.StatusReconciliation, messageReconciliation)
+			sliceCopy.Status.State = corev1alpha1.StatusReconciliation
 			sliceCopy.Status.Message = messageReconciliation
 			c.updateStatus(context.TODO(), sliceCopy)
 			return
 		}
 		if sliceCopy.Spec.ClaimRef != nil {
 			if sliceClaimCopy, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceCopy.Spec.ClaimRef.Namespace).Get(context.TODO(), sliceCopy.Spec.ClaimRef.Name, metav1.GetOptions{}); err == nil {
-				if sliceClaimCopy.Status.State == statusRequested {
+				if sliceClaimCopy.Status.State == corev1alpha1.StatusRequested {
 					ownerReferences := sliceClaimCopy.GetOwnerReferences()
 					sliceOwnerReference := sliceCopy.MakeOwnerReference()
 					controller := true
@@ -420,14 +411,14 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha1.Slice) {
 					sliceClaimCopy.SetOwnerReferences(ownerReferences)
 					if _, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceClaimCopy.GetNamespace()).Update(context.TODO(), sliceClaimCopy, metav1.UpdateOptions{}); err == nil {
 						c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messageBound)
-						sliceCopy.Status.State = statusBound
+						sliceCopy.Status.State = corev1alpha1.StatusBound
 						sliceCopy.Status.Message = messageBound
 						c.updateStatus(context.TODO(), sliceCopy)
 						return
 					}
 				}
 				c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failureBound, messageNotBound)
-				sliceCopy.Status.State = statusFailed
+				sliceCopy.Status.State = corev1alpha1.StatusFailed
 				sliceCopy.Status.Message = messageNotBound
 				c.updateStatus(context.TODO(), sliceCopy)
 			}
@@ -435,13 +426,13 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha1.Slice) {
 	default:
 		if isReserved := c.preReserveNodes(sliceCopy); !isReserved {
 			c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailed)
-			sliceCopy.Status.State = statusFailed
+			sliceCopy.Status.State = corev1alpha1.StatusFailed
 			sliceCopy.Status.Message = messageSliceFailed
 			c.updateStatus(context.TODO(), sliceCopy)
 			return
 		}
-		c.recorder.Event(sliceCopy, corev1.EventTypeNormal, statusReserved, messageReserved)
-		sliceCopy.Status.State = statusReserved
+		c.recorder.Event(sliceCopy, corev1.EventTypeNormal, corev1alpha1.StatusReserved, messageReserved)
+		sliceCopy.Status.State = corev1alpha1.StatusReserved
 		sliceCopy.Status.Message = messageReserved
 		c.updateStatus(context.TODO(), sliceCopy)
 	}
@@ -634,7 +625,7 @@ func (c *Controller) patchNode(phase, slice, node string) error {
 
 // updateStatus calls the API to update the slice status.
 func (c *Controller) updateStatus(ctx context.Context, sliceCopy *corev1alpha1.Slice) {
-	if sliceCopy.Status.State == statusFailed {
+	if sliceCopy.Status.State == corev1alpha1.StatusFailed {
 		sliceCopy.Status.Failed++
 	}
 	if _, err := c.edgenetclientset.CoreV1alpha1().Slices().UpdateStatus(ctx, sliceCopy, metav1.UpdateOptions{}); err != nil {

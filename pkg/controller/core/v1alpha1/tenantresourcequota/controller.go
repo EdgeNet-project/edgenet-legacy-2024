@@ -72,21 +72,6 @@ const (
 	messageQuotaCreated     = "Core resource quota created"
 	messageReconciliation   = "Reconciliation in progress"
 	messageApplied          = "Tenant Resource Quota applied to tenant's namespaces"
-
-	statusFailed         = "Failure"
-	statusQuotaCreated   = "Created"
-	statusReconciliation = "Reconciliation"
-	statusApplied        = "Applied"
-
-	// Statuses of the subnamespaces resource
-	statusPartitioned         = "Partitioned"
-	statusSubnamespaceCreated = "Created"
-	statusQuotaSet            = "Set"
-	statusEstablished         = "Established"
-
-	trueStr    = "True"
-	falseStr   = "False"
-	unknownStr = "Unknown"
 )
 
 type traverseStatus struct {
@@ -325,24 +310,24 @@ func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1a
 	if permitted {
 		if expired := tenantResourceQuotaCopy.DropExpiredItems(); expired {
 			c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successRemoved, messageRemoved)
-			tenantResourceQuotaCopy.Status.State = statusReconciliation
+			tenantResourceQuotaCopy.Status.State = corev1alpha1.StatusReconciliation
 			tenantResourceQuotaCopy.Status.Message = messageReconciliation
 			c.updateStatus(context.TODO(), tenantResourceQuotaCopy)
 			return
 		}
 
 		switch tenantResourceQuotaCopy.Status.State {
-		case statusApplied:
+		case corev1alpha1.StatusApplied:
 			c.reconcile(tenantResourceQuotaCopy, parentNamespaceLabels["edge-net.io/cluster-uid"])
-		case statusQuotaCreated:
+		case corev1alpha1.StatusQuotaCreated:
 			if ok := c.tuneHierarchicalResourceQuota(tenantResourceQuotaCopy, parentNamespaceLabels["edge-net.io/cluster-uid"]); !ok {
-				c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeWarning, statusFailed, messageNotUpdated)
-				tenantResourceQuotaCopy.Status.State = statusFailed
+				c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageNotUpdated)
+				tenantResourceQuotaCopy.Status.State = corev1alpha1.StatusFailed
 				tenantResourceQuotaCopy.Status.Message = messageNotUpdated
 				return
 			}
-			c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, statusApplied, messageApplied)
-			tenantResourceQuotaCopy.Status.State = statusApplied
+			c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, corev1alpha1.StatusApplied, messageApplied)
+			tenantResourceQuotaCopy.Status.State = corev1alpha1.StatusApplied
 			tenantResourceQuotaCopy.Status.Message = messageApplied
 			c.updateStatus(context.TODO(), tenantResourceQuotaCopy)
 		default:
@@ -353,14 +338,14 @@ func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1a
 				Hard: tenantResourceQuotaCopy.Spec.Claim["initial"].ResourceList,
 			}
 			if _, err := c.kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuotaCopy.GetName()).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-				c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeWarning, statusFailed, messageNotFound)
-				tenantResourceQuotaCopy.Status.State = statusFailed
+				c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageNotFound)
+				tenantResourceQuotaCopy.Status.State = corev1alpha1.StatusFailed
 				tenantResourceQuotaCopy.Status.Message = messageNotFound
 				c.updateStatus(context.TODO(), tenantResourceQuotaCopy)
 				return
 			}
-			c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, statusQuotaCreated, messageQuotaCreated)
-			tenantResourceQuotaCopy.Status.State = statusQuotaCreated
+			c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, corev1alpha1.StatusQuotaCreated, messageQuotaCreated)
+			tenantResourceQuotaCopy.Status.State = corev1alpha1.StatusQuotaCreated
 			tenantResourceQuotaCopy.Status.Message = messageQuotaCreated
 			c.updateStatus(context.TODO(), tenantResourceQuotaCopy)
 		}
@@ -369,14 +354,14 @@ func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1a
 
 func (c *Controller) reconcile(tenantResourceQuotaCopy *corev1alpha1.TenantResourceQuota, clusterUID string) {
 	if ok := c.tuneHierarchicalResourceQuota(tenantResourceQuotaCopy, clusterUID); !ok {
-		tenantResourceQuotaCopy.Status.State = statusQuotaCreated
+		tenantResourceQuotaCopy.Status.State = corev1alpha1.StatusQuotaCreated
 		tenantResourceQuotaCopy.Status.Message = messageQuotaCreated
 	}
 	if _, err := c.kubeclientset.CoreV1().ResourceQuotas(tenantResourceQuotaCopy.GetName()).Get(context.TODO(), "core-quota", metav1.GetOptions{}); err != nil {
-		tenantResourceQuotaCopy.Status.State = statusReconciliation
+		tenantResourceQuotaCopy.Status.State = corev1alpha1.StatusReconciliation
 		tenantResourceQuotaCopy.Status.Message = messageReconciliation
 	}
-	if tenantResourceQuotaCopy.Status.State != statusApplied {
+	if tenantResourceQuotaCopy.Status.State != corev1alpha1.StatusApplied {
 		c.updateStatus(context.TODO(), tenantResourceQuotaCopy)
 	}
 }
@@ -453,7 +438,7 @@ func (c *Controller) subtractSubnamespaceQuotas(namespace string, remainingQuota
 	var lastInSubnamespace string
 	if subnamespaceRaw, err := c.edgenetclientset.CoreV1alpha1().SubNamespaces(namespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
 		for _, subnamespaceRow := range subnamespaceRaw.Items {
-			if subnamespaceRow.Status.State == statusEstablished || subnamespaceRow.Status.State == statusQuotaSet || subnamespaceRow.Status.State == statusSubnamespaceCreated || subnamespaceRow.Status.State == statusPartitioned {
+			if subnamespaceRow.Status.State == corev1alpha1.StatusEstablished || subnamespaceRow.Status.State == corev1alpha1.StatusQuotaSet || subnamespaceRow.Status.State == corev1alpha1.StatusSubnamespaceCreated || subnamespaceRow.Status.State == corev1alpha1.StatusPartitioned {
 				for remainingQuotaResource, remainingQuotaQuantity := range remainingQuotaResourceList {
 					childQuota := subnamespaceRow.RetrieveQuantity(remainingQuotaResource)
 					if remainingQuotaQuantity.Cmp(childQuota) == -1 {
@@ -478,7 +463,7 @@ func (c *Controller) cleanup(tenantResourceQuotaCopy *corev1alpha1.TenantResourc
 
 // updateStatus calls the API to update the tenant resource quota status.
 func (c *Controller) updateStatus(ctx context.Context, tenantResourceQuotaCopy *corev1alpha1.TenantResourceQuota) {
-	if tenantResourceQuotaCopy.Status.State == statusFailed {
+	if tenantResourceQuotaCopy.Status.State == corev1alpha1.StatusFailed {
 		tenantResourceQuotaCopy.Status.Failed++
 	}
 	if _, err := c.edgenetclientset.CoreV1alpha1().TenantResourceQuotas().UpdateStatus(ctx, tenantResourceQuotaCopy, metav1.UpdateOptions{}); err != nil {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
+	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
@@ -136,7 +137,7 @@ func TestStartController(t *testing.T) {
 	tenant.Spec.Enabled = false
 	edgenetclientset.CoreV1alpha1().Tenants().Update(context.TODO(), tenant, metav1.UpdateOptions{})
 	time.Sleep(250 * time.Millisecond)
-	_, err = kubeclientset.RbacV1().Roles(tenant.GetName()).Get(context.TODO(), "edgenet:tenant-owner", metav1.GetOptions{})
+	_, err = kubeclientset.RbacV1().Roles(tenant.GetName()).Get(context.TODO(), corev1alpha1.TenantOwnerClusterRoleName, metav1.GetOptions{})
 	util.Equals(t, "roles.rbac.authorization.k8s.io \"edgenet:tenant-owner\" not found", err.Error())
 }
 
@@ -157,7 +158,7 @@ func TestCreate(t *testing.T) {
 			util.OK(t, err)
 		})
 		t.Run("role binding", func(t *testing.T) {
-			_, err := kubeclientset.RbacV1().RoleBindings(tenant.GetName()).Get(context.TODO(), "edgenet:tenant-owner", metav1.GetOptions{})
+			_, err := kubeclientset.RbacV1().RoleBindings(tenant.GetName()).Get(context.TODO(), corev1alpha1.TenantOwnerClusterRoleName, metav1.GetOptions{})
 			util.OK(t, err)
 		})
 	})

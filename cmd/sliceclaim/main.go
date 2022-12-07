@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/core/v1alpha1/sliceclaim"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
@@ -18,7 +19,7 @@ import (
 func main() {
 	klog.InitFlags(nil)
 	flag.String("kubeconfig-path", bootstrap.GetDefaultKubeconfigPath(), "Path to the kubeconfig file's directory")
-	provisioning := flag.String("provisioning", "Dynamic", "Working mode to automate slice creation")
+	provisioning := flag.String("provisioning", corev1alpha1.DynamicStr, "Working mode to automate slice creation")
 	flag.Parse()
 
 	stopCh := signals.SetupSignalHandler()

@@ -52,8 +52,7 @@ const controllerAgentName = "tenant-controller"
 
 // Definitions of the state of the tenant resource
 const (
-	backoffLimit    = 3
-	clusterRoleName = "edgenet:tenant-owner"
+	backoffLimit = 3
 
 	successSynced        = "Synced"
 	successEstablished   = "Established"
@@ -75,11 +74,6 @@ const (
 	messageRoleBindingDeletionFailed        = "Role binding clean up failed"
 	messageRoleBindingCreationFailed        = "Role binding creation for tenant failed"
 	messageReconciliation                   = "Reconciliation in progress"
-
-	statusFailed               = "Failure"
-	statusCoreNamespaceCreated = "Created"
-	statusReconciliation       = "Reconciliation"
-	statusEstablished          = "Established"
 )
 
 // Controller is the controller implementation for Tenant resources
@@ -270,13 +264,13 @@ func (c *Controller) processTenant(tenantCopy *corev1alpha1.Tenant) {
 		// When a tenant is deleted, the owner references feature drives the namespace to be automatically removed
 		ownerReferences := []metav1.OwnerReference{tenantCopy.MakeOwnerReference()}
 		switch tenantCopy.Status.State {
-		case statusEstablished:
+		case corev1alpha1.StatusEstablished:
 			c.reconcile(tenantCopy)
-		case statusCoreNamespaceCreated:
+		case corev1alpha1.StatusCoreNamespaceCreated:
 			// Apply network policies
 			if err := c.applyNetworkPolicy(tenantCopy.GetName(), string(tenantCopy.GetUID()), string(systemNamespace.GetUID()), tenantCopy.Spec.ClusterNetworkPolicy, ownerReferences); err != nil {
 				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureNetworkPolicy, messageNetworkPolicyFailed)
-				tenantCopy.Status.State = statusFailed
+				tenantCopy.Status.State = corev1alpha1.StatusFailed
 				tenantCopy.Status.Message = messageNetworkPolicyFailed
 				c.updateStatus(context.TODO(), tenantCopy)
 				return
@@ -285,8 +279,8 @@ func (c *Controller) processTenant(tenantCopy *corev1alpha1.Tenant) {
 			if err := c.configureOwnerPermissions(tenantCopy); err != nil {
 				return
 			}
-			c.recorder.Event(tenantCopy, corev1.EventTypeNormal, statusEstablished, successEstablished)
-			tenantCopy.Status.State = statusEstablished
+			c.recorder.Event(tenantCopy, corev1.EventTypeNormal, corev1alpha1.StatusEstablished, successEstablished)
+			tenantCopy.Status.State = corev1alpha1.StatusEstablished
 			tenantCopy.Status.Message = successEstablished
 			c.updateStatus(context.TODO(), tenantCopy)
 		default:
@@ -294,8 +288,8 @@ func (c *Controller) processTenant(tenantCopy *corev1alpha1.Tenant) {
 			if err = c.makeCoreNamespace(tenantCopy, ownerReferences, string(systemNamespace.GetUID())); err != nil {
 				return
 			}
-			c.recorder.Event(tenantCopy, corev1.EventTypeNormal, statusCoreNamespaceCreated, messageCreated)
-			tenantCopy.Status.State = statusCoreNamespaceCreated
+			c.recorder.Event(tenantCopy, corev1.EventTypeNormal, corev1alpha1.StatusCoreNamespaceCreated, messageCreated)
+			tenantCopy.Status.State = corev1alpha1.StatusCoreNamespaceCreated
 			tenantCopy.Status.Message = messageCreated
 			c.updateStatus(context.TODO(), tenantCopy)
 		}
@@ -306,11 +300,11 @@ func (c *Controller) processTenant(tenantCopy *corev1alpha1.Tenant) {
 
 func (c *Controller) reconcile(tenantCopy *corev1alpha1.Tenant) {
 	// Reconcile with the owner permissions in the core namespace
-	if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(tenantCopy.GetName()).Get(context.TODO(), clusterRoleName, metav1.GetOptions{}); err != nil {
-		tenantCopy.Status.State = statusCoreNamespaceCreated
+	if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(tenantCopy.GetName()).Get(context.TODO(), corev1alpha1.TenantOwnerClusterRoleName, metav1.GetOptions{}); err != nil {
+		tenantCopy.Status.State = corev1alpha1.StatusCoreNamespaceCreated
 		tenantCopy.Status.Message = messageCreated
 	} else {
-		if roleBinding.RoleRef.Kind == "ClusterRole" && roleBinding.RoleRef.Name == "edgenet:tenant-owner" {
+		if roleBinding.RoleRef.Kind == "ClusterRole" && roleBinding.RoleRef.Name == corev1alpha1.TenantOwnerClusterRoleName {
 			isConsiled := false
 			for _, subject := range roleBinding.Subjects {
 				if subject.Kind == "User" && subject.Name == tenantCopy.Spec.Contact.Email {
@@ -318,31 +312,31 @@ func (c *Controller) reconcile(tenantCopy *corev1alpha1.Tenant) {
 				}
 			}
 			if !isConsiled {
-				tenantCopy.Status.State = statusCoreNamespaceCreated
+				tenantCopy.Status.State = corev1alpha1.StatusCoreNamespaceCreated
 				tenantCopy.Status.Message = messageCreated
 			}
 		}
 	}
 	// Reconcile with the network policies
 	if _, err := c.kubeclientset.NetworkingV1().NetworkPolicies(tenantCopy.GetName()).Get(context.TODO(), "baseline", metav1.GetOptions{}); err != nil {
-		tenantCopy.Status.State = statusCoreNamespaceCreated
+		tenantCopy.Status.State = corev1alpha1.StatusCoreNamespaceCreated
 		tenantCopy.Status.Message = messageCreated
 	}
 	if _, err := c.antreaclientset.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), tenantCopy.GetName(), metav1.GetOptions{}); (err != nil && tenantCopy.Spec.ClusterNetworkPolicy) || (err == nil && !tenantCopy.Spec.ClusterNetworkPolicy) {
-		tenantCopy.Status.State = statusCoreNamespaceCreated
+		tenantCopy.Status.State = corev1alpha1.StatusCoreNamespaceCreated
 		tenantCopy.Status.Message = messageCreated
 	}
 	// Reconcile with the core namespace and the associated permissions of the tenant resource
 	if _, err := c.kubeclientset.RbacV1().ClusterRoleBindings().Get(context.TODO(), fmt.Sprintf("edgenet:tenants:%s-owner", tenantCopy.GetName()), metav1.GetOptions{}); err != nil {
-		tenantCopy.Status.State = statusReconciliation
+		tenantCopy.Status.State = corev1alpha1.StatusReconciliation
 		tenantCopy.Status.Message = messageReconciliation
 	}
 	if _, err := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), tenantCopy.GetName(), metav1.GetOptions{}); err != nil {
-		tenantCopy.Status.State = statusReconciliation
+		tenantCopy.Status.State = corev1alpha1.StatusReconciliation
 		tenantCopy.Status.Message = messageReconciliation
 	}
 
-	if tenantCopy.Status.State != statusEstablished {
+	if tenantCopy.Status.State != corev1alpha1.StatusEstablished {
 		c.updateStatus(context.TODO(), tenantCopy)
 	}
 }
@@ -371,7 +365,7 @@ func (c *Controller) makeCoreNamespace(tenantCopy *corev1alpha1.Tenant, ownerRef
 			}
 		}
 		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureCreation, messageCreationFailed)
-		tenantCopy.Status.State = statusFailed
+		tenantCopy.Status.State = corev1alpha1.StatusFailed
 		tenantCopy.Status.Message = messageCreationFailed
 		c.updateStatus(context.TODO(), tenantCopy)
 		return err
@@ -380,14 +374,14 @@ func (c *Controller) makeCoreNamespace(tenantCopy *corev1alpha1.Tenant, ownerRef
 	tenantOwnerClusterRole, err := access.CreateObjectSpecificClusterRole("core.edgenet.io", "tenants", tenantCopy.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureCreation, messageRoleBindingCreationFailed)
-		tenantCopy.Status.State = statusFailed
+		tenantCopy.Status.State = corev1alpha1.StatusFailed
 		tenantCopy.Status.Message = messageRoleBindingCreationFailed
 		c.updateStatus(context.TODO(), tenantCopy)
 		return err
 	}
 	if err := access.CreateObjectSpecificClusterRoleBinding(tenantOwnerClusterRole, tenantCopy.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, ownerReferences); err != nil {
 		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureCreation, messageRoleBindingCreationFailed)
-		tenantCopy.Status.State = statusFailed
+		tenantCopy.Status.State = corev1alpha1.StatusFailed
 		tenantCopy.Status.Message = messageRoleBindingCreationFailed
 		c.updateStatus(context.TODO(), tenantCopy)
 		return err
@@ -396,9 +390,9 @@ func (c *Controller) makeCoreNamespace(tenantCopy *corev1alpha1.Tenant, ownerRef
 }
 
 func (c *Controller) configureOwnerPermissions(tenantCopy *corev1alpha1.Tenant) error {
-	roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRoleName}
+	roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: corev1alpha1.TenantOwnerClusterRoleName}
 	rbSubjects := []rbacv1.Subject{{Kind: "User", Name: tenantCopy.Spec.Contact.Email, APIGroup: "rbac.authorization.k8s.io"}}
-	roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRoleName, Namespace: tenantCopy.GetName()},
+	roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: corev1alpha1.TenantOwnerClusterRoleName, Namespace: tenantCopy.GetName()},
 		Subjects: rbSubjects, RoleRef: roleRef}
 	roleBindLabels := map[string]string{"edge-net.io/generated": "true", "edge-net.io/notification": "true"}
 	roleBind.SetLabels(roleBindLabels)
@@ -415,7 +409,7 @@ func (c *Controller) configureOwnerPermissions(tenantCopy *corev1alpha1.Tenant) 
 			}
 		}
 		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
-		tenantCopy.Status.State = statusFailed
+		tenantCopy.Status.State = corev1alpha1.StatusFailed
 		tenantCopy.Status.Message = messageBindingFailed
 		c.updateStatus(context.TODO(), tenantCopy)
 		return err
@@ -567,7 +561,7 @@ func (c *Controller) cleanup(tenantCopy *corev1alpha1.Tenant, clusterUID string)
 
 // updateStatus calls the API to update the tenant status.
 func (c *Controller) updateStatus(ctx context.Context, tenantCopy *corev1alpha1.Tenant) {
-	if tenantCopy.Status.State == statusFailed {
+	if tenantCopy.Status.State == corev1alpha1.StatusFailed {
 		tenantCopy.Status.Failed++
 	}
 	if _, err := c.edgenetclientset.CoreV1alpha1().Tenants().UpdateStatus(ctx, tenantCopy, metav1.UpdateOptions{}); err != nil {

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 
+	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,7 +42,7 @@ func CreateClusterRoles() error {
 		{APIGroups: []string{"extensions"}, Resources: []string{"daemonsets", "deployments", "ingresses", "networkpolicies", "replicasets", "replicationcontrollers"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"networking.k8s.io"}, Resources: []string{"ingresses", "networkpolicies"}, Verbs: []string{"*"}},
 		{APIGroups: []string{""}, Resources: []string{"events", "controllerrevisions"}, Verbs: []string{"get", "list", "watch"}}}
-	ownerRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "edgenet:tenant-owner"}, Rules: policyRule}
+	ownerRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: corev1alpha1.TenantOwnerClusterRoleName}, Rules: policyRule}
 	ownerRole.SetLabels(labels)
 	_, err := Clientset.RbacV1().ClusterRoles().Create(context.TODO(), ownerRole, metav1.CreateOptions{})
 	if err != nil {
@@ -59,7 +60,7 @@ func CreateClusterRoles() error {
 			}
 		}
 	}
-	adminRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "edgenet:tenant-admin"}, Rules: policyRule}
+	adminRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: corev1alpha1.TenantAdminClusterRoleName}, Rules: policyRule}
 	adminRole.SetLabels(labels)
 	_, err = Clientset.RbacV1().ClusterRoles().Create(context.TODO(), adminRole, metav1.CreateOptions{})
 	if err != nil {
@@ -85,7 +86,7 @@ func CreateClusterRoles() error {
 		{APIGroups: []string{"batch"}, Resources: []string{"cronjobs", "jobs"}, Verbs: []string{"*"}},
 		{APIGroups: []string{"extensions"}, Resources: []string{"daemonsets", "deployments", "replicasets", "replicationcontrollers"}, Verbs: []string{"*"}},
 		{APIGroups: []string{""}, Resources: []string{"events", "controllerrevisions"}, Verbs: []string{"get", "list", "watch"}}}
-	collaboratorRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "edgenet:tenant-collaborator"}, Rules: policyRule}
+	collaboratorRole := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: corev1alpha1.TenantCollaboratorClusterRoleName}, Rules: policyRule}
 	collaboratorRole.SetLabels(labels)
 	_, err = Clientset.RbacV1().ClusterRoles().Create(context.TODO(), collaboratorRole, metav1.CreateOptions{})
 	if err != nil {

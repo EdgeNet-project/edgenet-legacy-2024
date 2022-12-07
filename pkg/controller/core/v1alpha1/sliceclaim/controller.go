@@ -72,23 +72,6 @@ const (
 	messageCreationFailed = "Slice creation failed"
 	messageWaiting        = "Waiting for the slice"
 	messageReconciliation = "Reconciliation in progress"
-
-	dynamic = "Dynamic"
-	// manual                = "Manual"
-
-	statusFailed         = "Failure"
-	statusPending        = "Pending"
-	statusRequested      = "Requested"
-	statusBound          = "Bound"
-	statusReconciliation = "Reconciliation"
-	statusEmployed       = "Employed"
-
-	statusReserved    = "Reserved"
-	statusEstablished = "Established"
-
-	statusPartitioned         = "Partitioned"
-	statusSubnamespaceCreated = "Created"
-	statusQuotaSet            = "Set"
 )
 
 // Controller is the controller implementation for Slice Claimresources
@@ -296,7 +279,7 @@ func (c *Controller) handleSubNamespace(obj interface{}) {
 		klog.Infof("Recovered deleted subnamespace '%s' from tombstone", subnamespace.GetName())
 	}
 	klog.Infof("Processing subnamespace: %s", subnamespace.GetName())
-	if subnamespace.Status.State == statusEstablished || subnamespace.Status.State == statusQuotaSet || subnamespace.Status.State == statusSubnamespaceCreated || subnamespace.Status.State == statusPartitioned {
+	if subnamespace.Status.State == corev1alpha1.StatusEstablished || subnamespace.Status.State == corev1alpha1.StatusQuotaSet || subnamespace.Status.State == corev1alpha1.StatusSubnamespaceCreated || subnamespace.Status.State == corev1alpha1.StatusPartitioned {
 		return
 	}
 	if name := subnamespace.GetSliceClaim(); name != nil {
@@ -323,9 +306,9 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha1.SliceClaim) 
 	permitted, _, namespaceLabels := namespacev1.EligibilityCheck(sliceclaimCopy.GetNamespace())
 	if permitted {
 		switch sliceclaimCopy.Status.State {
-		case statusEmployed:
+		case corev1alpha1.StatusEmployed:
 			// Reconcile
-		case statusBound:
+		case corev1alpha1.StatusBound:
 			if isSufficient := c.checkAvailableQuota(sliceclaimCopy, fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"])); !isSufficient {
 				return
 			}
@@ -333,60 +316,60 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha1.SliceClaim) 
 			for _, ownerReference := range ownerReferences {
 				if ownerReference.Kind == "SubNamespace" {
 					if subnamespaceCopy, err := c.edgenetclientset.CoreV1alpha1().SubNamespaces(sliceclaimCopy.GetNamespace()).Get(context.TODO(), ownerReference.Name, metav1.GetOptions{}); err == nil {
-						if subnamespaceCopy.Status.State == statusEstablished || subnamespaceCopy.Status.State == statusQuotaSet || subnamespaceCopy.Status.State == statusSubnamespaceCreated || subnamespaceCopy.Status.State == statusPartitioned {
+						if subnamespaceCopy.Status.State == corev1alpha1.StatusEstablished || subnamespaceCopy.Status.State == corev1alpha1.StatusQuotaSet || subnamespaceCopy.Status.State == corev1alpha1.StatusSubnamespaceCreated || subnamespaceCopy.Status.State == corev1alpha1.StatusPartitioned {
 							c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successApplied, messageApplied)
-							sliceclaimCopy.Status.State = statusEmployed
+							sliceclaimCopy.Status.State = corev1alpha1.StatusEmployed
 							sliceclaimCopy.Status.Message = messageApplied
 						}
 					}
 				}
 			}
-		case statusRequested:
+		case corev1alpha1.StatusRequested:
 			if isSufficient := c.checkAvailableQuota(sliceclaimCopy, fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"])); !isSufficient {
 				return
 			}
 			if slice, err := c.edgenetclientset.CoreV1alpha1().Slices().Get(context.TODO(), sliceclaimCopy.Spec.SliceName, metav1.GetOptions{}); err == nil && slice.Spec.ClaimRef != nil && slice.Spec.ClaimRef == sliceclaimCopy.MakeObjectReference() {
-				if slice.Status.State == statusBound {
+				if slice.Status.State == corev1alpha1.StatusBound {
 					c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successBound, messageBound)
-					sliceclaimCopy.Status.State = statusBound
+					sliceclaimCopy.Status.State = corev1alpha1.StatusBound
 					sliceclaimCopy.Status.Message = messageBound
 					c.updateStatus(context.TODO(), sliceclaimCopy)
 				}
 				return
 			}
 			c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
-			sliceclaimCopy.Status.State = statusFailed
+			sliceclaimCopy.Status.State = corev1alpha1.StatusFailed
 			sliceclaimCopy.Status.Message = messageBindingFailed
 			c.updateStatus(context.TODO(), sliceclaimCopy)
-		case statusPending:
+		case corev1alpha1.StatusPending:
 			if isSufficient := c.checkAvailableQuota(sliceclaimCopy, fmt.Sprintf("%s-quota", namespaceLabels["edge-net.io/kind"])); !isSufficient {
 				return
 			}
 			if slice, err := c.edgenetclientset.CoreV1alpha1().Slices().Get(context.TODO(), sliceclaimCopy.Spec.SliceName, metav1.GetOptions{}); err == nil {
 				if isBound := c.bindSlice(slice.DeepCopy(), sliceclaimCopy.Spec.SliceClassName, sliceclaimCopy.Spec.NodeSelector, sliceclaimCopy.MakeObjectReference()); isBound {
 					c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successClaimed, messageClaimed)
-					sliceclaimCopy.Status.State = statusRequested
+					sliceclaimCopy.Status.State = corev1alpha1.StatusRequested
 					sliceclaimCopy.Status.Message = messageWaiting
 					c.updateStatus(context.TODO(), sliceclaimCopy)
 					return
 				}
 				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
-				sliceclaimCopy.Status.State = statusFailed
+				sliceclaimCopy.Status.State = corev1alpha1.StatusFailed
 				sliceclaimCopy.Status.Message = messageBindingFailed
 				c.updateStatus(context.TODO(), sliceclaimCopy)
 				return
 			}
 
-			if strings.EqualFold(c.provisioning, dynamic) {
+			if strings.EqualFold(c.provisioning, corev1alpha1.DynamicStr) {
 				if isCreated := c.createSlice(sliceclaimCopy.Spec.SliceName, sliceclaimCopy.Spec.SliceClassName, sliceclaimCopy.Spec.NodeSelector, sliceclaimCopy.MakeObjectReference(), sliceclaimCopy.Spec.SliceExpiry); isCreated {
 					c.recorder.Event(sliceclaimCopy, corev1.EventTypeNormal, successClaimed, messageClaimed)
-					sliceclaimCopy.Status.State = statusRequested
+					sliceclaimCopy.Status.State = corev1alpha1.StatusRequested
 					sliceclaimCopy.Status.Message = messageWaiting
 					c.updateStatus(context.TODO(), sliceclaimCopy)
 					return
 				}
 				c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureCreation, messageCreationFailed)
-				sliceclaimCopy.Status.State = statusFailed
+				sliceclaimCopy.Status.State = corev1alpha1.StatusFailed
 				sliceclaimCopy.Status.Message = messageCreationFailed
 				c.updateStatus(context.TODO(), sliceclaimCopy)
 			}
@@ -395,7 +378,7 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha1.SliceClaim) 
 				return
 			}
 			c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, pendingSlice, messageWaiting)
-			sliceclaimCopy.Status.State = statusPending
+			sliceclaimCopy.Status.State = corev1alpha1.StatusPending
 			sliceclaimCopy.Status.Message = messageWaiting
 			c.updateStatus(context.TODO(), sliceclaimCopy)
 		}
@@ -405,7 +388,7 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha1.SliceClaim) 
 func (c *Controller) checkAvailableQuota(sliceclaimCopy *corev1alpha1.SliceClaim, quotaName string) bool {
 	if hasEnoughQuota := c.checkResourceQuota(sliceclaimCopy.Spec.NodeSelector.Resources.Limits, sliceclaimCopy.Spec.NodeSelector.Count, sliceclaimCopy.GetNamespace(), quotaName); !hasEnoughQuota {
 		c.recorder.Event(sliceclaimCopy, corev1.EventTypeWarning, failureQuotaShortage, messageQuotaShortage)
-		sliceclaimCopy.Status.State = statusFailed
+		sliceclaimCopy.Status.State = corev1alpha1.StatusFailed
 		sliceclaimCopy.Status.Message = messageQuotaShortage
 		c.updateStatus(context.TODO(), sliceclaimCopy)
 		return false
@@ -428,7 +411,7 @@ func (c *Controller) createSlice(sliceName, sliceclaimClass string, sliceclaimNo
 }
 
 func (c *Controller) bindSlice(sliceCopy *corev1alpha1.Slice, sliceclaimClass string, sliceclaimNodeSelector corev1alpha1.NodeSelector, sliceclaimRef *corev1.ObjectReference) bool {
-	if sliceCopy.Status.State == statusReserved && sliceCopy.Spec.SliceClassName == sliceclaimClass && reflect.DeepEqual(sliceCopy.Spec.NodeSelector, sliceclaimNodeSelector) {
+	if sliceCopy.Status.State == corev1alpha1.StatusReserved && sliceCopy.Spec.SliceClassName == sliceclaimClass && reflect.DeepEqual(sliceCopy.Spec.NodeSelector, sliceclaimNodeSelector) {
 		if sliceCopy.Spec.ClaimRef == nil {
 			sliceCopy.Spec.ClaimRef = sliceclaimRef
 			if _, err := c.edgenetclientset.CoreV1alpha1().Slices().Update(context.TODO(), sliceCopy, metav1.UpdateOptions{}); err == nil {
@@ -468,7 +451,7 @@ func (c *Controller) checkResourceQuota(sliceclaimResourceLimits corev1.Resource
 
 // updateStatus calls the API to update the slice claim status.
 func (c *Controller) updateStatus(ctx context.Context, sliceclaimCopy *corev1alpha1.SliceClaim) {
-	if sliceclaimCopy.Status.State == statusFailed {
+	if sliceclaimCopy.Status.State == corev1alpha1.StatusFailed {
 		sliceclaimCopy.Status.Failed++
 	}
 	if _, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceclaimCopy.GetNamespace()).UpdateStatus(ctx, sliceclaimCopy, metav1.UpdateOptions{}); err != nil {

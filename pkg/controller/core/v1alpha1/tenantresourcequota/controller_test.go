@@ -10,6 +10,7 @@ import (
 	"time"
 
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
+	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
@@ -156,7 +157,7 @@ func (g *TestGroup) Init() {
 			},
 		},
 		Status: corev1alpha.SubNamespaceStatus{
-			State: statusEstablished,
+			State: corev1alpha1.StatusEstablished,
 		},
 	}
 	nodeObj := corev1.Node{
@@ -245,7 +246,7 @@ func TestStartController(t *testing.T) {
 	// Get the object and check the status
 	tenantResourceQuota, err := edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	util.Equals(t, statusApplied, tenantResourceQuota.Status.State)
+	util.Equals(t, corev1alpha1.StatusApplied, tenantResourceQuota.Status.State)
 
 	// Update the tenant resource quota
 	drop := g.dropObj
