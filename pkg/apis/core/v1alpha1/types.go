@@ -54,13 +54,8 @@ const (
 	StatusQuotaCreated = "Created"
 	StatusApplied      = "Applied"
 	// Node contribution
-	StatusAccessed      = "Node Accessed"
-	StatusInQueue       = "In Queue"
-	StatusDNSConfigured = "DNS Configured"
-	StatusNodePatched   = "Node Patched"
-	StatusInProgress    = "In Progress"
-	StatusIncomplete    = "Incomplete"
-	StatusJoined        = "Joined"
+	StatusAccessed = "Node Accessed"
+	StatusReady    = "Ready"
 )
 
 // Values of string constants subject to repetitive use
