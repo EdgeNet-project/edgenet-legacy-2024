@@ -405,8 +405,8 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha1.Slice) {
 				if sliceClaimCopy.Status.State == corev1alpha1.StatusRequested {
 					ownerReferences := sliceClaimCopy.GetOwnerReferences()
 					sliceOwnerReference := sliceCopy.MakeOwnerReference()
-					controller := true
-					sliceOwnerReference.Controller = &controller
+					takeControl := true
+					sliceOwnerReference.Controller = &takeControl
 					ownerReferences = append(ownerReferences, sliceOwnerReference)
 					sliceClaimCopy.SetOwnerReferences(ownerReferences)
 					if _, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceClaimCopy.GetNamespace()).Update(context.TODO(), sliceClaimCopy, metav1.UpdateOptions{}); err == nil {

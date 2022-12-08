@@ -21,12 +21,13 @@ package bootstrap
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
-	"github.com/EdgeNet-project/edgenet/pkg/util"
+	"gopkg.in/yaml.v2"
 
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 	namecheap "github.com/billputer/go-namecheap"
@@ -34,6 +35,14 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+// Structure of Namecheap access credentials
+type namecheapCred struct {
+	App      string `yaml:"app"`
+	APIUser  string `yaml:"apiUser"`
+	APIToken string `yaml:"apiToken"`
+	Username string `yaml:"username"`
+}
 
 func homeDir() string {
 	if h := os.Getenv("HOME"); h != "" {
@@ -127,7 +136,7 @@ func CreateClientset(by string) (*kubernetes.Clientset, error) {
 
 // CreateNamecheapClient generates the client to interact with Namecheap API
 func CreateNamecheapClient() (*namecheap.Client, error) {
-	apiuser, apitoken, username, err := util.GetNamecheapCredentials()
+	apiuser, apitoken, username, err := getNamecheapCredentials()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -166,4 +175,27 @@ func CreateAntreaClientset(by string) (*antrea.Clientset, error) {
 		antreaclientset = generateClientset(config)
 	}
 	return antreaclientset, nil
+}
+
+// getNamecheapCredentials provides authentication info to have API Access
+func getNamecheapCredentials() (string, string, string, error) {
+	// The path of the yaml config file of namecheap
+	namecheapPath := "."
+	if flag.Lookup("configs-path") != nil {
+		namecheapPath = flag.Lookup("configs-path").Value.(flag.Getter).Get().(string)
+	}
+	file, err := os.Open(fmt.Sprintf("%s/namecheap.yaml", namecheapPath))
+	if err != nil {
+		log.Printf("unexpected error executing command: %v", err)
+		return "", "", "", err
+	}
+
+	decoder := yaml.NewDecoder(file)
+	var namecheapCred namecheapCred
+	err = decoder.Decode(&namecheapCred)
+	if err != nil {
+		log.Printf("unexpected error executing command: %v", err)
+		return "", "", "", err
+	}
+	return namecheapCred.APIUser, namecheapCred.APIToken, namecheapCred.Username, nil
 }

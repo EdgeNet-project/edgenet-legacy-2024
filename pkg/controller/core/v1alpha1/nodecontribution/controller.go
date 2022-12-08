@@ -33,7 +33,7 @@ import (
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/node"
-	"github.com/EdgeNet-project/edgenet/pkg/remoteip"
+	"github.com/EdgeNet-project/edgenet/pkg/node/remoteip"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -587,8 +587,8 @@ func (c *Controller) syncResources(nodecontributionCopy *corev1alpha1.NodeContri
 
 func (c *Controller) formOwnerReferences(nodecontributionCopy *corev1alpha1.NodeContribution) []metav1.OwnerReference {
 	ownerReference := nodecontributionCopy.MakeOwnerReference()
-	controller := true
-	ownerReference.Controller = &controller
+	takeControl := true
+	ownerReference.Controller = &takeControl
 	ownerReferences := []metav1.OwnerReference{ownerReference}
 	if nodecontributionCopy.Spec.Tenant != nil {
 		contributorTenant, err := c.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), *nodecontributionCopy.Spec.Tenant, metav1.GetOptions{})

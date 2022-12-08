@@ -26,8 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/util"
-
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
@@ -43,9 +41,62 @@ import (
 	bootstraputil "k8s.io/cluster-bootstrap/token/util"
 
 	//nodebootstraptokenphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/node"
-
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
 	kubeadmtypes "sigs.k8s.io/cluster-api/bootstrap/kubeadm/types/v1beta1"
 )
+
+// A part of the general structure of a kubeconfig file
+type clusterDetails struct {
+	CA     []byte `json:"certificate-authority-data"`
+	Server string `json:"server"`
+}
+type clusters struct {
+	Cluster clusterDetails `json:"cluster"`
+	Name    string         `json:"name"`
+}
+type contextDetails struct {
+	Cluster string `json:"cluster"`
+	User    string `json:"user"`
+}
+type contexts struct {
+	Context contextDetails `json:"context"`
+	Name    string         `json:"name"`
+}
+type configView struct {
+	Clusters       []clusters `json:"clusters"`
+	Contexts       []contexts `json:"contexts"`
+	CurrentContext string     `json:"current-context"`
+}
+
+// This reads the kubeconfig file by admin context and returns it in json format.
+func getConfigView() (api.Config, error) {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	// if you want to change the loading rules (which files in which order), you can do so here
+
+	configOverrides := &clientcmd.ConfigOverrides{}
+	// if you want to change override values or bind them to flags, there are methods to help you
+
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+	rawConfig, err := kubeConfig.RawConfig()
+	if err != nil {
+		// Do something
+		return rawConfig, err
+	}
+	return rawConfig, nil
+}
+
+// GetServerOfCurrentContext provides the server info of the current context
+func getServerOfCurrentContext() (string, error) {
+	rawConfig, err := getConfigView()
+	if err != nil {
+		log.Printf("unexpected error executing command: %v", err)
+		return "", err
+	}
+	var server string = rawConfig.Clusters["kubernetes"].Server
+	return server, nil
+}
 
 // CreateToken creates the token to be used to add node
 // and return the token
@@ -93,7 +144,7 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 	}
 
 	// This reads server info of the current context from the config file
-	server, err := util.GetServerOfCurrentContext()
+	server, err := getServerOfCurrentContext()
 	if err != nil {
 		log.Println(err)
 		return "", err

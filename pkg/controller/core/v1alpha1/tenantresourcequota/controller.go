@@ -23,14 +23,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha1"
-	namespacev1 "github.com/EdgeNet-project/edgenet/pkg/namespace"
+	"github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -167,11 +166,6 @@ func NewController(
 		},
 	})
 
-	access.Clientset = kubeclientset
-	access.EdgenetClientset = edgenetclientset
-	namespacev1.Clientset = kubeclientset
-	namespacev1.EdgenetClientset = edgenetclientset
-
 	return controller
 }
 
@@ -306,7 +300,8 @@ func (c *Controller) processTenantResourceQuota(tenantResourceQuotaCopy *corev1a
 		return
 	}
 
-	permitted, _, parentNamespaceLabels := namespacev1.EligibilityCheck(tenantResourceQuotaCopy.GetName())
+	multitenancyManager := multitenancy.NewManager(c.kubeclientset, c.edgenetclientset)
+	permitted, _, parentNamespaceLabels := multitenancyManager.EligibilityCheck(tenantResourceQuotaCopy.GetName())
 	if permitted {
 		if expired := tenantResourceQuotaCopy.DropExpiredItems(); expired {
 			c.recorder.Event(tenantResourceQuotaCopy, corev1.EventTypeNormal, successRemoved, messageRemoved)

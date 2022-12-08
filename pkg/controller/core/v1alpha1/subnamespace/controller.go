@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
@@ -31,7 +30,7 @@ import (
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha1"
-	namespacev1 "github.com/EdgeNet-project/edgenet/pkg/namespace"
+	"github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 
 	"github.com/google/uuid"
 
@@ -119,6 +118,8 @@ type Controller struct {
 	configmapsSynced      cache.InformerSynced
 	serviceaccountsLister corelisters.ServiceAccountLister
 	serviceaccountsSynced cache.InformerSynced
+
+	multitenancyManager *multitenancy.Manager
 
 	// workqueue is a rate limited work queue. This is used to queue work to be
 	// processed instead of performing it as soon as a change happens. This
@@ -283,10 +284,9 @@ func NewController(
 		DeleteFunc: controller.handleObject,
 	})
 
-	access.Clientset = kubeclientset
-	access.EdgenetClientset = edgenetclientset
-	namespacev1.Clientset = kubeclientset
-	namespacev1.EdgenetClientset = edgenetclientset
+	multitenancyManager := multitenancy.NewManager(kubeclientset, edgenetclientset)
+	controller.multitenancyManager = multitenancyManager
+
 	return controller
 }
 
@@ -490,7 +490,7 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 		return
 	}
 
-	permitted, parentNamespace, parentNamespaceLabels := namespacev1.EligibilityCheck(subnamespaceCopy.GetNamespace())
+	permitted, parentNamespace, parentNamespaceLabels := c.multitenancyManager.EligibilityCheck(subnamespaceCopy.GetNamespace())
 	if permitted {
 		var childNameHashed string
 		if subnamespaceCopy.Status.Child != nil {
@@ -561,7 +561,7 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 						ResourceList: remainingQuotaResourceList,
 					}
 					applied := make(chan error)
-					go access.ApplyTenantResourceQuota(childNameHashed, []metav1.OwnerReference{subtenant.MakeOwnerReference()}, claim, applied)
+					go c.multitenancyManager.ApplyTenantResourceQuota(childNameHashed, []metav1.OwnerReference{subtenant.MakeOwnerReference()}, claim, applied)
 					if err := <-applied; err != nil {
 						c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureApplied, messageApplyFail)
 						subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
@@ -579,7 +579,7 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 			c.updateStatus(context.TODO(), subnamespaceCopy)
 
 		case corev1alpha1.StatusPartitioned:
-			ownerReferences := namespacev1.SetAsOwnerReference(parentNamespace)
+			ownerReferences := []metav1.OwnerReference{multitenancy.MakeOwnerReferenceForNamespace(parentNamespace)}
 			if isCreated := c.makeSubsidiaryNamespace(subnamespaceCopy, parentNamespaceLabels["edge-net.io/tenant"], childNameHashed, ownerReferences); !isCreated {
 				return
 			}
@@ -940,7 +940,7 @@ func (c *Controller) makeSubsidiaryNamespace(subnamespaceCopy *corev1alpha1.SubN
 		tenantRequest.SetLabels(labels)
 		tenantRequest.SetOwnerReferences(ownerReferences)
 		tenantRequest.Spec.Contact = subnamespaceCopy.Spec.Subtenant.Owner
-		if err := access.CreateTenant(tenantRequest); err != nil {
+		if err := c.multitenancyManager.CreateTenant(tenantRequest); err != nil {
 			if errors.IsAlreadyExists(err) {
 				if subtenant, err := c.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), childNameHashed, metav1.GetOptions{}); err == nil {
 					subtenantCopy := subtenant.DeepCopy()

@@ -18,10 +18,10 @@ package v1alpha1
 
 import (
 	"fmt"
+	"hash/adler32"
 	"strings"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -261,7 +261,7 @@ func (sn SubNamespace) GenerateChildName(clusterUID string) string {
 		childName = fmt.Sprintf("%s-%s", clusterUID, childName)
 	}
 
-	childNameHashed := util.Hash(sn.GetNamespace(), childName)
+	childNameHashed := hash(sn.GetNamespace(), childName)
 	childName = strings.Join([]string{childName, childNameHashed}, "-")
 	return childName
 }
@@ -611,4 +611,11 @@ func (sc SliceClaim) MakeObjectReference() *corev1.ObjectReference {
 // MakeOwnerReference creates an owner reference for the given object.
 func (sc SliceClaim) MakeOwnerReference() metav1.OwnerReference {
 	return *metav1.NewControllerRef(&sc.ObjectMeta, SchemeGroupVersion.WithKind("SliceClaim"))
+}
+
+// hash returns a hash of the strings passed in.
+func hash(strs ...string) string {
+	str := strings.Join(strs, "-")
+	adler32 := adler32.Checksum([]byte(str))
+	return fmt.Sprintf("%x", adler32)
 }

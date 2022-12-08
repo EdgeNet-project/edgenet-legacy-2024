@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
@@ -60,9 +59,6 @@ func TestMain(m *testing.M) {
 		}
 	}()
 
-	access.Clientset = kubeclientset
-	access.EdgenetClientset = edgenetclientset
-	access.CreateClusterRoles()
 	kubeSystemNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}}
 	kubeclientset.CoreV1().Namespaces().Create(context.TODO(), kubeSystemNamespace, metav1.CreateOptions{})
 

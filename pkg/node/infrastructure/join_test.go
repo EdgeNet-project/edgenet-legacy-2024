@@ -29,3 +29,17 @@ func TestCreateJoinToken(t *testing.T) {
 	_, err = CreateToken(testclient.NewSimpleClientset(), ttl, "test.edgenet.io")
 	util.OK(t, err)
 }
+
+func TestGetOperations(t *testing.T) {
+	flag.String("configs-path", "../../configs", "Set Namecheap path.")
+	flag.Parse()
+
+	t.Run("config view", func(t *testing.T) {
+		_, err := getConfigView()
+		util.OK(t, err)
+	})
+	t.Run("server from current context", func(t *testing.T) {
+		_, err := getServerOfCurrentContext()
+		util.OK(t, err)
+	})
+}

@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha1"
+	"github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 
 	antreav1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
@@ -129,11 +129,6 @@ func NewController(
 			controller.enqueueTenant(newObj)
 		},
 	})
-
-	access.Clientset = kubeclientset
-	access.EdgenetClientset = edgenetclientset
-
-	access.CreateClusterRoles()
 
 	return controller
 }
@@ -371,15 +366,8 @@ func (c *Controller) makeCoreNamespace(tenantCopy *corev1alpha1.Tenant, ownerRef
 		return err
 	}
 	// Create the cluster role and role binding for the tenant resource
-	tenantOwnerClusterRole, err := access.CreateObjectSpecificClusterRole("core.edgenet.io", "tenants", tenantCopy.GetName(), "owner", []string{"get", "update", "patch"}, ownerReferences)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureCreation, messageRoleBindingCreationFailed)
-		tenantCopy.Status.State = corev1alpha1.StatusFailed
-		tenantCopy.Status.Message = messageRoleBindingCreationFailed
-		c.updateStatus(context.TODO(), tenantCopy)
-		return err
-	}
-	if err := access.CreateObjectSpecificClusterRoleBinding(tenantOwnerClusterRole, tenantCopy.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, ownerReferences); err != nil {
+	multitenancyManager := multitenancy.NewManager(c.kubeclientset, c.edgenetclientset)
+	if err := multitenancyManager.GrantObjectOwnership("core.edgenet.io", "tenants", tenantCopy.GetName(), tenantCopy.Spec.Contact.Email, ownerReferences); err != nil {
 		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureCreation, messageRoleBindingCreationFailed)
 		tenantCopy.Status.State = corev1alpha1.StatusFailed
 		tenantCopy.Status.Message = messageRoleBindingCreationFailed

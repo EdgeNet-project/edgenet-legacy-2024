@@ -1,33 +1,10 @@
 package util
 
 import (
-	"flag"
 	"strings"
 	"testing"
 	"time"
 )
-
-func TestGetOperations(t *testing.T) {
-	flag.String("configs-path", "../../configs", "Set Namecheap path.")
-	flag.Parse()
-
-	t.Run("config view", func(t *testing.T) {
-		_, err := getConfigView()
-		OK(t, err)
-	})
-	t.Run("cluster-server of current context", func(t *testing.T) {
-		_, _, _, err := GetClusterServerOfCurrentContext()
-		OK(t, err)
-	})
-	t.Run("server from current context", func(t *testing.T) {
-		_, err := GetServerOfCurrentContext()
-		OK(t, err)
-	})
-	t.Run("namecheap credentials", func(t *testing.T) {
-		_, _, _, err := GetNamecheapCredentials()
-		OK(t, err)
-	})
-}
 
 func TestGenerateRandomString(t *testing.T) {
 	var codes []string

@@ -29,7 +29,7 @@ import (
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha1"
-	namespacev1 "github.com/EdgeNet-project/edgenet/pkg/namespace"
+	"github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -303,7 +303,8 @@ func (c *Controller) processSliceClaim(sliceclaimCopy *corev1alpha1.SliceClaim) 
 		return
 	}
 
-	permitted, _, namespaceLabels := namespacev1.EligibilityCheck(sliceclaimCopy.GetNamespace())
+	multitenancyManager := multitenancy.NewManager(c.kubeclientset, c.edgenetclientset)
+	permitted, _, namespaceLabels := multitenancyManager.EligibilityCheck(sliceclaimCopy.GetNamespace())
 	if permitted {
 		switch sliceclaimCopy.Status.State {
 		case corev1alpha1.StatusEmployed:
