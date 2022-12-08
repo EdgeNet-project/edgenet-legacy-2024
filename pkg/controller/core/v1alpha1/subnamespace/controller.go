@@ -152,6 +152,8 @@ func NewController(
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
+	multitenancyManager := multitenancy.NewManager(kubeclientset, edgenetclientset)
+
 	controller := &Controller{
 		kubeclientset:         kubeclientset,
 		edgenetclientset:      edgenetclientset,
@@ -173,6 +175,7 @@ func NewController(
 		subnamespacesSynced:   subnamespaceInformer.Informer().HasSynced,
 		workqueue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "SubNamespaces"),
 		recorder:              recorder,
+		multitenancyManager:   multitenancyManager,
 	}
 
 	klog.Infoln("Setting up event handlers")
@@ -283,9 +286,6 @@ func NewController(
 		},
 		DeleteFunc: controller.handleObject,
 	})
-
-	multitenancyManager := multitenancy.NewManager(kubeclientset, edgenetclientset)
-	controller.multitenancyManager = multitenancyManager
 
 	return controller
 }

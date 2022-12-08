@@ -17,14 +17,13 @@ limitations under the License.
 // This code includes GeoLite2 data created by MaxMind, available from
 // https://www.maxmind.com.
 
-package node
+package multiprovider
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -32,16 +31,16 @@ import (
 	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
-	"github.com/EdgeNet-project/edgenet/pkg/node/infrastructure"
 	"github.com/savaki/geoip2"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
 	namecheap "github.com/billputer/go-namecheap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 )
 
 // JSON structure of patch operation
@@ -61,51 +60,8 @@ type patchByOwnerReferenceValue struct {
 	Value []metav1.OwnerReference `json:"value"`
 }
 
-// Clientset to be synced by the custom resources
-var Clientset kubernetes.Interface
-
-// GeoFence function determines whether the point is inside a polygon by using the crossing number method.
-// This method counts the number of times a ray starting at a point crosses a polygon boundary edge.
-// The even numbers mean the point is outside and the odd ones mean the point is inside.
-func GeoFence(boundbox []float64, polygon [][]float64, x float64, y float64) bool {
-	vertices := len(polygon)
-	lastIndex := vertices - 1
-	oddNodes := false
-	if boundbox[0] <= x && boundbox[1] >= x && boundbox[2] <= y && boundbox[3] >= y {
-		for index := range polygon {
-			if (polygon[index][1] < y && polygon[lastIndex][1] >= y || polygon[lastIndex][1] < y &&
-				polygon[index][1] >= y) && (polygon[index][0] <= x || polygon[lastIndex][0] <= x) {
-				if polygon[index][0]+(y-polygon[index][1])/(polygon[lastIndex][1]-polygon[index][1])*
-					(polygon[lastIndex][0]-polygon[index][0]) < x {
-					oddNodes = !oddNodes
-				}
-			}
-			lastIndex = index
-		}
-	}
-	return oddNodes
-}
-
-// Boundbox returns a rectangle which created according to the points of the polygon given
-func Boundbox(points [][]float64) []float64 {
-	var minX float64 = math.MaxFloat64
-	var maxX float64 = -math.MaxFloat64
-	var minY float64 = math.MaxFloat64
-	var maxY float64 = -math.MaxFloat64
-
-	for _, coordinates := range points {
-		minX = math.Min(minX, coordinates[0])
-		maxX = math.Max(maxX, coordinates[0])
-		minY = math.Min(minY, coordinates[1])
-		maxY = math.Max(maxY, coordinates[1])
-	}
-
-	bounding := []float64{minX, maxX, minY, maxY}
-	return bounding
-}
-
 // SetOwnerReferences make the references owner of the node
-func SetOwnerReferences(nodeName string, ownerReferences []metav1.OwnerReference) error {
+func (m *Manager) SetOwnerReferences(hostname string, ownerReferences []metav1.OwnerReference) error {
 	// Create a patch slice and initialize it to the size of 1
 	// Append the data existing in the label map to the slice
 	nodePatchArr := make([]interface{}, 1)
@@ -117,12 +73,12 @@ func SetOwnerReferences(nodeName string, ownerReferences []metav1.OwnerReference
 	nodePatchJSON, _ := json.Marshal(nodePatchArr)
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
-	_, err := Clientset.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.JSONPatchType, nodePatchJSON, metav1.PatchOptions{})
+	_, err := m.kubeclientset.CoreV1().Nodes().Patch(context.TODO(), hostname, types.JSONPatchType, nodePatchJSON, metav1.PatchOptions{})
 	return err
 }
 
 // SetNodeScheduling syncs the node with the node contribution
-func SetNodeScheduling(nodeName string, unschedulable bool) error {
+func (m *Manager) SetNodeScheduling(hostname string, unschedulable bool) error {
 	// Create a patch slice and initialize it to the size of 1
 	nodePatchArr := make([]interface{}, 1)
 	nodePatch := patchByBoolValue{}
@@ -133,12 +89,12 @@ func SetNodeScheduling(nodeName string, unschedulable bool) error {
 	nodePatchJSON, _ := json.Marshal(nodePatchArr)
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
-	_, err := Clientset.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.JSONPatchType, nodePatchJSON, metav1.PatchOptions{})
+	_, err := m.kubeclientset.CoreV1().Nodes().Patch(context.TODO(), hostname, types.JSONPatchType, nodePatchJSON, metav1.PatchOptions{})
 	return err
 }
 
 // setNodeLabels uses client-go to patch nodes by processing a labels map
-func setNodeLabels(hostname string, labels map[string]string) bool {
+func (m *Manager) setNodeLabels(hostname string, labels map[string]string) bool {
 	// Create a patch slice and initialize it to the label size
 	nodePatchArr := make([]patchStringValue, len(labels))
 	nodePatch := patchStringValue{}
@@ -154,7 +110,7 @@ func setNodeLabels(hostname string, labels map[string]string) bool {
 	nodesJSON, _ := json.Marshal(nodePatchArr)
 	// Patch the nodes with the arguments:
 	// hostname, patch type, and patch data
-	_, err := Clientset.CoreV1().Nodes().Patch(context.TODO(), hostname, types.JSONPatchType, nodesJSON, metav1.PatchOptions{})
+	_, err := m.kubeclientset.CoreV1().Nodes().Patch(context.TODO(), hostname, types.JSONPatchType, nodesJSON, metav1.PatchOptions{})
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -200,7 +156,7 @@ func getMaxmindLocation(url string, accountID string, licenseKey string, address
 }
 
 // GetGeolocationByIP returns geolabels from the MaxMind GeoIP2 precision service
-func GetGeolocationByIP(
+func (m *Manager) GetGeolocationByIP(
 	maxmindURL string,
 	maxmindAccountID string,
 	maxmindLicenseKey string,
@@ -251,7 +207,7 @@ func GetGeolocationByIP(
 	}
 
 	// Attach geolabels to the node
-	result := setNodeLabels(hostname, geoLabels)
+	result := m.setNodeLabels(hostname, geoLabels)
 
 	// If the result is different than the expected, return false
 	// The expected result is having a different longitude and latitude than zero
@@ -301,26 +257,71 @@ func GetNodeIPAddresses(obj *corev1.Node) (string, string) {
 	return internalIP, externalIP
 }
 
-// SetHostname generates token to be used on adding a node onto the cluster
-func SetHostname(hostRecord namecheap.DomainDNSHost) (bool, string) {
+// SetHostnameNamecheap generates token to be used on adding a node onto the cluster
+func SetHostnameNamecheap(hostRecord namecheap.DomainDNSHost) (bool, string) {
 	client, err := bootstrap.CreateNamecheapClient()
 	if err != nil {
 		log.Println(err.Error())
 		return false, "Unknown"
 	}
-	result, state := infrastructure.SetHostname(client, hostRecord)
+	result, state := setHostnamesNamecheap(client, hostRecord)
 	return result, state
 }
 
+// setHostnamesNamecheap allows comparing the current hosts with requested hostname by DNS check
+func setHostnamesNamecheap(client *namecheap.Client, hostRecord namecheap.DomainDNSHost) (bool, string) {
+	hostList := getHosts(client)
+	exist := false
+	for key, host := range hostList.Hosts {
+		if host.Name == hostRecord.Name || host.Address == hostRecord.Address {
+			// If the record exist then update it, overwrite it with new name and address
+			hostList.Hosts[key] = hostRecord
+			log.Printf("Update existing host: %s - %s \n Hostname  and ip address changed to: %s - %s", host.Name, host.Address, hostRecord.Name, hostRecord.Address)
+			exist = true
+			break
+		}
+	}
+	// In case the record is new, it is appended to the list of existing records
+	if !exist {
+		hostList.Hosts = append(hostList.Hosts, hostRecord)
+	}
+	setResponse, err := client.DomainDNSSetHosts("edge-net", "io", hostList.Hosts)
+	if err != nil {
+		log.Println(err.Error())
+		log.Printf("Set host failed: %s - %s", hostRecord.Name, hostRecord.Address)
+		return false, "failed"
+	} else if setResponse.IsSuccess == false {
+		log.Printf("Set host unknown problem: %s - %s", hostRecord.Name, hostRecord.Address)
+		return false, "unknown"
+	}
+	return true, ""
+}
+
+func getHosts(client *namecheap.Client) namecheap.DomainDNSGetHostsResult {
+	hostsResponse, err := client.DomainsDNSGetHosts("edge-net", "io")
+	if err != nil {
+		log.Println(err.Error())
+		return namecheap.DomainDNSGetHostsResult{}
+	}
+	responseJSON, err := json.Marshal(hostsResponse)
+	if err != nil {
+		log.Println(err.Error())
+		return namecheap.DomainDNSGetHostsResult{}
+	}
+	hostList := namecheap.DomainDNSGetHostsResult{}
+	json.Unmarshal([]byte(responseJSON), &hostList)
+	return hostList
+}
+
 // SetHostnameRoute53 add a DNS record to a Route53 hosted zone
-func SetHostnameRoute53(hostedZone, nodeName, address, recordType string) (bool, string) {
+func SetHostnameRoute53(hostedZone, hostname, address, recordType string) (bool, string) {
 	input := &route53.ChangeResourceRecordSetsInput{
 		ChangeBatch: &route53.ChangeBatch{
 			Changes: []*route53.Change{
 				{
 					Action: aws.String("CREATE"),
 					ResourceRecordSet: &route53.ResourceRecordSet{
-						Name: aws.String(nodeName),
+						Name: aws.String(hostname),
 						ResourceRecords: []*route53.ResourceRecord{
 							{
 								Value: aws.String(address),
@@ -335,14 +336,44 @@ func SetHostnameRoute53(hostedZone, nodeName, address, recordType string) (bool,
 		},
 		HostedZoneId: aws.String(hostedZone),
 	}
-	result, state := infrastructure.AddARecordRoute53(input)
+	result, state := addARecordRoute53(input)
 	return result, state
 }
 
+// addARecordRoute53 adds a new A record to the Route53
+func addARecordRoute53(input *route53.ChangeResourceRecordSetsInput) (bool, string) {
+	svc := route53.New(session.New())
+	_, err := svc.ChangeResourceRecordSets(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case route53.ErrCodeNoSuchHostedZone:
+				log.Println(route53.ErrCodeNoSuchHostedZone, aerr.Error())
+			case route53.ErrCodeNoSuchHealthCheck:
+				log.Println(route53.ErrCodeNoSuchHealthCheck, aerr.Error())
+			case route53.ErrCodeInvalidChangeBatch:
+				log.Println(route53.ErrCodeInvalidChangeBatch, aerr.Error())
+			case route53.ErrCodeInvalidInput:
+				log.Println(route53.ErrCodeInvalidInput, aerr.Error())
+			case route53.ErrCodePriorRequestNotComplete:
+				log.Println(route53.ErrCodePriorRequestNotComplete, aerr.Error())
+			default:
+				log.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			log.Println(err.Error())
+		}
+		return false, "failed"
+	}
+	return true, ""
+}
+
 // CreateJoinToken generates token to be used on adding a node onto the cluster
-func CreateJoinToken(ttl string, hostname string) string {
+func (m *Manager) CreateJoinToken(ttl string, hostname string) string {
 	duration, _ := time.ParseDuration(ttl)
-	token, err := infrastructure.CreateToken(Clientset, duration, hostname)
+	token, err := m.createToken(duration, hostname)
 	if err != nil {
 		log.Println(err.Error())
 		return "error"

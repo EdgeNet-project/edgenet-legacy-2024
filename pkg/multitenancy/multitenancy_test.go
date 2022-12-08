@@ -43,7 +43,7 @@ type TestGroup struct {
 	tenantResourceQuotaObj corev1alpha1.TenantResourceQuota
 	client                 kubernetes.Interface
 	edgenetclient          versioned.Interface
-	accessManager          *Manager
+	multitenancyManager    *Manager
 }
 
 func (g *TestGroup) Init() {
@@ -119,8 +119,8 @@ func (g *TestGroup) Init() {
 	g.edgenetclient = edgenettestclient.NewSimpleClientset()
 	g.namespace = corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: g.tenant.GetName()}}
 	g.client.CoreV1().Namespaces().Create(context.TODO(), &g.namespace, metav1.CreateOptions{})
-	accessManager := NewManager(g.client, g.edgenetclient)
-	g.accessManager = accessManager
+	multitenancyManager := NewManager(g.client, g.edgenetclient)
+	g.multitenancyManager = multitenancyManager
 }
 
 func TestCreateObjectSpecificClusterRole(t *testing.T) {
@@ -145,13 +145,13 @@ func TestCreateObjectSpecificClusterRole(t *testing.T) {
 	}
 	for k, tc := range cases {
 		t.Run(k, func(t *testing.T) {
-			g.accessManager.createObjectSpecificClusterRole(tc.apiGroup, tc.resource, tc.resourceName, "name", tc.verbs, []metav1.OwnerReference{})
+			g.multitenancyManager.createObjectSpecificClusterRole(tc.apiGroup, tc.resource, tc.resourceName, "name", tc.verbs, []metav1.OwnerReference{})
 			clusterRole, err := g.client.RbacV1().ClusterRoles().Get(context.TODO(), tc.expected, metav1.GetOptions{})
 			util.OK(t, err)
 			if err == nil {
 				util.Equals(t, tc.verbs, clusterRole.Rules[0].Verbs)
 			}
-			_, err = g.accessManager.createObjectSpecificClusterRole(tc.apiGroup, tc.resource, tc.resourceName, "name", tc.verbs, []metav1.OwnerReference{})
+			_, err = g.multitenancyManager.createObjectSpecificClusterRole(tc.apiGroup, tc.resource, tc.resourceName, "name", tc.verbs, []metav1.OwnerReference{})
 			util.OK(t, err)
 		})
 	}
@@ -168,10 +168,10 @@ func TestCreateObjectSpecificClusterRole(t *testing.T) {
 		}
 		for k, tc := range cases {
 			t.Run(k, func(t *testing.T) {
-				g.accessManager.createObjectSpecificClusterRoleBinding(tc.roleName, tc.email, []metav1.OwnerReference{})
+				g.multitenancyManager.createObjectSpecificClusterRoleBinding(tc.roleName, tc.email, []metav1.OwnerReference{})
 				_, err := g.client.RbacV1().ClusterRoleBindings().Get(context.TODO(), tc.roleName, metav1.GetOptions{})
 				util.OK(t, err)
-				err = g.accessManager.createObjectSpecificClusterRoleBinding(tc.roleName, tc.email, []metav1.OwnerReference{})
+				err = g.multitenancyManager.createObjectSpecificClusterRoleBinding(tc.roleName, tc.email, []metav1.OwnerReference{})
 				util.OK(t, err)
 			})
 		}
@@ -182,7 +182,7 @@ func TestApplyTenantResourceQuota(t *testing.T) {
 	g := TestGroup{}
 	g.Init()
 
-	_, err := g.accessManager.edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
+	_, err := g.multitenancyManager.edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.Equals(t, true, errors.IsNotFound(err))
 	claim := corev1alpha1.ResourceTuning{
 		ResourceList: map[corev1.ResourceName]resource.Quantity{
@@ -191,8 +191,8 @@ func TestApplyTenantResourceQuota(t *testing.T) {
 		},
 	}
 	applied := make(chan error)
-	g.accessManager.ApplyTenantResourceQuota(g.tenantResourceQuotaObj.GetName(), nil, claim, applied)
+	g.multitenancyManager.ApplyTenantResourceQuota(g.tenantResourceQuotaObj.GetName(), nil, claim, applied)
 	util.OK(t, <-applied)
-	_, err = g.accessManager.edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
+	_, err = g.multitenancyManager.edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), g.tenantResourceQuotaObj.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 }

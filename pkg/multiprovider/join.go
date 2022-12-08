@@ -14,28 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package infrastructure
+package multiprovider
 
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/route53"
-
-	namecheap "github.com/billputer/go-namecheap"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/cert"
 	bootstrapapi "k8s.io/cluster-bootstrap/token/api"
 	bootstraputil "k8s.io/cluster-bootstrap/token/util"
@@ -100,7 +92,7 @@ func getServerOfCurrentContext() (string, error) {
 
 // CreateToken creates the token to be used to add node
 // and return the token
-func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostname string) (string, error) {
+func (m *Manager) createToken(duration time.Duration, hostname string) (string, error) {
 	tokenStr, err := bootstraputil.GenerateBootstrapToken()
 	if err != nil {
 		log.Printf("Error generating token to upload certs: %s", err)
@@ -120,7 +112,7 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 	bootstrapToken.Groups = []string{"system:bootstrappers:kubeadm:default-node-token"}
 	bootstrapToken.Token = token
 
-	secret, err := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(context.TODO(), token.ID, metav1.GetOptions{})
+	secret, err := m.kubeclientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(context.TODO(), token.ID, metav1.GetOptions{})
 	if secret != nil && err == nil {
 		return "", err
 	}
@@ -133,12 +125,12 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 		Data: encodeTokenSecretData(bootstrapToken.DeepCopy(), time.Now()),
 	}
 
-	if _, err := clientset.CoreV1().Secrets(secret.ObjectMeta.Namespace).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
+	if _, err := m.kubeclientset.CoreV1().Secrets(secret.ObjectMeta.Namespace).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
 		if !errors.IsAlreadyExists(err) {
 			return "", err
 		}
 
-		if _, err := clientset.CoreV1().Secrets(secret.ObjectMeta.Namespace).Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
+		if _, err := m.kubeclientset.CoreV1().Secrets(secret.ObjectMeta.Namespace).Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
 			return "", err
 		}
 	}
@@ -171,81 +163,6 @@ func CreateToken(clientset kubernetes.Interface, duration time.Duration, hostnam
 
 	joinCommand := fmt.Sprintf("kubeadm join %s --token %s --discovery-token-ca-cert-hash %s", server, tokenStr, CA)
 	return joinCommand, nil
-}
-
-func getHosts(client *namecheap.Client) namecheap.DomainDNSGetHostsResult {
-	hostsResponse, err := client.DomainsDNSGetHosts("edge-net", "io")
-	if err != nil {
-		log.Println(err.Error())
-		return namecheap.DomainDNSGetHostsResult{}
-	}
-	responseJSON, err := json.Marshal(hostsResponse)
-	if err != nil {
-		log.Println(err.Error())
-		return namecheap.DomainDNSGetHostsResult{}
-	}
-	hostList := namecheap.DomainDNSGetHostsResult{}
-	json.Unmarshal([]byte(responseJSON), &hostList)
-	return hostList
-}
-
-// SetHostname allows comparing the current hosts with requested hostname by DNS check
-func SetHostname(client *namecheap.Client, hostRecord namecheap.DomainDNSHost) (bool, string) {
-	hostList := getHosts(client)
-	exist := false
-	for key, host := range hostList.Hosts {
-		if host.Name == hostRecord.Name || host.Address == hostRecord.Address {
-			// If the record exist then update it, overwrite it with new name and address
-			hostList.Hosts[key] = hostRecord
-			log.Printf("Update existing host: %s - %s \n Hostname  and ip address changed to: %s - %s", host.Name, host.Address, hostRecord.Name, hostRecord.Address)
-			exist = true
-			break
-		}
-	}
-	// In case the record is new, it is appended to the list of existing records
-	if !exist {
-		hostList.Hosts = append(hostList.Hosts, hostRecord)
-	}
-	setResponse, err := client.DomainDNSSetHosts("edge-net", "io", hostList.Hosts)
-	if err != nil {
-		log.Println(err.Error())
-		log.Printf("Set host failed: %s - %s", hostRecord.Name, hostRecord.Address)
-		return false, "failed"
-	} else if setResponse.IsSuccess == false {
-		log.Printf("Set host unknown problem: %s - %s", hostRecord.Name, hostRecord.Address)
-		return false, "unknown"
-	}
-	return true, ""
-}
-
-// AddARecordRoute53 adds a new A record to the Route53
-func AddARecordRoute53(input *route53.ChangeResourceRecordSetsInput) (bool, string) {
-	svc := route53.New(session.New())
-	_, err := svc.ChangeResourceRecordSets(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case route53.ErrCodeNoSuchHostedZone:
-				log.Println(route53.ErrCodeNoSuchHostedZone, aerr.Error())
-			case route53.ErrCodeNoSuchHealthCheck:
-				log.Println(route53.ErrCodeNoSuchHealthCheck, aerr.Error())
-			case route53.ErrCodeInvalidChangeBatch:
-				log.Println(route53.ErrCodeInvalidChangeBatch, aerr.Error())
-			case route53.ErrCodeInvalidInput:
-				log.Println(route53.ErrCodeInvalidInput, aerr.Error())
-			case route53.ErrCodePriorRequestNotComplete:
-				log.Println(route53.ErrCodePriorRequestNotComplete, aerr.Error())
-			default:
-				log.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			log.Println(err.Error())
-		}
-		return false, "failed"
-	}
-	return true, ""
 }
 
 // encodeTokenSecretData takes the token discovery object and an optional duration and returns the .Data for the Secret

@@ -32,8 +32,7 @@ import (
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha1"
-	"github.com/EdgeNet-project/edgenet/pkg/node"
-	"github.com/EdgeNet-project/edgenet/pkg/node/remoteip"
+	multiprovider "github.com/EdgeNet-project/edgenet/pkg/multiprovider"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -99,9 +98,10 @@ type Controller struct {
 	workqueue workqueue.RateLimitingInterface
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
-	recorder          record.EventRecorder
-	route53hostedZone string
-	domainName        string
+	recorder             record.EventRecorder
+	route53hostedZone    string
+	domainName           string
+	multiproviderManager *multiprovider.Manager
 }
 
 // NewController returns a new controller
@@ -119,6 +119,8 @@ func NewController(
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
+	multiproviderManager := multiprovider.NewManager(kubeclientset)
+
 	controller := &Controller{
 		kubeclientset:           kubeclientset,
 		edgenetclientset:        edgenetclientset,
@@ -130,6 +132,7 @@ func NewController(
 		recorder:                recorder,
 		route53hostedZone:       hostedZone,
 		domainName:              domain,
+		multiproviderManager:    multiproviderManager,
 	}
 
 	klog.Infoln("Setting up event handlers")
@@ -197,15 +200,15 @@ func NewController(
 					return
 				}
 			}
-			if string(corev1.ConditionTrue) == node.GetConditionReadyStatus(nodeObj) {
+			if string(corev1.ConditionTrue) == multiprovider.GetConditionReadyStatus(nodeObj) {
 				setIncentives("incentive", nodeObj.GetName(), nodeObj.GetOwnerReferences(), nodeObj.Status.Capacity.Cpu(), nodeObj.Status.Capacity.Memory())
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
 			oldObj := old.(*corev1.Node)
 			newObj := new.(*corev1.Node)
-			oldReady := node.GetConditionReadyStatus(oldObj)
-			newReady := node.GetConditionReadyStatus(newObj)
+			oldReady := multiprovider.GetConditionReadyStatus(oldObj)
+			newReady := multiprovider.GetConditionReadyStatus(newObj)
 			if (oldReady == string(corev1.ConditionFalse) && newReady == string(corev1.ConditionTrue)) ||
 				(oldReady == string(corev1.ConditionUnknown) && newReady == string(corev1.ConditionTrue)) {
 				setIncentives("incentive", newObj.GetName(), newObj.GetOwnerReferences(), newObj.Status.Capacity.Cpu(), newObj.Status.Capacity.Memory())
@@ -217,15 +220,13 @@ func NewController(
 		},
 		DeleteFunc: func(obj interface{}) {
 			nodeObj := obj.(*corev1.Node)
-			ready := node.GetConditionReadyStatus(nodeObj)
+			ready := multiprovider.GetConditionReadyStatus(nodeObj)
 			if ready == string(corev1.ConditionTrue) {
 				setIncentives("disincentive", nodeObj.GetName(), nodeObj.GetOwnerReferences(), nil, nil)
 				controller.handleObject(obj)
 			}
 		},
 	})
-
-	node.Clientset = kubeclientset
 
 	return controller
 }
@@ -397,7 +398,7 @@ func (c *Controller) processNodeContribution(nodecontributionCopy *corev1alpha1.
 		c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageFailed)
 		return
 	}
-	recordType := remoteip.GetRecordType(nodecontributionCopy.Spec.Host)
+	recordType := multiprovider.GetRecordType(nodecontributionCopy.Spec.Host)
 	if recordType == "" {
 		c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageInvalidHost)
 		nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
@@ -423,7 +424,7 @@ func (c *Controller) processNodeContribution(nodecontributionCopy *corev1alpha1.
 			return
 		} else {
 			if contributedNode.Spec.Unschedulable != !nodecontributionCopy.Spec.Enabled {
-				if err := node.SetNodeScheduling(nodeName, !nodecontributionCopy.Spec.Enabled); err != nil {
+				if err := c.multiproviderManager.SetNodeScheduling(nodeName, !nodecontributionCopy.Spec.Enabled); err != nil {
 					nodecontributionCopy.Status.State = corev1alpha1.StatusAccessed
 					nodecontributionCopy.Status.Message = messageReconciliation
 				}
@@ -483,7 +484,7 @@ func (c *Controller) processNodeContribution(nodecontributionCopy *corev1alpha1.
 			}
 			klog.Infof("DNS configuration started: %s", nodeName)
 			// Use AWS Route53 for registration
-			if updated, _ := node.SetHostnameRoute53(c.route53hostedZone, nodeName, nodecontributionCopy.Spec.Host, recordType); !updated {
+			if updated, _ := multiprovider.SetHostnameRoute53(c.route53hostedZone, nodeName, nodecontributionCopy.Spec.Host, recordType); !updated {
 				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
 				nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
 				nodecontributionCopy.Status.Message = messageDNSFailed
@@ -552,7 +553,7 @@ func (c *Controller) processNodeContribution(nodecontributionCopy *corev1alpha1.
 func (c *Controller) syncResources(nodecontributionCopy *corev1alpha1.NodeContribution, nodeName string) bool {
 	klog.Infof("Patch node and set owner references: %s", nodeName)
 	// Set the node as schedulable or unschedulable according to the node contribution
-	if err := node.SetNodeScheduling(nodeName, !nodecontributionCopy.Spec.Enabled); err != nil {
+	if err := c.multiproviderManager.SetNodeScheduling(nodeName, !nodecontributionCopy.Spec.Enabled); err != nil {
 		c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageSchedulingFailed)
 		nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
 		nodecontributionCopy.Status.Message = messageSchedulingFailed
@@ -562,7 +563,7 @@ func (c *Controller) syncResources(nodecontributionCopy *corev1alpha1.NodeContri
 	c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDonePatch)
 
 	ownerReferences := c.formOwnerReferences(nodecontributionCopy)
-	if err := node.SetOwnerReferences(nodeName, ownerReferences); err != nil {
+	if err := c.multiproviderManager.SetOwnerReferences(nodeName, ownerReferences); err != nil {
 		c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageOwnerReferenceNotSet)
 		nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
 		nodecontributionCopy.Status.Message = messageOwnerReferenceNotSet
@@ -601,7 +602,7 @@ func (c *Controller) formOwnerReferences(nodecontributionCopy *corev1alpha1.Node
 
 func (c *Controller) getNodeInfo(contributionCreationTimestamp metav1.Time, nodeName string) (*corev1.Node, bool, bool, bool) {
 	if contributedNode, err := c.nodesLister.Get(nodeName); err == nil {
-		if node.GetConditionReadyStatus(contributedNode) == string(corev1.ConditionTrue) {
+		if multiprovider.GetConditionReadyStatus(contributedNode) == string(corev1.ConditionTrue) {
 			return contributedNode, true, true, false
 		} else if contributionCreationTimestamp.Add(10 * time.Minute).Before(time.Now()) {
 			return nil, true, false, false
@@ -653,7 +654,7 @@ func (c *Controller) join(conn *ssh.Client, nodeName string) error {
 	commands := []string{
 		"sudo su",
 		"kubeadm reset -f",
-		node.CreateJoinToken("30m", nodeName),
+		c.multiproviderManager.CreateJoinToken("30m", nodeName),
 	}
 	sess, err := startSession(conn)
 	if err != nil {

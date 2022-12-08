@@ -1,4 +1,4 @@
-package node
+package multiprovider
 
 import (
 	"context"
@@ -15,14 +15,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
 // The main structure of test group
 type testGroup struct {
-	client  kubernetes.Interface
-	nodeObj corev1.Node
+	nodeObj              corev1.Node
+	multiproviderManager *Manager
 }
 
 func TestMain(m *testing.M) {
@@ -36,8 +35,6 @@ func TestMain(m *testing.M) {
 
 // Init syncs the test group
 func (g *testGroup) Init() {
-	g.client = testclient.NewSimpleClientset()
-	Clientset = g.client
 	g.nodeObj = corev1.Node{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Node",
@@ -64,6 +61,8 @@ func (g *testGroup) Init() {
 			},
 		},
 	}
+	multiproviderManager := NewManager(testclient.NewSimpleClientset())
+	g.multiproviderManager = multiproviderManager
 }
 
 func TestBoundbox(t *testing.T) {
@@ -411,13 +410,13 @@ func TestSetOwnerReferences(t *testing.T) {
 	newRef.Controller = &takeControl
 	ownerReferences := []metav1.OwnerReference{newRef}
 
-	g.client.CoreV1().Nodes().Create(context.TODO(), node1.DeepCopy(), metav1.CreateOptions{})
-	g.client.CoreV1().Nodes().Create(context.TODO(), node2.DeepCopy(), metav1.CreateOptions{})
+	g.multiproviderManager.kubeclientset.CoreV1().Nodes().Create(context.TODO(), node1.DeepCopy(), metav1.CreateOptions{})
+	g.multiproviderManager.kubeclientset.CoreV1().Nodes().Create(context.TODO(), node2.DeepCopy(), metav1.CreateOptions{})
 
-	err := SetOwnerReferences(node1.GetName(), ownerReferences)
+	err := g.multiproviderManager.SetOwnerReferences(node1.GetName(), ownerReferences)
 	util.OK(t, err)
 
-	node, err := g.client.CoreV1().Nodes().Get(context.TODO(), node1.GetName(), metav1.GetOptions{})
+	node, err := g.multiproviderManager.kubeclientset.CoreV1().Nodes().Get(context.TODO(), node1.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
 	util.Equals(t, ownerReferences, node.GetOwnerReferences())
 }
@@ -429,7 +428,7 @@ func TestSetNodeScheduling(t *testing.T) {
 	node1 := g.nodeObj
 	node1.SetName("node-1")
 
-	g.client.CoreV1().Nodes().Create(context.TODO(), node1.DeepCopy(), metav1.CreateOptions{})
+	g.multiproviderManager.kubeclientset.CoreV1().Nodes().Create(context.TODO(), node1.DeepCopy(), metav1.CreateOptions{})
 
 	cases := map[string]struct {
 		input    bool
@@ -441,9 +440,9 @@ func TestSetNodeScheduling(t *testing.T) {
 
 	for k, tc := range cases {
 		t.Run(fmt.Sprintf("%s", k), func(t *testing.T) {
-			err := SetNodeScheduling(node1.GetName(), tc.input)
+			err := g.multiproviderManager.SetNodeScheduling(node1.GetName(), tc.input)
 			util.OK(t, err)
-			node, err := g.client.CoreV1().Nodes().Get(context.TODO(), node1.GetName(), metav1.GetOptions{})
+			node, err := g.multiproviderManager.kubeclientset.CoreV1().Nodes().Get(context.TODO(), node1.GetName(), metav1.GetOptions{})
 			util.OK(t, err)
 			util.Equals(t, tc.expected, node.Spec.Unschedulable)
 		})
@@ -451,7 +450,9 @@ func TestSetNodeScheduling(t *testing.T) {
 }
 
 func TestCreateJoinToken(t *testing.T) {
-	token := CreateJoinToken("600s", "test.edgenet.io")
+	g := testGroup{}
+	g.Init()
+	token := g.multiproviderManager.CreateJoinToken("600s", "test.edgenet.io")
 	if token == "error" {
 		t.Errorf("Token cannot be created")
 	}

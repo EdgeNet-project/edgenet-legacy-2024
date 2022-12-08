@@ -31,12 +31,9 @@ import (
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/apps/v1alpha1"
-	"github.com/EdgeNet-project/edgenet/pkg/node"
+	"github.com/EdgeNet-project/edgenet/pkg/multiprovider"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
-	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
-	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -185,7 +182,7 @@ func NewController(
 		DeleteFunc: controller.recoverSelectiveDeployments,
 	})
 
-	deploymentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	/*deploymentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.handleObject,
 		UpdateFunc: func(old, new interface{}) {
 			newDeployment := new.(*appsv1.Deployment)
@@ -244,7 +241,7 @@ func NewController(
 			controller.handleObject(new)
 		},
 		DeleteFunc: controller.handleObject,
-	})
+	})*/
 
 	return controller
 }
@@ -420,7 +417,7 @@ func (c *Controller) handleObject(obj interface{}) {
 
 func (c *Controller) recoverSelectiveDeployments(obj interface{}) {
 	nodeCopy := obj.(*corev1.Node).DeepCopy()
-	if nodeCopy.GetDeletionTimestamp() != nil || node.GetConditionReadyStatus(nodeCopy) != trueStr || nodeCopy.Spec.Unschedulable {
+	if nodeCopy.GetDeletionTimestamp() != nil || multiprovider.GetConditionReadyStatus(nodeCopy) != trueStr || nodeCopy.Spec.Unschedulable {
 		ownerRaw, status := c.getByNode(nodeCopy.GetName())
 		if status {
 			for _, ownerRow := range ownerRaw {
@@ -434,7 +431,7 @@ func (c *Controller) recoverSelectiveDeployments(obj interface{}) {
 				}
 			}
 		}
-	} else if node.GetConditionReadyStatus(nodeCopy) == trueStr {
+	} else if multiprovider.GetConditionReadyStatus(nodeCopy) == trueStr {
 		selectivedeploymentRaw, _ := c.selectivedeploymentsLister.SelectiveDeployments("").List(labels.Everything())
 		for _, selectivedeploymentRow := range selectivedeploymentRaw {
 			if selectivedeploymentRow.Spec.Recovery {
@@ -878,7 +875,7 @@ func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha1.SelectiveDe
 						}
 					}
 					conditionBlock := false
-					if node.GetConditionReadyStatus(nodeRow.DeepCopy()) != trueStr {
+					if multiprovider.GetConditionReadyStatus(nodeRow.DeepCopy()) != trueStr {
 						conditionBlock = true
 					}
 
@@ -914,8 +911,8 @@ func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha1.SelectiveDe
 									if lat, err := strconv.ParseFloat(latStr, 64); err == nil {
 										// boundbox is a rectangle which provides to check whether the point is inside polygon
 										// without taking all point of the polygon into consideration
-										boundbox := node.Boundbox(polygon)
-										status := node.GeoFence(boundbox, polygon, lon, lat)
+										boundbox := multiprovider.Boundbox(polygon)
+										status := multiprovider.GeoFence(boundbox, polygon, lon, lat)
 										if status && selectorRow.Operator == "In" {
 											if !checkActualList(nodeRow.Labels["kubernetes.io/hostname"]) {
 												matchNodeList = append(matchNodeList, nodeRow.Labels["kubernetes.io/hostname"])

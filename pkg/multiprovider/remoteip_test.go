@@ -1,4 +1,4 @@
-package remoteip
+package multiprovider
 
 import (
 	"fmt"

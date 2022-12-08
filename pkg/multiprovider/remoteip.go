@@ -1,7 +1,7 @@
 // The all credit for this code goes to:
 // https://husobee.github.io/golang/ip-address/2015/12/17/remote-ip-go.html
 
-package remoteip
+package multiprovider
 
 import (
 	"bytes"
