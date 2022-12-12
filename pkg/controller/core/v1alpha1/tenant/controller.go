@@ -445,7 +445,7 @@ func (c *Controller) applyNetworkPolicy(tenant, tenantUID, clusterUID string, cl
 			},
 		},
 	}
-	if _, err = c.kubeclientset.NetworkingV1().NetworkPolicies(tenant).Create(context.TODO(), networkPolicy, metav1.CreateOptions{}); err != nil {
+	if _, err = c.kubeclientset.NetworkingV1().NetworkPolicies(tenant).Create(context.TODO(), networkPolicy, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 	if clusterNetworkPolicyEnabled {
@@ -519,13 +519,13 @@ func (c *Controller) applyNetworkPolicy(tenant, tenantUID, clusterUID string, cl
 				NamespaceSelector: &labelSelector,
 			},
 		}
-		if _, err = c.antreaclientset.CrdV1alpha1().ClusterNetworkPolicies().Create(context.TODO(), clusterNetworkPolicy, metav1.CreateOptions{}); err != nil {
+		if _, err = c.antreaclientset.CrdV1alpha1().ClusterNetworkPolicies().Create(context.TODO(), clusterNetworkPolicy, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
 	} else {
 		c.antreaclientset.CrdV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), tenant, metav1.DeleteOptions{})
 	}
-	return err
+	return nil
 }
 
 func (c *Controller) cleanup(tenantCopy *corev1alpha1.Tenant, clusterUID string) {
