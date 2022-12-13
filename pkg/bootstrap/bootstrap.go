@@ -51,6 +51,7 @@ func homeDir() string {
 	return os.Getenv("USERPROFILE")
 }
 
+// GetDefaultKubeconfigPath returns the default kubeconfig path
 func GetDefaultKubeconfigPath() string {
 	var kubeconfigPath string
 	if home := homeDir(); home != "" {
@@ -62,7 +63,7 @@ func GetDefaultKubeconfigPath() string {
 }
 
 func getKubeconfigPath() string {
-	var kubeconfigPath string = GetDefaultKubeconfigPath()
+	kubeconfigPath := GetDefaultKubeconfigPath()
 	if flag.Lookup("kubeconfig-path") != nil {
 		kubeconfigPath = flag.Lookup("kubeconfig-path").Value.(flag.Getter).Get().(string)
 	}

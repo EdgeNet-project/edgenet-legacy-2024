@@ -14,6 +14,7 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
+	"github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 	"github.com/sirupsen/logrus"
@@ -75,6 +76,8 @@ func TestMain(m *testing.M) {
 
 	kubeSystemNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}}
 	kubeclientset.CoreV1().Namespaces().Create(context.TODO(), kubeSystemNamespace, metav1.CreateOptions{})
+	multitenancyManager := multitenancy.NewManager(kubeclientset, edgenetclientset)
+	multitenancyManager.CreateClusterRoles()
 
 	time.Sleep(500 * time.Millisecond)
 

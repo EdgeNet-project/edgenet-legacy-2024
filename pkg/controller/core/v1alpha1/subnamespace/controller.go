@@ -516,29 +516,54 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 			subnamespaceCopy.Status.Message = messageEstablished
 			c.updateStatus(context.TODO(), subnamespaceCopy)
 		case corev1alpha1.StatusSubnamespaceCreated:
-			remainingQuotaResourceList, isReconciled := c.reconcileWithChildQuota(subnamespaceCopy, childNameHashed)
-			if isReconciled {
-				return
-			}
-			switch subnamespaceCopy.GetMode() {
-			case "workspace":
-				resourceQuota := corev1.ResourceQuota{}
-				resourceQuota.Name = "sub-quota"
-				resourceQuota.Spec = corev1.ResourceQuotaSpec{
-					Hard: remainingQuotaResourceList,
+			remainingQuotaResourceList, isQuotaSufficient, isReconciled := c.reconcileWithChildQuota(subnamespaceCopy, childNameHashed)
+			if !isReconciled {
+				if !isQuotaSufficient {
+					return
 				}
-				if _, err := c.kubeclientset.CoreV1().ResourceQuotas(childNameHashed).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{}); err != nil {
-					if errors.IsAlreadyExists(err) {
-						remainingChildResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(childNameHashed).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{})
-						if err != nil {
+				switch subnamespaceCopy.GetMode() {
+				case "workspace":
+					resourceQuota := corev1.ResourceQuota{}
+					resourceQuota.SetName("sub-quota")
+					resourceQuota.Spec = corev1.ResourceQuotaSpec{
+						Hard: remainingQuotaResourceList,
+					}
+					if _, err := c.kubeclientset.CoreV1().ResourceQuotas(childNameHashed).Create(context.TODO(), resourceQuota.DeepCopy(), metav1.CreateOptions{}); err != nil {
+						if errors.IsAlreadyExists(err) {
+							remainingChildResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(childNameHashed).Get(context.TODO(), resourceQuota.GetName(), metav1.GetOptions{})
+							if err != nil {
+								c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureApplied, messageApplyFail)
+								subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
+								subnamespaceCopy.Status.Message = failureApplied
+								c.updateStatus(context.TODO(), subnamespaceCopy)
+								return
+							}
+							remainingChildResourceQuota.Spec.Hard = remainingQuotaResourceList
+							if _, err := c.kubeclientset.CoreV1().ResourceQuotas(childNameHashed).Update(context.TODO(), remainingChildResourceQuota, metav1.UpdateOptions{}); err != nil {
+								c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureApplied, messageApplyFail)
+								subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
+								subnamespaceCopy.Status.Message = failureApplied
+								c.updateStatus(context.TODO(), subnamespaceCopy)
+								klog.Infoln(err)
+								return
+							}
+						} else {
 							c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureApplied, messageApplyFail)
 							subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
 							subnamespaceCopy.Status.Message = failureApplied
 							c.updateStatus(context.TODO(), subnamespaceCopy)
+							klog.Infoln(err)
 							return
 						}
-						remainingChildResourceQuota.Spec.Hard = remainingQuotaResourceList
-						if _, err := c.kubeclientset.CoreV1().ResourceQuotas(childNameHashed).Update(context.TODO(), remainingChildResourceQuota, metav1.UpdateOptions{}); err != nil {
+					}
+				case "subtenant":
+					if subtenant, err := c.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), childNameHashed, metav1.GetOptions{}); err == nil {
+						claim := corev1alpha1.ResourceTuning{
+							ResourceList: remainingQuotaResourceList,
+						}
+						applied := make(chan error)
+						go c.multitenancyManager.ApplyTenantResourceQuota(childNameHashed, []metav1.OwnerReference{subtenant.MakeOwnerReference()}, claim, applied)
+						if err := <-applied; err != nil {
 							c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureApplied, messageApplyFail)
 							subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
 							subnamespaceCopy.Status.Message = failureApplied
@@ -555,29 +580,11 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 						return
 					}
 				}
-			case "subtenant":
-				if subtenant, err := c.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), childNameHashed, metav1.GetOptions{}); err == nil {
-					claim := corev1alpha1.ResourceTuning{
-						ResourceList: remainingQuotaResourceList,
-					}
-					applied := make(chan error)
-					go c.multitenancyManager.ApplyTenantResourceQuota(childNameHashed, []metav1.OwnerReference{subtenant.MakeOwnerReference()}, claim, applied)
-					if err := <-applied; err != nil {
-						c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureApplied, messageApplyFail)
-						subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
-						subnamespaceCopy.Status.Message = failureApplied
-						c.updateStatus(context.TODO(), subnamespaceCopy)
-						klog.Infoln(err)
-						return
-					}
-				}
 			}
-
 			c.recorder.Event(subnamespaceCopy, corev1.EventTypeNormal, corev1alpha1.StatusQuotaSet, messageApplied)
 			subnamespaceCopy.Status.State = corev1alpha1.StatusQuotaSet
 			subnamespaceCopy.Status.Message = messageApplied
 			c.updateStatus(context.TODO(), subnamespaceCopy)
-
 		case corev1alpha1.StatusPartitioned:
 			ownerReferences := []metav1.OwnerReference{multitenancy.MakeOwnerReferenceForNamespace(parentNamespace)}
 			if isCreated := c.makeSubsidiaryNamespace(subnamespaceCopy, parentNamespaceLabels["edge-net.io/tenant"], childNameHashed, ownerReferences); !isCreated {
@@ -649,13 +656,13 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 }
 
 func (c *Controller) reconcile(subnamespaceCopy *corev1alpha1.SubNamespace, parentNamespace *corev1.Namespace, childNameHashed string) {
-	if _, isReconciled := c.reconcileWithChildQuota(subnamespaceCopy, childNameHashed); !isReconciled {
+	if _, isQuotaSufficient, isReconciled := c.reconcileWithChildQuota(subnamespaceCopy, childNameHashed); !isReconciled || !isQuotaSufficient {
 		subnamespaceCopy.Status.State = corev1alpha1.StatusSubnamespaceCreated
-		subnamespaceCopy.Status.Message = messageCreation
+		subnamespaceCopy.Status.Message = messageReconciliation
 	}
 	if isReconciled := c.reconcileWithOwnerPermissions(subnamespaceCopy, childNameHashed); !isReconciled {
 		subnamespaceCopy.Status.State = corev1alpha1.StatusPartitioned
-		subnamespaceCopy.Status.Message = messagePartitioned
+		subnamespaceCopy.Status.Message = messageReconciliation
 	}
 	if _, isReconciled := c.reconcileWithParentQuota(subnamespaceCopy, parentNamespace); !isReconciled {
 		subnamespaceCopy.Status.State = corev1alpha1.StatusReconciliation
@@ -670,13 +677,13 @@ func (c *Controller) reconcile(subnamespaceCopy *corev1alpha1.SubNamespace, pare
 	}
 }
 
-func (c *Controller) reconcileWithChildQuota(subnamespaceCopy *corev1alpha1.SubNamespace, childNameHashed string) (map[corev1.ResourceName]resource.Quantity, bool) {
+func (c *Controller) reconcileWithChildQuota(subnamespaceCopy *corev1alpha1.SubNamespace, childNameHashed string) (map[corev1.ResourceName]resource.Quantity, bool, bool) {
 	remainingQuotaResourceList, lastInSubnamespace, isQuotaSufficient := c.subtractSubnamespaceQuotas(subnamespaceCopy, childNameHashed, subnamespaceCopy.GetResourceAllocation())
 	if !isQuotaSufficient {
 		c.edgenetclientset.CoreV1alpha1().SubNamespaces(childNameHashed).Delete(context.TODO(), lastInSubnamespace, metav1.DeleteOptions{})
 		c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageSubnamespaceDeleted)
 		c.enqueueSubNamespaceAfter(subnamespaceCopy, time.Minute)
-		return nil, true
+		return nil, false, false
 	}
 
 	var childQuotaResourceList = make(map[corev1.ResourceName]resource.Quantity)
@@ -684,21 +691,30 @@ func (c *Controller) reconcileWithChildQuota(subnamespaceCopy *corev1alpha1.SubN
 	case "subtenant":
 		currentChildResourceQuota, err := c.edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), childNameHashed, metav1.GetOptions{})
 		if err != nil {
-			return remainingQuotaResourceList, false
+			return remainingQuotaResourceList, true, false
 		}
 		childQuotaResourceList = currentChildResourceQuota.Fetch()
 	default:
 		currentChildResourceQuota, err := c.kubeclientset.CoreV1().ResourceQuotas(childNameHashed).Get(context.TODO(), "sub-quota", metav1.GetOptions{})
 		if err != nil {
-			return remainingQuotaResourceList, false
+			return remainingQuotaResourceList, true, false
 		}
 		childQuotaResourceList = currentChildResourceQuota.Spec.Hard
 	}
 
-	if !reflect.DeepEqual(remainingQuotaResourceList, childQuotaResourceList) {
-		return remainingQuotaResourceList, false
+	if len(remainingQuotaResourceList) != len(childQuotaResourceList) {
+		return remainingQuotaResourceList, true, false
 	}
-	return nil, true
+	for resourceName, remainingQuantity := range remainingQuotaResourceList {
+		if childQuantity, elementExists := childQuotaResourceList[resourceName]; elementExists {
+			if !remainingQuantity.Equal(childQuantity) {
+				return remainingQuotaResourceList, true, false
+			}
+		} else {
+			return remainingQuotaResourceList, true, false
+		}
+	}
+	return nil, true, true
 }
 
 func (c *Controller) reconcileWithOwnerPermissions(subnamespaceCopy *corev1alpha1.SubNamespace, childNameHashed string) bool {
@@ -712,16 +728,20 @@ func (c *Controller) reconcileWithOwnerPermissions(subnamespaceCopy *corev1alpha
 			return true
 		}
 	default:
-		roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(childNameHashed).Get(context.TODO(), "edgenet:workspace:owner", metav1.GetOptions{})
-		if err != nil {
-			return false
-		}
-		if roleBinding.RoleRef.Kind == "ClusterRole" && roleBinding.RoleRef.Name == corev1alpha1.TenantOwnerClusterRoleName {
-			for _, subject := range roleBinding.Subjects {
-				if subject.Kind == "User" && subject.Name == subnamespaceCopy.Spec.Workspace.Owner.Email {
-					return true
+		if subnamespaceCopy.Spec.Workspace.Owner != nil {
+			roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(childNameHashed).Get(context.TODO(), "edgenet:workspace:owner", metav1.GetOptions{})
+			if err != nil {
+				return false
+			}
+			if roleBinding.RoleRef.Kind == "ClusterRole" && roleBinding.RoleRef.Name == corev1alpha1.TenantOwnerClusterRoleName {
+				for _, subject := range roleBinding.Subjects {
+					if subject.Kind == "User" && subject.Name == subnamespaceCopy.Spec.Workspace.Owner.Email {
+						return true
+					}
 				}
 			}
+		} else {
+			return true
 		}
 	}
 	return false
@@ -733,25 +753,35 @@ func (c *Controller) reconcileWithParentQuota(subnamespaceCopy *corev1alpha1.Sub
 	if err != nil {
 		return nil, true
 	}
-	var remainingQuotaResourceList = make(corev1.ResourceList)
+	var parentQuotaResourceList = make(corev1.ResourceList)
 	if strings.ToLower(parentNamespaceLabels["edge-net.io/kind"]) == "core" {
 		if parentResourceQuota, err := c.edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), parentNamespace.GetName(), metav1.GetOptions{}); err == nil {
-			remainingQuotaResourceList = parentResourceQuota.Fetch()
+			parentQuotaResourceList = parentResourceQuota.Fetch()
 		}
 	} else {
 		if parentNamespaceOwner, err := c.edgenetclientset.CoreV1alpha1().SubNamespaces(parentNamespaceLabels["edge-net.io/parent-namespace"]).Get(context.TODO(), parentNamespaceLabels["edge-net.io/owner"], metav1.GetOptions{}); err == nil {
-			remainingQuotaResourceList = parentNamespaceOwner.GetResourceAllocation()
+			parentQuotaResourceList = parentNamespaceOwner.GetResourceAllocation()
 		}
 	}
-
-	isQuotaSufficient := false
-	remainingQuotaResourceList, _, isQuotaSufficient = c.subtractSubnamespaceQuotas(subnamespaceCopy, parentNamespace.GetName(), remainingQuotaResourceList)
+	remainingQuotaResourceList, _, isQuotaSufficient := c.subtractSubnamespaceQuotas(subnamespaceCopy, parentNamespace.GetName(), parentQuotaResourceList)
 	if !isQuotaSufficient {
 		return nil, false
 	}
-	if !reflect.DeepEqual(currentParentResourceQuota.Spec.Hard, remainingQuotaResourceList) {
+
+	if len(remainingQuotaResourceList) != len(currentParentResourceQuota.Spec.Hard) {
 		currentParentResourceQuota.Spec.Hard = remainingQuotaResourceList
 		return currentParentResourceQuota, false
+	}
+	for resourceName, remainingQuantity := range remainingQuotaResourceList {
+		if childQuantity, elementExists := currentParentResourceQuota.Spec.Hard[resourceName]; elementExists {
+			if !remainingQuantity.Equal(childQuantity) {
+				currentParentResourceQuota.Spec.Hard = remainingQuotaResourceList
+				return currentParentResourceQuota, false
+			}
+		} else {
+			currentParentResourceQuota.Spec.Hard = remainingQuotaResourceList
+			return currentParentResourceQuota, false
+		}
 	}
 	return nil, true
 }
@@ -784,6 +814,10 @@ func (c *Controller) subtractSubnamespaceQuotas(subnamespaceCopy *corev1alpha1.S
 		for _, subnamespaceRow := range subnamespaceRaw.Items {
 			if (subnamespaceRow.GetUID() == subnamespaceCopy.GetUID() && !(subnamespaceCopy.Status.Failed >= backoffLimit && subnamespaceCopy.Status.State == corev1alpha1.StatusFailed)) ||
 				subnamespaceRow.Status.State == corev1alpha1.StatusEstablished || subnamespaceRow.Status.State == corev1alpha1.StatusQuotaSet || subnamespaceRow.Status.State == corev1alpha1.StatusSubnamespaceCreated || subnamespaceRow.Status.State == corev1alpha1.StatusPartitioned {
+				if lastInDate.IsZero() || subnamespaceRow.GetCreationTimestamp().After(lastInDate.Time) {
+					lastInSubnamespace = subnamespaceRow.GetName()
+					lastInDate = subnamespaceRow.GetCreationTimestamp()
+				}
 				for remainingQuotaResource, remainingQuotaQuantity := range remainingQuotaResourceList {
 					childQuota := subnamespaceRow.RetrieveQuantity(remainingQuotaResource)
 					if subnamespaceRow.GetUID() == subnamespaceCopy.GetUID() {
@@ -794,10 +828,6 @@ func (c *Controller) subtractSubnamespaceQuotas(subnamespaceCopy *corev1alpha1.S
 					}
 					remainingQuotaQuantity.Sub(childQuota)
 					remainingQuotaResourceList[remainingQuotaResource] = remainingQuotaQuantity
-				}
-				if lastInDate.IsZero() || lastInDate.Sub(subnamespaceRow.GetCreationTimestamp().Time) >= 0 {
-					lastInSubnamespace = subnamespaceRow.GetName()
-					lastInDate = subnamespaceRow.GetCreationTimestamp()
 				}
 			}
 		}

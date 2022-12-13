@@ -434,6 +434,10 @@ func (c *Controller) subtractSubnamespaceQuotas(namespace string, remainingQuota
 	if subnamespaceRaw, err := c.edgenetclientset.CoreV1alpha1().SubNamespaces(namespace).List(context.TODO(), metav1.ListOptions{}); err == nil {
 		for _, subnamespaceRow := range subnamespaceRaw.Items {
 			if subnamespaceRow.Status.State == corev1alpha1.StatusEstablished || subnamespaceRow.Status.State == corev1alpha1.StatusQuotaSet || subnamespaceRow.Status.State == corev1alpha1.StatusSubnamespaceCreated || subnamespaceRow.Status.State == corev1alpha1.StatusPartitioned {
+				if lastInDate.IsZero() || subnamespaceRow.GetCreationTimestamp().After(lastInDate.Time) {
+					lastInSubnamespace = subnamespaceRow.GetName()
+					lastInDate = subnamespaceRow.GetCreationTimestamp()
+				}
 				for remainingQuotaResource, remainingQuotaQuantity := range remainingQuotaResourceList {
 					childQuota := subnamespaceRow.RetrieveQuantity(remainingQuotaResource)
 					if remainingQuotaQuantity.Cmp(childQuota) == -1 {
@@ -441,10 +445,6 @@ func (c *Controller) subtractSubnamespaceQuotas(namespace string, remainingQuota
 					}
 					remainingQuotaQuantity.Sub(childQuota)
 					remainingQuotaResourceList[remainingQuotaResource] = remainingQuotaQuantity
-				}
-				if lastInDate.IsZero() || lastInDate.Sub(subnamespaceRow.GetCreationTimestamp().Time) >= 0 {
-					lastInSubnamespace = subnamespaceRow.GetName()
-					lastInDate = subnamespaceRow.GetCreationTimestamp()
 				}
 			}
 		}

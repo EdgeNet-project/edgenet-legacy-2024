@@ -277,9 +277,9 @@ func (sn SubNamespace) GetMode() string {
 // GetResourceAllocation return the allocated resources at workspace or subtenant.
 func (sn SubNamespace) GetResourceAllocation() map[corev1.ResourceName]resource.Quantity {
 	if sn.Spec.Workspace != nil {
-		return sn.Spec.Workspace.ResourceAllocation
+		return sn.Spec.Workspace.DeepCopy().ResourceAllocation
 	}
-	return sn.Spec.Subtenant.ResourceAllocation
+	return sn.Spec.Subtenant.DeepCopy().ResourceAllocation
 }
 
 // SetResourceAllocation set the allocated resources at workspace or subtenant.
