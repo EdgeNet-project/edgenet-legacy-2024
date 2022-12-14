@@ -66,6 +66,7 @@ const (
 
 	successSynced        = "Synced"
 	successExpired       = "Expired"
+	successSlice         = "Slice Ready"
 	failureQuotaShortage = "Shortage"
 	failureUpdate        = "Not Updated"
 	failureApplied       = "Not Applied"
@@ -87,7 +88,8 @@ const (
 	messageSubnamespaceDeleted = "Last created child subnamespace has been deleted due to insufficient quota "
 	messageParentQuotaShortage = "Insufficient quota at the parent"
 	messageUpdateFail          = "Quota cannot be updated"
-	messageSliceFailure        = "Slice is not ready to be used."
+	messageSliceFailure        = "Slice is not ready to be used"
+	messageSliceReady          = "Slice is ready"
 	messageBindingFailed       = "Role binding failed"
 	messagePartitioned         = "Parent resource quota has been partitioned among its children and itself"
 	messageApplied             = "Child quota applied successfully"
@@ -504,6 +506,15 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 
 		switch subnamespaceCopy.Status.State {
 		case corev1alpha1.StatusEstablished:
+			if sliceclaimName := subnamespaceCopy.GetSliceClaim(); sliceclaimName != nil {
+				if sliceclaimCopy, ok := c.checkSliceClaim(subnamespaceCopy.GetNamespace(), *sliceclaimName); sliceclaimCopy == nil || !ok {
+					c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailure)
+					subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
+					subnamespaceCopy.Status.Message = failureSlice
+					c.updateStatus(context.TODO(), subnamespaceCopy)
+					return
+				}
+			}
 			c.reconcile(subnamespaceCopy, parentNamespace, childNameHashed)
 		case corev1alpha1.StatusQuotaSet:
 			if subnamespaceCopy.Spec.Workspace != nil {
@@ -587,7 +598,7 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 			c.updateStatus(context.TODO(), subnamespaceCopy)
 		case corev1alpha1.StatusPartitioned:
 			ownerReferences := []metav1.OwnerReference{multitenancy.MakeOwnerReferenceForNamespace(parentNamespace)}
-			if isCreated := c.makeSubsidiaryNamespace(subnamespaceCopy, parentNamespaceLabels["edge-net.io/tenant"], childNameHashed, ownerReferences); !isCreated {
+			if isCreated := c.makeSubsidiaryNamespace(subnamespaceCopy, parentNamespaceLabels["edge-net.io/tenant"], childNameHashed, parentNamespace.GetAnnotations(), ownerReferences); !isCreated {
 				return
 			}
 			c.recorder.Event(subnamespaceCopy, corev1.EventTypeNormal, corev1alpha1.StatusPartitioned, messageCreation)
@@ -622,10 +633,7 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 						}
 						subnamespaceCopy.SetResourceAllocation(childQuota)
 						if _, err := c.edgenetclientset.CoreV1alpha1().SubNamespaces(subnamespaceCopy.GetNamespace()).Update(context.TODO(), subnamespaceCopy, metav1.UpdateOptions{}); err == nil {
-							c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailure)
-							subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
-							subnamespaceCopy.Status.Message = failureSlice
-							c.updateStatus(context.TODO(), subnamespaceCopy)
+							c.recorder.Event(subnamespaceCopy, corev1.EventTypeNormal, successSlice, messageSliceReady)
 							return
 						}
 					}
@@ -635,8 +643,15 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 					c.updateStatus(context.TODO(), subnamespaceCopy)
 					return
 				}
-				sliceclaimCopy.SetOwnerReferences([]metav1.OwnerReference{subnamespaceCopy.MakeOwnerReference()})
+				sliceclaimOwnerReferences := sliceclaimCopy.GetOwnerReferences()
+				subnamespaceControllerRef := subnamespaceCopy.MakeOwnerReference()
+				takeControl := false
+				subnamespaceControllerRef.Controller = &takeControl
+				sliceclaimOwnerReferences = append(sliceclaimOwnerReferences, subnamespaceControllerRef)
+				sliceclaimCopy.SetOwnerReferences(sliceclaimOwnerReferences)
 				if _, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(subnamespaceCopy.GetNamespace()).Update(context.TODO(), sliceclaimCopy, metav1.UpdateOptions{}); err != nil {
+					klog.Infoln("HOPHOPHOPHOP")
+					klog.Infoln(err)
 					c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailure)
 					subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
 					subnamespaceCopy.Status.Message = failureSlice
@@ -840,6 +855,7 @@ func (c *Controller) checkSliceClaim(namespace, name string) (*corev1alpha1.Slic
 		if sliceclaimCopy.Status.State == corev1alpha1.StatusBound || sliceclaimCopy.Status.State == corev1alpha1.StatusEmployed {
 			return sliceclaimCopy, true
 		}
+		return sliceclaimCopy, false
 	}
 	return nil, false
 }
@@ -912,10 +928,17 @@ func (c *Controller) returnParentResourceQuota(subnamespaceCopy *corev1alpha1.Su
 	return true
 }
 
-func (c *Controller) makeSubsidiaryNamespace(subnamespaceCopy *corev1alpha1.SubNamespace, tenant, childNameHashed string, ownerReferences []metav1.OwnerReference) bool {
+func (c *Controller) makeSubsidiaryNamespace(subnamespaceCopy *corev1alpha1.SubNamespace, tenant, childNameHashed string, parentAnnotations map[string]string, ownerReferences []metav1.OwnerReference) bool {
 	var annotations map[string]string
-	if sliceclaim := subnamespaceCopy.GetSliceClaim(); sliceclaim != nil {
-		annotations = map[string]string{"scheduler.alpha.kubernetes.io/node-selector": fmt.Sprintf("edge-net.io/access=private,edge-net.io/slice=%s", *sliceclaim)}
+	if parentAnnotations != nil {
+		if _, elementExists := parentAnnotations["scheduler.alpha.kubernetes.io/node-selector"]; elementExists {
+			annotations = map[string]string{"scheduler.alpha.kubernetes.io/node-selector": parentAnnotations["scheduler.alpha.kubernetes.io/node-selector"]}
+		}
+	}
+	if annotations == nil {
+		if sliceclaim := subnamespaceCopy.GetSliceClaim(); sliceclaim != nil {
+			annotations = map[string]string{"scheduler.alpha.kubernetes.io/node-selector": fmt.Sprintf("edge-net.io/access=private,edge-net.io/slice=%s", *sliceclaim)}
+		}
 	}
 	switch subnamespaceCopy.GetMode() {
 	case "workspace":

@@ -133,20 +133,7 @@ func NewController(
 		},
 		DeleteFunc: func(obj interface{}) {
 			sliceCopy := obj.(*corev1alpha1.Slice).DeepCopy()
-			if sliceCopy.Status.State == corev1alpha1.StatusReserved || sliceCopy.Status.State == corev1alpha1.StatusBound {
-				if nodeRaw, err := controller.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/pre-reservation=%s", sliceCopy.GetName())}); err == nil {
-					for _, nodeRow := range nodeRaw.Items {
-						controller.patchNode("return", "", nodeRow.GetName())
-					}
-				}
-			}
-			if sliceCopy.Status.State == corev1alpha1.StatusProvisioned {
-				if nodeRaw, err := controller.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/slice=%s", sliceCopy.GetName())}); err == nil {
-					for _, nodeRow := range nodeRaw.Items {
-						controller.patchNode("return", "", nodeRow.GetName())
-					}
-				}
-			}
+			controller.returnNodes(sliceCopy)
 		},
 	})
 
@@ -334,10 +321,7 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha1.Slice) {
 		return
 	}
 	if exceedsBackoffLimit := sliceCopy.Status.Failed >= backoffLimit; exceedsBackoffLimit {
-		sliceClaimCopy, _ := c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceCopy.Spec.ClaimRef.Namespace).Get(context.TODO(), sliceCopy.Spec.ClaimRef.Name, metav1.GetOptions{})
-		sliceClaimCopy.Status.State = corev1alpha1.StatusFailed
-		sliceClaimCopy.Status.Message = messageNotBound
-		c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceClaimCopy.GetNamespace()).UpdateStatus(context.TODO(), sliceClaimCopy, metav1.UpdateOptions{})
+		c.returnNodes(sliceCopy)
 		return
 	}
 
@@ -347,10 +331,9 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha1.Slice) {
 			if sliceCopy.Spec.ClaimRef != nil {
 				if sliceClaimCopy, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceCopy.Spec.ClaimRef.Namespace).Get(context.TODO(), sliceCopy.Spec.ClaimRef.Name, metav1.GetOptions{}); err == nil {
 					if ownerRef := metav1.GetControllerOf(sliceClaimCopy); ownerRef != nil && ownerRef.Kind == "Slice" {
-						if ownerRef.UID != sliceCopy.GetUID() {
-							c.edgenetclientset.CoreV1alpha1().Slices().Delete(context.TODO(), sliceCopy.GetName(), metav1.DeleteOptions{})
+						if ownerRef.UID == sliceCopy.GetUID() && sliceClaimCopy.Status.State == corev1alpha1.StatusEmployed {
+							return
 						}
-						return
 					}
 				}
 			}
@@ -402,26 +385,36 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha1.Slice) {
 		}
 		if sliceCopy.Spec.ClaimRef != nil {
 			if sliceClaimCopy, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceCopy.Spec.ClaimRef.Namespace).Get(context.TODO(), sliceCopy.Spec.ClaimRef.Name, metav1.GetOptions{}); err == nil {
-				if sliceClaimCopy.Status.State == corev1alpha1.StatusRequested {
-					ownerReferences := sliceClaimCopy.GetOwnerReferences()
-					sliceOwnerReference := sliceCopy.MakeOwnerReference()
-					takeControl := true
-					sliceOwnerReference.Controller = &takeControl
-					ownerReferences = append(ownerReferences, sliceOwnerReference)
-					sliceClaimCopy.SetOwnerReferences(ownerReferences)
-					if _, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceClaimCopy.GetNamespace()).Update(context.TODO(), sliceClaimCopy, metav1.UpdateOptions{}); err == nil {
+				if controllerRef := metav1.GetControllerOf(sliceClaimCopy); controllerRef != nil {
+					if controllerRef.Kind == "Slice" && controllerRef.UID == sliceCopy.GetUID() {
 						c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messageBound)
 						sliceCopy.Status.State = corev1alpha1.StatusBound
 						sliceCopy.Status.Message = messageBound
 						c.updateStatus(context.TODO(), sliceCopy)
 						return
 					}
+				} else {
+					if sliceClaimCopy.Status.State == corev1alpha1.StatusRequested {
+						ownerReferences := sliceClaimCopy.GetOwnerReferences()
+						sliceOwnerReference := sliceCopy.MakeOwnerReference()
+						takeControl := true
+						sliceOwnerReference.Controller = &takeControl
+						ownerReferences = append(ownerReferences, sliceOwnerReference)
+						sliceClaimCopy.SetOwnerReferences(ownerReferences)
+						if _, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(sliceClaimCopy.GetNamespace()).Update(context.TODO(), sliceClaimCopy, metav1.UpdateOptions{}); err == nil {
+							c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messageBound)
+							sliceCopy.Status.State = corev1alpha1.StatusBound
+							sliceCopy.Status.Message = messageBound
+							c.updateStatus(context.TODO(), sliceCopy)
+							return
+						}
+					}
 				}
-				c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failureBound, messageNotBound)
-				sliceCopy.Status.State = corev1alpha1.StatusFailed
-				sliceCopy.Status.Message = messageNotBound
-				c.updateStatus(context.TODO(), sliceCopy)
 			}
+			c.recorder.Event(sliceCopy, corev1.EventTypeWarning, failureBound, messageNotBound)
+			sliceCopy.Status.State = corev1alpha1.StatusFailed
+			sliceCopy.Status.Message = messageNotBound
+			c.updateStatus(context.TODO(), sliceCopy)
 		}
 	default:
 		if isReserved := c.preReserveNodes(sliceCopy); !isReserved {
@@ -550,7 +543,7 @@ nodeLoop:
 	for _, nodeRow := range nodeRaw.Items {
 		nodeLabels := nodeRow.GetLabels()
 		if nodeLabels["edge-net.io/access"] == "private" || nodeLabels["edge-net.io/slice"] != "none" || nodeLabels["edge-net.io/pre-reservation"] != "none" {
-			if nodeLabels["edge-net.io/slice"] != sliceCopy.GetName() || nodeLabels["edge-net.io/pre-reservation"] != sliceCopy.GetName() {
+			if nodeLabels["edge-net.io/slice"] == sliceCopy.GetName() || nodeLabels["edge-net.io/pre-reservation"] == sliceCopy.GetName() {
 				associatedNodeList = append(associatedNodeList, nodeRow.GetName())
 			}
 			continue nodeLoop
@@ -579,6 +572,23 @@ func (c *Controller) checkSliceStatus(sliceCopy *corev1alpha1.Slice, phase strin
 		}
 	}
 	return false
+}
+
+func (c *Controller) returnNodes(sliceCopy *corev1alpha1.Slice) {
+	if sliceCopy.Status.State == corev1alpha1.StatusReserved || sliceCopy.Status.State == corev1alpha1.StatusBound {
+		if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/pre-reservation=%s", sliceCopy.GetName())}); err == nil {
+			for _, nodeRow := range nodeRaw.Items {
+				c.patchNode("return", "", nodeRow.GetName())
+			}
+		}
+	}
+	if sliceCopy.Status.State == corev1alpha1.StatusProvisioned {
+		if nodeRaw, err := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/slice=%s", sliceCopy.GetName())}); err == nil {
+			for _, nodeRow := range nodeRaw.Items {
+				c.patchNode("return", "", nodeRow.GetName())
+			}
+		}
+	}
 }
 
 func (c *Controller) patchNode(phase, slice, node string) error {
