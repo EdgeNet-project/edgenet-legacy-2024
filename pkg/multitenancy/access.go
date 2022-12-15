@@ -152,24 +152,26 @@ func (m *Manager) createObjectSpecificClusterRole(apiGroup, resource, resourceNa
 
 // CreateObjectSpecificClusterRoleBinding links the cluster role up with the user
 func (m *Manager) createObjectSpecificClusterRoleBinding(roleName, email string, ownerReferences []metav1.OwnerReference) error {
-	if currentRoleBind, err := m.kubeclientset.RbacV1().ClusterRoleBindings().Get(context.TODO(), roleName, metav1.GetOptions{}); err == nil {
-		currentRoleBind.Subjects = []rbacv1.Subject{{Kind: "User", Name: email, APIGroup: "rbac.authorization.k8s.io"}}
-		currentRoleBind.SetLabels(labels)
-		if _, err = m.kubeclientset.RbacV1().ClusterRoleBindings().Update(context.TODO(), currentRoleBind, metav1.UpdateOptions{}); err != nil {
-			log.Printf("Updated: %s cluster role binding updated", roleName)
-			return err
-		}
-	} else {
-		roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: roleName}
-		rbSubjects := []rbacv1.Subject{{Kind: "User", Name: email, APIGroup: "rbac.authorization.k8s.io"}}
-		roleBind := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: roleName},
-			Subjects: rbSubjects, RoleRef: roleRef}
-		roleBind.ObjectMeta.OwnerReferences = ownerReferences
-		roleBind.SetLabels(labels)
-		if _, err := m.kubeclientset.RbacV1().ClusterRoleBindings().Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
-			log.Printf("Couldn't create %s cluster role binding: %s", roleName, err)
-			return err
+	roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: roleName}
+	rbSubjects := []rbacv1.Subject{{Kind: "User", Name: email, APIGroup: "rbac.authorization.k8s.io"}}
+	roleBind := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: roleName},
+		Subjects: rbSubjects, RoleRef: roleRef}
+	roleBind.ObjectMeta.OwnerReferences = ownerReferences
+	roleBind.SetLabels(labels)
+	_, err := m.kubeclientset.RbacV1().ClusterRoleBindings().Create(context.TODO(), roleBind, metav1.CreateOptions{})
+	if err != nil {
+		log.Printf("Couldn't create %s cluster role binding: %s", roleName, err)
+		if k8serrors.IsAlreadyExists(err) {
+			currentRoleBind, err := m.kubeclientset.RbacV1().ClusterRoleBindings().Get(context.TODO(), roleName, metav1.GetOptions{})
+			if err == nil {
+				currentRoleBind.Subjects = []rbacv1.Subject{{Kind: "User", Name: email, APIGroup: "rbac.authorization.k8s.io"}}
+				currentRoleBind.SetLabels(labels)
+				if _, err = m.kubeclientset.RbacV1().ClusterRoleBindings().Update(context.TODO(), currentRoleBind, metav1.UpdateOptions{}); err == nil {
+					log.Printf("Updated: %s cluster role binding updated", roleName)
+					return err
+				}
+			}
 		}
 	}
-	return nil
+	return err
 }
