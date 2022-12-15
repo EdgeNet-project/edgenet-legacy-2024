@@ -423,6 +423,7 @@ func (c *Controller) applyNetworkPolicy(tenant, tenantUID, clusterUID string, cl
 	endPort := int32(32768)
 	networkPolicy := new(networkingv1.NetworkPolicy)
 	networkPolicy.SetName("baseline")
+	networkPolicy.SetNamespace(tenant)
 	networkPolicy.Spec.PolicyTypes = []networkingv1.PolicyType{"Ingress"}
 	networkPolicy.Spec.Ingress = []networkingv1.NetworkPolicyIngressRule{
 		{
