@@ -96,7 +96,6 @@ func newTenant(name string, cnp, enabled bool) *corev1alpha1.Tenant {
 		},
 	}
 }
-
 func newNamespace(name string, labels, annotations map[string]string, ownerReferences []metav1.OwnerReference) *corev1.Namespace {
 	return &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -107,11 +106,10 @@ func newNamespace(name string, labels, annotations map[string]string, ownerRefer
 		},
 	}
 }
-
 func newClusterRole(name, resourceName string, ownerReferences []metav1.OwnerReference) *rbacv1.ClusterRole {
 	return &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            name,
+			Name:            fmt.Sprintf("edgenet:tenants:%s-owner", name),
 			OwnerReferences: ownerReferences,
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -130,11 +128,10 @@ func newClusterRole(name, resourceName string, ownerReferences []metav1.OwnerRef
 		},
 	}
 }
-
 func newClusterRoleBinding(name, email string, labels map[string]string, ownerReferences []metav1.OwnerReference) *rbacv1.ClusterRoleBinding {
 	return &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            name,
+			Name:            fmt.Sprintf("edgenet:tenants:%s-owner", name),
 			Labels:          labels,
 			OwnerReferences: ownerReferences,
 		},
@@ -147,11 +144,10 @@ func newClusterRoleBinding(name, email string, labels map[string]string, ownerRe
 		},
 		RoleRef: rbacv1.RoleRef{
 			Kind: "ClusterRole",
-			Name: name,
+			Name: fmt.Sprintf("edgenet:tenants:%s-owner", name),
 		},
 	}
 }
-
 func newRoleBinding(name, namespace, email string, labels map[string]string) *rbacv1.RoleBinding {
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -172,8 +168,30 @@ func newRoleBinding(name, namespace, email string, labels map[string]string) *rb
 		},
 	}
 }
-
-func newNetworkPolicy(name, namespace string, ingressRules []networkingv1.NetworkPolicyIngressRule) *networkingv1.NetworkPolicy {
+func newNetworkPolicy(name, namespace string, labelSelector metav1.LabelSelector) *networkingv1.NetworkPolicy {
+	port := intstr.IntOrString{IntVal: 1}
+	endPort := int32(32768)
+	ingressRules := []networkingv1.NetworkPolicyIngressRule{
+		{
+			From: []networkingv1.NetworkPolicyPeer{
+				{
+					NamespaceSelector: &labelSelector,
+				},
+				{
+					IPBlock: &networkingv1.IPBlock{
+						CIDR:   "0.0.0.0/0",
+						Except: []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"},
+					},
+				},
+			},
+			Ports: []networkingv1.NetworkPolicyPort{
+				{
+					Port:    &port,
+					EndPort: &endPort,
+				},
+			},
+		},
+	}
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -185,21 +203,88 @@ func newNetworkPolicy(name, namespace string, ingressRules []networkingv1.Networ
 		},
 	}
 }
-
-func newClusterNetworkPolicy(name, tier string, priority float64, appliedTo []antreav1alpha1.NetworkPolicyPeer, ingressRules []antreav1alpha1.Rule, ownerReferences []metav1.OwnerReference) *antreav1alpha1.ClusterNetworkPolicy {
+func newClusterNetworkPolicy(name string, labelSelector metav1.LabelSelector, ownerReferences []metav1.OwnerReference) *antreav1alpha1.ClusterNetworkPolicy {
+	drop := antreav1alpha1.RuleActionDrop
+	allow := antreav1alpha1.RuleActionAllow
+	port := intstr.IntOrString{IntVal: 1}
+	endPort := int32(32768)
+	ingressRules := []antreav1alpha1.Rule{
+		{
+			Action: &allow,
+			From: []antreav1alpha1.NetworkPolicyPeer{
+				{
+					NamespaceSelector: &labelSelector,
+				},
+			},
+			Ports: []antreav1alpha1.NetworkPolicyPort{
+				{
+					Port:    &port,
+					EndPort: &endPort,
+				},
+			},
+		},
+		{
+			Action: &drop,
+			From: []antreav1alpha1.NetworkPolicyPeer{
+				{
+					IPBlock: &antreav1alpha1.IPBlock{
+						CIDR: "10.0.0.0/8",
+					},
+				},
+				{
+					IPBlock: &antreav1alpha1.IPBlock{
+						CIDR: "172.16.0.0/12",
+					},
+				},
+				{
+					IPBlock: &antreav1alpha1.IPBlock{
+						CIDR: "192.168.0.0/16",
+					},
+				},
+			},
+			Ports: []antreav1alpha1.NetworkPolicyPort{
+				{
+					Port:    &port,
+					EndPort: &endPort,
+				},
+			},
+		},
+		{
+			Action: &allow,
+			From: []antreav1alpha1.NetworkPolicyPeer{
+				{
+					IPBlock: &antreav1alpha1.IPBlock{
+						CIDR: "0.0.0.0/0",
+					},
+				},
+			},
+			Ports: []antreav1alpha1.NetworkPolicyPort{
+				{
+					Port:    &port,
+					EndPort: &endPort,
+				},
+			},
+		},
+	}
+	appliedTo := []antreav1alpha1.NetworkPolicyPeer{
+		{
+			NamespaceSelector: &labelSelector,
+		},
+	}
 	return &antreav1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            name,
 			OwnerReferences: ownerReferences,
 		},
 		Spec: antreav1alpha1.ClusterNetworkPolicySpec{
-			Tier:      tier,
-			Priority:  priority,
+			Tier:      "tenant",
+			Priority:  5,
 			AppliedTo: appliedTo,
 			Ingress:   ingressRules,
 		},
 	}
 }
+
 func (f *fixture) newController() (*Controller, edgeinformers.SharedInformerFactory) {
 	f.kubeclientset = k8sfake.NewSimpleClientset(f.kubeobjects...)
 	f.edgenetclientset = edgenetfake.NewSimpleClientset(f.edgenetobjects...)
@@ -317,6 +402,28 @@ func checkAction(expected, actual core.Action, t *testing.T) {
 			t.Errorf("Action %s %s has wrong object\nDiff:\n %s",
 				a.GetVerb(), a.GetResource().Resource, diff.ObjectGoPrintSideBySide(expName, name))
 		}
+	case core.DeleteCollectionActionImpl:
+		e, _ := expected.(core.DeleteCollectionActionImpl)
+		expNamespace := e.Namespace
+		expResource := e.GetResource().Resource
+		namespace := a.Namespace
+		resource := a.GetResource().Resource
+
+		if expNamespace != namespace || expResource != resource {
+			t.Errorf("Action %s %s has wrong object\nDiff:\n %s",
+				a.GetVerb(), a.GetResource().Resource, diff.ObjectGoPrintSideBySide(expNamespace, namespace))
+		}
+	case core.DeleteActionImpl:
+		e, _ := expected.(core.DeleteActionImpl)
+		expName := e.GetName()
+		expResource := e.GetResource().Resource
+		name := a.GetName()
+		resource := a.GetResource().Resource
+
+		if expName != name || expResource != resource {
+			t.Errorf("Action %s %s has wrong object\nDiff:\n %s",
+				a.GetVerb(), a.GetResource().Resource, diff.ObjectGoPrintSideBySide(expName, name))
+		}
 	case core.CreateActionImpl:
 		e, _ := expected.(core.CreateActionImpl)
 		expObject := e.GetObject()
@@ -341,7 +448,6 @@ func checkAction(expected, actual core.Action, t *testing.T) {
 					a.GetVerb(), a.GetResource().Resource, diff.ObjectGoPrintSideBySide(expObject, object))
 			}
 		}
-
 	case core.PatchActionImpl:
 		e, _ := expected.(core.PatchActionImpl)
 		expPatch := e.GetPatch()
@@ -372,56 +478,57 @@ func filterInformerActions(actions []core.Action) []core.Action {
 	return ret
 }
 
-func (f *fixture) expectGetNamespaceAction(name string) {
-	f.kubeactions = append(f.kubeactions, core.NewRootGetAction(schema.GroupVersionResource{Resource: "namespaces"}, name))
+func (f *fixture) expectGetRootAction(name, resource, kind string) {
+	switch kind {
+	case "kube":
+		f.kubeactions = append(f.kubeactions, core.NewRootGetAction(schema.GroupVersionResource{Resource: resource}, name))
+	default:
+		f.antreaactions = append(f.antreaactions, core.NewRootGetAction(schema.GroupVersionResource{Resource: resource}, name))
+	}
 }
-
-func (f *fixture) expectGetRoleBindingAction(name, namespace string) {
-	f.kubeactions = append(f.kubeactions, core.NewGetAction(schema.GroupVersionResource{Resource: "rolebindings"}, namespace, name))
+func (f *fixture) expectGetAction(name, namespace, resource string) {
+	f.kubeactions = append(f.kubeactions, core.NewGetAction(schema.GroupVersionResource{Resource: resource}, namespace, name))
 }
-
-func (f *fixture) expectGetNetworkPolicyAction(name, namespace string) {
-	f.kubeactions = append(f.kubeactions, core.NewGetAction(schema.GroupVersionResource{Resource: "networkpolicies"}, namespace, name))
-}
-
-func (f *fixture) expectGetClusterNetworkPolicyAction(name string) {
-	f.antreaactions = append(f.antreaactions, core.NewRootGetAction(schema.GroupVersionResource{Resource: "clusternetworkpolicies"}, name))
-}
-
-func (f *fixture) expectGetClusterRoleBindingAction(name string) {
-	f.kubeactions = append(f.kubeactions, core.NewRootGetAction(schema.GroupVersionResource{Resource: "clusterrolebindings"}, name))
-}
-
 func (f *fixture) expectCreateNamespaceAction(namespace *corev1.Namespace) {
 	f.kubeactions = append(f.kubeactions, core.NewRootCreateAction(schema.GroupVersionResource{Resource: "namespaces"}, namespace))
 }
-
-func (f *fixture) expectUpdateNamespaceAction(namespace *corev1.Namespace) {
-	f.kubeactions = append(f.kubeactions, core.NewRootUpdateAction(schema.GroupVersionResource{Resource: "namespaces"}, namespace))
-}
-
 func (f *fixture) expectCreateClusterRoleAction(clusterrole *rbacv1.ClusterRole) {
 	f.kubeactions = append(f.kubeactions, core.NewRootCreateAction(schema.GroupVersionResource{Resource: "clusterroles"}, clusterrole))
 }
-
 func (f *fixture) expectCreateClusterRoleBindingAction(clusterrolebinding *rbacv1.ClusterRoleBinding) {
 	f.kubeactions = append(f.kubeactions, core.NewRootCreateAction(schema.GroupVersionResource{Resource: "clusterrolebindings"}, clusterrolebinding))
 }
-
 func (f *fixture) expectCreateRoleBindingAction(rolebinding *rbacv1.RoleBinding) {
 	f.kubeactions = append(f.kubeactions, core.NewCreateAction(schema.GroupVersionResource{Resource: "rolebindings"}, rolebinding.GetNamespace(), rolebinding))
 }
-
+func (f *fixture) expectUpdateRoleBindingAction(rolebinding *rbacv1.RoleBinding) {
+	f.kubeactions = append(f.kubeactions, core.NewUpdateAction(schema.GroupVersionResource{Resource: "rolebindings"}, rolebinding.GetNamespace(), rolebinding))
+}
 func (f *fixture) expectCreateNetworkPolicyAction(networkpolicy *networkingv1.NetworkPolicy) {
 	f.kubeactions = append(f.kubeactions, core.NewCreateAction(schema.GroupVersionResource{Resource: "networkpolicies"}, networkpolicy.GetNamespace(), networkpolicy))
 }
-
 func (f *fixture) expectCreateClusterNetworkPolicyAction(clusternetworkpolicy *antreav1alpha1.ClusterNetworkPolicy) {
 	f.antreaactions = append(f.antreaactions, core.NewRootCreateAction(schema.GroupVersionResource{Resource: "clusternetworkpolicies"}, clusternetworkpolicy))
 }
-
+func (f *fixture) expectDeleteClusterNetworkPolicyAction(name string) {
+	f.antreaactions = append(f.antreaactions, core.NewRootDeleteAction(schema.GroupVersionResource{Resource: "clusternetworkpolicies"}, name))
+}
 func (f *fixture) expectUpdateTenantStatusAction(tenant *corev1alpha1.Tenant) {
 	f.edgenetactions = append(f.edgenetactions, core.NewRootUpdateSubresourceAction(schema.GroupVersionResource{Resource: "tenants"}, "status", tenant))
+}
+func (f *fixture) expectUpdateNamespaceAction(namespace *corev1.Namespace) {
+	f.kubeactions = append(f.kubeactions, core.NewRootUpdateAction(schema.GroupVersionResource{Resource: "namespaces"}, namespace))
+}
+func (f *fixture) expectDeleteCollectionAction(namespace, resource, kind string) {
+	switch kind {
+	case "kube":
+		f.kubeactions = append(f.kubeactions, core.NewDeleteCollectionAction(schema.GroupVersionResource{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version, Resource: resource}, namespace, metav1.ListOptions{}))
+	default:
+		f.edgenetactions = append(f.edgenetactions, core.NewDeleteCollectionAction(schema.GroupVersionResource{Resource: resource}, namespace, metav1.ListOptions{}))
+	}
+}
+func (f *fixture) expectRootDeleteCollectionAction(resource string, listOptions metav1.ListOptions) {
+	f.kubeactions = append(f.kubeactions, core.NewRootDeleteCollectionAction(schema.GroupVersionResource{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version, Resource: resource}, listOptions))
 }
 
 func getKey(tenant *corev1alpha1.Tenant, t *testing.T) string {
@@ -439,8 +546,8 @@ func TestCreateTenant(t *testing.T) {
 
 	kubenamespace := newNamespace("kube-system", nil, nil, nil)
 	namespace := newNamespace(tenant.GetName(), map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": ""}, map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
-	clusterrole := newClusterRole("edgenet:tenants:tenant1-owner", tenant.GetName(), []metav1.OwnerReference{tenant.MakeOwnerReference()})
-	clusterrolebinding := newClusterRoleBinding("edgenet:tenants:tenant1-owner", tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	clusterrole := newClusterRole(tenant.GetName(), tenant.GetName(), []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	clusterrolebinding := newClusterRoleBinding(tenant.GetName(), tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
 
 	f.tenantLister = append(f.tenantLister, tenant)
 	f.edgenetobjects = append(f.edgenetobjects, tenant)
@@ -450,7 +557,7 @@ func TestCreateTenant(t *testing.T) {
 	f.clusterrolebindingLister = append(f.clusterrolebindingLister, clusterrolebinding)
 	f.kubeobjects = append(f.kubeobjects, kubenamespace)
 
-	f.expectGetNamespaceAction(kubenamespace.GetName())
+	f.expectGetRootAction(kubenamespace.GetName(), "namespaces", "kube")
 	f.expectCreateNamespaceAction(namespace)
 	f.expectCreateClusterRoleAction(clusterrole)
 	f.expectCreateClusterRoleBindingAction(clusterrolebinding)
@@ -470,97 +577,8 @@ func TestTenantEstablishment(t *testing.T) {
 	namespace := newNamespace(tenant.GetName(), map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": ""}, map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
 	rolebinding := newRoleBinding(corev1alpha1.TenantOwnerClusterRoleName, tenant.GetName(), tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true", "edge-net.io/notification": "true"})
 	labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"edge-net.io/subtenant": "false", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": string(kubenamespace.GetUID())}}
-	port := intstr.IntOrString{IntVal: 1}
-	endPort := int32(32768)
-	ingressRules := []networkingv1.NetworkPolicyIngressRule{
-		{
-			From: []networkingv1.NetworkPolicyPeer{
-				{
-					NamespaceSelector: &labelSelector,
-				},
-				{
-					IPBlock: &networkingv1.IPBlock{
-						CIDR:   "0.0.0.0/0",
-						Except: []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"},
-					},
-				},
-			},
-			Ports: []networkingv1.NetworkPolicyPort{
-				{
-					Port:    &port,
-					EndPort: &endPort,
-				},
-			},
-		},
-	}
-	networkpolicy := newNetworkPolicy("baseline", tenant.GetName(), ingressRules)
-
-	drop := antreav1alpha1.RuleActionDrop
-	allow := antreav1alpha1.RuleActionAllow
-	antreaIngressRules := []antreav1alpha1.Rule{
-		{
-			Action: &allow,
-			From: []antreav1alpha1.NetworkPolicyPeer{
-				{
-					NamespaceSelector: &labelSelector,
-				},
-			},
-			Ports: []antreav1alpha1.NetworkPolicyPort{
-				{
-					Port:    &port,
-					EndPort: &endPort,
-				},
-			},
-		},
-		{
-			Action: &drop,
-			From: []antreav1alpha1.NetworkPolicyPeer{
-				{
-					IPBlock: &antreav1alpha1.IPBlock{
-						CIDR: "10.0.0.0/8",
-					},
-				},
-				{
-					IPBlock: &antreav1alpha1.IPBlock{
-						CIDR: "172.16.0.0/12",
-					},
-				},
-				{
-					IPBlock: &antreav1alpha1.IPBlock{
-						CIDR: "192.168.0.0/16",
-					},
-				},
-			},
-			Ports: []antreav1alpha1.NetworkPolicyPort{
-				{
-					Port:    &port,
-					EndPort: &endPort,
-				},
-			},
-		},
-		{
-			Action: &allow,
-			From: []antreav1alpha1.NetworkPolicyPeer{
-				{
-					IPBlock: &antreav1alpha1.IPBlock{
-						CIDR: "0.0.0.0/0",
-					},
-				},
-			},
-			Ports: []antreav1alpha1.NetworkPolicyPort{
-				{
-					Port:    &port,
-					EndPort: &endPort,
-				},
-			},
-		},
-	}
-	appliedTo := []antreav1alpha1.NetworkPolicyPeer{
-		{
-			NamespaceSelector: &labelSelector,
-		},
-	}
-	clusternetworkpolicy := newClusterNetworkPolicy(tenant.GetName(), "tenant", 5, appliedTo, antreaIngressRules, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	networkpolicy := newNetworkPolicy("baseline", tenant.GetName(), labelSelector)
+	clusternetworkpolicy := newClusterNetworkPolicy(tenant.GetName(), labelSelector, []metav1.OwnerReference{tenant.MakeOwnerReference()})
 
 	f.tenantLister = append(f.tenantLister, tenant)
 	f.edgenetobjects = append(f.edgenetobjects, tenant)
@@ -571,7 +589,7 @@ func TestTenantEstablishment(t *testing.T) {
 	f.rolebindingLister = append(f.rolebindingLister, rolebinding)
 	f.kubeobjects = append(f.kubeobjects, kubenamespace, namespace)
 
-	f.expectGetNamespaceAction(kubenamespace.GetName())
+	f.expectGetRootAction(kubenamespace.GetName(), "namespaces", "kube")
 	f.expectCreateNetworkPolicyAction(networkpolicy)
 	f.expectCreateClusterNetworkPolicyAction(clusternetworkpolicy)
 	f.expectCreateRoleBindingAction(rolebinding)
@@ -580,110 +598,22 @@ func TestTenantEstablishment(t *testing.T) {
 	f.run(getKey(tenant, t))
 }
 
-func TestReconcile(t *testing.T) {
+func TestTenantDisabled(t *testing.T) {
 	f := newFixture(t)
-	tenant := newTenant("tenant3", true, true)
+	tenant := newTenant("tenant3", true, false)
 	tenant.Status.Failed = 0
 	tenant.Status.State = corev1alpha1.StatusEstablished
 	tenant.Status.Message = successEstablished
 
 	kubenamespace := newNamespace("kube-system", nil, nil, nil)
 	namespace := newNamespace(tenant.GetName(), map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": ""}, map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
-	clusterrole := newClusterRole("edgenet:tenants:tenant3-owner", tenant.GetName(), []metav1.OwnerReference{tenant.MakeOwnerReference()})
-	clusterrolebinding := newClusterRoleBinding("edgenet:tenants:tenant3-owner", tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	clusterrole := newClusterRole(tenant.GetName(), tenant.GetName(), []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	clusterrolebinding := newClusterRoleBinding(tenant.GetName(), tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
 	rolebinding := newRoleBinding(corev1alpha1.TenantOwnerClusterRoleName, tenant.GetName(), tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true", "edge-net.io/notification": "true"})
 	labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"edge-net.io/subtenant": "false", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": string(kubenamespace.GetUID())}}
-	port := intstr.IntOrString{IntVal: 1}
-	endPort := int32(32768)
-	ingressRules := []networkingv1.NetworkPolicyIngressRule{
-		{
-			From: []networkingv1.NetworkPolicyPeer{
-				{
-					NamespaceSelector: &labelSelector,
-				},
-				{
-					IPBlock: &networkingv1.IPBlock{
-						CIDR:   "0.0.0.0/0",
-						Except: []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"},
-					},
-				},
-			},
-			Ports: []networkingv1.NetworkPolicyPort{
-				{
-					Port:    &port,
-					EndPort: &endPort,
-				},
-			},
-		},
-	}
-	networkpolicy := newNetworkPolicy("baseline", tenant.GetName(), ingressRules)
 
-	drop := antreav1alpha1.RuleActionDrop
-	allow := antreav1alpha1.RuleActionAllow
-	antreaIngressRules := []antreav1alpha1.Rule{
-		{
-			Action: &allow,
-			From: []antreav1alpha1.NetworkPolicyPeer{
-				{
-					NamespaceSelector: &labelSelector,
-				},
-			},
-			Ports: []antreav1alpha1.NetworkPolicyPort{
-				{
-					Port:    &port,
-					EndPort: &endPort,
-				},
-			},
-		},
-		{
-			Action: &drop,
-			From: []antreav1alpha1.NetworkPolicyPeer{
-				{
-					IPBlock: &antreav1alpha1.IPBlock{
-						CIDR: "10.0.0.0/8",
-					},
-				},
-				{
-					IPBlock: &antreav1alpha1.IPBlock{
-						CIDR: "172.16.0.0/12",
-					},
-				},
-				{
-					IPBlock: &antreav1alpha1.IPBlock{
-						CIDR: "192.168.0.0/16",
-					},
-				},
-			},
-			Ports: []antreav1alpha1.NetworkPolicyPort{
-				{
-					Port:    &port,
-					EndPort: &endPort,
-				},
-			},
-		},
-		{
-			Action: &allow,
-			From: []antreav1alpha1.NetworkPolicyPeer{
-				{
-					IPBlock: &antreav1alpha1.IPBlock{
-						CIDR: "0.0.0.0/0",
-					},
-				},
-			},
-			Ports: []antreav1alpha1.NetworkPolicyPort{
-				{
-					Port:    &port,
-					EndPort: &endPort,
-				},
-			},
-		},
-	}
-	appliedTo := []antreav1alpha1.NetworkPolicyPeer{
-		{
-			NamespaceSelector: &labelSelector,
-		},
-	}
-	clusternetworkpolicy := newClusterNetworkPolicy(tenant.GetName(), "tenant", 5, appliedTo, antreaIngressRules, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	networkpolicy := newNetworkPolicy("baseline", tenant.GetName(), labelSelector)
+	clusternetworkpolicy := newClusterNetworkPolicy(tenant.GetName(), labelSelector, []metav1.OwnerReference{tenant.MakeOwnerReference()})
 
 	f.tenantLister = append(f.tenantLister, tenant)
 	f.edgenetobjects = append(f.edgenetobjects, tenant)
@@ -697,12 +627,149 @@ func TestReconcile(t *testing.T) {
 	f.kubeobjects = append(f.kubeobjects, kubenamespace, namespace, clusterrole, clusterrolebinding, rolebinding, networkpolicy)
 	f.antreaobjects = append(f.antreaobjects, clusternetworkpolicy)
 
-	f.expectGetNamespaceAction(kubenamespace.GetName())
-	f.expectGetRoleBindingAction(rolebinding.GetName(), rolebinding.GetNamespace())
-	f.expectGetNetworkPolicyAction(networkpolicy.GetName(), networkpolicy.GetNamespace())
-	f.expectGetClusterNetworkPolicyAction(clusternetworkpolicy.GetName())
-	f.expectGetClusterRoleBindingAction(clusterrolebinding.GetName())
-	f.expectGetNamespaceAction(namespace.GetName())
+	listOptions := metav1.ListOptions{LabelSelector: fmt.Sprintf("edge-net.io/tenant=%s,edge-net.io/tenant-uid=%s,edge-net.io/cluster-uid=%s", tenant.GetName(), string(tenant.GetUID()), string(kubenamespace.GetUID()))}
+	f.expectGetRootAction(kubenamespace.GetName(), "namespaces", "kube")
+	f.expectRootDeleteCollectionAction("clusterroles", listOptions)
+	f.expectRootDeleteCollectionAction("clusterrolebindings", listOptions)
+	f.expectDeleteCollectionAction(tenant.GetName(), "rolebindings", "kube")
+	f.expectDeleteCollectionAction(tenant.GetName(), "sliceclaims", "edgenet")
+	f.expectDeleteCollectionAction(tenant.GetName(), "subnamespaces", "edgenet")
+
+	f.run(getKey(tenant, t))
+}
+
+func TestReconcileDoNothing(t *testing.T) {
+	f := newFixture(t)
+	tenant := newTenant("tenant4", true, true)
+	tenant.Status.Failed = 0
+	tenant.Status.State = corev1alpha1.StatusEstablished
+	tenant.Status.Message = successEstablished
+
+	kubenamespace := newNamespace("kube-system", nil, nil, nil)
+	namespace := newNamespace(tenant.GetName(), map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": ""}, map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	clusterrole := newClusterRole(tenant.GetName(), tenant.GetName(), []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	clusterrolebinding := newClusterRoleBinding(tenant.GetName(), tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	rolebinding := newRoleBinding(corev1alpha1.TenantOwnerClusterRoleName, tenant.GetName(), tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true", "edge-net.io/notification": "true"})
+	labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"edge-net.io/subtenant": "false", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": string(kubenamespace.GetUID())}}
+
+	networkpolicy := newNetworkPolicy("baseline", tenant.GetName(), labelSelector)
+	clusternetworkpolicy := newClusterNetworkPolicy(tenant.GetName(), labelSelector, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+
+	f.tenantLister = append(f.tenantLister, tenant)
+	f.edgenetobjects = append(f.edgenetobjects, tenant)
+
+	f.namespaceLister = append(f.namespaceLister, kubenamespace, namespace)
+	f.clusterroleLister = append(f.clusterroleLister, clusterrole)
+	f.clusterrolebindingLister = append(f.clusterrolebindingLister, clusterrolebinding)
+	f.networkpolicyLister = append(f.networkpolicyLister, networkpolicy)
+	f.clusternetworkpolicyLister = append(f.clusternetworkpolicyLister, clusternetworkpolicy)
+	f.rolebindingLister = append(f.rolebindingLister, rolebinding)
+	f.kubeobjects = append(f.kubeobjects, kubenamespace, namespace, clusterrole, clusterrolebinding, rolebinding, networkpolicy)
+	f.antreaobjects = append(f.antreaobjects, clusternetworkpolicy)
+
+	f.expectGetRootAction(kubenamespace.GetName(), "namespaces", "kube")
+	f.expectGetAction(rolebinding.GetName(), rolebinding.GetNamespace(), "rolebindings")
+	f.expectGetAction(networkpolicy.GetName(), networkpolicy.GetNamespace(), "networkpolicies")
+	f.expectGetRootAction(clusternetworkpolicy.GetName(), "clusternetworkpolicies", "antrea")
+	f.expectGetRootAction(clusterrolebinding.GetName(), "clusterrolebindings", "kube")
+	f.expectGetRootAction(namespace.GetName(), "namespaces", "kube")
+
+	f.run(getKey(tenant, t))
+}
+
+func TestReconcile(t *testing.T) {
+	f := newFixture(t)
+	tenant := newTenant("tenant5", false, true)
+	tenant.Status.Failed = 0
+	tenant.Status.State = corev1alpha1.StatusEstablished
+	tenant.Status.Message = successEstablished
+
+	kubenamespace := newNamespace("kube-system", nil, nil, nil)
+	namespace := newNamespace(tenant.GetName(), map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": ""}, map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	clusterrolebinding := newClusterRoleBinding(tenant.GetName(), tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	rolebinding := newRoleBinding(corev1alpha1.TenantOwnerClusterRoleName, tenant.GetName(), tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true", "edge-net.io/notification": "true"})
+	labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"edge-net.io/subtenant": "false", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": string(kubenamespace.GetUID())}}
+	networkpolicy := newNetworkPolicy("baseline", tenant.GetName(), labelSelector)
+	clusternetworkpolicy := newClusterNetworkPolicy(tenant.GetName(), labelSelector, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+
+	f.tenantLister = append(f.tenantLister, tenant)
+	f.edgenetobjects = append(f.edgenetobjects, tenant)
+	f.namespaceLister = append(f.namespaceLister, kubenamespace)
+	f.kubeobjects = append(f.kubeobjects, kubenamespace)
+
+	f.expectGetRootAction(kubenamespace.GetName(), "namespaces", "kube")
+	f.expectGetAction(rolebinding.GetName(), rolebinding.GetNamespace(), "rolebindings")
+	f.expectGetAction(networkpolicy.GetName(), networkpolicy.GetNamespace(), "networkpolicies")
+	f.expectGetRootAction(clusternetworkpolicy.GetName(), "clusternetworkpolicies", "antrea")
+	f.expectGetRootAction(clusterrolebinding.GetName(), "clusterrolebindings", "kube")
+	f.expectGetRootAction(namespace.GetName(), "namespaces", "kube")
+	f.expectUpdateTenantStatusAction(tenant)
+
+	f.run(getKey(tenant, t))
+}
+
+func TestReconcileThroughStatusCoreNamespaceCreated(t *testing.T) {
+	f := newFixture(t)
+	tenant := newTenant("tenant6", false, true)
+	tenant.Status.Failed = 0
+	tenant.Status.State = corev1alpha1.StatusCoreNamespaceCreated
+	tenant.Status.Message = messageCreated
+
+	kubenamespace := newNamespace("kube-system", nil, nil, nil)
+	namespace := newNamespace(tenant.GetName(), map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": ""}, map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	clusterrole := newClusterRole(tenant.GetName(), tenant.GetName(), []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	clusterrolebinding := newClusterRoleBinding(tenant.GetName(), tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	rolebinding := newRoleBinding(corev1alpha1.TenantOwnerClusterRoleName, tenant.GetName(), tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true", "edge-net.io/notification": "true"})
+	labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"edge-net.io/subtenant": "false", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": string(kubenamespace.GetUID())}}
+
+	networkpolicy := newNetworkPolicy("baseline", tenant.GetName(), labelSelector)
+	clusternetworkpolicy := newClusterNetworkPolicy(tenant.GetName(), labelSelector, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+
+	f.tenantLister = append(f.tenantLister, tenant)
+	f.edgenetobjects = append(f.edgenetobjects, tenant)
+
+	f.namespaceLister = append(f.namespaceLister, kubenamespace, namespace)
+	f.clusterroleLister = append(f.clusterroleLister, clusterrole)
+	f.clusterrolebindingLister = append(f.clusterrolebindingLister, clusterrolebinding)
+	f.networkpolicyLister = append(f.networkpolicyLister, networkpolicy)
+	f.clusternetworkpolicyLister = append(f.clusternetworkpolicyLister, clusternetworkpolicy)
+	f.rolebindingLister = append(f.rolebindingLister, rolebinding)
+	f.kubeobjects = append(f.kubeobjects, kubenamespace, namespace, clusterrole, clusterrolebinding, rolebinding, networkpolicy)
+	f.antreaobjects = append(f.antreaobjects, clusternetworkpolicy)
+
+	f.expectGetRootAction(kubenamespace.GetName(), "namespaces", "kube")
+	f.expectCreateNetworkPolicyAction(networkpolicy)
+	f.expectDeleteClusterNetworkPolicyAction(clusternetworkpolicy.GetName())
+	f.expectCreateRoleBindingAction(rolebinding)
+	f.expectGetAction(rolebinding.GetName(), rolebinding.GetNamespace(), "rolebindings")
+	f.expectUpdateRoleBindingAction(rolebinding)
+	f.expectUpdateTenantStatusAction(tenant)
+
+	f.run(getKey(tenant, t))
+}
+
+func TestReconcileThroughStatusReconciliation(t *testing.T) {
+	f := newFixture(t)
+	tenant := newTenant("tenant7", true, true)
+
+	kubenamespace := newNamespace("kube-system", nil, nil, nil)
+	namespace := newNamespace(tenant.GetName(), map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": ""}, map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	clusterrole := newClusterRole(tenant.GetName(), tenant.GetName(), []metav1.OwnerReference{tenant.MakeOwnerReference()})
+	clusterrolebinding := newClusterRoleBinding(tenant.GetName(), tenant.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
+
+	f.tenantLister = append(f.tenantLister, tenant)
+	f.edgenetobjects = append(f.edgenetobjects, tenant)
+
+	f.namespaceLister = append(f.namespaceLister, kubenamespace, namespace)
+	f.clusterroleLister = append(f.clusterroleLister, clusterrole)
+	f.clusterrolebindingLister = append(f.clusterrolebindingLister, clusterrolebinding)
+	f.kubeobjects = append(f.kubeobjects, kubenamespace)
+
+	f.expectGetRootAction(kubenamespace.GetName(), "namespaces", "kube")
+	f.expectCreateNamespaceAction(namespace)
+	f.expectCreateClusterRoleAction(clusterrole)
+	f.expectCreateClusterRoleBindingAction(clusterrolebinding)
+	f.expectUpdateTenantStatusAction(tenant)
 
 	f.run(getKey(tenant, t))
 }
