@@ -495,8 +495,14 @@ func (f *fixture) expectCreateNamespaceAction(namespace *corev1.Namespace) {
 func (f *fixture) expectCreateClusterRoleAction(clusterrole *rbacv1.ClusterRole) {
 	f.kubeactions = append(f.kubeactions, core.NewRootCreateAction(schema.GroupVersionResource{Resource: "clusterroles"}, clusterrole))
 }
+func (f *fixture) expectUpdateClusterRoleAction(clusterrole *rbacv1.ClusterRole) {
+	f.kubeactions = append(f.kubeactions, core.NewRootUpdateAction(schema.GroupVersionResource{Resource: "clusterroles"}, clusterrole))
+}
 func (f *fixture) expectCreateClusterRoleBindingAction(clusterrolebinding *rbacv1.ClusterRoleBinding) {
 	f.kubeactions = append(f.kubeactions, core.NewRootCreateAction(schema.GroupVersionResource{Resource: "clusterrolebindings"}, clusterrolebinding))
+}
+func (f *fixture) expectUpdateClusterRoleBindingAction(clusterrolebinding *rbacv1.ClusterRoleBinding) {
+	f.kubeactions = append(f.kubeactions, core.NewRootUpdateAction(schema.GroupVersionResource{Resource: "clusterrolebindings"}, clusterrolebinding))
 }
 func (f *fixture) expectCreateRoleBindingAction(rolebinding *rbacv1.RoleBinding) {
 	f.kubeactions = append(f.kubeactions, core.NewCreateAction(schema.GroupVersionResource{Resource: "rolebindings"}, rolebinding.GetNamespace(), rolebinding))
@@ -751,6 +757,9 @@ func TestReconcileThroughStatusCoreNamespaceCreated(t *testing.T) {
 func TestReconcileThroughStatusReconciliation(t *testing.T) {
 	f := newFixture(t)
 	tenant := newTenant("tenant7", true, true)
+	tenant.Status.Failed = 0
+	tenant.Status.State = corev1alpha1.StatusReconciliation
+	tenant.Status.Message = messageReconciliation
 
 	kubenamespace := newNamespace("kube-system", nil, nil, nil)
 	namespace := newNamespace(tenant.GetName(), map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": ""}, map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
@@ -763,12 +772,18 @@ func TestReconcileThroughStatusReconciliation(t *testing.T) {
 	f.namespaceLister = append(f.namespaceLister, kubenamespace, namespace)
 	f.clusterroleLister = append(f.clusterroleLister, clusterrole)
 	f.clusterrolebindingLister = append(f.clusterrolebindingLister, clusterrolebinding)
-	f.kubeobjects = append(f.kubeobjects, kubenamespace)
+	f.kubeobjects = append(f.kubeobjects, kubenamespace, namespace, clusterrole, clusterrolebinding)
 
 	f.expectGetRootAction(kubenamespace.GetName(), "namespaces", "kube")
 	f.expectCreateNamespaceAction(namespace)
+	f.expectGetRootAction(namespace.GetName(), "namespaces", "kube")
+	f.expectUpdateNamespaceAction(namespace)
 	f.expectCreateClusterRoleAction(clusterrole)
+	f.expectGetRootAction(clusterrole.GetName(), "clusterroles", "kube")
+	f.expectUpdateClusterRoleAction(clusterrole)
 	f.expectCreateClusterRoleBindingAction(clusterrolebinding)
+	f.expectGetRootAction(clusterrolebinding.GetName(), "clusterrolebindings", "kube")
+	f.expectUpdateClusterRoleBindingAction(clusterrolebinding)
 	f.expectUpdateTenantStatusAction(tenant)
 
 	f.run(getKey(tenant, t))

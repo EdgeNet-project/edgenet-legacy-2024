@@ -281,6 +281,19 @@ func (c *Controller) processTenant(tenantCopy *corev1alpha1.Tenant) {
 		default:
 			// Create the core namespace
 			if err = c.makeCoreNamespace(tenantCopy, ownerReferences, string(systemNamespace.GetUID())); err != nil {
+				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureCreation, messageCreationFailed)
+				tenantCopy.Status.State = corev1alpha1.StatusFailed
+				tenantCopy.Status.Message = messageCreationFailed
+				c.updateStatus(context.TODO(), tenantCopy)
+				return
+			}
+			// Create the cluster role and role binding for the tenant resource
+			multitenancyManager := multitenancy.NewManager(c.kubeclientset, c.edgenetclientset)
+			if err := multitenancyManager.GrantObjectOwnership("core.edgenet.io", "tenants", tenantCopy.GetName(), tenantCopy.Spec.Contact.Email, ownerReferences); err != nil {
+				c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureCreation, messageRoleBindingCreationFailed)
+				tenantCopy.Status.State = corev1alpha1.StatusFailed
+				tenantCopy.Status.Message = messageRoleBindingCreationFailed
+				c.updateStatus(context.TODO(), tenantCopy)
 				return
 			}
 			c.recorder.Event(tenantCopy, corev1.EventTypeNormal, corev1alpha1.StatusCoreNamespaceCreated, messageCreated)
@@ -359,19 +372,6 @@ func (c *Controller) makeCoreNamespace(tenantCopy *corev1alpha1.Tenant, ownerRef
 				}
 			}
 		}
-		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureCreation, messageCreationFailed)
-		tenantCopy.Status.State = corev1alpha1.StatusFailed
-		tenantCopy.Status.Message = messageCreationFailed
-		c.updateStatus(context.TODO(), tenantCopy)
-		return err
-	}
-	// Create the cluster role and role binding for the tenant resource
-	multitenancyManager := multitenancy.NewManager(c.kubeclientset, c.edgenetclientset)
-	if err := multitenancyManager.GrantObjectOwnership("core.edgenet.io", "tenants", tenantCopy.GetName(), tenantCopy.Spec.Contact.Email, ownerReferences); err != nil {
-		c.recorder.Event(tenantCopy, corev1.EventTypeWarning, failureCreation, messageRoleBindingCreationFailed)
-		tenantCopy.Status.State = corev1alpha1.StatusFailed
-		tenantCopy.Status.Message = messageRoleBindingCreationFailed
-		c.updateStatus(context.TODO(), tenantCopy)
 		return err
 	}
 	return nil
