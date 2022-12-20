@@ -26,6 +26,7 @@ import (
 	versioned "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	apps "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps"
 	core "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core"
+	federation "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/federation"
 	internalinterfaces "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/internalinterfaces"
 	networking "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/networking"
 	registration "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration"
@@ -177,6 +178,7 @@ type SharedInformerFactory interface {
 
 	Apps() apps.Interface
 	Core() core.Interface
+	Federation() federation.Interface
 	Networking() networking.Interface
 	Registration() registration.Interface
 }
@@ -187,6 +189,10 @@ func (f *sharedInformerFactory) Apps() apps.Interface {
 
 func (f *sharedInformerFactory) Core() core.Interface {
 	return core.New(f, f.namespace, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) Federation() federation.Interface {
+	return federation.New(f, f.namespace, f.tweakListOptions)
 }
 
 func (f *sharedInformerFactory) Networking() networking.Interface {
