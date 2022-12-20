@@ -34,6 +34,147 @@ metadata:
 spec:
   group: apps.edgenet.io
   versions:
+    - name: v1alpha2
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Ready
+          type: string
+          jsonPath: .status.ready
+        - name: Status
+          type: string
+          jsonPath: .status.state
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - workloads
+                - clusterAffinity
+              properties:
+                workloads:
+                  type: object
+                  properties:
+                    deployment:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-embedded-resource: true
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    daemonset:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-embedded-resource: true
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    statefulset:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-embedded-resource: true
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    job:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-embedded-resource: true
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    cronjob:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-embedded-resource: true
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                clusterAffinity:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                    matchLabels:
+                      x-kubernetes-preserve-unknown-fields: true
+                clusterReplicas:
+                  type: integer
+                  minimum: 1
+            status:
+              type: object
+              properties:
+                state:
+                  type: string
+                message:
+                  type: string
+                clusterRefs:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      uuid:
+                        type: string
+                      server:
+                        type: string
+                      location:
+                        type: string
+                      workloads:
+                        type: object
+                        properties:
+                          deployment:
+                            type: array
+                            items:
+                              type: object
+                              x-kubernetes-embedded-resource: true
+                              x-kubernetes-preserve-unknown-fields: true
+                          daemonset:
+                            type: array
+                            items:
+                              type: object
+                              x-kubernetes-embedded-resource: true
+                              x-kubernetes-preserve-unknown-fields: true
+                          statefulset:
+                            type: array
+                            items:
+                              type: object
+                              x-kubernetes-embedded-resource: true
+                              x-kubernetes-preserve-unknown-fields: true
+                          job:
+                            type: array
+                            items:
+                              type: object
+                              x-kubernetes-embedded-resource: true
+                              x-kubernetes-preserve-unknown-fields: true
+                          cronjob:
+                            type: array
+                            items:
+                              type: object
+                              x-kubernetes-embedded-resource: true
+                              x-kubernetes-preserve-unknown-fields: true
     - name: v1alpha1
       served: true
       storage: true
