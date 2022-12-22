@@ -31,11 +31,15 @@ const (
 	// Selective Deployment Anchor
 	StatusAssigned  = "A Federation Manager Assigned"
 	StatusDelegated = "Selective Deployment Delegated"
+	// Manager Cache
+	StatusPending = "Pending Workload Cluster Creation"
+	StatusUpdated = "Remote Manager Cache Updated"
 )
 
 // Values of string constants subject to repetitive use
 const (
-	RemoteClusterOps = "edgenet:federation-remotecluster"
+	RemoteClusterRole          = "edgenet:federation:remotecluster"
+	FederationManagerNamespace = "federated:%s"
 )
 
 // +genclient
