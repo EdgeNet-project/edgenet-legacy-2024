@@ -22,6 +22,8 @@ import (
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	appsv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha1"
 	fakeappsv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha1/fake"
+	appsv1alpha2 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha2"
+	fakeappsv1alpha2 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha2/fake"
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha1"
 	fakecorev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha1/fake"
 	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/federation/v1alpha1"
@@ -87,6 +89,11 @@ var _ clientset.Interface = &Clientset{}
 // AppsV1alpha1 retrieves the AppsV1alpha1Client
 func (c *Clientset) AppsV1alpha1() appsv1alpha1.AppsV1alpha1Interface {
 	return &fakeappsv1alpha1.FakeAppsV1alpha1{Fake: &c.Fake}
+}
+
+// AppsV1alpha2 retrieves the AppsV1alpha2Client
+func (c *Clientset) AppsV1alpha2() appsv1alpha2.AppsV1alpha2Interface {
+	return &fakeappsv1alpha2.FakeAppsV1alpha2{Fake: &c.Fake}
 }
 
 // CoreV1alpha1 retrieves the CoreV1alpha1Client

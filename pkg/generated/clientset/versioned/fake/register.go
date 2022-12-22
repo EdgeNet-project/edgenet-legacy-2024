@@ -20,6 +20,7 @@ package fake
 
 import (
 	appsv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha1"
+	appsv1alpha2 "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha2"
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
 	networkingv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/networking/v1alpha1"
@@ -36,6 +37,7 @@ var codecs = serializer.NewCodecFactory(scheme)
 
 var localSchemeBuilder = runtime.SchemeBuilder{
 	appsv1alpha1.AddToScheme,
+	appsv1alpha2.AddToScheme,
 	corev1alpha1.AddToScheme,
 	federationv1alpha1.AddToScheme,
 	networkingv1alpha1.AddToScheme,

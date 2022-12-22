@@ -24,10 +24,6 @@ import (
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 )
 
-// +genclient
-// +genclient:nonNamespaced
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // Values of Status.State
 const (
 	StatusFailed = "Failed"
@@ -38,6 +34,10 @@ const (
 	// Role request
 	StatusBound = "Bound" // Also used for cluster role request
 )
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // TenantRequest describes a TenantRequest resource
 type TenantRequest struct {

@@ -27,10 +27,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +genclient
-// +genclient:nonNamespaced
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // Values of Status.State
 const (
 	StatusFailed         = "Failure"
@@ -65,6 +61,10 @@ const (
 	TenantAdminClusterRoleName        = "edgenet:tenant-admin"
 	TenantCollaboratorClusterRoleName = "edgenet:tenant-collaborator"
 )
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Tenant describes a tenant that consumes the cluster resources in an isolated environment
 type Tenant struct {

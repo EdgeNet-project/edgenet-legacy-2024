@@ -22,12 +22,15 @@ import (
 
 // Values of Status.State
 const (
-	StatusFailed              = "Failure"
-	StatusReconciliation      = "Reconciliation"
-	StatusAccessed            = "Cluster Accessed"
+	StatusFailed         = "Failure"
+	StatusReconciliation = "Reconciliation"
+	// Cluster
 	StatusCredsPrepared       = "Auth Credentials Prepared"
 	StatusSubnamespaceCreated = "Subnamespace Created"
 	StatusReady               = "Ready"
+	// Selective Deployment Anchor
+	StatusAssigned  = "A Federation Manager Assigned"
+	StatusDelegated = "Selective Deployment Delegated"
 )
 
 // Values of string constants subject to repetitive use
@@ -52,8 +55,8 @@ type Cluster struct {
 
 // ClusterSpec is the spec to define the desired state of the cluster resource
 type ClusterSpec struct {
-	// UUID is the unique identifier of the cluster
-	UUID string `json:"uuid"`
+	// UID is the unique identifier of the cluster
+	UID string `json:"uid"`
 	// Role can be 'Workload' or 'Federation'
 	Role string `json:"role"`
 	// Server is the API server of the cluster
@@ -118,16 +121,27 @@ type SelectiveDeploymentAnchorSpec struct {
 	OriginRef OriginReference `json:"originRef"`
 	// ClusterAffinity is the selector to target clusters that match the cluster affinity
 	ClusterAffinity *metav1.LabelSelector `json:"clusterAffinity,omitempty"`
-	// FederationManagerNames is the list of federation managers that match the cluster affinity
-	FederationManagerNames []string `json:"federationManagerNames,omitempty"`
+	// ClusterReplicas is to pick up defined number of clusters that match the cluster affinity
+	ClusterReplicas int `json:"clusterReplicas,omitempty"`
+	// WorkloadClusters is the list of workload clusters that match the cluster affinity
+	WorkloadClusters []string `json:"workloadClusters,omitempty"`
+	// FederationManager is the federation manager that is responsible for the selective deployment
+	FederationManager *SelectedFederationManager `json:"federationManagers,omitempty"`
 	// SecretName is the name of the secret that contains the token to access the original selective deployment
 	SecretName string `json:"secretName"`
 }
 
+type SelectedFederationManager struct {
+	// Name is the UID of the federation manager
+	Name string `json:"name"`
+	// Path is the shortest path to the federation manager
+	Path []string `json:"path"`
+}
+
 // OriginReference is the reference to the original selective deployment
 type OriginReference struct {
-	// UUID is the unique identifier of the selective deployment
-	UUID string `json:"uuid"`
+	// UID is the unique identifier of the selective deployment
+	UID string `json:"uid"`
 	// Namespace is the namespace of the selective deployment
 	Namespace string `json:"namespace"`
 	// Name is the name of the selective deployment
@@ -177,16 +191,18 @@ type ManagerCache struct {
 type ManagerCacheSpec struct {
 	// Hierarchical information
 	Hierarchy Hierarchy `json:"hierarchy"`
-	// Cluster is the list of clusters that are managed by the federation manager
-	Cluster []ClusterCache `json:"cluster"`
+	// Clusters form a list of clusters that are managed by the federation manager
+	Clusters []ClusterCache `json:"cluster"`
 }
 
 // Hierarchy is to trace the federation manager's position in the hierarchy
 type Hierarchy struct {
 	// Level is the hierarchy level of the federation manager
 	Level int `json:"level"`
-	// Parent is the UUID of the federation manager's parent
+	// Parent is the UID of the federation manager's parent
 	Parent string `json:"parent"`
+	// Children is the list of UIDs of the federation manager's children
+	Children []string `json:"children"`
 }
 
 // ClusterCache is to cache cluster information for scheduling decisions

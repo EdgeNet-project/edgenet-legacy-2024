@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha1"
+	v1alpha2 "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha2"
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
 	networkingv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/networking/v1alpha1"
@@ -59,6 +60,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=apps.edgenet.io, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("selectivedeployments"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha1().SelectiveDeployments().Informer()}, nil
+
+		// Group=apps.edgenet.io, Version=v1alpha2
+	case v1alpha2.SchemeGroupVersion.WithResource("selectivedeployments"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha2().SelectiveDeployments().Informer()}, nil
 
 		// Group=core.edgenet.io, Version=v1alpha1
 	case corev1alpha1.SchemeGroupVersion.WithResource("nodecontributions"):
