@@ -23,6 +23,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Values of Status.State
+const (
+	StatusFailed         = "Failure"
+	StatusReconciliation = "Reconciliation"
+	// Selective Deployment
+	StatusReady   = "Ready"
+	StatusCreated = "Created"
+)
+
+// Values of string constants subject to repetitive use
+const (
+	RemoteSelectiveDeploymentRole = "edgenet:federation:remoteselectivedeployment"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -66,9 +80,12 @@ type Workloads struct {
 type SelectiveDeploymentStatus struct {
 	// Represents state of the selective deployment
 	State string `json:"state"`
-	// There can be multiple display messages for state description.
-	Message     string             `json:"message"`
+	// Extended status message
+	Message string `json:"message"`
+	// ClusterRefs is the list of clusters where the workloads are deployed
 	ClusterRefs []ClusterReference `json:"clusterRefs"`
+	// Failed sets the backoff limit.
+	Failed int `json:"failed"`
 }
 
 type ClusterReference struct {
@@ -97,4 +114,9 @@ type SelectiveDeploymentList struct {
 	// SelectiveDeploymentList is a list of SelectiveDeployment resources thus,
 	// SelectiveDeployments are contained here.
 	Items []SelectiveDeployment `json:"items"`
+}
+
+// MakeOwnerReference creates an owner reference for the given object.
+func (s SelectiveDeployment) MakeOwnerReference() metav1.OwnerReference {
+	return *metav1.NewControllerRef(&s.ObjectMeta, SchemeGroupVersion.WithKind("SelectiveDeployment"))
 }
