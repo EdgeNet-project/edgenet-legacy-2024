@@ -31,8 +31,7 @@ const controllerAgentName = "fedlet-controller"
 
 // Controller is the controller implementation
 type Controller struct {
-	kubeclientset    kubernetes.Interface
-	edgenetclientset clientset.Interface
+	kubeclientset kubernetes.Interface
 
 	lister corelisters.NodeLister
 	synced cache.InformerSynced
@@ -55,7 +54,6 @@ type Controller struct {
 // NewController returns a new controller
 func NewController(
 	kubeclientset kubernetes.Interface,
-	edgenetclientset clientset.Interface,
 	informer coreinformers.NodeInformer,
 ) *Controller {
 	// Create event broadcaster
@@ -67,12 +65,11 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeclientset:    kubeclientset,
-		edgenetclientset: edgenetclientset,
-		lister:           informer.Lister(),
-		synced:           informer.Informer().HasSynced,
-		workqueue:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "fedlet"),
-		recorder:         recorder,
+		kubeclientset: kubeclientset,
+		lister:        informer.Lister(),
+		synced:        informer.Informer().HasSynced,
+		workqueue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "fedlet"),
+		recorder:      recorder,
 	}
 
 	klog.Infoln("Setting up event handlers")
