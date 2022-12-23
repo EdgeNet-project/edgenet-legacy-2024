@@ -256,6 +256,7 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 		propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, namespaceLabels["edge-net.io/cluster-uid"])
 		switch clusterCopy.Status.State {
 		case federationv1alpha1.StatusReady:
+			// Add manager cache to reconcile
 			c.reconcile(clusterCopy, propagationNamespace, namespaceLabels["edge-net.io/cluster-uid"])
 		case federationv1alpha1.StatusCredsPrepared:
 			// Create the remote clientset
@@ -272,6 +273,19 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 				return
 			}
 			remotekubeclientset.CoreV1().Secrets(remoteSecret.GetNamespace()).Create(context.TODO(), remoteSecret, metav1.CreateOptions{})
+
+			if clusterCopy.Spec.Role == "Federation" {
+				managerCache, _ := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), namespaceLabels["edge-net.io/cluster-uid"], metav1.GetOptions{})
+				managerCache.Spec.Hierarchy.Children = append(managerCache.Spec.Hierarchy.Children, clusterCopy.Spec.UID)
+				c.edgenetclientset.FederationV1alpha1().ManagerCaches().Update(context.TODO(), managerCache, metav1.UpdateOptions{})
+
+				remoteManagerCache := new(federationv1alpha1.ManagerCache)
+				remoteManagerCache.SetName(clusterCopy.Spec.UID)
+				remoteManagerCache.Spec.Hierarchy.Parent = namespaceLabels["edge-net.io/cluster-uid"]
+				remoteManagerCache.Spec.Hierarchy.Level = managerCache.Spec.Hierarchy.Level + 1
+				remoteedgeclientset, _ := c.createRemoteEdgeNetClientset(clusterCopy)
+				remoteedgeclientset.FederationV1alpha1().ManagerCaches().Create(context.TODO(), remoteManagerCache, metav1.CreateOptions{})
+			}
 
 			c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusReady, messageReady)
 			clusterCopy.Status.State = federationv1alpha1.StatusReady
@@ -470,6 +484,27 @@ func (c *Controller) createRemoteKubeClientset(clusterCopy *federationv1alpha1.C
 		klog.Infoln(err)
 	}
 	return remotekubeclientset, nil
+}
+
+func (c *Controller) createRemoteEdgeNetClientset(clusterCopy *federationv1alpha1.Cluster) (*clientset.Clientset, error) {
+	remoteAuthSecret, err := c.getSecretForRemoteClusterAuth(clusterCopy)
+	if err != nil {
+		return nil, err
+	}
+	// TODO: Check if the secret is valid
+	remoteUsername := string(remoteAuthSecret.Data["username"])
+	remoteToken := string(remoteAuthSecret.Data["token"])
+
+	remoteConfig := new(rest.Config)
+	remoteConfig.Host = clusterCopy.Spec.Server
+	remoteConfig.Username = remoteUsername
+	remoteConfig.BearerToken = remoteToken
+	// Create the clientset
+	remoteedgeclientset, err := clientset.NewForConfig(remoteConfig)
+	if err != nil {
+		klog.Infoln(err)
+	}
+	return remoteedgeclientset, nil
 }
 
 func (c *Controller) getSecretForRemoteClusterAuth(clusterCopy *federationv1alpha1.Cluster) (*corev1.Secret, error) {
