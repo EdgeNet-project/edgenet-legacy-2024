@@ -124,6 +124,42 @@ services:
     image: slice:v1.0.0
     volumes:
       - ~/.kube/:/edgenet/.kube/
+  fedlet:
+    container_name: fedlet
+    restart: always
+    build:
+      context: ../../
+      dockerfile: ./build/images/fedlet/Dockerfile
+    image: fedlet:v1.0.0
+    volumes:
+      - ~/.kube/:/edgenet/.kube/
+  cluster:
+    container_name: cluster
+    restart: always
+    build:
+      context: ../../
+      dockerfile: ./build/images/cluster/Dockerfile
+    image: cluster:v1.0.0
+    volumes:
+      - ~/.kube/:/edgenet/.kube/
+  managercache:
+    container_name: managercache
+    restart: always
+    build:
+      context: ../../
+      dockerfile: ./build/images/managercache/Dockerfile
+    image: managercache:v1.0.0
+    volumes:
+      - ~/.kube/:/edgenet/.kube/
+  selectivedeploymentanchor:
+    container_name: selectivedeploymentanchor
+    restart: always
+    build:
+      context: ../../
+      dockerfile: ./build/images/selectivedeploymentanchor/Dockerfile
+    image: selectivedeploymentanchor:v1.0.0
+    volumes:
+      - ~/.kube/:/edgenet/.kube/
   admissioncontrol:
     container_name: admissioncontrol
     restart: always
