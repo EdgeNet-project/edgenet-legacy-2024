@@ -255,9 +255,9 @@ func (in *ManagerCacheSpec) DeepCopyInto(out *ManagerCacheSpec) {
 	in.Hierarchy.DeepCopyInto(&out.Hierarchy)
 	if in.Clusters != nil {
 		in, out := &in.Clusters, &out.Clusters
-		*out = make([]ClusterCache, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
+		*out = make(map[string]ClusterCache, len(*in))
+		for key, val := range *in {
+			(*out)[key] = *val.DeepCopy()
 		}
 	}
 	return

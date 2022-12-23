@@ -40,6 +40,10 @@ const (
 const (
 	RemoteClusterRole          = "edgenet:federation:remotecluster"
 	FederationManagerNamespace = "federated:%s"
+	AbundantResources          = "Abundance"
+	NormalResources            = "Normal"
+	LimitedResources           = "Limited"
+	ScarceResources            = "Scarcity"
 )
 
 // +genclient
@@ -196,7 +200,7 @@ type ManagerCacheSpec struct {
 	// Hierarchical information
 	Hierarchy Hierarchy `json:"hierarchy"`
 	// Clusters form a list of clusters that are managed by the federation manager
-	Clusters []ClusterCache `json:"cluster"`
+	Clusters map[string]ClusterCache `json:"cluster"`
 }
 
 // Hierarchy is to trace the federation manager's position in the hierarchy
