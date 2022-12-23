@@ -327,13 +327,20 @@ func (c *Controller) processSelectiveDeploymentAnchor(selectivedeploymentanchorC
 							remotekubeclientset.CoreV1().Namespaces().Create(context.TODO(), remoteNamespace, metav1.CreateOptions{})
 
 							selectiveDeploymentSecret, _ := c.kubeclientset.CoreV1().Secrets(selectivedeploymentanchorCopy.GetNamespace()).Get(context.TODO(), selectivedeploymentanchorCopy.Spec.OriginRef.UID, metav1.GetOptions{})
-
 							originedgeclientset, _ := c.createRemoteEdgeNetClientset(string(selectiveDeploymentSecret.Data["server"]), string(selectiveDeploymentSecret.Data["serviceaccount"]), string(selectiveDeploymentSecret.Data["token"]))
 							originSelectiveDeployment, _ := originedgeclientset.AppsV1alpha2().SelectiveDeployments(selectivedeploymentanchorCopy.Spec.OriginRef.Namespace).Get(context.TODO(), selectivedeploymentanchorCopy.Spec.OriginRef.Name, metav1.GetOptions{})
+
+							remoteSelectiveDeploymentSecret := new(corev1.Secret)
+							remoteSelectiveDeploymentSecret.SetName(selectiveDeploymentSecret.GetName())
+							remoteSelectiveDeploymentSecret.SetNamespace(originSelectiveDeployment.GetNamespace())
+							remoteSelectiveDeploymentSecret.Data = selectiveDeploymentSecret.Data
+							remotekubeclientset.CoreV1().Secrets(remoteSelectiveDeploymentSecret.GetNamespace()).Create(context.TODO(), remoteSelectiveDeploymentSecret, metav1.CreateOptions{})
+
 							remoteSelectiveDeployment := new(appsv1alpha2.SelectiveDeployment)
 							remoteSelectiveDeployment.SetName(originSelectiveDeployment.GetName())
 							remoteSelectiveDeployment.SetNamespace(originSelectiveDeployment.GetNamespace())
-							remoteSelectiveDeployment.SetLabels(map[string]string{"edge-net.io/selective-deployment": "follower"})
+							remoteSelectiveDeployment.SetAnnotations(map[string]string{"edge-net.io/selective-deployment": "follower"})
+							remoteSelectiveDeployment.SetAnnotations(map[string]string{"edge-net.io/origin-selective-deployment-uid": selectivedeploymentanchorCopy.Spec.OriginRef.UID})
 							remoteSelectiveDeployment.Spec = originSelectiveDeployment.Spec
 							// remoteSelectiveDeployment.Spec = selectivedeploymentanchorCopy.Spec.OriginRef.
 							remoteedgeclientset, _ := c.createRemoteEdgeNetClientset(string(remoteAuthSecret.Data["server"]), string(remoteAuthSecret.Data["serviceaccount"]), string(remoteAuthSecret.Data["token"]))
