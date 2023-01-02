@@ -196,7 +196,7 @@ func (c *Controller) enqueuefedlet(obj interface{}) {
 
 func (c *Controller) updateClusterResourceStatus() {
 	overallAllocatableResources := make(corev1.ResourceList)
-	overallConsumedResources := make(corev1.ResourceList)
+	overallCapacityResources := make(corev1.ResourceList)
 
 	nodeRaw, _ := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	for _, nodeRow := range nodeRaw.Items {
@@ -209,22 +209,25 @@ func (c *Controller) updateClusterResourceStatus() {
 			}
 		}
 		for key, value := range nodeRow.Status.Capacity {
-			if consumedQuantity, ok := overallConsumedResources[key]; ok {
-				consumedQuantity.Add(value)
-				overallConsumedResources[key] = *resource.NewQuantity(consumedQuantity.Value(), value.Format)
+			if capacityQuantity, ok := overallCapacityResources[key]; ok {
+				capacityQuantity.Add(value)
+				overallCapacityResources[key] = *resource.NewQuantity(capacityQuantity.Value(), value.Format)
 			} else {
-				overallConsumedResources[key] = value
+				overallCapacityResources[key] = value
 			}
 		}
 	}
 
 	resourceAvailability := []string{federationv1alpha1.AbundantResources, federationv1alpha1.NormalResources, federationv1alpha1.LimitedResources, federationv1alpha1.ScarceResources}
 	key := 0
-	if len(overallAllocatableResources) > 0 && len(overallConsumedResources) > 0 {
-		for resourceName, consumedQuantity := range overallConsumedResources {
+	if len(overallAllocatableResources) > 0 && len(overallCapacityResources) > 0 {
+		for resourceName, capacityQuantity := range overallCapacityResources {
 			if allocatableQuantity, ok := overallAllocatableResources[resourceName]; ok {
+				if capacityQuantity.Value() == 0 {
+					continue
+				}
 				// The ratio of consumed resources to allocatable resources
-				ratio := float64(consumedQuantity.Value() / allocatableQuantity.Value())
+				ratio := float64((capacityQuantity.Value() - allocatableQuantity.Value()) / capacityQuantity.Value())
 				if ratio > 0.35 && ratio < 0.5 && key < 2 {
 					key = 1
 				} else if ratio > 0.15 && key < 3 {
