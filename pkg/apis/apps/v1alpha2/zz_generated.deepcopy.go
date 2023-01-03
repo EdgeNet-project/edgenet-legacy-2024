@@ -24,7 +24,6 @@ package v1alpha2
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
-	v1beta1 "k8s.io/api/batch/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
@@ -242,7 +241,7 @@ func (in *Workloads) DeepCopyInto(out *Workloads) {
 	}
 	if in.CronJob != nil {
 		in, out := &in.CronJob, &out.CronJob
-		*out = make([]v1beta1.CronJob, len(*in))
+		*out = make([]batchv1.CronJob, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}

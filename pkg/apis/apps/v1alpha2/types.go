@@ -19,7 +19,6 @@ package v1alpha2
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
-	batchv1beta "k8s.io/api/batch/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -73,7 +72,7 @@ type Workloads struct {
 	// Workload can have a list of Jobs
 	Job []batchv1.Job `json:"job"`
 	// Workload can have a list of CronJobs
-	CronJob []batchv1beta.CronJob `json:"cronjob"`
+	CronJob []batchv1.CronJob `json:"cronjob"`
 }
 
 // SelectiveDeploymentStatus is the status for a SelectiveDeployment resource

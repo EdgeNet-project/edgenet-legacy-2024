@@ -27,6 +27,7 @@ import (
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha2"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/apps/v1alpha2"
+	"github.com/EdgeNet-project/edgenet/pkg/multiprovider"
 	"github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 
 	corev1 "k8s.io/api/core/v1"
@@ -37,14 +38,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	appsinformers "k8s.io/client-go/informers/apps/v1"
 	batchinformers "k8s.io/client-go/informers/batch/v1"
-	batchv1beta1informers "k8s.io/client-go/informers/batch/v1beta1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	appslisters "k8s.io/client-go/listers/apps/v1"
 	batchlisters "k8s.io/client-go/listers/batch/v1"
-	batchv1beta1listers "k8s.io/client-go/listers/batch/v1beta1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -84,7 +83,7 @@ type Controller struct {
 	statefulsetsSynced cache.InformerSynced
 	jobsLister         batchlisters.JobLister
 	jobsSynced         cache.InformerSynced
-	cronjobsLister     batchv1beta1listers.CronJobLister
+	cronjobsLister     batchlisters.CronJobLister
 	cronjobsSynced     cache.InformerSynced
 
 	selectivedeploymentsLister listers.SelectiveDeploymentLister
@@ -110,7 +109,7 @@ func NewController(
 	daemonsetInformer appsinformers.DaemonSetInformer,
 	statefulsetInformer appsinformers.StatefulSetInformer,
 	jobInformer batchinformers.JobInformer,
-	cronjobInformer batchv1beta1informers.CronJobInformer,
+	cronjobInformer batchinformers.CronJobInformer,
 	selectivedeploymentInformer informers.SelectiveDeploymentInformer) *Controller {
 
 	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
@@ -448,7 +447,7 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 				if len(selectivedeploymentCopy.Spec.Workloads.CronJob) > 0 {
 					for _, cronjob := range selectivedeploymentCopy.Spec.Workloads.CronJob {
 						name := selectivedeploymentCopy.GetName() + "-" + cronjob.GetName()
-						if _, err := c.kubeclientset.BatchV1beta1().CronJobs(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+						if _, err := c.kubeclientset.BatchV1().CronJobs(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 							return
 						}
 					}
@@ -458,8 +457,8 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 				secretFMAuth, _ := c.kubeclientset.CoreV1().Secrets("edgenet").Get(context.TODO(), "federation", metav1.GetOptions{})
 				propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, secretFMAuth.Data["cluster-uid"])
 
-				remotekubeclientset, _ := c.createRemoteKubeClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["serviceaccount"]), string(secretFMAuth.Data["token"]))
-				remoteedgeclientset, _ := c.createRemoteEdgeNetClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["serviceaccount"]), string(secretFMAuth.Data["token"]))
+				remotekubeclientset, _ := c.createRemoteKubeClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
+				remoteedgeclientset, _ := c.createRemoteEdgeNetClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
 				if _, err := remotekubeclientset.CoreV1().Secrets(propagationNamespace).Get(context.TODO(), string(selectivedeploymentCopy.GetUID()), metav1.GetOptions{}); err != nil {
 					return
 				}
@@ -562,10 +561,10 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 						cronjobCopy.SetOwnerReferences([]metav1.OwnerReference{selectivedeploymentCopy.MakeOwnerReference()})
 						cronjobCopy.Labels["edge-net.io/selective-deployment"] = "follower"
 						cronjobCopy.Labels["edge-net.io/selective-deployment-name"] = selectivedeploymentCopy.GetName()
-						_, err := c.kubeclientset.BatchV1beta1().CronJobs(cronjobCopy.GetNamespace()).Create(context.TODO(), cronjobCopy, metav1.CreateOptions{})
+						_, err := c.kubeclientset.BatchV1().CronJobs(cronjobCopy.GetNamespace()).Create(context.TODO(), cronjobCopy, metav1.CreateOptions{})
 						if err != nil {
 							if errors.IsAlreadyExists(err) {
-								_, err := c.kubeclientset.BatchV1beta1().CronJobs(cronjobCopy.GetNamespace()).Update(context.TODO(), cronjobCopy, metav1.UpdateOptions{})
+								_, err := c.kubeclientset.BatchV1().CronJobs(cronjobCopy.GetNamespace()).Update(context.TODO(), cronjobCopy, metav1.UpdateOptions{})
 								if err != nil {
 									klog.Errorf("Couldn't update cronjob %s in namespace %s", cronjobCopy.GetName(), cronjobCopy.GetNamespace())
 								}
@@ -580,17 +579,18 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 
 				secretFMAuth, _ := c.kubeclientset.CoreV1().Secrets("edgenet").Get(context.TODO(), "federation", metav1.GetOptions{})
 				propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, secretFMAuth.Data["cluster-uid"])
+				klog.Infof("%s", secretFMAuth.Data)
+				remotekubeclientset, _ := c.createRemoteKubeClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
+				remoteedgeclientset, _ := c.createRemoteEdgeNetClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
 
-				remotekubeclientset, _ := c.createRemoteKubeClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["serviceaccount"]), string(secretFMAuth.Data["token"]))
-				remoteedgeclientset, _ := c.createRemoteEdgeNetClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["serviceaccount"]), string(secretFMAuth.Data["token"]))
-
-				authSecret, _ := c.kubeclientset.CoreV1().Secrets(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), string(selectivedeploymentCopy.GetUID()), metav1.GetOptions{})
+				authSecret, err := c.kubeclientset.CoreV1().Secrets(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), string(selectivedeploymentCopy.GetUID()), metav1.GetOptions{})
+				klog.Infoln(err)
 				remoteAuthSecret := new(corev1.Secret)
 				remoteAuthSecret.SetName(authSecret.GetName())
 				remoteAuthSecret.SetNamespace(propagationNamespace)
 				remoteAuthSecret.Data = authSecret.Data
-				remotekubeclientset.CoreV1().Secrets(remoteAuthSecret.GetNamespace()).Create(context.TODO(), remoteAuthSecret, metav1.CreateOptions{})
-
+				_, err = remotekubeclientset.CoreV1().Secrets(remoteAuthSecret.GetNamespace()).Create(context.TODO(), remoteAuthSecret, metav1.CreateOptions{})
+				klog.Infoln(err)
 				selectivedeploymentanchor := new(federationv1alpha1.SelectiveDeploymentAnchor)
 				selectivedeploymentanchor.SetName(string(selectivedeploymentCopy.GetUID()))
 				selectivedeploymentanchor.SetNamespace(propagationNamespace)
@@ -600,7 +600,8 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 				selectivedeploymentanchor.Spec.OriginRef.Namespace = selectivedeploymentCopy.GetNamespace()
 				selectivedeploymentanchor.Spec.OriginRef.UID = string(selectivedeploymentCopy.GetUID())
 				selectivedeploymentanchor.Spec.SecretName = remoteAuthSecret.GetName()
-				remoteedgeclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchor.GetNamespace()).Create(context.TODO(), selectivedeploymentanchor, metav1.CreateOptions{})
+				_, err = remoteedgeclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchor.GetNamespace()).Create(context.TODO(), selectivedeploymentanchor, metav1.CreateOptions{})
+				klog.Infoln(err)
 			}
 		}
 	} else {
@@ -618,11 +619,11 @@ func (c *Controller) updateStatus(ctx context.Context, selectivedeploymentCopy *
 	}
 }
 
-func (c *Controller) createRemoteKubeClientset(server, username, token string) (*kubernetes.Clientset, error) {
+func (c *Controller) createRemoteKubeClientset(remoteServer, remoteToken string, remoteCA []byte) (*kubernetes.Clientset, error) {
 	remoteConfig := new(rest.Config)
-	remoteConfig.Host = server
-	remoteConfig.Username = username
-	remoteConfig.BearerToken = username
+	remoteConfig.Host = remoteServer
+	remoteConfig.BearerToken = remoteToken
+	remoteConfig.CAData = remoteCA
 	// Create the clientset
 	remotekubeclientset, err := kubernetes.NewForConfig(remoteConfig)
 	if err != nil {
@@ -631,11 +632,11 @@ func (c *Controller) createRemoteKubeClientset(server, username, token string) (
 	return remotekubeclientset, nil
 }
 
-func (c *Controller) createRemoteEdgeNetClientset(server, username, token string) (*clientset.Clientset, error) {
+func (c *Controller) createRemoteEdgeNetClientset(remoteServer, remoteToken string, remoteCA []byte) (*clientset.Clientset, error) {
 	remoteConfig := new(rest.Config)
-	remoteConfig.Host = server
-	remoteConfig.Username = username
-	remoteConfig.BearerToken = username
+	remoteConfig.Host = remoteServer
+	remoteConfig.BearerToken = remoteToken
+	remoteConfig.CAData = remoteCA
 	// Create the clientset
 	remoteedgeclientset, err := clientset.NewForConfig(remoteConfig)
 	if err != nil {
@@ -649,7 +650,7 @@ func (c *Controller) createTokenForFollowers(selectivedeploymentCopy *appsv1alph
 	serviceAccount := new(corev1.ServiceAccount)
 	serviceAccount.SetName(string(selectivedeploymentCopy.GetUID()))
 	serviceAccount.SetNamespace(propagationNamespace)
-	if _, err := c.kubeclientset.CoreV1().ServiceAccounts(propagationNamespace).Create(context.TODO(), serviceAccount, metav1.CreateOptions{}); err != nil {
+	if _, err := c.kubeclientset.CoreV1().ServiceAccounts(propagationNamespace).Create(context.TODO(), serviceAccount, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 		c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageServiceAccountFailed)
 		selectivedeploymentCopy.Status.State = appsv1alpha2.StatusFailed
 		selectivedeploymentCopy.Status.Message = messageServiceAccountFailed
@@ -659,8 +660,25 @@ func (c *Controller) createTokenForFollowers(selectivedeploymentCopy *appsv1alph
 	authSecret := new(corev1.Secret)
 	authSecret.Name = string(selectivedeploymentCopy.GetUID())
 	authSecret.Namespace = propagationNamespace
+	authSecret.Type = corev1.SecretTypeServiceAccountToken
+	authSecret.Data = make(map[string][]byte)
+	authSecret.Data["serviceaccount"] = []byte(fmt.Sprintf("system:serviceaccount:%s:%s", propagationNamespace, serviceAccount.GetName()))
+	authSecret.Data["namespace"] = []byte(propagationNamespace)
+	var address string
+	nodeRaw, _ := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/control-plane"})
+	for _, node := range nodeRaw.Items {
+		if internal, external := multiprovider.GetNodeIPAddresses(node.DeepCopy()); external == "" && internal == "" {
+			continue
+		} else if external != "" {
+			address = external + ":8443"
+		} else {
+			address = internal + ":8443"
+		}
+		break
+	}
+	authSecret.Data["server"] = []byte(address)
 	authSecret.Annotations = map[string]string{"kubernetes.io/service-account.name": serviceAccount.GetName()}
-	if _, err := c.kubeclientset.CoreV1().Secrets(propagationNamespace).Create(context.TODO(), authSecret, metav1.CreateOptions{}); err != nil {
+	if _, err := c.kubeclientset.CoreV1().Secrets(propagationNamespace).Create(context.TODO(), authSecret, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 		c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageAuthSecretFailed)
 		selectivedeploymentCopy.Status.State = appsv1alpha2.StatusFailed
 		selectivedeploymentCopy.Status.Message = messageAuthSecretFailed
@@ -670,7 +688,7 @@ func (c *Controller) createTokenForFollowers(selectivedeploymentCopy *appsv1alph
 
 	roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: appsv1alpha2.RemoteSelectiveDeploymentRole}
 	rbSubjects := []rbacv1.Subject{{Kind: "ServiceAccount", Name: serviceAccount.GetName(), Namespace: serviceAccount.GetNamespace()}}
-	roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", appsv1alpha2.RemoteSelectiveDeploymentRole, selectivedeploymentCopy.GetUID()), Namespace: serviceAccount.GetName()},
+	roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", appsv1alpha2.RemoteSelectiveDeploymentRole, selectivedeploymentCopy.GetUID()), Namespace: propagationNamespace},
 		Subjects: rbSubjects, RoleRef: roleRef}
 	roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
 	roleBind.SetLabels(roleBindLabels)
@@ -690,6 +708,7 @@ func (c *Controller) createTokenForFollowers(selectivedeploymentCopy *appsv1alph
 		selectivedeploymentCopy.Status.State = appsv1alpha2.StatusFailed
 		selectivedeploymentCopy.Status.Message = messageBindingFailed
 		c.updateStatus(context.TODO(), selectivedeploymentCopy)
+		klog.Infoln(err)
 		return err
 	}
 	return nil
