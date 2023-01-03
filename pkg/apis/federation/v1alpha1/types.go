@@ -39,7 +39,7 @@ const (
 // Values of string constants subject to repetitive use
 const (
 	RemoteClusterRole          = "edgenet:federation:remotecluster"
-	FederationManagerNamespace = "federated:%s"
+	FederationManagerNamespace = "federated-%s"
 	AbundantResources          = "Abundance"
 	NormalResources            = "Normal"
 	LimitedResources           = "Limited"
