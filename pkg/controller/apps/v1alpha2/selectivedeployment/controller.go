@@ -23,6 +23,7 @@ import (
 
 	appsv1alpha2 "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha2"
 	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha2"
@@ -45,7 +46,6 @@ import (
 	appslisters "k8s.io/client-go/listers/apps/v1"
 	batchlisters "k8s.io/client-go/listers/batch/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -457,8 +457,9 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 				secretFMAuth, _ := c.kubeclientset.CoreV1().Secrets("edgenet").Get(context.TODO(), "federation", metav1.GetOptions{})
 				propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, secretFMAuth.Data["cluster-uid"])
 
-				remotekubeclientset, _ := c.createRemoteKubeClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
-				remoteedgeclientset, _ := c.createRemoteEdgeNetClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
+				config := bootstrap.PrepareRestConfig(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
+				remotekubeclientset, _ := bootstrap.CreateKubeClientset(config)
+				remoteedgeclientset, _ := bootstrap.CreateEdgeNetClientset(config)
 				if _, err := remotekubeclientset.CoreV1().Secrets(propagationNamespace).Get(context.TODO(), string(selectivedeploymentCopy.GetUID()), metav1.GetOptions{}); err != nil {
 					return
 				}
@@ -580,8 +581,9 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 				secretFMAuth, _ := c.kubeclientset.CoreV1().Secrets("edgenet").Get(context.TODO(), "federation", metav1.GetOptions{})
 				propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, secretFMAuth.Data["cluster-uid"])
 				klog.Infof("%s", secretFMAuth.Data)
-				remotekubeclientset, _ := c.createRemoteKubeClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
-				remoteedgeclientset, _ := c.createRemoteEdgeNetClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
+				config := bootstrap.PrepareRestConfig(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
+				remotekubeclientset, _ := bootstrap.CreateKubeClientset(config)
+				remoteedgeclientset, _ := bootstrap.CreateEdgeNetClientset(config)
 
 				authSecret, err := c.kubeclientset.CoreV1().Secrets(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), string(selectivedeploymentCopy.GetUID()), metav1.GetOptions{})
 				klog.Infoln(err)
@@ -617,32 +619,6 @@ func (c *Controller) updateStatus(ctx context.Context, selectivedeploymentCopy *
 	if _, err := c.edgenetclientset.AppsV1alpha2().SelectiveDeployments(selectivedeploymentCopy.GetNamespace()).UpdateStatus(ctx, selectivedeploymentCopy, metav1.UpdateOptions{}); err != nil {
 		klog.Infoln(err)
 	}
-}
-
-func (c *Controller) createRemoteKubeClientset(remoteServer, remoteToken string, remoteCA []byte) (*kubernetes.Clientset, error) {
-	remoteConfig := new(rest.Config)
-	remoteConfig.Host = remoteServer
-	remoteConfig.BearerToken = remoteToken
-	remoteConfig.CAData = remoteCA
-	// Create the clientset
-	remotekubeclientset, err := kubernetes.NewForConfig(remoteConfig)
-	if err != nil {
-		klog.Infoln(err)
-	}
-	return remotekubeclientset, nil
-}
-
-func (c *Controller) createRemoteEdgeNetClientset(remoteServer, remoteToken string, remoteCA []byte) (*clientset.Clientset, error) {
-	remoteConfig := new(rest.Config)
-	remoteConfig.Host = remoteServer
-	remoteConfig.BearerToken = remoteToken
-	remoteConfig.CAData = remoteCA
-	// Create the clientset
-	remoteedgeclientset, err := clientset.NewForConfig(remoteConfig)
-	if err != nil {
-		klog.Infoln(err)
-	}
-	return remoteedgeclientset, nil
 }
 
 // createTokenForFollowers creates a service account, a secret, and required permissions for the follower selective deployments to access the original selective deployment

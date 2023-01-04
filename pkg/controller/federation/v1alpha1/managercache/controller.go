@@ -23,6 +23,7 @@ import (
 	"time"
 
 	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
@@ -37,7 +38,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -249,7 +249,8 @@ func (c *Controller) processManagerCache(managercacheCopy *federationv1alpha1.Ma
 			remoteManagerCache.Spec = managercacheCopy.Spec
 			if secretFMAuth, err := c.kubeclientset.CoreV1().Secrets("edgenet").Get(context.TODO(), "federation", metav1.GetOptions{}); err == nil {
 				if managercacheCopy.Spec.Hierarchy.Parent == string(secretFMAuth.Data["cluster-uid"]) {
-					remoteedgeclientset, _ := c.createRemoteEdgeNetClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["serviceaccount"]), string(secretFMAuth.Data["token"]))
+					config := bootstrap.PrepareRestConfig(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
+					remoteedgeclientset, _ := bootstrap.CreateEdgeNetClientset(config)
 					if _, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Create(context.TODO(), remoteManagerCache, metav1.CreateOptions{}); err != nil && errors.IsAlreadyExists(err) {
 						remoteManagerCacheCopy, _ := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), managercacheCopy.GetName(), metav1.GetOptions{})
 						if !reflect.DeepEqual(managercacheCopy.Spec, remoteManagerCacheCopy.Spec) {
@@ -264,7 +265,8 @@ func (c *Controller) processManagerCache(managercacheCopy *federationv1alpha1.Ma
 			for _, clusterRow := range clusterRaw.Items {
 				if clusterRow.Spec.Role == "federation" {
 					remoteAuthSecret, _ := c.kubeclientset.CoreV1().Secrets(clusterRow.GetNamespace()).Get(context.TODO(), clusterRow.Spec.SecretName, metav1.GetOptions{})
-					remoteedgeclientset, _ := c.createRemoteEdgeNetClientset(string(remoteAuthSecret.Data["server"]), string(remoteAuthSecret.Data["serviceaccount"]), string(remoteAuthSecret.Data["token"]))
+					config := bootstrap.PrepareRestConfig(string(remoteAuthSecret.Data["server"]), string(remoteAuthSecret.Data["token"]), remoteAuthSecret.Data["ca.crt"])
+					remoteedgeclientset, _ := bootstrap.CreateEdgeNetClientset(config)
 					if _, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Create(context.TODO(), remoteManagerCache, metav1.CreateOptions{}); err != nil && errors.IsAlreadyExists(err) {
 						remoteManagerCacheCopy, _ := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), managercacheCopy.GetName(), metav1.GetOptions{})
 						if !reflect.DeepEqual(managercacheCopy.Spec, remoteManagerCacheCopy.Spec) {
@@ -303,6 +305,7 @@ func (c *Controller) updateStatus(ctx context.Context, managercacheCopy *federat
 	}
 }
 
+/*
 func (c *Controller) createRemoteEdgeNetClientset(server, username, token string) (*clientset.Clientset, error) {
 	remoteConfig := new(rest.Config)
 	remoteConfig.Host = server
@@ -315,3 +318,4 @@ func (c *Controller) createRemoteEdgeNetClientset(server, username, token string
 	}
 	return remoteedgeclientset, nil
 }
+*/

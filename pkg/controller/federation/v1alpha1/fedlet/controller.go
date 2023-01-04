@@ -6,7 +6,7 @@ import (
 	"time"
 
 	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
-	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/multiprovider"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -20,7 +20,6 @@ import (
 	scheme "k8s.io/client-go/kubernetes/scheme"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -245,24 +244,13 @@ func (c *Controller) updateClusterResourceStatus() {
 	secretFMAuth, _ := c.kubeclientset.CoreV1().Secrets("edgenet").Get(context.TODO(), "federation", metav1.GetOptions{})
 	kubeNamespace, _ := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
 	clusterUID := string(kubeNamespace.GetUID())
-	remoteedgeclientset, _ := c.createRemoteEdgeNetClientset(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["serviceaccount"]), string(secretFMAuth.Data["token"]))
+
+	config := bootstrap.PrepareRestConfig(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
+	remoteedgeclientset, _ := bootstrap.CreateEdgeNetClientset(config)
 	managercache, _ := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), string(secretFMAuth.Data["cluster-uid"]), metav1.GetOptions{})
 
 	if _, ok := managercache.Spec.Clusters[clusterUID]; ok {
 		managercache.Spec.Clusters[clusterUID] = federationv1alpha1.ClusterCache{ResourceAvailability: clusterStatus}
 		remoteedgeclientset.FederationV1alpha1().ManagerCaches().Update(context.TODO(), managercache, metav1.UpdateOptions{})
 	}
-}
-
-func (c *Controller) createRemoteEdgeNetClientset(server, username, token string) (*clientset.Clientset, error) {
-	remoteConfig := new(rest.Config)
-	remoteConfig.Host = server
-	remoteConfig.Username = username
-	remoteConfig.BearerToken = username
-	// Create the clientset
-	remoteedgeclientset, err := clientset.NewForConfig(remoteConfig)
-	if err != nil {
-		klog.Infoln(err)
-	}
-	return remoteedgeclientset, nil
 }

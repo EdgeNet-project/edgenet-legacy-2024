@@ -40,7 +40,12 @@ func main() {
 	if authentication = strings.TrimSpace(os.Getenv("AUTHENTICATION_STRATEGY")); authentication != "kubeconfig" {
 		authentication = "serviceaccount"
 	}
-	kubeclientset, err := bootstrap.CreateClientset(authentication)
+	config, err := bootstrap.GetRestConfig(authentication)
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	kubeclientset, err := bootstrap.CreateKubeClientset(config)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
