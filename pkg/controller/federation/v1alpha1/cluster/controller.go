@@ -20,8 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
@@ -35,7 +33,6 @@ import (
 	multitenancy "github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -57,20 +54,21 @@ const (
 
 	successSynced = "Synced"
 
-	messageResourceSynced          = "Cluster synced successfully"
-	messageCredsPrepared           = "Credentials for federation manager access prepared successfully"
-	messageSubnamespaceCreated     = "Subnamespace for object propagation created successfully"
-	messageSubnamespaceFailed      = "Subnamespace for object propagation creation failed"
-	messageBindingFailed           = "Role binding failed"
-	messageMissingSecretAtRemote   = "Secret storing federation managers's token is missing in the remote cluster"
-	messageWrongSecretAtRemote     = "Secret storing federation manager's token is wrong in the remote cluster"
-	messageMissingSecretFMAuth     = "Secret storing federation manager's token is missing in the federation manager"
-	messageMissingSecretRemoteAuth = "Secret storing remote cluster's token is missing in the federation manager"
-	messageServiceAccountFailed    = "Service account creation failed"
-	messageAuthSecretFailed        = "Secret storing federation manager's token cannot be created"
-	messageRemoteClientFailed      = "Clientset for remote cluster cannot be created"
-	messageMissingToken            = "Token for federation manager is missing in the secret"
-	messageReady                   = "Inter-cluster communication is established"
+	messageResourceSynced                   = "Cluster synced successfully"
+	messageCredsPrepared                    = "Credentials for federation manager access prepared successfully"
+	messageReady                            = "Inter-cluster communication is established"
+	messageMissingSecretAtRemote            = "Secret storing federation managers's token is missing in the remote cluster"
+	messageWrongSecretAtRemote              = "Secret storing federation manager's token is wrong in the remote cluster"
+	messageWrongManagerCacheAtRemote        = "Manager cache is wrong in the remote cluster"
+	messageMissingSecretFMAuth              = "Secret storing federation manager's token is missing in the federation manager"
+	messageMissingSecretRemoteAuth          = "Secret storing remote cluster's token is missing in the federation manager"
+	messageMissingServiceAccount            = "Remote cluster's service account is missing in the federation manager"
+	messageRemoteClientFailed               = "Clientset for remote cluster cannot be created"
+	messageCredsFailed                      = "Credentials for federation manager access cannot be prepared"
+	messageRemoteSecretFailed               = "Remote secret cannot be created from the secret of credentials"
+	messageRemoteSecretDeploymentFailed     = "Remote secret cannot be deployed to the remote cluster"
+	messageManagerCacheUpdateFailed         = "Manager cache cannot be updated to include the new manager cluster as a child"
+	messageRemoteManagerCacheCreationFailed = "Manager cache cannot be created in the remote cluster"
 )
 
 // Controller is the controller implementation for Cluster resources
@@ -253,6 +251,7 @@ func (c *Controller) enqueueClusterAfter(obj interface{}, after time.Duration) {
 }
 
 func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
+	// Crashloop backoff limit to avoid endless loop
 	if exceedsBackoffLimit := clusterCopy.Status.Failed >= backoffLimit; exceedsBackoffLimit {
 		return
 	}
@@ -262,73 +261,83 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 		propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, namespaceLabels["edge-net.io/cluster-uid"])
 		switch clusterCopy.Status.State {
 		case federationv1alpha1.StatusReady:
-			// Add manager cache to reconcile
+			// As the cluster is ready, we need to reconcile with the remote cluster
 			c.reconcile(clusterCopy, propagationNamespace, namespaceLabels["edge-net.io/cluster-uid"])
 		case federationv1alpha1.StatusCredsPrepared:
-			// Create the remote kube clientset
+			// Make the config file from the cluster spec and create the remote kube clientset
 			config, ok := c.prepareConfig(clusterCopy)
 			if !ok {
 				return
 			}
 			remotekubeclientset, err := bootstrap.CreateKubeClientset(config)
 			if err != nil {
-				c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusFailed, messageRemoteClientFailed)
-				clusterCopy.Status.State = federationv1alpha1.StatusFailed
-				clusterCopy.Status.Message = messageRemoteClientFailed
-				c.updateStatus(context.TODO(), clusterCopy)
+				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteClientFailed)
+				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteClientFailed)
 				return
 			}
-			remoteSecret, err := c.deployTokenToRemoteCluster(clusterCopy, propagationNamespace, namespaceLabels["edge-net.io/cluster-uid"])
-			if err != nil {
-				return
-			}
-			_, err = remotekubeclientset.CoreV1().Secrets(remoteSecret.GetNamespace()).Create(context.TODO(), remoteSecret, metav1.CreateOptions{})
-			if err != nil {
-				klog.Infoln(err)
-				clusterCopy.Status.State = federationv1alpha1.StatusFailed
-				c.updateStatus(context.TODO(), clusterCopy)
-				return
-			}
+			multiproviderManager := multiprovider.NewManager(c.kubeclientset, remotekubeclientset, nil)
+			// The federation framework uses a manager cache to keep track of the hierarchy of the manager clusters along with their location information.
+			// In addition to that, a manager cache contains information regarding the resources and the locations of their workload clusters.
+			// Thus, the manager cache is the source of truth for the federation framework to make scheduling decisions at the federation scale.
+			// Below checks if the cluster's role is being a federation manager. If so, it adds the cluster as a child to its federation manager cache and then creates a manager cache of the cluster in the remote cluster.
 			if clusterCopy.Spec.Role == "Federation" {
+				remoteedgeclientset, err := bootstrap.CreateEdgeNetClientset(config)
+				if err != nil {
+					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteClientFailed)
+					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteClientFailed)
+					return
+				}
+				multiproviderManager = multiprovider.NewManager(c.kubeclientset, remotekubeclientset, remoteedgeclientset)
+				// Update the manager cache of the federation manager to include the newly added cluster as a child
 				managerCache, _ := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), namespaceLabels["edge-net.io/cluster-uid"], metav1.GetOptions{})
 				managerCache.Spec.Hierarchy.Children = append(managerCache.Spec.Hierarchy.Children, clusterCopy.Spec.UID)
-				c.edgenetclientset.FederationV1alpha1().ManagerCaches().Update(context.TODO(), managerCache, metav1.UpdateOptions{})
-
+				if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Update(context.TODO(), managerCache, metav1.UpdateOptions{}); err != nil {
+					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageManagerCacheUpdateFailed)
+					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageManagerCacheUpdateFailed)
+					return
+				}
+				// Create a manager cache in the remote cluster
 				remoteManagerCache := new(federationv1alpha1.ManagerCache)
 				remoteManagerCache.SetName(clusterCopy.Spec.UID)
 				remoteManagerCache.Spec.Hierarchy.Parent = namespaceLabels["edge-net.io/cluster-uid"]
-				remoteManagerCache.Spec.Hierarchy.Level = managerCache.Spec.Hierarchy.Level + 1
-				remoteedgeclientset, _ := bootstrap.CreateEdgeNetClientset(config)
-				remoteedgeclientset.FederationV1alpha1().ManagerCaches().Create(context.TODO(), remoteManagerCache, metav1.CreateOptions{})
-			}
-
-			c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusReady, messageReady)
-			clusterCopy.Status.State = federationv1alpha1.StatusReady
-			clusterCopy.Status.Message = messageReady
-			c.updateStatus(context.TODO(), clusterCopy)
-		default:
-			/*if clusterCopy.Spec.Role == "Federation" {
-				fedSubnamespace := new(corev1alpha1.SubNamespace)
-				fedSubnamespace.SetName(clusterCopy.GetName())
-				fedSubnamespace.SetNamespace(clusterCopy.GetNamespace())
-				fedSubnamespace.Spec.Workspace = new(corev1alpha1.Workspace)
-				fedSubnamespace.Spec.Workspace.Scope = "federated"
-				if _, err := c.edgenetclientset.CoreV1alpha1().SubNamespaces(clusterCopy.GetNamespace()).Create(context.TODO(), fedSubnamespace, metav1.CreateOptions{}); err != nil {
-					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageSubnamespaceFailed)
-					clusterCopy.Status.State = federationv1alpha1.StatusFailed
-					clusterCopy.Status.Message = messageSubnamespaceFailed
-					c.updateStatus(context.TODO(), clusterCopy)
+				remoteManagerCache.Spec.Hierarchy.Level = managerCache.Spec.Hierarchy.Level + 1 // The level of this manager cluster is one level higher than the federation manager
+				if err := multiproviderManager.CreateManagerCache(remoteManagerCache); err != nil {
+					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteManagerCacheCreationFailed)
+					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteManagerCacheCreationFailed)
+					return
 				}
-				c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusSubnamespaceCreated, messageSubnamespaceCreated)
-			}*/
-
-			if err := c.createTokenForRemoteCluster(clusterCopy, propagationNamespace); err != nil {
+			}
+			// Here we prepare a secret to be deployed to the remote cluster by using the secret that is created while setting up the access credentials.
+			// This secret has additional information about the API server, namespace, the cluster UID of federation manager.
+			// The remote cluster will be consuming these information to access the federation manager and drive necessary operations.
+			remoteSecret, enqueue, err := multiproviderManager.PrepareSecretForRemoteCluster(clusterCopy.Spec.UID, propagationNamespace, namespaceLabels["edge-net.io/cluster-uid"])
+			if err != nil {
+				if enqueue {
+					c.enqueueClusterAfter(clusterCopy, 1*time.Minute)
+					return
+				}
+				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteSecretFailed)
+				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteSecretFailed)
+				return
+			}
+			if err := multiproviderManager.DeploySecret(remoteSecret); err != nil {
+				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteSecretDeploymentFailed)
+				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteSecretDeploymentFailed)
+				return
+			}
+			c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusReady, messageReady)
+			c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusReady, messageReady)
+		default:
+			// Below creates a secret tied to a service account along with a role binding for the remote cluster.
+			// The remote cluster will use this secret to communicate with its federation manager, thus gaining access to the federated resources.
+			multiproviderManager := multiprovider.NewManager(c.kubeclientset, nil, nil)
+			if err := multiproviderManager.SetupRemoteAccessCredentials(clusterCopy.Spec.UID, propagationNamespace, federationv1alpha1.RemoteClusterRole); err != nil {
+				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageCredsFailed)
+				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageCredsFailed)
 				return
 			}
 			c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusCredsPrepared, messageCredsPrepared)
-			clusterCopy.Status.State = federationv1alpha1.StatusCredsPrepared
-			clusterCopy.Status.Message = messageCredsPrepared
-			c.updateStatus(context.TODO(), clusterCopy)
+			c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusCredsPrepared, messageCredsPrepared)
 		}
 	} else {
 		c.edgenetclientset.FederationV1alpha1().Clusters(clusterCopy.GetNamespace()).Delete(context.TODO(), clusterCopy.GetName(), metav1.DeleteOptions{})
@@ -336,26 +345,26 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 }
 
 func (c *Controller) reconcile(clusterCopy *federationv1alpha1.Cluster, propagationNamespace, fedmanagerUID string) {
+	var state, message string
+	// Check if the remote cluster's service account exists
 	if _, err := c.kubeclientset.CoreV1().ServiceAccounts(propagationNamespace).Get(context.TODO(), clusterCopy.Spec.UID, metav1.GetOptions{}); err != nil {
-		c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageServiceAccountFailed)
-		clusterCopy.Status.State = federationv1alpha1.StatusReconciliation
-		clusterCopy.Status.Message = messageServiceAccountFailed
+		c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageMissingServiceAccount)
+		state = federationv1alpha1.StatusReconciliation
+		message = messageMissingServiceAccount
 	}
+	// Check if the secret that is tied to the remote cluster's service account exists
 	authSecret, err := c.kubeclientset.CoreV1().Secrets(propagationNamespace).Get(context.TODO(), clusterCopy.Spec.UID, metav1.GetOptions{})
 	if err != nil {
-		c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusFailed, messageMissingSecretFMAuth)
-		clusterCopy.Status.State = federationv1alpha1.StatusFailed
-		clusterCopy.Status.Message = messageMissingSecretFMAuth
+		c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageMissingSecretFMAuth)
+		state = federationv1alpha1.StatusReconciliation
+		message = messageMissingSecretFMAuth
 	}
+	// Manipulate the secret to be compared with the one in the remote cluster
 	authSecret.SetName("federation")
 	authSecret.SetNamespace("edgenet")
 	authSecret.Data["serviceaccount"] = []byte(fmt.Sprintf("system:serviceaccount:%s:%s", propagationNamespace, clusterCopy.Spec.UID))
 	authSecret.Data["namespace"] = []byte(propagationNamespace)
-	var authentication string
-	if authentication = strings.TrimSpace(os.Getenv("AUTHENTICATION_STRATEGY")); authentication != "kubeconfig" {
-		authentication = "serviceaccount"
-	}
-
+	// Get the address of the federation manager
 	var address string
 	nodeRaw, _ := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/control-plane"})
 	for _, node := range nodeRaw.Items {
@@ -370,156 +379,92 @@ func (c *Controller) reconcile(clusterCopy *federationv1alpha1.Cluster, propagat
 	}
 	authSecret.Data["server"] = []byte(address)
 	authSecret.Data["cluster-uid"] = []byte(fedmanagerUID)
+	// Prepare the config to access the remote cluster
 	config, ok := c.prepareConfig(clusterCopy)
 	if !ok {
 		return
 	}
 	remotekubeclientset, err := bootstrap.CreateKubeClientset(config)
+	if err != nil {
+		c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageRemoteClientFailed)
+		state = federationv1alpha1.StatusReconciliation
+		message = messageRemoteClientFailed
+	}
+	// Retrieve that secret from the remote cluster
 	remoteSecretFMAuth, err := remotekubeclientset.CoreV1().Secrets(authSecret.GetNamespace()).Get(context.TODO(), authSecret.GetName(), metav1.GetOptions{})
 	if err != nil {
-		c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusFailed, messageMissingSecretAtRemote)
-		clusterCopy.Status.State = federationv1alpha1.StatusFailed
-		clusterCopy.Status.Message = messageMissingSecretAtRemote
+		c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageMissingSecretAtRemote)
+		state = federationv1alpha1.StatusReconciliation
+		message = messageMissingSecretAtRemote
 	}
+	// Compare the two secrets
 	if bytes.Compare(authSecret.Data["username"], remoteSecretFMAuth.Data["username"]) != 0 || bytes.Compare(authSecret.Data["namespace"], remoteSecretFMAuth.Data["namespace"]) != 0 ||
 		bytes.Compare(authSecret.Data["server"], remoteSecretFMAuth.Data["server"]) != 0 || bytes.Compare(authSecret.Data["token"], remoteSecretFMAuth.Data["token"]) != 0 || bytes.Compare(authSecret.Data["cluster-uid"], remoteSecretFMAuth.Data["cluster-uid"]) != 0 {
-		c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusFailed, messageWrongSecretAtRemote)
-		clusterCopy.Status.State = federationv1alpha1.StatusFailed
-		clusterCopy.Status.Message = messageWrongSecretAtRemote
-	}
-	if clusterCopy.Status.State != federationv1alpha1.StatusReady {
-		c.updateStatus(context.TODO(), clusterCopy)
-	}
-}
-
-// createTokenForRemoteCluster creates a service account, a secret, and required permissions for the remote cluster to access the federation manager
-func (c *Controller) createTokenForRemoteCluster(clusterCopy *federationv1alpha1.Cluster, propagationNamespace string) error {
-	serviceAccount := new(corev1.ServiceAccount)
-	serviceAccount.SetName(clusterCopy.Spec.UID)
-	serviceAccount.SetNamespace(propagationNamespace)
-	if _, err := c.kubeclientset.CoreV1().ServiceAccounts(propagationNamespace).Create(context.TODO(), serviceAccount, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-		c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageServiceAccountFailed)
-		clusterCopy.Status.State = federationv1alpha1.StatusFailed
-		clusterCopy.Status.Message = messageServiceAccountFailed
-		c.updateStatus(context.TODO(), clusterCopy)
-		return err
-	}
-	authSecret := new(corev1.Secret)
-	authSecret.Name = clusterCopy.Spec.UID
-	authSecret.Namespace = propagationNamespace
-	authSecret.Type = corev1.SecretTypeServiceAccountToken
-	authSecret.Annotations = map[string]string{"kubernetes.io/service-account.name": serviceAccount.GetName()}
-	if _, err := c.kubeclientset.CoreV1().Secrets(propagationNamespace).Create(context.TODO(), authSecret, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-		c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageAuthSecretFailed)
-		clusterCopy.Status.State = federationv1alpha1.StatusFailed
-		clusterCopy.Status.Message = messageAuthSecretFailed
-		c.updateStatus(context.TODO(), clusterCopy)
-		return err
+		c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageWrongSecretAtRemote)
+		state = federationv1alpha1.StatusReconciliation
+		message = messageWrongSecretAtRemote
 	}
 
-	roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: federationv1alpha1.RemoteClusterRole}
-	rbSubjects := []rbacv1.Subject{{Kind: "ServiceAccount", Name: serviceAccount.GetName(), Namespace: serviceAccount.GetNamespace()}}
-	roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", federationv1alpha1.RemoteClusterRole, clusterCopy.Spec.UID), Namespace: serviceAccount.GetNamespace()},
-		Subjects: rbSubjects, RoleRef: roleRef}
-	roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
-	roleBind.SetLabels(roleBindLabels)
-	if _, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
-		if errors.IsAlreadyExists(err) {
-			if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Get(context.TODO(), roleBind.GetName(), metav1.GetOptions{}); err == nil {
-				roleBindingCopy := roleBinding.DeepCopy()
-				roleBindingCopy.RoleRef = roleBind.RoleRef
-				roleBindingCopy.Subjects = roleBind.Subjects
-				roleBindingCopy.SetLabels(roleBind.GetLabels())
-				if _, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Update(context.TODO(), roleBindingCopy, metav1.UpdateOptions{}); err == nil {
-					return nil
-				}
+	// Check if the manager cache at the remote cluster exists and holds the correct information
+	if clusterCopy.Spec.Role == "Federation" {
+		// Update the manager cache of the federation manager to include the newly added cluster as a child
+		managerCache, _ := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), fedmanagerUID, metav1.GetOptions{})
+		isExists := false
+		for _, child := range managerCache.Spec.Hierarchy.Children {
+			if child == clusterCopy.Spec.UID {
+				isExists = true
 			}
 		}
-		c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageBindingFailed)
-		clusterCopy.Status.State = federationv1alpha1.StatusFailed
-		clusterCopy.Status.Message = messageBindingFailed
-		c.updateStatus(context.TODO(), clusterCopy)
-		klog.Infoln(err)
-		return err
-	}
-	return nil
-}
-
-func (c *Controller) deployTokenToRemoteCluster(clusterCopy *federationv1alpha1.Cluster, propagationNamespace, fedmanagerUID string) (*corev1.Secret, error) {
-	authSecret, err := c.kubeclientset.CoreV1().Secrets(propagationNamespace).Get(context.TODO(), clusterCopy.Spec.UID, metav1.GetOptions{})
-	if err != nil {
-		c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusFailed, messageMissingSecretFMAuth)
-		clusterCopy.Status.State = federationv1alpha1.StatusFailed
-		clusterCopy.Status.Message = messageMissingSecretFMAuth
-		c.updateStatus(context.TODO(), clusterCopy)
-		return nil, err
-	}
-	remoteSecret := new(corev1.Secret)
-	remoteSecret.SetName("federation")
-	remoteSecret.SetNamespace("edgenet")
-	if authSecret.Data["token"] == nil {
-		if authSecret.GetCreationTimestamp().Add(1 * time.Minute).Before(time.Now()) {
-			c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageMissingToken)
-			clusterCopy.Status.State = federationv1alpha1.StatusFailed
-			clusterCopy.Status.Message = messageMissingToken
-			c.updateStatus(context.TODO(), clusterCopy)
-		} else {
-			c.enqueueClusterAfter(clusterCopy, 1*time.Minute)
+		if !isExists {
+			c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageManagerCacheUpdateFailed)
+			state = federationv1alpha1.StatusReconciliation
+			message = messageManagerCacheUpdateFailed
 		}
-		return nil, fmt.Errorf("token is missing")
-	}
-	remoteSecret.Data = make(map[string][]byte)
-	remoteSecret.Data["token"] = authSecret.Data["token"]
-	remoteSecret.Data["ca.crt"] = authSecret.Data["ca.crt"]
-	remoteSecret.Data["serviceaccount"] = []byte(fmt.Sprintf("system:serviceaccount:%s:%s", propagationNamespace, clusterCopy.Spec.UID))
-	remoteSecret.Data["namespace"] = []byte(propagationNamespace)
-	var authentication string
-	if authentication = strings.TrimSpace(os.Getenv("AUTHENTICATION_STRATEGY")); authentication != "kubeconfig" {
-		authentication = "serviceaccount"
-	}
-	var address string
-	nodeRaw, _ := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/control-plane"})
-	for _, node := range nodeRaw.Items {
-		if internal, external := multiprovider.GetNodeIPAddresses(node.DeepCopy()); external == "" && internal == "" {
-			continue
-		} else if external != "" {
-			address = external + ":8443"
-		} else {
-			address = internal + ":8443"
+		remoteedgeclientset, err := bootstrap.CreateEdgeNetClientset(config)
+		if err != nil {
+			c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageRemoteClientFailed)
+			state = federationv1alpha1.StatusReconciliation
+			message = messageRemoteClientFailed
 		}
-		break
+		if remoteManagerCache, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), clusterCopy.Spec.UID, metav1.GetOptions{}); err == nil {
+			if remoteManagerCache.Spec.Hierarchy.Parent != fedmanagerUID || remoteManagerCache.Spec.Hierarchy.Level != managerCache.Spec.Hierarchy.Level+1 {
+				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageWrongManagerCacheAtRemote)
+				state = federationv1alpha1.StatusReconciliation
+				message = messageWrongManagerCacheAtRemote
+			}
+		} else {
+			c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageRemoteManagerCacheCreationFailed)
+			state = federationv1alpha1.StatusReconciliation
+			message = messageRemoteManagerCacheCreationFailed
+		}
 	}
-	remoteSecret.Data["server"] = []byte(address)
-	remoteSecret.Data["cluster-uid"] = []byte(fedmanagerUID)
-	return remoteSecret, nil
+	// If the cluster status is not ready, update it
+	if clusterCopy.Status.State != federationv1alpha1.StatusReady {
+		c.updateStatus(context.TODO(), clusterCopy, state, message)
+	}
 }
 
 func (c *Controller) prepareConfig(clusterCopy *federationv1alpha1.Cluster) (*rest.Config, bool) {
-	// Below is to prepare the config to create the remote clientsets
+	// Below is to prepare the config to create the remote clientsets. It gets the secret created in the cluster's namespace.
+	// This secret includes necessary information for the federation manager to access the remote cluster.
+	// The federation framework uses service accounts to allow clusters to access one another.
 	remoteAuthSecret, err := c.kubeclientset.CoreV1().Secrets(clusterCopy.GetNamespace()).Get(context.TODO(), clusterCopy.Spec.SecretName, metav1.GetOptions{})
 	if err != nil {
-		c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusFailed, messageMissingSecretRemoteAuth)
-		clusterCopy.Status.State = federationv1alpha1.StatusFailed
-		clusterCopy.Status.Message = messageMissingSecretRemoteAuth
-		c.updateStatus(context.TODO(), clusterCopy)
+		c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageMissingSecretRemoteAuth)
+		c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageMissingSecretRemoteAuth)
 		return nil, false
 	}
-	if err != nil {
-		c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusFailed, messageRemoteClientFailed)
-		clusterCopy.Status.State = federationv1alpha1.StatusFailed
-		clusterCopy.Status.Message = messageRemoteClientFailed
-		c.updateStatus(context.TODO(), clusterCopy)
-		return nil, false
-	}
-	remoteServer := clusterCopy.Spec.Server
-	remoteToken := string(remoteAuthSecret.Data["token"])
-	remoteCA := remoteAuthSecret.Data["ca.crt"]
+	remoteServer := clusterCopy.Spec.Server               // API server address
+	remoteToken := string(remoteAuthSecret.Data["token"]) // A service account token to be consumed
+	remoteCA := remoteAuthSecret.Data["ca.crt"]           // CA certificate
 	config := bootstrap.PrepareRestConfig(remoteServer, remoteToken, remoteCA)
 	return config, true
 }
 
 // updateStatus calls the API to update the cluster status.
-func (c *Controller) updateStatus(ctx context.Context, clusterCopy *federationv1alpha1.Cluster) {
+func (c *Controller) updateStatus(ctx context.Context, clusterCopy *federationv1alpha1.Cluster, state, message string) {
+	clusterCopy.Status.State = state
+	clusterCopy.Status.Message = message
 	if clusterCopy.Status.State == federationv1alpha1.StatusFailed {
 		clusterCopy.Status.Failed++
 	}

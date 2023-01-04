@@ -119,7 +119,7 @@ func NewController(
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
-	multiproviderManager := multiprovider.NewManager(kubeclientset)
+	multiproviderManager := multiprovider.NewManager(kubeclientset, nil, nil)
 
 	controller := &Controller{
 		kubeclientset:           kubeclientset,

@@ -19,6 +19,8 @@ package multiprovider
 import (
 	"math"
 
+	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -26,11 +28,15 @@ import (
 type Manager struct {
 	// kubeclientset is a standard kubernetes clientset
 	kubeclientset kubernetes.Interface
+	// remotekubeclientset is a standard kubernetes clientset for remote clusters
+	remotekubeclientset kubernetes.Interface
+	// remoteedgeclientset is a clientset for the EdgeNet API groups for remote clusters
+	remoteedgeclientset clientset.Interface
 }
 
 // NewManager returns a new multitenancy manager
-func NewManager(kubeclientset kubernetes.Interface) *Manager {
-	return &Manager{kubeclientset}
+func NewManager(kubeclientset, remotekubeclientset kubernetes.Interface, remoteedgeclientset clientset.Interface) *Manager {
+	return &Manager{kubeclientset, remotekubeclientset, remoteedgeclientset}
 }
 
 // GeoFence function determines whether the point is inside a polygon by using the crossing number method.
