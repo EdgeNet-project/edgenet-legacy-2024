@@ -73,7 +73,7 @@ func (m *Manager) SetupRemoteAccessCredentials(name, namespace, clusterRole stri
 }
 
 // PrepareSecretForRemoteCluster prepares a secret from the secret of access credentials, which will be consumed by the remote cluster
-func (m *Manager) PrepareSecretForRemoteCluster(name, namespace, fedmanagerUID string) (*corev1.Secret, bool, error) {
+func (m *Manager) PrepareSecretForRemoteCluster(name, namespace, clusterUID string) (*corev1.Secret, bool, error) {
 	// Get the secret of the access credentials that is already prepared
 	authSecret, err := m.kubeclientset.CoreV1().Secrets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
@@ -112,7 +112,9 @@ func (m *Manager) PrepareSecretForRemoteCluster(name, namespace, fedmanagerUID s
 		break
 	}
 	remoteSecret.Data["server"] = []byte(address)
-	remoteSecret.Data["cluster-uid"] = []byte(fedmanagerUID)
+	// We need to add the cluster UID to the secret to be able to identify the parent cluster.
+	// As we deploy this secret to the remote cluster, current cluster UID becomes remote to that cluster.
+	remoteSecret.Data["remote-cluster-uid"] = []byte(clusterUID)
 	return remoteSecret, false, nil
 }
 

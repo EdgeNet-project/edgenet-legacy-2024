@@ -311,6 +311,8 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 			// This secret has additional information about the API server, namespace, the cluster UID of federation manager.
 			// The remote cluster will be consuming these information to access the federation manager and drive necessary operations.
 			remoteSecret, enqueue, err := multiproviderManager.PrepareSecretForRemoteCluster(clusterCopy.Spec.UID, propagationNamespace, namespaceLabels["edge-net.io/cluster-uid"])
+			remoteSecret.Data["assigned-cluster-namespace"] = []byte(clusterCopy.GetNamespace())
+			remoteSecret.Data["assigned-cluster-name"] = []byte(clusterCopy.GetName())
 			if err != nil {
 				if enqueue {
 					c.enqueueClusterAfter(clusterCopy, 1*time.Minute)
@@ -378,7 +380,9 @@ func (c *Controller) reconcile(clusterCopy *federationv1alpha1.Cluster, propagat
 		break
 	}
 	authSecret.Data["server"] = []byte(address)
-	authSecret.Data["cluster-uid"] = []byte(fedmanagerUID)
+	authSecret.Data["remote-cluster-uid"] = []byte(fedmanagerUID)
+	authSecret.Data["assigned-cluster-namespace"] = []byte(clusterCopy.GetNamespace())
+	authSecret.Data["assigned-cluster-name"] = []byte(clusterCopy.GetName())
 	// Prepare the config to access the remote cluster
 	config, ok := c.prepareConfig(clusterCopy)
 	if !ok {
@@ -399,7 +403,9 @@ func (c *Controller) reconcile(clusterCopy *federationv1alpha1.Cluster, propagat
 	}
 	// Compare the two secrets
 	if bytes.Compare(authSecret.Data["username"], remoteSecretFMAuth.Data["username"]) != 0 || bytes.Compare(authSecret.Data["namespace"], remoteSecretFMAuth.Data["namespace"]) != 0 ||
-		bytes.Compare(authSecret.Data["server"], remoteSecretFMAuth.Data["server"]) != 0 || bytes.Compare(authSecret.Data["token"], remoteSecretFMAuth.Data["token"]) != 0 || bytes.Compare(authSecret.Data["cluster-uid"], remoteSecretFMAuth.Data["cluster-uid"]) != 0 {
+		bytes.Compare(authSecret.Data["server"], remoteSecretFMAuth.Data["server"]) != 0 || bytes.Compare(authSecret.Data["token"], remoteSecretFMAuth.Data["token"]) != 0 ||
+		bytes.Compare(authSecret.Data["remote-cluster-uid"], remoteSecretFMAuth.Data["remote-cluster-uid"]) != 0 || bytes.Compare(authSecret.Data["assigned-cluster-namespace"], remoteSecretFMAuth.Data["assigned-cluster-namespace"]) != 0 ||
+		bytes.Compare(authSecret.Data["assigned-cluster-name"], remoteSecretFMAuth.Data["assigned-cluster-name"]) != 0 {
 		c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageWrongSecretAtRemote)
 		state = federationv1alpha1.StatusReconciliation
 		message = messageWrongSecretAtRemote
