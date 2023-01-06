@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -91,8 +92,18 @@ type ClusterStatus struct {
 	State string `json:"state"`
 	// Additional description can be located here.
 	Message string `json:"message"`
+	// RelativeResourceAvailability indicates the status of available resources in the cluster
+	RelativeResourceAvailability string `json:"relativeResourceAvailability"`
+	// AllocatableResources is the list of grouped allocatable resources in the cluster
+	AllocatableResources []BundledAllocatableResources `json:"allocatableResources"`
 	// Failed sets the backoff limit.
 	Failed int `json:"failed"`
+}
+
+// BundledAllocatableResources is the struct to bundle the allocatable resources
+type BundledAllocatableResources struct {
+	Count        int
+	ResourceList corev1.ResourceList
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -217,8 +228,10 @@ type Hierarchy struct {
 type ClusterCache struct {
 	// Characteristics is the list of characteristics of the cluster such as GPU cluster, camera cluster, etc.
 	Characteristics []string `json:"characteristics"`
-	// ResourceAvailability indicates the status of available resources in the cluster
-	ResourceAvailability string `json:"resourceAvailability"`
+	// RelativeResourceAvailability indicates the status of available resources in the cluster
+	RelativeResourceAvailability string `json:"relativeResourceAvailability"`
+	// AllocatableResources is the list of grouped allocatable resources in the cluster
+	AllocatableResources []BundledAllocatableResources `json:"allocatableResources"`
 }
 
 // ManagerCacheStatus is the status that shows the actual state of the managercache resource
