@@ -45,6 +45,8 @@ const (
 	NormalResources            = "Normal"
 	LimitedResources           = "Limited"
 	ScarceResources            = "Scarcity"
+	FederationManagerRole      = "Federation"
+	WorkloadRole               = "Workload"
 )
 
 // +genclient
