@@ -97,7 +97,7 @@ func NewController(
 	klog.Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartStructuredLogging(0)
-	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
+	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events(metav1.NamespaceAll)})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
@@ -275,7 +275,7 @@ func (c *Controller) processSelectiveDeploymentAnchor(selectivedeploymentanchorC
 					remotekubeclientset, _ = bootstrap.CreateKubeClientset(config)
 					remoteedgeclientset, _ = bootstrap.CreateEdgeNetClientset(config)
 				} else {
-					clusterRaw, err := c.edgenetclientset.FederationV1alpha1().Clusters("").List(context.TODO(), metav1.ListOptions{})
+					clusterRaw, err := c.edgenetclientset.FederationV1alpha1().Clusters(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
 					if err != nil {
 						return
 					}
@@ -320,7 +320,7 @@ func (c *Controller) processSelectiveDeploymentAnchor(selectivedeploymentanchorC
 				if len(selectivedeploymentanchorCopy.Spec.WorkloadClusters) == 0 {
 					return
 				}
-				clusterRaw, err := c.edgenetclientset.FederationV1alpha1().Clusters("").List(context.TODO(), metav1.ListOptions{})
+				clusterRaw, err := c.edgenetclientset.FederationV1alpha1().Clusters(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
 				if err != nil {
 					return
 				}
@@ -427,7 +427,7 @@ func (c *Controller) updateStatus(ctx context.Context, selectivedeploymentanchor
 
 // getFeasibleChildWorkloadClusters returns the list of feasible child workload clusters that are managed by the current federation manager
 func (c *Controller) getFeasibleChildWorkloadClusters(labelSelector string, clusterReplicaCount int) ([]string, error) {
-	clusterRaw, err := c.edgenetclientset.FederationV1alpha1().Clusters("").List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
+	clusterRaw, err := c.edgenetclientset.FederationV1alpha1().Clusters(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
 		klog.Infoln(err)
 		return nil, err
@@ -463,7 +463,7 @@ func (c *Controller) scanFederationManagers(currentFederationManager string, lab
 		score    int
 	}
 	federationManagers := make(map[string]managerList)
-	// keys is a list of manager names to be used while sort federation managers by their scores
+	// keys is a list of manager names to be used while sorting federation managers by their scores
 	var keys []string
 	// Get the list of manager caches that match the cluster affinity provided in the spec
 	// Thus, we have a list of managers that are eligible to be selected
@@ -475,7 +475,7 @@ func (c *Controller) scanFederationManagers(currentFederationManager string, lab
 	for _, managerCacheRow := range managerCachesRaw.Items {
 		score := 0
 		for _, managedCluster := range managerCacheRow.Spec.Clusters {
-			switch managedCluster.ResourceAvailability {
+			switch managedCluster.RelativeResourceAvailability {
 			case "Abundance":
 				score += 3
 			case "Normal":
@@ -504,21 +504,21 @@ func (c *Controller) scanFederationManagers(currentFederationManager string, lab
 	// Get the shortest path from the current federation manager to the selected federation manager
 	var path []string
 	// Look for the lowest common ancestor of the current federation manager and the selected federation manager
-	lca := LowestCommonAncestor(rootNode, sourceNode, destinationNode)
+	lca := lowestCommonAncestor(rootNode, sourceNode, destinationNode)
 	if lca == sourceNode {
-		shortestPath := ShortestPathFromParentToChild(sourceNode, destinationNode)
+		shortestPath := shortestPathFromParentToChild(sourceNode, destinationNode)
 		for _, node := range shortestPath {
 			path = append(path, node.Name)
 		}
 	} else if lca == destinationNode {
-		shortestPath := ShortestPathFromParentToChild(sourceNode, destinationNode)
+		shortestPath := shortestPathFromParentToChild(sourceNode, destinationNode)
 		for _, node := range shortestPath {
 			path = append(path, node.Name)
 		}
 		sort.Sort(sort.Reverse(sort.StringSlice(path)))
 	} else {
-		shortestPath := ShortestPathFromParentToChild(sourceNode, lca)
-		shortestPath = append(shortestPath, ShortestPathFromParentToChild(lca, destinationNode)...)
+		shortestPath := shortestPathFromParentToChild(sourceNode, lca)
+		shortestPath = append(shortestPath, shortestPathFromParentToChild(lca, destinationNode)...)
 		for _, node := range shortestPath {
 			path = append(path, node.Name)
 		}
@@ -560,14 +560,14 @@ func newNode(name string) *Node {
 	return &Node{Name: name, Children: []*Node{}}
 }
 
-// ShortestPathFromParentToChild returns the shortest path from the parent to the child
-func ShortestPathFromParentToChild(start, end *Node) []*Node {
+// shortestPathFromParentToChild returns the shortest path from the parent to the child
+func shortestPathFromParentToChild(start, end *Node) []*Node {
 	if start == end {
 		return []*Node{start}
 	}
 	var path []*Node
 	for _, child := range start.Children {
-		result := ShortestPathFromParentToChild(child, end)
+		result := shortestPathFromParentToChild(child, end)
 		if result != nil {
 			path = append(path, result...)
 		}
@@ -578,15 +578,14 @@ func ShortestPathFromParentToChild(start, end *Node) []*Node {
 	return nil
 }
 
-// LowestCommonAncestor returns the lowest common ancestor of the two nodes
-func LowestCommonAncestor(root *Node, p, q *Node) *Node {
+// lowestCommonAncestor returns the lowest common ancestor of the two nodes
+func lowestCommonAncestor(root *Node, p, q *Node) *Node {
 	if root == nil || root == p || root == q {
 		return root
 	}
-
 	var lca *Node
 	for _, child := range root.Children {
-		result := LowestCommonAncestor(child, p, q)
+		result := lowestCommonAncestor(child, p, q)
 		if result == nil {
 			continue
 		}
