@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
@@ -102,7 +103,7 @@ func NewController(
 	klog.Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartStructuredLogging(0)
-	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
+	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events(metav1.NamespaceAll)})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
@@ -288,9 +289,17 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 					return
 				}
 				multiproviderManager = multiprovider.NewManager(c.kubeclientset, remotekubeclientset, remoteedgeclientset)
-				// Update the manager cache of the federation manager to include the newly added cluster as a child
+				// Update the manager cache of the federation manager to include the cluster as a child
 				managerCache, _ := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), namespaceLabels["edge-net.io/cluster-uid"], metav1.GetOptions{})
 				managerCache.Spec.Hierarchy.Children = append(managerCache.Spec.Hierarchy.Children, clusterCopy.Spec.UID)
+				if managerCache.Spec.Clusters == nil {
+					managerCache.Spec.Clusters = make(map[string]federationv1alpha1.ClusterCache)
+				}
+				clusterCache := federationv1alpha1.ClusterCache{}
+				clusterCache.AllocatableResources = clusterCopy.Status.AllocatableResources
+				clusterCache.RelativeResourceAvailability = clusterCopy.Status.RelativeResourceAvailability
+				// TODO: Set clusterCache.Characteristics
+				managerCache.Spec.Clusters[clusterCopy.Spec.UID] = clusterCache
 				if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Update(context.TODO(), managerCache, metav1.UpdateOptions{}); err != nil {
 					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageManagerCacheUpdateFailed)
 					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageManagerCacheUpdateFailed)
@@ -422,6 +431,18 @@ func (c *Controller) reconcile(clusterCopy *federationv1alpha1.Cluster, propagat
 			}
 		}
 		if !isExists {
+			c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageManagerCacheUpdateFailed)
+			state = federationv1alpha1.StatusReconciliation
+			message = messageManagerCacheUpdateFailed
+		}
+		if managerCache.Spec.Clusters != nil {
+			if clusterCache, ok := managerCache.Spec.Clusters[clusterCopy.Spec.UID]; !ok || !reflect.DeepEqual(clusterCache.AllocatableResources, clusterCopy.Status.AllocatableResources) ||
+				clusterCache.RelativeResourceAvailability != clusterCopy.Status.RelativeResourceAvailability {
+				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageManagerCacheUpdateFailed)
+				state = federationv1alpha1.StatusReconciliation
+				message = messageManagerCacheUpdateFailed
+			}
+		} else {
 			c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageManagerCacheUpdateFailed)
 			state = federationv1alpha1.StatusReconciliation
 			message = messageManagerCacheUpdateFailed
