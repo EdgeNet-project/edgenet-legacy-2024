@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
+	appsv1alpha2 "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha2"
 	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -99,7 +101,19 @@ func (m *Manager) PrepareSecretForRemoteCluster(name, namespace, clusterUID stri
 		authentication = "serviceaccount"
 	}
 	// TODO: This part needs to be changed to support multiple control plane nodes
+	address, _ := m.GetClusterAddressWithLocation()
+	remoteSecret.Data["server"] = []byte(address)
+	// We need to add the cluster UID to the secret to be able to identify the parent cluster.
+	// As we deploy this secret to the remote cluster, current cluster UID becomes remote to that cluster.
+	remoteSecret.Data["remote-cluster-uid"] = []byte(clusterUID)
+	return remoteSecret, false, nil
+}
+
+// GetServerAddress retrieves the server address of the cluster from a control plane node
+func (m *Manager) GetClusterAddressWithLocation() (string, string) {
+	// TODO: This part needs to be changed to support multiple control plane nodes
 	var address string
+	var location string
 	nodeRaw, _ := m.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/control-plane"})
 	for _, node := range nodeRaw.Items {
 		if internal, external := GetNodeIPAddresses(node.DeepCopy()); external == "" && internal == "" {
@@ -109,13 +123,11 @@ func (m *Manager) PrepareSecretForRemoteCluster(name, namespace, clusterUID stri
 		} else {
 			address = internal + ":8443"
 		}
+		labels := node.GetLabels()
+		location = fmt.Sprintf("%s/%s", labels["edge-net.io/country"], labels["edge-net.io/city"])
 		break
 	}
-	remoteSecret.Data["server"] = []byte(address)
-	// We need to add the cluster UID to the secret to be able to identify the parent cluster.
-	// As we deploy this secret to the remote cluster, current cluster UID becomes remote to that cluster.
-	remoteSecret.Data["remote-cluster-uid"] = []byte(clusterUID)
-	return remoteSecret, false, nil
+	return address, location
 }
 
 // DeploySecret deploys a secret to the remote cluster
@@ -124,6 +136,9 @@ func (m *Manager) DeploySecret(secret *corev1.Secret) error {
 	if _, err := m.remotekubeclientset.CoreV1().Secrets(secret.GetNamespace()).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
 		if errors.IsAlreadyExists(err) {
 			if currentSecret, err := m.remotekubeclientset.CoreV1().Secrets(secret.GetNamespace()).Get(context.TODO(), secret.GetName(), metav1.GetOptions{}); err == nil {
+				if reflect.DeepEqual(currentSecret.Data, secret.Data) {
+					return nil
+				}
 				currentSecret.Data = secret.Data
 				if _, err = m.remotekubeclientset.CoreV1().Secrets(secret.GetNamespace()).Update(context.TODO(), currentSecret, metav1.UpdateOptions{}); err == nil {
 					return nil
@@ -133,6 +148,59 @@ func (m *Manager) DeploySecret(secret *corev1.Secret) error {
 		return err
 	}
 	return nil
+}
+
+// AnchorSelectiveDeployment creates a selective deployment anchor in its federation manager
+func (m *Manager) AnchorSelectiveDeployment(selectivedeployment *appsv1alpha2.SelectiveDeployment, propagationNamespace, secretName string) error {
+	selectivedeploymentanchor := new(federationv1alpha1.SelectiveDeploymentAnchor)
+	selectivedeploymentanchor.SetName(string(selectivedeployment.GetUID()))
+	selectivedeploymentanchor.SetNamespace(propagationNamespace)
+	selectivedeploymentanchor.Spec.ClusterAffinity = selectivedeployment.Spec.ClusterAffinity
+	selectivedeploymentanchor.Spec.ClusterReplicas = selectivedeployment.Spec.ClusterReplicas
+	selectivedeploymentanchor.Spec.OriginRef.Name = selectivedeployment.GetName()
+	selectivedeploymentanchor.Spec.OriginRef.Namespace = selectivedeployment.GetNamespace()
+	selectivedeploymentanchor.Spec.OriginRef.UID = string(selectivedeployment.GetUID())
+	selectivedeploymentanchor.Spec.SecretName = secretName
+	if _, err := m.remoteedgeclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchor.GetNamespace()).Create(context.TODO(), selectivedeploymentanchor, metav1.CreateOptions{}); err != nil {
+		if errors.IsAlreadyExists(err) {
+			if currentSelectiveDeploymentAnchor, err := m.remoteedgeclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchor.GetNamespace()).Get(context.TODO(), selectivedeploymentanchor.GetName(), metav1.GetOptions{}); err == nil {
+				if reflect.DeepEqual(currentSelectiveDeploymentAnchor.Spec, selectivedeploymentanchor.Spec) {
+					return nil
+				}
+				currentSelectiveDeploymentAnchor.Spec = selectivedeploymentanchor.Spec
+				if _, err := m.remoteedgeclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchor.GetNamespace()).Update(context.TODO(), currentSelectiveDeploymentAnchor, metav1.UpdateOptions{}); err == nil {
+					return nil
+				}
+			}
+		}
+		return err
+	}
+	return nil
+}
+
+// UpdateSelectiveDeploymentClusterStatus updates the status of originating selective deployment in its originating cluster
+func (m *Manager) UpdateSelectiveDeploymentClusterStatus(name, namespace, clusterUID string, status appsv1alpha2.WorkloadClusterStatus) bool {
+	originatingSelectivedeployment, err := m.remoteedgeclientset.AppsV1alpha2().SelectiveDeployments(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return false
+	}
+	updateStatus := true
+	if originatingSelectivedeployment.Status.Clusters != nil {
+		if originatingStatus, elementExists := originatingSelectivedeployment.Status.Clusters[clusterUID]; elementExists {
+			if reflect.DeepEqual(originatingStatus, status) {
+				updateStatus = false
+			}
+		}
+	} else {
+		originatingSelectivedeployment.Status.Clusters = make(map[string]appsv1alpha2.WorkloadClusterStatus)
+	}
+	if updateStatus {
+		originatingSelectivedeployment.Status.Clusters[clusterUID] = status
+		if _, err := m.remoteedgeclientset.AppsV1alpha2().SelectiveDeployments(namespace).UpdateStatus(context.TODO(), originatingSelectivedeployment, metav1.UpdateOptions{}); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // CreateManagerCache creates a manager cache in the remote cluster

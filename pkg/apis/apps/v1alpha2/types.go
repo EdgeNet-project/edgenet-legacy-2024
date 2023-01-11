@@ -27,8 +27,8 @@ const (
 	StatusFailed         = "Failure"
 	StatusReconciliation = "Reconciliation"
 	// Selective Deployment
-	StatusReady   = "Ready"
-	StatusCreated = "Created"
+	StatusSuccessful = "Successful"
+	StatusCreated    = "Created"
 )
 
 // Values of string constants subject to repetitive use
@@ -81,17 +81,16 @@ type SelectiveDeploymentStatus struct {
 	State string `json:"state"`
 	// Extended status message
 	Message string `json:"message"`
-	// ClusterRefs is the list of clusters where the workloads are deployed
-	ClusterRefs []ClusterReference `json:"clusterRefs"`
+	// Clusters is the list of clusters where the workloads are deployed
+	Clusters map[string]WorkloadClusterStatus `json:"cluster"`
 	// Failed sets the backoff limit.
 	Failed int `json:"failed"`
 }
 
-type ClusterReference struct {
-	UUID      string           `json:"uuid"`
-	Server    string           `json:"server"`
-	Location  string           `json:"location"`
-	Workloads []WorkloadStatus `json:"workloads"`
+type WorkloadClusterStatus struct {
+	Server    string         `json:"server"`
+	Location  string         `json:"location"`
+	Workloads WorkloadStatus `json:"workloads"`
 }
 
 type WorkloadStatus struct {

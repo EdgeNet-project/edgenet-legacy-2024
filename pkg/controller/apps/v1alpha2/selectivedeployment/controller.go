@@ -32,7 +32,6 @@ import (
 	"github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -56,13 +55,28 @@ const controllerAgentName = "selectivedeployment-controller"
 
 // Definitions of the state of the selectivedeployment resource
 const (
+	backoffLimit = 3
+
 	successSynced = "Synced"
 
 	messageResourceSynced = "Selective deployment synced successfully"
 
-	messageServiceAccountFailed = "Service account creation failed"
-	messageAuthSecretFailed     = "Secret storing selective deployment's token cannot be created"
-	messageBindingFailed        = "Role binding failed"
+	messageServiceAccountFailed                   = "Service account creation failed"
+	messageAuthSecretFailed                       = "Secret storing selective deployment's token cannot be created"
+	messageBindingFailed                          = "Role binding failed"
+	messageWorkloadDeploymentFailed               = "Workload deployment failed"
+	messageWorkloadDeploymentMade                 = "Workload deployment is successful"
+	messageWorkloadCannotBeCreated                = "Cannot create %s %s"
+	messageCredsFailed                            = "Credentials for selective deployment access cannot be prepared"
+	messageRemoteSecretFailed                     = "Remote secret cannot be created from the secret of credentials"
+	messageRemoteSecretDeploymentFailed           = "Remote secret cannot be deployed to the remote cluster"
+	messageAnchorMade                             = "Anchor has dropped in the federation manager"
+	messageAnchorFailed                           = "Anchor cannot be dropped in the federation manager"
+	messageMissingSecretFMAuth                    = "Secret storing federation manager's token is missing"
+	messageRemoteClientFailed                     = "Clientset for remote cluster cannot be created"
+	messageOriginatingSelectivedeploymentNotFound = "Originating selective deployment is not found"
+	messageStatusUpdateFailed                     = "Originating selective deployment status cannot be updated"
+	messageReconciliationDone                     = "Reconciliation of the selective deployment at the scope of federation is done"
 )
 
 // Controller is the controller implementation for Selective Deployment resources
@@ -153,19 +167,6 @@ func NewController(
 			controller.enqueueSelectiveDeployment(new)
 		},
 	})
-
-	/*nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.recoverSelectiveDeployments,
-		UpdateFunc: func(old, new interface{}) {
-			newNode := new.(*corev1.Node)
-			oldNode := old.(*corev1.Node)
-			if newNode.ResourceVersion == oldNode.ResourceVersion {
-				return
-			}
-			controller.recoverSelectiveDeployments(new)
-		},
-		DeleteFunc: controller.recoverSelectiveDeployments,
-	})*/
 
 	/*deploymentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.handleObject,
@@ -393,217 +394,97 @@ func (c *Controller) handleObject(obj interface{}) {
 			klog.Infof("ignoring orphaned object '%s' of selectivedeployment '%s'", object.GetSelfLink(), ownerRef.Name)
 			return
 		}
-
-		//c.enqueueSelectiveDeploymentAfter(selectivedeployment, 5*time.Minute)
-		c.enqueueSelectiveDeployment(selectivedeployment)
+		c.enqueueSelectiveDeploymentAfter(selectivedeployment, 1*time.Minute)
 		return
 	}
 }
 
 func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1alpha2.SelectiveDeployment) {
+	// Crashloop backoff limit to avoid endless loop
+	if exceedsBackoffLimit := selectivedeploymentCopy.Status.Failed >= backoffLimit; exceedsBackoffLimit {
+		// TODO: If it exceeds the limit, run a cleanup function
+		// c.cleanup(selectivedeploymentanchorCopy)
+		return
+	}
 	multitenancyManager := multitenancy.NewManager(c.kubeclientset, c.edgenetclientset)
-	permitted, _, _ := multitenancyManager.EligibilityCheck(selectivedeploymentCopy.GetNamespace())
+	permitted, _, namespaceLabels := multitenancyManager.EligibilityCheck(selectivedeploymentCopy.GetNamespace())
 	if permitted {
-
 		switch selectivedeploymentCopy.Status.State {
-		case appsv1alpha2.StatusReady:
-			// edge-net.io/origin-selective-deployment-uid
-
 		case appsv1alpha2.StatusCreated:
+			multiproviderManager, fedmanagerUID, ok := c.prepareMultiProviderManager()
+			if !ok {
+				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusReconciliation, messageCredsFailed)
+				c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusReconciliation, messageCredsFailed)
+				return
+			}
 			annotations := selectivedeploymentCopy.GetAnnotations()
 			if value, ok := annotations["edge-net.io/selective-deployment"]; ok && value == "follower" {
-				if len(selectivedeploymentCopy.Spec.Workloads.Deployment) > 0 {
-					for _, deployment := range selectivedeploymentCopy.Spec.Workloads.Deployment {
-						name := selectivedeploymentCopy.GetName() + "-" + deployment.GetName()
-						if _, err := c.kubeclientset.AppsV1().Deployments(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
-							return
-						}
-					}
-				}
-				if len(selectivedeploymentCopy.Spec.Workloads.StatefulSet) > 0 {
-					for _, statefulset := range selectivedeploymentCopy.Spec.Workloads.StatefulSet {
-						name := selectivedeploymentCopy.GetName() + "-" + statefulset.GetName()
-						if _, err := c.kubeclientset.AppsV1().StatefulSets(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
-							return
-						}
-					}
-				}
-				if len(selectivedeploymentCopy.Spec.Workloads.DaemonSet) > 0 {
-					for _, daemonset := range selectivedeploymentCopy.Spec.Workloads.DaemonSet {
-						name := selectivedeploymentCopy.GetName() + "-" + daemonset.GetName()
-						if _, err := c.kubeclientset.AppsV1().DaemonSets(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
-							return
-						}
-					}
-				}
-				if len(selectivedeploymentCopy.Spec.Workloads.Job) > 0 {
-					for _, job := range selectivedeploymentCopy.Spec.Workloads.Job {
-						name := selectivedeploymentCopy.GetName() + "-" + job.GetName()
-						if _, err := c.kubeclientset.BatchV1().Jobs(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
-							return
-						}
-					}
-				}
-				if len(selectivedeploymentCopy.Spec.Workloads.CronJob) > 0 {
-					for _, cronjob := range selectivedeploymentCopy.Spec.Workloads.CronJob {
-						name := selectivedeploymentCopy.GetName() + "-" + cronjob.GetName()
-						if _, err := c.kubeclientset.BatchV1().CronJobs(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
-							return
-						}
-					}
-				}
-				// Update the status of the original selectivedeployment
-			} else {
-				secretFMAuth, _ := c.kubeclientset.CoreV1().Secrets("edgenet").Get(context.TODO(), "federation", metav1.GetOptions{})
-				propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, secretFMAuth.Data["cluster-uid"])
-
-				config := bootstrap.PrepareRestConfig(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
-				remotekubeclientset, _ := bootstrap.CreateKubeClientset(config)
-				remoteedgeclientset, _ := bootstrap.CreateEdgeNetClientset(config)
-				if _, err := remotekubeclientset.CoreV1().Secrets(propagationNamespace).Get(context.TODO(), string(selectivedeploymentCopy.GetUID()), metav1.GetOptions{}); err != nil {
+				// Check the workloads of the selective deployment and prepare a deployment status for the cluster.
+				// This status will be used to update the status of originating selective deployment.
+				workloadClusterStatus, ok := c.reconcileWithWorkloads(selectivedeploymentCopy)
+				if !ok {
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusReconciliation, messageWorkloadDeploymentFailed)
+					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusReconciliation, messageWorkloadDeploymentFailed)
 					return
 				}
-				if _, err := remoteedgeclientset.FederationV1alpha1().SelectiveDeploymentAnchors(propagationNamespace).Get(context.TODO(), string(selectivedeploymentCopy.GetUID()), metav1.GetOptions{}); err != nil {
+				address, location := multiproviderManager.GetClusterAddressWithLocation()
+				workloadClusterStatus.Location = location
+				workloadClusterStatus.Server = address
+				if ok := multiproviderManager.UpdateSelectiveDeploymentClusterStatus(selectivedeploymentCopy.GetName(), selectivedeploymentCopy.GetNamespace(), namespaceLabels["edge-net.io/cluster-uid"], workloadClusterStatus); !ok {
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusReconciliation, messageStatusUpdateFailed)
+					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusReconciliation, messageStatusUpdateFailed)
+					return
+				}
+			} else {
+				// Reconcile with the anchor in the federation manager
+				if enqueue, err := c.makeSelectiveDeployment(selectivedeploymentCopy, multiproviderManager, namespaceLabels["edge-net.io/cluster-uid"], fedmanagerUID); err != nil {
+					if enqueue {
+						return
+					}
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusReconciliation, messageAnchorFailed)
+					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusReconciliation, messageAnchorFailed)
 					return
 				}
 			}
+			c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeNormal, appsv1alpha2.StatusSuccessful, messageReconciliationDone)
 		default:
+			// There are two roles for selective deployments: Followee and Follower. If it is a follower, it will create the workloads defined in the selective deployment.
+			// If it is a followee, it will propagate the selective deployment through an anchor to the federation manager.
+			// Then federation manager makes a scheduling decision at the level of the federation.
 			annotations := selectivedeploymentCopy.GetAnnotations()
 			if value, ok := annotations["edge-net.io/selective-deployment"]; ok && value == "follower" {
-				if len(selectivedeploymentCopy.Spec.Workloads.Deployment) > 0 {
-					for _, deployment := range selectivedeploymentCopy.Spec.Workloads.Deployment {
-						deploymentCopy := deployment.DeepCopy()
-						deploymentCopy.Namespace = selectivedeploymentCopy.GetNamespace()
-						deploymentCopy.Name = selectivedeploymentCopy.GetName() + "-" + deploymentCopy.GetName()
-						deploymentCopy.SetOwnerReferences([]metav1.OwnerReference{selectivedeploymentCopy.MakeOwnerReference()})
-						deploymentCopy.Labels["edge-net.io/selective-deployment"] = "follower"
-						deploymentCopy.Labels["edge-net.io/selective-deployment-name"] = selectivedeploymentCopy.GetName()
-						_, err := c.kubeclientset.AppsV1().Deployments(deploymentCopy.GetNamespace()).Create(context.TODO(), deploymentCopy, metav1.CreateOptions{})
-						if err != nil {
-							if errors.IsAlreadyExists(err) {
-								_, err := c.kubeclientset.AppsV1().Deployments(deploymentCopy.GetNamespace()).Update(context.TODO(), deploymentCopy, metav1.UpdateOptions{})
-								if err != nil {
-									klog.Errorf("Couldn't update deployment %s in namespace %s", deploymentCopy.GetName(), deploymentCopy.GetNamespace())
-								}
-							} else {
-								klog.Errorf("Couldn't create deployment %s in namespace %s", deploymentCopy.GetName(), deploymentCopy.GetNamespace())
-							}
-						}
-					}
+				// Create the workloads defined in the selective deployment and check if there is any failure
+				if ok := c.createWorkloads(selectivedeploymentCopy); ok {
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageWorkloadDeploymentFailed)
+					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageWorkloadDeploymentFailed)
+					return
 				}
-				if len(selectivedeploymentCopy.Spec.Workloads.StatefulSet) > 0 {
-					for _, statefulset := range selectivedeploymentCopy.Spec.Workloads.StatefulSet {
-						statefulsetCopy := statefulset.DeepCopy()
-						statefulsetCopy.Namespace = selectivedeploymentCopy.GetNamespace()
-						statefulsetCopy.Name = selectivedeploymentCopy.GetName() + "-" + statefulsetCopy.GetName()
-						statefulsetCopy.SetOwnerReferences([]metav1.OwnerReference{selectivedeploymentCopy.MakeOwnerReference()})
-						statefulsetCopy.Labels["edge-net.io/selective-deployment"] = "follower"
-						statefulsetCopy.Labels["edge-net.io/selective-deployment-name"] = selectivedeploymentCopy.GetName()
-						_, err := c.kubeclientset.AppsV1().StatefulSets(statefulsetCopy.GetNamespace()).Create(context.TODO(), statefulsetCopy, metav1.CreateOptions{})
-						if err != nil {
-							if errors.IsAlreadyExists(err) {
-								_, err := c.kubeclientset.AppsV1().StatefulSets(statefulsetCopy.GetNamespace()).Update(context.TODO(), statefulsetCopy, metav1.UpdateOptions{})
-								if err != nil {
-									klog.Errorf("Couldn't update statefulset %s in namespace %s", statefulsetCopy.GetName(), statefulsetCopy.GetNamespace())
-								}
-							} else {
-								klog.Errorf("Couldn't create statefulset %s in namespace %s", statefulsetCopy.GetName(), statefulsetCopy.GetNamespace())
-							}
-						}
-					}
-				}
-				if len(selectivedeploymentCopy.Spec.Workloads.DaemonSet) > 0 {
-					for _, daemonset := range selectivedeploymentCopy.Spec.Workloads.DaemonSet {
-						daemonsetCopy := daemonset.DeepCopy()
-						daemonsetCopy.Namespace = selectivedeploymentCopy.GetNamespace()
-						daemonsetCopy.Name = selectivedeploymentCopy.GetName() + "-" + daemonsetCopy.GetName()
-						daemonsetCopy.SetOwnerReferences([]metav1.OwnerReference{selectivedeploymentCopy.MakeOwnerReference()})
-						daemonsetCopy.Labels["edge-net.io/selective-deployment"] = "follower"
-						daemonsetCopy.Labels["edge-net.io/selective-deployment-name"] = selectivedeploymentCopy.GetName()
-						_, err := c.kubeclientset.AppsV1().DaemonSets(daemonsetCopy.GetNamespace()).Create(context.TODO(), daemonsetCopy, metav1.CreateOptions{})
-						if err != nil {
-							if errors.IsAlreadyExists(err) {
-								_, err := c.kubeclientset.AppsV1().DaemonSets(daemonsetCopy.GetNamespace()).Update(context.TODO(), daemonsetCopy, metav1.UpdateOptions{})
-								if err != nil {
-									klog.Errorf("Couldn't update daemonset %s in namespace %s", daemonsetCopy.GetName(), daemonsetCopy.GetNamespace())
-								}
-							} else {
-								klog.Errorf("Couldn't create daemonset %s in namespace %s", daemonsetCopy.GetName(), daemonsetCopy.GetNamespace())
-							}
-						}
-					}
-				}
-				if len(selectivedeploymentCopy.Spec.Workloads.Job) > 0 {
-					for _, job := range selectivedeploymentCopy.Spec.Workloads.Job {
-						jobCopy := job.DeepCopy()
-						jobCopy.Namespace = selectivedeploymentCopy.GetNamespace()
-						jobCopy.Name = selectivedeploymentCopy.GetName() + "-" + jobCopy.GetName()
-						jobCopy.SetOwnerReferences([]metav1.OwnerReference{selectivedeploymentCopy.MakeOwnerReference()})
-						jobCopy.Labels["edge-net.io/selective-deployment"] = "follower"
-						jobCopy.Labels["edge-net.io/selective-deployment-name"] = selectivedeploymentCopy.GetName()
-						_, err := c.kubeclientset.BatchV1().Jobs(jobCopy.GetNamespace()).Create(context.TODO(), jobCopy, metav1.CreateOptions{})
-						if err != nil {
-							if errors.IsAlreadyExists(err) {
-								_, err := c.kubeclientset.BatchV1().Jobs(jobCopy.GetNamespace()).Update(context.TODO(), jobCopy, metav1.UpdateOptions{})
-								if err != nil {
-									klog.Errorf("Couldn't update job %s in namespace %s", jobCopy.GetName(), jobCopy.GetNamespace())
-								}
-							} else {
-								klog.Errorf("Couldn't create job %s in namespace %s", jobCopy.GetName(), jobCopy.GetNamespace())
-							}
-						}
-					}
-				}
-				if len(selectivedeploymentCopy.Spec.Workloads.CronJob) > 0 {
-					for _, cronjob := range selectivedeploymentCopy.Spec.Workloads.CronJob {
-						cronjobCopy := cronjob.DeepCopy()
-						cronjobCopy.Namespace = selectivedeploymentCopy.GetNamespace()
-						cronjobCopy.Name = selectivedeploymentCopy.GetName() + "-" + cronjobCopy.GetName()
-						cronjobCopy.SetOwnerReferences([]metav1.OwnerReference{selectivedeploymentCopy.MakeOwnerReference()})
-						cronjobCopy.Labels["edge-net.io/selective-deployment"] = "follower"
-						cronjobCopy.Labels["edge-net.io/selective-deployment-name"] = selectivedeploymentCopy.GetName()
-						_, err := c.kubeclientset.BatchV1().CronJobs(cronjobCopy.GetNamespace()).Create(context.TODO(), cronjobCopy, metav1.CreateOptions{})
-						if err != nil {
-							if errors.IsAlreadyExists(err) {
-								_, err := c.kubeclientset.BatchV1().CronJobs(cronjobCopy.GetNamespace()).Update(context.TODO(), cronjobCopy, metav1.UpdateOptions{})
-								if err != nil {
-									klog.Errorf("Couldn't update cronjob %s in namespace %s", cronjobCopy.GetName(), cronjobCopy.GetNamespace())
-								}
-							} else {
-								klog.Errorf("Couldn't create cronjob %s in namespace %s", cronjobCopy.GetName(), cronjobCopy.GetNamespace())
-							}
-						}
-					}
-				}
+				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeNormal, appsv1alpha2.StatusCreated, messageWorkloadDeploymentMade)
+				c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusCreated, messageWorkloadDeploymentMade)
 			} else {
-				c.createTokenForFollowers(selectivedeploymentCopy, selectivedeploymentCopy.GetNamespace())
-
-				secretFMAuth, _ := c.kubeclientset.CoreV1().Secrets("edgenet").Get(context.TODO(), "federation", metav1.GetOptions{})
-				propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, secretFMAuth.Data["cluster-uid"])
-				klog.Infof("%s", secretFMAuth.Data)
-				config := bootstrap.PrepareRestConfig(string(secretFMAuth.Data["server"]), string(secretFMAuth.Data["token"]), secretFMAuth.Data["ca.crt"])
-				remotekubeclientset, _ := bootstrap.CreateKubeClientset(config)
-				remoteedgeclientset, _ := bootstrap.CreateEdgeNetClientset(config)
-
-				authSecret, err := c.kubeclientset.CoreV1().Secrets(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), string(selectivedeploymentCopy.GetUID()), metav1.GetOptions{})
-				klog.Infoln(err)
-				remoteAuthSecret := new(corev1.Secret)
-				remoteAuthSecret.SetName(authSecret.GetName())
-				remoteAuthSecret.SetNamespace(propagationNamespace)
-				remoteAuthSecret.Data = authSecret.Data
-				_, err = remotekubeclientset.CoreV1().Secrets(remoteAuthSecret.GetNamespace()).Create(context.TODO(), remoteAuthSecret, metav1.CreateOptions{})
-				klog.Infoln(err)
-				selectivedeploymentanchor := new(federationv1alpha1.SelectiveDeploymentAnchor)
-				selectivedeploymentanchor.SetName(string(selectivedeploymentCopy.GetUID()))
-				selectivedeploymentanchor.SetNamespace(propagationNamespace)
-				selectivedeploymentanchor.Spec.ClusterAffinity = selectivedeploymentCopy.Spec.ClusterAffinity
-				selectivedeploymentanchor.Spec.ClusterReplicas = selectivedeploymentCopy.Spec.ClusterReplicas
-				selectivedeploymentanchor.Spec.OriginRef.Name = selectivedeploymentCopy.GetName()
-				selectivedeploymentanchor.Spec.OriginRef.Namespace = selectivedeploymentCopy.GetNamespace()
-				selectivedeploymentanchor.Spec.OriginRef.UID = string(selectivedeploymentCopy.GetUID())
-				selectivedeploymentanchor.Spec.SecretName = remoteAuthSecret.GetName()
-				_, err = remoteedgeclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchor.GetNamespace()).Create(context.TODO(), selectivedeploymentanchor, metav1.CreateOptions{})
-				klog.Infoln(err)
+				multiproviderManager, fedmanagerUID, ok := c.prepareMultiProviderManager()
+				if !ok {
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageCredsFailed)
+					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageCredsFailed)
+					return
+				}
+				// Below creates a secret tied to a service account along with a role binding for the remote cluster.
+				// The remote cluster will use this secret to communicate with this originating selective deployment, thus updating its status regularly.
+				if err := multiproviderManager.SetupRemoteAccessCredentials(string(selectivedeploymentCopy.GetUID()), selectivedeploymentCopy.GetNamespace(), appsv1alpha2.RemoteSelectiveDeploymentRole); err != nil {
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageCredsFailed)
+					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageCredsFailed)
+					return
+				}
+				// Create the anchor in the federation manager
+				if enqueue, err := c.makeSelectiveDeployment(selectivedeploymentCopy, multiproviderManager, namespaceLabels["edge-net.io/cluster-uid"], fedmanagerUID); err != nil {
+					if enqueue {
+						return
+					}
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageAnchorFailed)
+					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageAnchorFailed)
+				}
+				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeNormal, appsv1alpha2.StatusCreated, messageAnchorMade)
+				c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusCreated, messageAnchorMade)
 			}
 		}
 	} else {
@@ -611,81 +492,215 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 	}
 }
 
+func (c *Controller) makeSelectiveDeployment(selectivedeploymentCopy *appsv1alpha2.SelectiveDeployment, multiproviderManager *multiprovider.Manager, clusterUID string, fedmanagerUID []byte) (bool, error) {
+	// We will create the anchor object in the federation manager. It will trigger the FedScheduler to make scheduling decision at the level of the federation.
+	// Following the scheduling decision, this object will be propagated across the federation if needed.
+	// Once it reaches the destination federation manager, workloads will be created in the selected clusters.
+	propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, fedmanagerUID)
+	// Prepare the selective deployment secret and deploy it to the federation manager
+	remoteSecret, enqueue, err := multiproviderManager.PrepareSecretForRemoteCluster(string(selectivedeploymentCopy.GetUID()), propagationNamespace, clusterUID)
+	if err != nil {
+		if enqueue {
+			c.enqueueSelectiveDeploymentAfter(selectivedeploymentCopy, 1*time.Minute)
+			return true, err
+		}
+		c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageRemoteSecretFailed)
+		return false, err
+	}
+	if err := multiproviderManager.DeploySecret(remoteSecret); err != nil {
+		c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageRemoteSecretDeploymentFailed)
+		return false, err
+	}
+	if err := multiproviderManager.AnchorSelectiveDeployment(selectivedeploymentCopy, propagationNamespace, remoteSecret.GetName()); err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
+func (c *Controller) prepareMultiProviderManager() (*multiprovider.Manager, []byte, bool) {
+	fedmanagerSecret, err := c.kubeclientset.CoreV1().Secrets("edgenet").Get(context.TODO(), "federation", metav1.GetOptions{})
+	if err != nil {
+		return nil, nil, false
+	}
+	config := bootstrap.PrepareRestConfig(string(fedmanagerSecret.Data["server"]), string(fedmanagerSecret.Data["token"]), fedmanagerSecret.Data["ca.crt"])
+	remotekubeclientset, err := bootstrap.CreateKubeClientset(config)
+	if err != nil {
+		return nil, nil, false
+	}
+	remoteedgeclientset, err := bootstrap.CreateEdgeNetClientset(config)
+	if err != nil {
+		return nil, nil, false
+	}
+	multiproviderManager := multiprovider.NewManager(c.kubeclientset, remotekubeclientset, remoteedgeclientset)
+	return multiproviderManager, fedmanagerSecret.Data["cluster-uid"], true
+}
+
+// reconcileWithWorkloads checks if the workloads defined in the selective deployment exist or not.
+// If so, it gets the statuses of these workloads for further use.
+func (c *Controller) reconcileWithWorkloads(selectivedeploymentCopy *appsv1alpha2.SelectiveDeployment) (appsv1alpha2.WorkloadClusterStatus, bool) {
+	workloadClusterStatus := appsv1alpha2.WorkloadClusterStatus{}
+	if len(selectivedeploymentCopy.Spec.Workloads.Deployment) > 0 {
+		workloadClusterStatus.Workloads.Deployment = make(map[string]string)
+		for _, deployment := range selectivedeploymentCopy.Spec.Workloads.Deployment {
+			name := selectivedeploymentCopy.GetName() + "-" + deployment.GetName()
+			deployment, err := c.kubeclientset.AppsV1().Deployments(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{})
+			if err != nil {
+				return workloadClusterStatus, false
+			}
+			workloadClusterStatus.Workloads.Deployment[name] = fmt.Sprintf("%d/%d", deployment.Status.AvailableReplicas, deployment.Status.Replicas)
+		}
+	}
+	if len(selectivedeploymentCopy.Spec.Workloads.StatefulSet) > 0 {
+		workloadClusterStatus.Workloads.StatefulSet = make(map[string]string)
+		for _, statefulset := range selectivedeploymentCopy.Spec.Workloads.StatefulSet {
+			name := selectivedeploymentCopy.GetName() + "-" + statefulset.GetName()
+			if _, err := c.kubeclientset.AppsV1().StatefulSets(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+				return workloadClusterStatus, false
+			}
+			workloadClusterStatus.Workloads.StatefulSet[name] = fmt.Sprintf("%d/%d", statefulset.Status.ReadyReplicas, statefulset.Status.Replicas)
+		}
+	}
+	if len(selectivedeploymentCopy.Spec.Workloads.DaemonSet) > 0 {
+		workloadClusterStatus.Workloads.DaemonSet = make(map[string]string)
+		for _, daemonset := range selectivedeploymentCopy.Spec.Workloads.DaemonSet {
+			name := selectivedeploymentCopy.GetName() + "-" + daemonset.GetName()
+			if _, err := c.kubeclientset.AppsV1().DaemonSets(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+				return workloadClusterStatus, false
+			}
+			workloadClusterStatus.Workloads.Deployment[name] = fmt.Sprintf("%d/%d", daemonset.Status.CurrentNumberScheduled, daemonset.Status.DesiredNumberScheduled)
+		}
+	}
+	if len(selectivedeploymentCopy.Spec.Workloads.Job) > 0 {
+		workloadClusterStatus.Workloads.Job = make(map[string]string)
+		for _, job := range selectivedeploymentCopy.Spec.Workloads.Job {
+			name := selectivedeploymentCopy.GetName() + "-" + job.GetName()
+			if _, err := c.kubeclientset.BatchV1().Jobs(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+				return workloadClusterStatus, false
+			}
+			workloadClusterStatus.Workloads.Deployment[name] = fmt.Sprintf("Active: %d, Succeeded: %d, Failed: %d", job.Status.Active, job.Status.Succeeded, job.Status.Failed)
+		}
+	}
+	if len(selectivedeploymentCopy.Spec.Workloads.CronJob) > 0 {
+		workloadClusterStatus.Workloads.CronJob = make(map[string]string)
+		for _, cronjob := range selectivedeploymentCopy.Spec.Workloads.CronJob {
+			name := selectivedeploymentCopy.GetName() + "-" + cronjob.GetName()
+			if _, err := c.kubeclientset.BatchV1().CronJobs(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+				return workloadClusterStatus, false
+			}
+			workloadClusterStatus.Workloads.Deployment[name] = fmt.Sprintf("Active %v", cronjob.Status.Active)
+		}
+	}
+	return workloadClusterStatus, true
+}
+
+func (c *Controller) createWorkloads(selectivedeploymentCopy *appsv1alpha2.SelectiveDeployment) bool {
+	if len(selectivedeploymentCopy.Spec.Workloads.Deployment) > 0 {
+		for _, deployment := range selectivedeploymentCopy.Spec.Workloads.Deployment {
+			deploymentCopy := deployment.DeepCopy()
+			deploymentCopy.Namespace = selectivedeploymentCopy.GetNamespace()
+			deploymentCopy.Name = selectivedeploymentCopy.GetName() + "-" + deploymentCopy.GetName()
+			deploymentCopy.SetOwnerReferences([]metav1.OwnerReference{selectivedeploymentCopy.MakeOwnerReference()})
+			deploymentCopy.Labels["edge-net.io/selective-deployment"] = "follower"
+			deploymentCopy.Labels["edge-net.io/selective-deployment-name"] = selectivedeploymentCopy.GetName()
+			if _, err := c.kubeclientset.AppsV1().Deployments(deploymentCopy.GetNamespace()).Create(context.TODO(), deploymentCopy, metav1.CreateOptions{}); err != nil {
+				if errors.IsAlreadyExists(err) {
+					if _, err := c.kubeclientset.AppsV1().Deployments(deploymentCopy.GetNamespace()).Update(context.TODO(), deploymentCopy, metav1.UpdateOptions{}); err == nil {
+						continue
+					}
+				}
+				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, fmt.Sprintf(messageWorkloadCannotBeCreated, deploymentCopy.GetObjectKind().GroupVersionKind().Kind, deploymentCopy.GetName()))
+				return false
+			}
+		}
+	}
+	if len(selectivedeploymentCopy.Spec.Workloads.StatefulSet) > 0 {
+		for _, statefulset := range selectivedeploymentCopy.Spec.Workloads.StatefulSet {
+			statefulsetCopy := statefulset.DeepCopy()
+			statefulsetCopy.Namespace = selectivedeploymentCopy.GetNamespace()
+			statefulsetCopy.Name = selectivedeploymentCopy.GetName() + "-" + statefulsetCopy.GetName()
+			statefulsetCopy.SetOwnerReferences([]metav1.OwnerReference{selectivedeploymentCopy.MakeOwnerReference()})
+			statefulsetCopy.Labels["edge-net.io/selective-deployment"] = "follower"
+			statefulsetCopy.Labels["edge-net.io/selective-deployment-name"] = selectivedeploymentCopy.GetName()
+			if _, err := c.kubeclientset.AppsV1().StatefulSets(statefulsetCopy.GetNamespace()).Create(context.TODO(), statefulsetCopy, metav1.CreateOptions{}); err != nil {
+				if errors.IsAlreadyExists(err) {
+					if _, err := c.kubeclientset.AppsV1().StatefulSets(statefulsetCopy.GetNamespace()).Update(context.TODO(), statefulsetCopy, metav1.UpdateOptions{}); err == nil {
+						continue
+					}
+				}
+				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, fmt.Sprintf(messageWorkloadCannotBeCreated, statefulsetCopy.GetObjectKind().GroupVersionKind().Kind, statefulsetCopy.GetName()))
+				return false
+			}
+		}
+	}
+	if len(selectivedeploymentCopy.Spec.Workloads.DaemonSet) > 0 {
+		for _, daemonset := range selectivedeploymentCopy.Spec.Workloads.DaemonSet {
+			daemonsetCopy := daemonset.DeepCopy()
+			daemonsetCopy.Namespace = selectivedeploymentCopy.GetNamespace()
+			daemonsetCopy.Name = selectivedeploymentCopy.GetName() + "-" + daemonsetCopy.GetName()
+			daemonsetCopy.SetOwnerReferences([]metav1.OwnerReference{selectivedeploymentCopy.MakeOwnerReference()})
+			daemonsetCopy.Labels["edge-net.io/selective-deployment"] = "follower"
+			daemonsetCopy.Labels["edge-net.io/selective-deployment-name"] = selectivedeploymentCopy.GetName()
+			if _, err := c.kubeclientset.AppsV1().DaemonSets(daemonsetCopy.GetNamespace()).Create(context.TODO(), daemonsetCopy, metav1.CreateOptions{}); err != nil {
+				if errors.IsAlreadyExists(err) {
+					if _, err := c.kubeclientset.AppsV1().DaemonSets(daemonsetCopy.GetNamespace()).Update(context.TODO(), daemonsetCopy, metav1.UpdateOptions{}); err == nil {
+						continue
+					}
+				}
+				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, fmt.Sprintf(messageWorkloadCannotBeCreated, daemonsetCopy.GetObjectKind().GroupVersionKind().Kind, daemonsetCopy.GetName()))
+				return false
+			}
+		}
+	}
+	if len(selectivedeploymentCopy.Spec.Workloads.Job) > 0 {
+		for _, job := range selectivedeploymentCopy.Spec.Workloads.Job {
+			jobCopy := job.DeepCopy()
+			jobCopy.Namespace = selectivedeploymentCopy.GetNamespace()
+			jobCopy.Name = selectivedeploymentCopy.GetName() + "-" + jobCopy.GetName()
+			jobCopy.SetOwnerReferences([]metav1.OwnerReference{selectivedeploymentCopy.MakeOwnerReference()})
+			jobCopy.Labels["edge-net.io/selective-deployment"] = "follower"
+			jobCopy.Labels["edge-net.io/selective-deployment-name"] = selectivedeploymentCopy.GetName()
+			if _, err := c.kubeclientset.BatchV1().Jobs(jobCopy.GetNamespace()).Create(context.TODO(), jobCopy, metav1.CreateOptions{}); err != nil {
+				if errors.IsAlreadyExists(err) {
+					if _, err := c.kubeclientset.BatchV1().Jobs(jobCopy.GetNamespace()).Update(context.TODO(), jobCopy, metav1.UpdateOptions{}); err == nil {
+						continue
+					}
+				}
+				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, fmt.Sprintf(messageWorkloadCannotBeCreated, jobCopy.GetObjectKind().GroupVersionKind().Kind, jobCopy.GetName()))
+				return false
+			}
+
+		}
+	}
+	if len(selectivedeploymentCopy.Spec.Workloads.CronJob) > 0 {
+		for _, cronjob := range selectivedeploymentCopy.Spec.Workloads.CronJob {
+			cronjobCopy := cronjob.DeepCopy()
+			cronjobCopy.Namespace = selectivedeploymentCopy.GetNamespace()
+			cronjobCopy.Name = selectivedeploymentCopy.GetName() + "-" + cronjobCopy.GetName()
+			cronjobCopy.SetOwnerReferences([]metav1.OwnerReference{selectivedeploymentCopy.MakeOwnerReference()})
+			cronjobCopy.Labels["edge-net.io/selective-deployment"] = "follower"
+			cronjobCopy.Labels["edge-net.io/selective-deployment-name"] = selectivedeploymentCopy.GetName()
+			if _, err := c.kubeclientset.BatchV1().CronJobs(cronjobCopy.GetNamespace()).Create(context.TODO(), cronjobCopy, metav1.CreateOptions{}); err != nil {
+				if errors.IsAlreadyExists(err) {
+					if _, err := c.kubeclientset.BatchV1().CronJobs(cronjobCopy.GetNamespace()).Update(context.TODO(), cronjobCopy, metav1.UpdateOptions{}); err == nil {
+						continue
+					}
+				}
+				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, fmt.Sprintf(messageWorkloadCannotBeCreated, cronjobCopy.GetObjectKind().GroupVersionKind().Kind, cronjobCopy.GetName()))
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // updateStatus calls the API to update the selectivedeployment status.
-func (c *Controller) updateStatus(ctx context.Context, selectivedeploymentCopy *appsv1alpha2.SelectiveDeployment) {
+func (c *Controller) updateStatus(ctx context.Context, selectivedeploymentCopy *appsv1alpha2.SelectiveDeployment, state, message string) {
+	selectivedeploymentCopy.Status.State = state
+	selectivedeploymentCopy.Status.Message = message
 	if selectivedeploymentCopy.Status.State == appsv1alpha2.StatusFailed {
 		selectivedeploymentCopy.Status.Failed++
 	}
 	if _, err := c.edgenetclientset.AppsV1alpha2().SelectiveDeployments(selectivedeploymentCopy.GetNamespace()).UpdateStatus(ctx, selectivedeploymentCopy, metav1.UpdateOptions{}); err != nil {
 		klog.Infoln(err)
 	}
-}
-
-// createTokenForFollowers creates a service account, a secret, and required permissions for the follower selective deployments to access the original selective deployment
-func (c *Controller) createTokenForFollowers(selectivedeploymentCopy *appsv1alpha2.SelectiveDeployment, propagationNamespace string) error {
-	serviceAccount := new(corev1.ServiceAccount)
-	serviceAccount.SetName(string(selectivedeploymentCopy.GetUID()))
-	serviceAccount.SetNamespace(propagationNamespace)
-	if _, err := c.kubeclientset.CoreV1().ServiceAccounts(propagationNamespace).Create(context.TODO(), serviceAccount, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-		c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageServiceAccountFailed)
-		selectivedeploymentCopy.Status.State = appsv1alpha2.StatusFailed
-		selectivedeploymentCopy.Status.Message = messageServiceAccountFailed
-		c.updateStatus(context.TODO(), selectivedeploymentCopy)
-		return err
-	}
-	authSecret := new(corev1.Secret)
-	authSecret.Name = string(selectivedeploymentCopy.GetUID())
-	authSecret.Namespace = propagationNamespace
-	authSecret.Type = corev1.SecretTypeServiceAccountToken
-	authSecret.Data = make(map[string][]byte)
-	authSecret.Data["serviceaccount"] = []byte(fmt.Sprintf("system:serviceaccount:%s:%s", propagationNamespace, serviceAccount.GetName()))
-	authSecret.Data["namespace"] = []byte(propagationNamespace)
-	var address string
-	nodeRaw, _ := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/control-plane"})
-	for _, node := range nodeRaw.Items {
-		if internal, external := multiprovider.GetNodeIPAddresses(node.DeepCopy()); external == "" && internal == "" {
-			continue
-		} else if external != "" {
-			address = external + ":8443"
-		} else {
-			address = internal + ":8443"
-		}
-		break
-	}
-	authSecret.Data["server"] = []byte(address)
-	authSecret.Annotations = map[string]string{"kubernetes.io/service-account.name": serviceAccount.GetName()}
-	if _, err := c.kubeclientset.CoreV1().Secrets(propagationNamespace).Create(context.TODO(), authSecret, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-		c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageAuthSecretFailed)
-		selectivedeploymentCopy.Status.State = appsv1alpha2.StatusFailed
-		selectivedeploymentCopy.Status.Message = messageAuthSecretFailed
-		c.updateStatus(context.TODO(), selectivedeploymentCopy)
-		return err
-	}
-
-	roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: appsv1alpha2.RemoteSelectiveDeploymentRole}
-	rbSubjects := []rbacv1.Subject{{Kind: "ServiceAccount", Name: serviceAccount.GetName(), Namespace: serviceAccount.GetNamespace()}}
-	roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", appsv1alpha2.RemoteSelectiveDeploymentRole, selectivedeploymentCopy.GetUID()), Namespace: propagationNamespace},
-		Subjects: rbSubjects, RoleRef: roleRef}
-	roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
-	roleBind.SetLabels(roleBindLabels)
-	if _, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
-		if errors.IsAlreadyExists(err) {
-			if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Get(context.TODO(), roleBind.GetName(), metav1.GetOptions{}); err == nil {
-				roleBindingCopy := roleBinding.DeepCopy()
-				roleBindingCopy.RoleRef = roleBind.RoleRef
-				roleBindingCopy.Subjects = roleBind.Subjects
-				roleBindingCopy.SetLabels(roleBind.GetLabels())
-				if _, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Update(context.TODO(), roleBindingCopy, metav1.UpdateOptions{}); err == nil {
-					return nil
-				}
-			}
-		}
-		c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageBindingFailed)
-		selectivedeploymentCopy.Status.State = appsv1alpha2.StatusFailed
-		selectivedeploymentCopy.Status.Message = messageBindingFailed
-		c.updateStatus(context.TODO(), selectivedeploymentCopy)
-		klog.Infoln(err)
-		return err
-	}
-	return nil
 }
