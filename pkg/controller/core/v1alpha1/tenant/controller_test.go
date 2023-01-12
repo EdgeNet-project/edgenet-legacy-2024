@@ -609,7 +609,7 @@ func TestTenantDisabled(t *testing.T) {
 	tenant := newTenant("tenant3", true, false)
 	tenant.Status.Failed = 0
 	tenant.Status.State = corev1alpha1.StatusEstablished
-	tenant.Status.Message = successEstablished
+	tenant.Status.Message = messageEstablished
 
 	kubenamespace := newNamespace("kube-system", nil, nil, nil)
 	namespace := newNamespace(tenant.GetName(), map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": ""}, map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
@@ -649,7 +649,7 @@ func TestReconcileDoNothing(t *testing.T) {
 	tenant := newTenant("tenant4", true, true)
 	tenant.Status.Failed = 0
 	tenant.Status.State = corev1alpha1.StatusEstablished
-	tenant.Status.Message = successEstablished
+	tenant.Status.Message = messageEstablished
 
 	kubenamespace := newNamespace("kube-system", nil, nil, nil)
 	namespace := newNamespace(tenant.GetName(), map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": ""}, map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})
@@ -688,7 +688,7 @@ func TestReconcile(t *testing.T) {
 	tenant := newTenant("tenant5", false, true)
 	tenant.Status.Failed = 0
 	tenant.Status.State = corev1alpha1.StatusEstablished
-	tenant.Status.Message = successEstablished
+	tenant.Status.Message = messageEstablished
 
 	kubenamespace := newNamespace("kube-system", nil, nil, nil)
 	namespace := newNamespace(tenant.GetName(), map[string]string{"edge-net.io/kind": "core", "edge-net.io/tenant": tenant.GetName(), "edge-net.io/tenant-uid": string(tenant.GetUID()), "edge-net.io/cluster-uid": ""}, map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/slice=none"}, []metav1.OwnerReference{tenant.MakeOwnerReference()})

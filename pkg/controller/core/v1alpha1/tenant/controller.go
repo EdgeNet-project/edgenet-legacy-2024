@@ -55,7 +55,6 @@ const (
 	backoffLimit = 3
 
 	successSynced        = "Synced"
-	successEstablished   = "Established"
 	failureCreation      = "Not Created"
 	failureBinding       = "Binding Failed"
 	failureNetworkPolicy = "Not Applied"
@@ -274,9 +273,9 @@ func (c *Controller) processTenant(tenantCopy *corev1alpha1.Tenant) {
 			if err := c.configureOwnerPermissions(tenantCopy); err != nil {
 				return
 			}
-			c.recorder.Event(tenantCopy, corev1.EventTypeNormal, corev1alpha1.StatusEstablished, successEstablished)
+			c.recorder.Event(tenantCopy, corev1.EventTypeNormal, corev1alpha1.StatusEstablished, messageEstablished)
 			tenantCopy.Status.State = corev1alpha1.StatusEstablished
-			tenantCopy.Status.Message = successEstablished
+			tenantCopy.Status.Message = messageEstablished
 			c.updateStatus(context.TODO(), tenantCopy)
 		default:
 			// Create the core namespace
