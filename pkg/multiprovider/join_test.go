@@ -9,6 +9,8 @@ import (
 )
 
 func TestCreateToken(t *testing.T) {
+	flag.String("kubeconfig-path", "../../configs/public.cfg", "Set kubeconfig path.")
+	flag.Parse()
 	g := testGroup{}
 	g.Init()
 	ttl, err := time.ParseDuration("600s")

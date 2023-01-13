@@ -35,6 +35,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
 	namecheap "github.com/billputer/go-namecheap"
@@ -314,7 +315,10 @@ func getHosts(client *namecheap.Client) namecheap.DomainDNSGetHostsResult {
 }
 
 // SetHostnameRoute53 add a DNS record to a Route53 hosted zone
-func SetHostnameRoute53(hostedZone, hostname, address, recordType string) (bool, string) {
+func SetHostnameRoute53(id, key []byte, hostedZone, hostname, address, recordType string) (bool, string) {
+	// TODO: Dynamically set the region
+	config := aws.Config{Region: aws.String("us-east-1")}
+	config.Credentials = credentials.NewStaticCredentials(strings.TrimSpace(string(id)), strings.TrimSpace(string(key)), "")
 	input := &route53.ChangeResourceRecordSetsInput{
 		ChangeBatch: &route53.ChangeBatch{
 			Changes: []*route53.Change{
@@ -336,13 +340,14 @@ func SetHostnameRoute53(hostedZone, hostname, address, recordType string) (bool,
 		},
 		HostedZoneId: aws.String(hostedZone),
 	}
-	result, state := addARecordRoute53(input)
+	result, state := addARecordRoute53(&config, input)
 	return result, state
 }
 
 // addARecordRoute53 adds a new A record to the Route53
-func addARecordRoute53(input *route53.ChangeResourceRecordSetsInput) (bool, string) {
-	svc := route53.New(session.New())
+func addARecordRoute53(config *aws.Config, input *route53.ChangeResourceRecordSetsInput) (bool, string) {
+	newSession := session.Must(session.NewSession())
+	svc := route53.New(newSession, config)
 	_, err := svc.ChangeResourceRecordSets(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {

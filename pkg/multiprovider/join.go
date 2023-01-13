@@ -135,12 +135,17 @@ func (m *Manager) createToken(duration time.Duration, hostname string) (string, 
 		}
 	}
 
-	// This reads server info of the current context from the config file
-	server, err := getServerOfCurrentContext()
+	// This is to get server info
+	kubeconfigPath := "/edgenet/.kube/config"
+	if flag.Lookup("kubeconfig-path") != nil {
+		kubeconfigPath = flag.Lookup("kubeconfig-path").Value.(flag.Getter).Get().(string)
+	}
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	if err != nil {
-		log.Println(err)
+		log.Println(err.Error())
 		return "", err
 	}
+	server := config.Host
 	server = strings.Trim(server, "https://")
 	server = strings.Trim(server, "http://")
 	pathCA := "/etc/kubernetes/pki/ca.crt"

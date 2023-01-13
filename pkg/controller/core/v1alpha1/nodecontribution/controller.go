@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
-	knownhosts "golang.org/x/crypto/ssh/knownhosts"
 
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
@@ -64,7 +63,8 @@ const (
 	messageDNSFailed            = "DNS record configuration failed"
 	messageDoneSSH              = "SSH connection established"
 	messageDoneKubeadm          = "Bootstrap token created and join command has been invoked"
-	messageDonePatch            = "Node scheduling updated"
+	messageDoneSchedulingPatch  = "Node scheduling updated"
+	messageDonePatch            = "Node is patched"
 	messageInvalidHost          = "Host field must be an IP Address"
 	messageSchedulingFailed     = "Scheduling configuration failed"
 	messageUnready              = "Node is unready"
@@ -484,59 +484,96 @@ func (c *Controller) processNodeContribution(nodecontributionCopy *corev1alpha1.
 			}
 			klog.Infof("DNS configuration started: %s", nodeName)
 			// Use AWS Route53 for registration
-			if updated, _ := multiprovider.SetHostnameRoute53(c.route53hostedZone, nodeName, nodecontributionCopy.Spec.Host, recordType); !updated {
+			awsIDPath := "/edgenet/aws/id"
+			if flag.Lookup("aws-id-path") != nil {
+				awsIDPath = flag.Lookup("aws-id-path").Value.(flag.Getter).Get().(string)
+			}
+			awsSecretPath := "/edgenet/aws/secret"
+			if flag.Lookup("aws-secret-path") != nil {
+				awsSecretPath = flag.Lookup("aws-secret-path").Value.(flag.Getter).Get().(string)
+			}
+			awsID, err := ioutil.ReadFile(awsIDPath)
+			if err != nil {
 				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
 				nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
 				nodecontributionCopy.Status.Message = messageDNSFailed
 				c.updateStatus(context.TODO(), nodecontributionCopy)
 				return
 			}
+			awsSecret, err := ioutil.ReadFile(awsSecretPath)
+			if err != nil {
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
+				nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+				nodecontributionCopy.Status.Message = messageDNSFailed
+				c.updateStatus(context.TODO(), nodecontributionCopy)
+				return
+			}
+			if updated, _ := multiprovider.SetHostnameRoute53(awsID, awsSecret, c.route53hostedZone, nodeName, nodecontributionCopy.Spec.Host, recordType); !updated {
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
+				nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+				nodecontributionCopy.Status.Message = messageDNSFailed
+				c.updateStatus(context.TODO(), nodecontributionCopy)
+				return
+			}
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, corev1alpha1.StatusReady, messageSuccessful)
 			nodecontributionCopy.Status.State = corev1alpha1.StatusReady
 			nodecontributionCopy.Status.Message = messageSuccessful
 			c.updateStatus(context.TODO(), nodecontributionCopy)
 		}
 	default:
-		signer, hostkeyCallback, ok := getSSHConfigurations()
-		if !ok {
-			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageSSHFailed)
-			nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
-			nodecontributionCopy.Status.Message = messageSSHFailed
+		if _, isJoined, isReady, _ := c.getNodeInfo(nodecontributionCopy.GetCreationTimestamp(), nodeName); isJoined && isReady {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneKubeadm)
+			nodecontributionCopy.Status.State = corev1alpha1.StatusAccessed
+			nodecontributionCopy.Status.Message = messageDoneKubeadm
 			c.updateStatus(context.TODO(), nodecontributionCopy)
+			return
 		}
-		config := &ssh.ClientConfig{
-			User:            nodecontributionCopy.Spec.User,
-			Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-			HostKeyCallback: hostkeyCallback,
-			Timeout:         15 * time.Second,
-		}
-		addr := fmt.Sprintf("%s:%d", nodecontributionCopy.Spec.Host, nodecontributionCopy.Spec.Port)
-		klog.Infof("Establish SSH connection: %s", nodeName)
-		var conn *ssh.Client
-		isConnected := false
-		done := make(chan bool, 1)
-	connLoop:
-		for {
-			select {
-			case <-time.After(15 * time.Second):
-				break connLoop
-			default:
-				go c.sshDialRoutine(conn, config, addr, done)
-				if isConnected = <-done; ok {
-					isConnected = true
-					c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneSSH)
-				}
-				break connLoop
-			}
-		}
-		if !isConnected {
+		// TODO: Include HostKeyCallback
+		signer, _, ok := getSSHConfigurations()
+		if !ok {
 			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageSSHFailed)
 			nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
 			nodecontributionCopy.Status.Message = messageSSHFailed
 			c.updateStatus(context.TODO(), nodecontributionCopy)
 			return
 		}
+		config := &ssh.ClientConfig{
+			User:            nodecontributionCopy.Spec.User,
+			Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			Timeout:         15 * time.Second,
+		}
+		addr := fmt.Sprintf("%s:%d", nodecontributionCopy.Spec.Host, nodecontributionCopy.Spec.Port)
+		klog.Infof("Establish SSH connection: %s", nodeName)
+		conn := new(ssh.Client)
+		isSuccessful := false
+		isConnected := make(chan bool, 1)
+		go c.sshDialRoutine(conn, config, addr, isConnected)
+		select {
+		case isSuccessful = <-isConnected:
+			break
+		case <-time.After(15 * time.Second):
+			break
+		}
+		if !isSuccessful {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageSSHFailed)
+			nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+			nodecontributionCopy.Status.Message = messageSSHFailed
+			c.updateStatus(context.TODO(), nodecontributionCopy)
+			return
+		}
+		c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneSSH)
 		defer conn.Close()
-		if err := c.join(conn, nodeName); err != nil {
+		isCompleted := make(chan bool, 1)
+		isSuccessful = false
+		go c.join(conn, nodeName, isCompleted)
+		select {
+		case isSuccessful = <-isCompleted:
+			break
+		case <-time.After(5 * time.Minute):
+			break
+		}
+		if !isSuccessful {
 			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageJoinFailed)
 			nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
 			nodecontributionCopy.Status.Message = messageJoinFailed
@@ -560,7 +597,7 @@ func (c *Controller) syncResources(nodecontributionCopy *corev1alpha1.NodeContri
 		c.updateStatus(context.TODO(), nodecontributionCopy)
 		return false
 	}
-	c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDonePatch)
+	c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneSchedulingPatch)
 
 	ownerReferences := c.formOwnerReferences(nodecontributionCopy)
 	if err := c.multiproviderManager.SetOwnerReferences(nodeName, ownerReferences); err != nil {
@@ -599,30 +636,32 @@ func (c *Controller) formOwnerReferences(nodecontributionCopy *corev1alpha1.Node
 	}
 	return ownerReferences
 }
-
-func (c *Controller) getNodeInfo(contributionCreationTimestamp metav1.Time, nodeName string) (*corev1.Node, bool, bool, bool) {
-	if contributedNode, err := c.nodesLister.Get(nodeName); err == nil {
+func (c *Controller) getNodeInfo(contributionCreationTimestamp metav1.Time, nodeName string) (contributedNode *corev1.Node, isJoined bool, isReady bool, hasTimedOut bool) {
+	var err error
+	if contributedNode, err = c.nodesLister.Get(nodeName); err == nil {
 		if multiprovider.GetConditionReadyStatus(contributedNode) == string(corev1.ConditionTrue) {
-			return contributedNode, true, true, false
-		} else if contributionCreationTimestamp.Add(10 * time.Minute).Before(time.Now()) {
-			return nil, true, false, false
+			isJoined, isReady = true, true
 		} else {
-			return nil, true, false, true
+			isJoined = true
+			if contributionCreationTimestamp.Add(10 * time.Minute).Before(time.Now()) {
+				hasTimedOut = true
+			}
+		}
+	} else {
+		if contributionCreationTimestamp.Add(5 * time.Minute).Before(time.Now()) {
+			hasTimedOut = true
 		}
 	}
-	if contributionCreationTimestamp.Add(5 * time.Minute).Before(time.Now()) {
-		return nil, false, false, false
-	}
-	return nil, false, false, true
+	return contributedNode, isJoined, isReady, hasTimedOut
 }
 
 func (c *Controller) sshDialRoutine(conn *ssh.Client, config *ssh.ClientConfig, addr string, done chan<- bool) {
-	var err error
-	conn, err = ssh.Dial("tcp", addr, config)
+	clientConn, err := ssh.Dial("tcp", addr, config)
 	if err != nil {
 		done <- false
 		return
 	}
+	*conn = *clientConn
 	done <- true
 }
 
@@ -634,23 +673,26 @@ func getSSHConfigurations() (ssh.Signer, ssh.HostKeyCallback, bool) {
 	if flag.Lookup("ssh-path") != nil {
 		sshPath = flag.Lookup("ssh-path").Value.(flag.Getter).Get().(string)
 	}
-	key, err := ioutil.ReadFile(sshPath)
+	key, err := ioutil.ReadFile(fmt.Sprintf("%s/id_rsa", sshPath))
 	if err != nil {
+		klog.Infoln(err)
 		return nil, nil, false
 	}
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
+		klog.Infoln(err)
 		return nil, nil, false
 	}
-	hostkeyCallback, err := knownhosts.New("~/.ssh/known_hosts")
+	/*hostkeyCallback, err := knownhosts.New(fmt.Sprintf("%s/known_hosts", sshPath))
 	if err != nil {
+		klog.Infoln(err)
 		return nil, nil, false
-	}
-	return signer, hostkeyCallback, true
+	}*/
+	return signer, nil, true
 }
 
 // join creates a token and runs kubeadm join command
-func (c *Controller) join(conn *ssh.Client, nodeName string) error {
+func (c *Controller) join(conn *ssh.Client, nodeName string, done chan<- bool) {
 	commands := []string{
 		"sudo su",
 		"kubeadm reset -f",
@@ -659,28 +701,32 @@ func (c *Controller) join(conn *ssh.Client, nodeName string) error {
 	sess, err := startSession(conn)
 	if err != nil {
 		klog.Info(err)
-		return err
+		done <- false
+		return
 	}
 	defer sess.Close()
 	// StdinPipe for commands
 	stdin, err := sess.StdinPipe()
 	if err != nil {
 		klog.Info(err)
-		return err
+		done <- false
+		return
 	}
 	//sess.Stdout = os.Stdout
 	sess.Stderr = os.Stderr
 	sess, err = startShell(sess)
 	if err != nil {
 		klog.Info(err)
-		return err
+		done <- false
+		return
 	}
 	// Run commands sequentially
 	for _, cmd := range commands {
 		_, err = fmt.Fprintf(stdin, "%s\n", cmd)
 		if err != nil {
 			klog.Info(err)
-			return err
+			done <- false
+			return
 		}
 	}
 	stdin.Close()
@@ -688,9 +734,10 @@ func (c *Controller) join(conn *ssh.Client, nodeName string) error {
 	err = sess.Wait()
 	if err != nil {
 		klog.Info(err)
-		return err
+		done <- false
+		return
 	}
-	return nil
+	done <- true
 }
 
 // Start a new session in the connection

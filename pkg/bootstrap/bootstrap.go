@@ -57,7 +57,7 @@ func GetDefaultKubeconfigPath() string {
 	if home := homeDir(); home != "" {
 		kubeconfigPath = filepath.Join(home, ".kube", "config")
 	} else {
-		kubeconfigPath = "/edgenet/.kube"
+		kubeconfigPath = "/edgenet/.kube/config"
 	}
 	return kubeconfigPath
 }
