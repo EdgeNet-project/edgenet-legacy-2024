@@ -207,7 +207,7 @@ func (c *Controller) updateClusterResourceStatus() {
 	if err != nil {
 		return
 	}
-	// bundledAllocatableResourcesList is a list to store the allocatable resources of each node.
+	// bundledAllocatableResourcesList is a list to store the allocatable resources of each node that is open to federated workloads.
 	// It groups the nodes that have the same allocatable resources together.
 	var bundledAllocatableResourcesList []federationv1alpha1.BundledAllocatableResources
 	// overallAllocatableResources calculates the total allocatable resources of all nodes in the cluster
@@ -216,7 +216,7 @@ func (c *Controller) updateClusterResourceStatus() {
 	overallCapacityResources := make(corev1.ResourceList)
 	// Below is the logic to calculate the total allocatable resources and total capacity resources of all nodes in the cluster.
 	// It also prepares the bundledAllocatableResourcesList.
-	nodeRaw, _ := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+	nodeRaw, _ := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/access=public,edge-net.io/access-scope=federation"})
 	for _, nodeRow := range nodeRaw.Items {
 		for key, value := range nodeRow.Status.Allocatable {
 			if allocatableQuantity, ok := overallAllocatableResources[key]; ok {
