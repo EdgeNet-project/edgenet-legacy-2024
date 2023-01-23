@@ -332,9 +332,11 @@ func (c *Controller) makeSelectiveDeployment(selectivedeploymentanchorCopy *fede
 				if err != nil {
 					return false
 				}
-				// Create the namespace that the original selective deployment lives in the remote cluster if it does not exist
+				// Create a namespace with the name of the namespace in which the original selective deployment lives in the remote cluster if it does not exist
 				remoteNamespace := new(corev1.Namespace)
 				remoteNamespace.SetName(selectivedeploymentanchorCopy.Spec.OriginRef.Namespace)
+				annotations := map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/access-scope=federation"}
+				remoteNamespace.SetAnnotations(annotations)
 				if _, err := remotekubeclientset.CoreV1().Namespaces().Create(context.TODO(), remoteNamespace, metav1.CreateOptions{}); err != nil {
 					klog.Infoln(err)
 					return false
