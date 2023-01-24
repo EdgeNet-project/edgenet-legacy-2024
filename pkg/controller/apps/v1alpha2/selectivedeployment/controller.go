@@ -462,29 +462,36 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeNormal, appsv1alpha2.StatusCreated, messageWorkloadDeploymentMade)
 				c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusCreated, messageWorkloadDeploymentMade)
 			} else {
-				multiproviderManager, fedmanagerUID, ok := c.prepareMultiProviderManager()
-				if !ok {
-					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageCredsFailed)
-					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageCredsFailed)
-					return
-				}
-				// Below creates a secret tied to a service account along with a role binding for the remote cluster.
-				// The remote cluster will use this secret to communicate with this originating selective deployment, thus updating its status regularly.
-				if err := multiproviderManager.SetupRemoteAccessCredentials(string(selectivedeploymentCopy.GetUID()), selectivedeploymentCopy.GetNamespace(), appsv1alpha2.RemoteSelectiveDeploymentRole); err != nil {
-					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageCredsFailed)
-					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageCredsFailed)
-					return
-				}
-				// Create the anchor in the federation manager
-				if enqueue, err := c.makeSelectiveDeployment(selectivedeploymentCopy, multiproviderManager, namespaceLabels["edge-net.io/cluster-uid"], fedmanagerUID); err != nil {
-					if enqueue {
+				subnamespace, _ := c.edgenetclientset.CoreV1alpha1().SubNamespaces(namespaceLabels["edge-net.io/parent-namespace"]).Get(context.TODO(), namespaceLabels["edge-net.io/owner"], metav1.GetOptions{})
+				if subnamespace.Spec.Workspace != nil && subnamespace.Spec.Workspace.Scope == "federation" {
+					multiproviderManager, fedmanagerUID, ok := c.prepareMultiProviderManager()
+					if !ok {
+						c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageCredsFailed)
+						c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageCredsFailed)
 						return
 					}
-					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageAnchorFailed)
-					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageAnchorFailed)
+					// Below creates a secret tied to a service account along with a role binding for the remote cluster.
+					// The remote cluster will use this secret to communicate with this originating selective deployment, thus updating its status regularly.
+					if err := multiproviderManager.SetupRemoteAccessCredentials(string(selectivedeploymentCopy.GetUID()), selectivedeploymentCopy.GetNamespace(), appsv1alpha2.RemoteSelectiveDeploymentRole); err != nil {
+						c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageCredsFailed)
+						c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageCredsFailed)
+						return
+					}
+					// Create the anchor in the federation manager
+					if enqueue, err := c.makeSelectiveDeployment(selectivedeploymentCopy, multiproviderManager, namespaceLabels["edge-net.io/cluster-uid"], fedmanagerUID); err != nil {
+						if enqueue {
+							return
+						}
+						c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageAnchorFailed)
+						c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageAnchorFailed)
+						return
+					}
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeNormal, appsv1alpha2.StatusCreated, messageAnchorMade)
+					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusCreated, messageAnchorMade)
+					return
 				}
-				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeNormal, appsv1alpha2.StatusCreated, messageAnchorMade)
-				c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusCreated, messageAnchorMade)
+				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageAnchorFailed)
+				c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageAnchorFailed)
 			}
 		}
 	} else {
