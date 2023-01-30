@@ -70,6 +70,7 @@ const (
 	messageRemoteSecretDeploymentFailed     = "Remote secret cannot be deployed to the remote cluster"
 	messageManagerCacheUpdateFailed         = "Manager cache cannot be updated to include the new manager cluster as a child"
 	messageRemoteManagerCacheCreationFailed = "Manager cache cannot be created in the remote cluster"
+	messageInvalidHost                      = "Server field must be an IP Address"
 )
 
 // Controller is the controller implementation for Cluster resources
@@ -342,6 +343,13 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 			// Below creates a secret tied to a service account along with a role binding for the remote cluster.
 			// The remote cluster will use this secret to communicate with its federation manager, thus gaining access to the federated resources.
 			multiproviderManager := multiprovider.NewManager(c.kubeclientset, nil, nil)
+			// TODO: We should support both using the IP address of the cluster or do a DNS lookup if it is a hostname
+			recordType := multiprovider.GetRecordType(clusterCopy.Spec.Server)
+			if recordType == "" {
+				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageInvalidHost)
+				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageInvalidHost)
+				return
+			}
 			if err := multiproviderManager.SetupRemoteAccessCredentials(clusterCopy.Spec.UID, propagationNamespace, federationv1alpha1.RemoteClusterRole); err != nil {
 				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageCredsFailed)
 				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageCredsFailed)
