@@ -17,7 +17,10 @@ limitations under the License.
 package multiprovider
 
 import (
+	"fmt"
+	"log"
 	"math"
+	"strconv"
 
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 
@@ -77,4 +80,61 @@ func Boundbox(points [][]float64) []float64 {
 
 	bounding := []float64{minX, maxX, minY, maxY}
 	return bounding
+}
+
+// GetGeolocationLabelsByIP returns geolabels from the MaxMind GeoIP2 precision service
+func (m *Manager) GetGeolocationLabelsByIP(
+	maxmindURL string,
+	maxmindAccountID string,
+	maxmindLicenseKey string,
+	address string,
+	patch bool,
+) (map[string]string, bool) {
+	// Fetch geolocation information
+	record, err := getMaxmindLocation(maxmindURL, maxmindAccountID, maxmindLicenseKey, address)
+	if err != nil {
+		log.Println(err)
+		return nil, false
+	}
+
+	continent := sanitizeNodeLabel(record.Continent.Names["en"])
+	country := record.Country.IsoCode
+	state := record.Country.IsoCode
+	city := sanitizeNodeLabel(record.City.Names["en"])
+	isp := sanitizeNodeLabel(record.Traits.Isp)
+	as := sanitizeNodeLabel(record.Traits.AutonomousSystemOrganization)
+	asn := strconv.Itoa(record.Traits.AutonomousSystemNumber)
+	var lon string
+	var lat string
+	if record.Location.Longitude >= 0 {
+		lon = fmt.Sprintf("e%.6f", record.Location.Longitude)
+	} else {
+		lon = fmt.Sprintf("w%.6f", record.Location.Longitude)
+	}
+	if record.Location.Latitude >= 0 {
+		lat = fmt.Sprintf("n%.6f", record.Location.Latitude)
+	} else {
+		lat = fmt.Sprintf("s%.6f", record.Location.Latitude)
+	}
+	if len(record.Subdivisions) > 0 {
+		state = record.Subdivisions[0].IsoCode
+	}
+
+	// Create label map to attach to the node
+	keyPrefix := "edge-net.io/"
+	if patch {
+		keyPrefix = "edge-net.io~1"
+	}
+	geoLabels := map[string]string{
+		fmt.Sprintf("%s%s", keyPrefix, "continent"):   continent,
+		fmt.Sprintf("%s%s", keyPrefix, "country-iso"): country,
+		fmt.Sprintf("%s%s", keyPrefix, "state-iso"):   state,
+		fmt.Sprintf("%s%s", keyPrefix, "city"):        city,
+		fmt.Sprintf("%s%s", keyPrefix, "lon"):         lon,
+		fmt.Sprintf("%s%s", keyPrefix, "lat"):         lat,
+		fmt.Sprintf("%s%s", keyPrefix, "isp"):         isp,
+		fmt.Sprintf("%s%s", keyPrefix, "as"):          as,
+		fmt.Sprintf("%s%s", keyPrefix, "asn"):         asn,
+	}
+	return geoLabels, true
 }
