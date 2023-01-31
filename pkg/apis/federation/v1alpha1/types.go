@@ -229,7 +229,7 @@ type Hierarchy struct {
 // ClusterCache is to cache cluster information for scheduling decisions
 type ClusterCache struct {
 	// Characteristics is the list of characteristics of the cluster such as GPU cluster, camera cluster, etc.
-	Characteristics []string `json:"characteristics"`
+	Characteristics map[string]string `json:"characteristics"`
 	// RelativeResourceAvailability indicates the status of available resources in the cluster
 	RelativeResourceAvailability string `json:"relativeResourceAvailability"`
 	// AllocatableResources is the list of grouped allocatable resources in the cluster
