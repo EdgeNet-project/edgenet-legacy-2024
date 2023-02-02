@@ -289,7 +289,7 @@ func (c *Controller) scanFederationManagers(currentFederationManager string, lab
 	}
 	federationManagers := make(map[string]managerList)
 	// keys is a list of manager names to be used while sorting federation managers by their scores
-	var keys []string
+	keys := []string{}
 	// Get the list of manager caches that match the cluster affinity provided in the spec
 	// Thus, we have a list of managers that are eligible to be selected
 	managerCachesRaw, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
@@ -298,8 +298,14 @@ func (c *Controller) scanFederationManagers(currentFederationManager string, lab
 	}
 	// Iterate over the list of manager caches and calculate the score of each manager
 	for _, managerCacheRow := range managerCachesRaw.Items {
+		if !managerCacheRow.Spec.Enabled {
+			continue
+		}
 		score := 0
 		for _, managedCluster := range managerCacheRow.Spec.Clusters {
+			if !managedCluster.Enabled {
+				continue
+			}
 			switch managedCluster.RelativeResourceAvailability {
 			case "Abundance":
 				score += 3
@@ -312,7 +318,17 @@ func (c *Controller) scanFederationManagers(currentFederationManager string, lab
 			}
 		}
 		keys = append(keys, managerCacheRow.GetName())
-		federationManagers[managerCacheRow.GetName()] = managerList{parent: managerCacheRow.Spec.Hierarchy.Parent, children: managerCacheRow.Spec.Hierarchy.Children, score: score}
+		parent := ""
+		children := []string{}
+		for _, child := range managerCacheRow.Spec.Hierarchy.Children {
+			if child.Enabled {
+				children = append(children, child.Name)
+			}
+		}
+		if managerCacheRow.Spec.Hierarchy.Parent.Enabled {
+			parent = managerCacheRow.Spec.Hierarchy.Parent.Name
+		}
+		federationManagers[managerCacheRow.GetName()] = managerList{parent: parent, children: children, score: score}
 	}
 	// Sort the federation managers by their scores
 	sort.SliceStable(keys, func(i, j int) bool {
@@ -360,6 +376,9 @@ func (c *Controller) createTree() (map[string]*Node, *Node) {
 	var rootFederationManager *Node
 	federationManagerTree := make(map[string]*Node)
 	for _, managerCacheRow := range managerCachesRaw.Items {
+		if !managerCacheRow.Spec.Enabled {
+			continue
+		}
 		node, ok := federationManagerTree[managerCacheRow.GetName()]
 		if !ok {
 			node = newNode(managerCacheRow.GetName())
@@ -368,11 +387,11 @@ func (c *Controller) createTree() (map[string]*Node, *Node) {
 		if managerCacheRow.Spec.Hierarchy.Level == 0 {
 			rootFederationManager = node
 		} else {
-			if parentNode, ok := federationManagerTree[managerCacheRow.Spec.Hierarchy.Parent]; ok {
+			if parentNode, ok := federationManagerTree[managerCacheRow.Spec.Hierarchy.Parent.Name]; ok {
 				parentNode.Children = append(parentNode.Children, node)
 			} else {
-				parentNode = newNode(managerCacheRow.Spec.Hierarchy.Parent)
-				federationManagerTree[managerCacheRow.Spec.Hierarchy.Parent] = parentNode
+				parentNode = newNode(managerCacheRow.Spec.Hierarchy.Parent.Name)
+				federationManagerTree[managerCacheRow.Spec.Hierarchy.Parent.Name] = parentNode
 			}
 		}
 		federationManagerTree[managerCacheRow.GetName()] = node

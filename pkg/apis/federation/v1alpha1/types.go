@@ -78,6 +78,8 @@ type ClusterSpec struct {
 	Visibility string `json:"visibility"`
 	// SecretName is the name of the secret that contains the token to access the cluster
 	SecretName string `json:"secretName"`
+	// Enabled is to open or close the cluster to the federation
+	Enabled bool `json:"enabled"`
 }
 
 // ClusterPreferences is to set allowlist and denylist for federated objects
@@ -210,23 +212,33 @@ type ManagerCache struct {
 
 // ManagerCacheSpec is the spec to define the desired state of the managercache resource
 type ManagerCacheSpec struct {
-	// Hierarchical information
+	// Hierarchical information related to the federation manager
 	Hierarchy Hierarchy `json:"hierarchy"`
-	// Clusters form a list of clusters that are managed by the federation manager
+	// Clusters form a list of workload clusters that are managed by the federation manager
 	Clusters map[string]ClusterCache `json:"cluster"`
+	// Enabled indicates whether the federation manager is open to the federation or not
+	Enabled bool `json:"enabled"`
 }
 
 // Hierarchy is to trace the federation manager's position in the hierarchy
 type Hierarchy struct {
 	// Level is the hierarchy level of the federation manager
 	Level int `json:"level"`
-	// Parent is the UID of the federation manager's parent
-	Parent string `json:"parent"`
-	// Children is the list of UIDs of the federation manager's children
-	Children []string `json:"children"`
+	// Parent is the info of the federation manager's parent
+	Parent AssociatedManager `json:"parent"`
+	// Children is the info of the federation manager's children
+	Children []AssociatedManager `json:"children"`
 }
 
-// ClusterCache is to cache cluster information for scheduling decisions
+// AssociatedManagers are the parent and children of the federation manager
+type AssociatedManager struct {
+	// Name is the UID of the federation manager
+	Name string `json:"name"`
+	// Enabled indicates whether the federation manager is open to the federation or not
+	Enabled bool `json:"enabled"`
+}
+
+// ClusterCache is to cache workload cluster information for scheduling decisions
 type ClusterCache struct {
 	// Characteristics is the list of characteristics of the cluster such as GPU cluster, camera cluster, etc.
 	Characteristics map[string]string `json:"characteristics"`
@@ -234,6 +246,8 @@ type ClusterCache struct {
 	RelativeResourceAvailability string `json:"relativeResourceAvailability"`
 	// AllocatableResources is the list of grouped allocatable resources in the cluster
 	AllocatableResources []BundledAllocatableResources `json:"allocatableResources"`
+	// Enabled indicates whether the cluster is open to the federation or not
+	Enabled bool `json:"enabled"`
 }
 
 // ManagerCacheStatus is the status that shows the actual state of the managercache resource

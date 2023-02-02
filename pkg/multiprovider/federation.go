@@ -218,3 +218,19 @@ func (m *Manager) CreateManagerCache(managerCache *federationv1alpha1.ManagerCac
 	}
 	return nil
 }
+
+// DisableChildrenManagers closes the children managers to the federation
+func (m *Manager) DisableChildrenManagers(managerCache *federationv1alpha1.ManagerCache) error {
+	if clusterRaw, err := m.remoteedgeclientset.FederationV1alpha1().Clusters("").List(context.TODO(), metav1.ListOptions{}); err == nil {
+		for _, clusterRow := range clusterRaw.Items {
+			if clusterRow.Spec.Role == "Federation" && clusterRow.Spec.Enabled {
+				clusterRow.Spec.Enabled = false
+				// TODO: Error handling
+				m.remoteedgeclientset.FederationV1alpha1().Clusters(clusterRow.GetNamespace()).Update(context.TODO(), &clusterRow, metav1.UpdateOptions{})
+			}
+		}
+	} else {
+		return err
+	}
+	return nil
+}

@@ -297,7 +297,7 @@ func (c *Controller) reconcileWithParent(managerCache *federationv1alpha1.Manage
 		}
 		return false
 	}
-	if managerCache.Spec.Hierarchy.Parent != string(parentFedManagerSecret.Data["cluster-uid"]) {
+	if managerCache.Spec.Hierarchy.Parent.Name != string(parentFedManagerSecret.Data["cluster-uid"]) {
 		return false
 	}
 	config := bootstrap.PrepareRestConfig(string(parentFedManagerSecret.Data["server"]), string(parentFedManagerSecret.Data["token"]), parentFedManagerSecret.Data["ca.crt"])
@@ -306,7 +306,7 @@ func (c *Controller) reconcileWithParent(managerCache *federationv1alpha1.Manage
 		return false
 	}
 	if remoteManagerCacheCopy, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), managerCache.GetName(), metav1.GetOptions{}); err == nil {
-		if !reflect.DeepEqual(managerCache.Spec, remoteManagerCacheCopy) {
+		if !reflect.DeepEqual(managerCache.Spec, remoteManagerCacheCopy.Spec) {
 			return false
 		}
 	} else {
@@ -332,7 +332,7 @@ func (c *Controller) reconcileWithChildren(managerCache *federationv1alpha1.Mana
 				return false
 			}
 			if remoteManagerCacheCopy, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), managerCache.GetName(), metav1.GetOptions{}); err == nil {
-				if !reflect.DeepEqual(managerCache.Spec, remoteManagerCacheCopy) {
+				if !reflect.DeepEqual(managerCache.Spec, remoteManagerCacheCopy.Spec) {
 					return false
 				}
 			} else {
@@ -354,7 +354,7 @@ func (c *Controller) applyCacheAtParent(remoteManagerCache *federationv1alpha1.M
 		}
 		return err
 	}
-	if remoteManagerCache.Spec.Hierarchy.Parent != string(parentFedManagerSecret.Data["cluster-uid"]) {
+	if remoteManagerCache.Spec.Hierarchy.Parent.Name != string(parentFedManagerSecret.Data["cluster-uid"]) {
 		return fmt.Errorf("Cluster UID mismatch")
 	}
 	if err := c.applyCacheAtRemoteFedManager(remoteManagerCache, parentFedManagerSecret.Data["server"], parentFedManagerSecret.Data["token"], parentFedManagerSecret.Data["ca.crt"]); err != nil {
