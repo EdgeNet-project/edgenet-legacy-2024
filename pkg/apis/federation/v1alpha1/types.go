@@ -106,8 +106,8 @@ type ClusterStatus struct {
 
 // BundledAllocatableResources is the struct to bundle the allocatable resources
 type BundledAllocatableResources struct {
-	Count        int
-	ResourceList corev1.ResourceList
+	Count        int                 `json:"count"`
+	ResourceList corev1.ResourceList `json:"resourceList"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -215,7 +215,7 @@ type ManagerCacheSpec struct {
 	// Hierarchical information related to the federation manager
 	Hierarchy Hierarchy `json:"hierarchy"`
 	// Clusters form a list of workload clusters that are managed by the federation manager
-	Clusters map[string]ClusterCache `json:"cluster"`
+	Clusters map[string]ClusterCache `json:"clusters"`
 	// Enabled indicates whether the federation manager is open to the federation or not
 	Enabled bool `json:"enabled"`
 }

@@ -82,7 +82,7 @@ type SelectiveDeploymentStatus struct {
 	// Extended status message
 	Message string `json:"message"`
 	// Clusters is the list of clusters where the workloads are deployed
-	Clusters map[string]WorkloadClusterStatus `json:"cluster"`
+	Clusters map[string]WorkloadClusterStatus `json:"clusters"`
 	// Failed sets the backoff limit.
 	Failed int `json:"failed"`
 }
