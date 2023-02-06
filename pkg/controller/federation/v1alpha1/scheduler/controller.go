@@ -10,6 +10,7 @@ import (
 
 	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/federation/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/federation/v1alpha1"
 	multitenancy "github.com/EdgeNet-project/edgenet/pkg/multitenancy"
@@ -71,7 +72,7 @@ func NewController(
 	sdaInformer informers.SelectiveDeploymentAnchorInformer,
 ) *Controller {
 	// Create event broadcaster
-	utilruntime.Must(scheme.AddToScheme(scheme.Scheme))
+	utilruntime.Must(edgenetscheme.AddToScheme(scheme.Scheme))
 	klog.V(4).Infoln("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(klog.Infof)
