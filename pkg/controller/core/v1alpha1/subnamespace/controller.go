@@ -687,7 +687,8 @@ func (c *Controller) reconcile(subnamespaceCopy *corev1alpha1.SubNamespace, pare
 		c.updateStatus(context.TODO(), subnamespaceCopy)
 		return
 	}
-	if subnamespaceCopy.Spec.Workspace != nil {
+	if subnamespaceCopy.Spec.Workspace != nil && subnamespaceCopy.Spec.Workspace.Sync {
+		klog.Infoln("SYNCING")
 		c.handleInheritance(subnamespaceCopy, childNameHashed)
 	}
 }
