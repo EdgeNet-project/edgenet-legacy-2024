@@ -30,8 +30,9 @@ const (
 	StatusSubnamespaceCreated = "Subnamespace Created"
 	StatusReady               = "Ready"
 	// Selective Deployment Anchor
-	StatusAssigned  = "A Federation Manager Assigned"
-	StatusDelegated = "Selective Deployment Delegated"
+	StatusAssigned         = "A Federation Manager Assigned"
+	StatusDelegated        = "Selective Deployment Delegated"
+	StatusPendingScheduler = "Pending Scheduler"
 	// Manager Cache
 	StatusPending = "Pending Workload Cluster Creation"
 	StatusUpdated = "Remote Manager Cache Updated"

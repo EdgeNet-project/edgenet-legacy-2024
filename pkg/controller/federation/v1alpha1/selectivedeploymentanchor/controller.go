@@ -55,7 +55,8 @@ const (
 	messageResourceSynced       = "SelectiveDeploymentAnchor synced successfully"
 	messageFedManagerAssigned   = "Federation manager assigned for selective deployment"
 	messageNoFeasibleFedManager = "No feasible federation manager found for selective deployment"
-	messageResourceDelegated    = "Selective deployment delegated to the responsible cluster(s)"
+	messageDelegationComplete   = "Selective deployment delegated to the responsible clusters"
+	messageResourceDelegated    = "Selective deployment delegated to the responsible cluster"
 	messagePending              = "Selective deployment anchor awaits for the scheduling decision to be made"
 	messageFedManagerMissing    = "Federation manager is not assigned yet"
 	messagePathEmpty            = "Next federation manager to be appointed is missing"
@@ -268,7 +269,7 @@ func (c *Controller) processSelectiveDeploymentAnchor(selectivedeploymentanchorC
 				if ok := c.makeSelectiveDeployment(selectivedeploymentanchorCopy); !ok {
 					c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusFailed, messageDeploymentFailed)
 				} else {
-					c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusDelegated, messageResourceDelegated)
+					c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusDelegated, messageDelegationComplete)
 				}
 				return
 			}
@@ -284,8 +285,8 @@ func (c *Controller) processSelectiveDeploymentAnchor(selectivedeploymentanchorC
 				c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusFailed, messageDelegationFailed)
 				return
 			}
-			c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeNormal, federationv1alpha1.StatusDelegated, messageResourceDelegated)
-			c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusDelegated, messageResourceDelegated)
+			c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeNormal, federationv1alpha1.StatusDelegated, messageDelegationComplete)
+			c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusDelegated, messageDelegationComplete)
 		default:
 			if selectivedeploymentanchorCopy.Spec.FederationManager != nil && selectivedeploymentanchorCopy.Spec.WorkloadClusters != nil && len(selectivedeploymentanchorCopy.Spec.WorkloadClusters) > 0 {
 				c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeNormal, federationv1alpha1.StatusAssigned, messageFedManagerAssigned)
@@ -296,8 +297,9 @@ func (c *Controller) processSelectiveDeploymentAnchor(selectivedeploymentanchorC
 			// The goal is to avoid concurrency issues that delay scheduling decisions.
 			go func() {
 				time.Sleep(5 * time.Second)
-				c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeNormal, federationv1alpha1.StatusPending, messagePending)
-				c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusPending, messagePending)
+				klog.Infoln("TESTTEST")
+				klog.Infoln(selectivedeploymentanchorCopy.Status.State)
+				c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusPendingScheduler, messagePending)
 			}()
 		}
 	} else {
@@ -337,7 +339,7 @@ func (c *Controller) makeSelectiveDeployment(selectivedeploymentanchorCopy *fede
 				remoteNamespace.SetName(selectivedeploymentanchorCopy.Spec.OriginRef.Namespace)
 				annotations := map[string]string{"scheduler.alpha.kubernetes.io/node-selector": "edge-net.io/access=public,edge-net.io/access-scope=federation"}
 				remoteNamespace.SetAnnotations(annotations)
-				if _, err := remotekubeclientset.CoreV1().Namespaces().Create(context.TODO(), remoteNamespace, metav1.CreateOptions{}); err != nil {
+				if _, err := remotekubeclientset.CoreV1().Namespaces().Create(context.TODO(), remoteNamespace, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					klog.Infoln(err)
 					return false
 				}
@@ -363,7 +365,7 @@ func (c *Controller) makeSelectiveDeployment(selectivedeploymentanchorCopy *fede
 				remoteSelectiveDeploymentSecret.SetName(selectiveDeploymentSecret.GetName())
 				remoteSelectiveDeploymentSecret.SetNamespace(originSelectiveDeployment.GetNamespace())
 				remoteSelectiveDeploymentSecret.Data = selectiveDeploymentSecret.Data
-				if _, err = remotekubeclientset.CoreV1().Secrets(remoteSelectiveDeploymentSecret.GetNamespace()).Create(context.TODO(), remoteSelectiveDeploymentSecret, metav1.CreateOptions{}); err != nil {
+				if _, err = remotekubeclientset.CoreV1().Secrets(remoteSelectiveDeploymentSecret.GetNamespace()).Create(context.TODO(), remoteSelectiveDeploymentSecret, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					klog.Infoln(err)
 					return false
 				}
@@ -378,7 +380,7 @@ func (c *Controller) makeSelectiveDeployment(selectivedeploymentanchorCopy *fede
 				if err != nil {
 					return false
 				}
-				if _, err = remoteedgeclientset.AppsV1alpha2().SelectiveDeployments(remoteSelectiveDeployment.GetNamespace()).Create(context.TODO(), remoteSelectiveDeployment, metav1.CreateOptions{}); err != nil {
+				if _, err = remoteedgeclientset.AppsV1alpha2().SelectiveDeployments(remoteSelectiveDeployment.GetNamespace()).Create(context.TODO(), remoteSelectiveDeployment, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 					klog.Infoln(err)
 					return false
 				}
