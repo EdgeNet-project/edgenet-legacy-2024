@@ -35,20 +35,20 @@ func (m *Manager) SetupRemoteAccessCredentials(name, namespace, clusterRole stri
 	authSecret.Type = corev1.SecretTypeServiceAccountToken
 	authSecret.Annotations = map[string]string{"kubernetes.io/service-account.name": serviceAccount.GetName()}
 	if _, err := m.kubeclientset.CoreV1().Secrets(namespace).Create(context.TODO(), authSecret, metav1.CreateOptions{}); err != nil {
-		if errors.IsAlreadyExists(err) {
-			if secret, err := m.kubeclientset.CoreV1().Secrets(namespace).Get(context.TODO(), authSecret.GetName(), metav1.GetOptions{}); err == nil {
-				if secret.Type == corev1.SecretTypeServiceAccountToken && secret.Annotations["kubernetes.io/service-account.name"] == serviceAccount.GetName() {
-					return nil
-				}
+		if !errors.IsAlreadyExists(err) {
+			return err
+		}
+		if secret, err := m.kubeclientset.CoreV1().Secrets(namespace).Get(context.TODO(), authSecret.GetName(), metav1.GetOptions{}); err == nil {
+			if secret.Type != corev1.SecretTypeServiceAccountToken || secret.Annotations["kubernetes.io/service-account.name"] != serviceAccount.GetName() {
 				secret.Type = authSecret.Type
 				secret.Annotations = authSecret.Annotations
-				if _, err := m.kubeclientset.CoreV1().Secrets(namespace).Update(context.TODO(), secret, metav1.UpdateOptions{}); err == nil {
-					return nil
+				if _, err := m.kubeclientset.CoreV1().Secrets(namespace).Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
+					return err
 				}
 			}
+		} else {
+			return err
 		}
-		klog.Infoln(err)
-		return err
 	}
 	// This part binds a ClusterRole to the service account to grant the predefined permissions to the serviceaccount
 	roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: clusterRole}
@@ -75,7 +75,7 @@ func (m *Manager) SetupRemoteAccessCredentials(name, namespace, clusterRole stri
 }
 
 // PrepareSecretForRemoteCluster prepares a secret from the secret of access credentials, which will be consumed by the remote cluster
-func (m *Manager) PrepareSecretForRemoteCluster(name, namespace, clusterUID string) (*corev1.Secret, bool, error) {
+func (m *Manager) PrepareSecretForRemoteCluster(name, namespace, clusterUID, remoteName, remoteNamespace string) (*corev1.Secret, bool, error) {
 	// Get the secret of the access credentials that is already prepared
 	authSecret, err := m.kubeclientset.CoreV1().Secrets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
@@ -90,8 +90,8 @@ func (m *Manager) PrepareSecretForRemoteCluster(name, namespace, clusterUID stri
 		return nil, false, fmt.Errorf("token is missing")
 	}
 	remoteSecret := new(corev1.Secret)
-	remoteSecret.SetName("federation")
-	remoteSecret.SetNamespace("edgenet")
+	remoteSecret.SetName(remoteName)
+	remoteSecret.SetNamespace(remoteNamespace)
 	remoteSecret.Data = make(map[string][]byte)
 	remoteSecret.Data["token"] = authSecret.Data["token"]
 	remoteSecret.Data["ca.crt"] = authSecret.Data["ca.crt"]
@@ -135,6 +135,7 @@ func (m *Manager) DeploySecret(secret *corev1.Secret) error {
 	// Using the remote kube clientset, create/update the secret in the remote cluster
 	if _, err := m.remotekubeclientset.CoreV1().Secrets(secret.GetNamespace()).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
 		if errors.IsAlreadyExists(err) {
+			klog.Infoln(err)
 			if currentSecret, err := m.remotekubeclientset.CoreV1().Secrets(secret.GetNamespace()).Get(context.TODO(), secret.GetName(), metav1.GetOptions{}); err == nil {
 				if reflect.DeepEqual(currentSecret.Data, secret.Data) {
 					return nil
@@ -142,9 +143,12 @@ func (m *Manager) DeploySecret(secret *corev1.Secret) error {
 				currentSecret.Data = secret.Data
 				if _, err = m.remotekubeclientset.CoreV1().Secrets(secret.GetNamespace()).Update(context.TODO(), currentSecret, metav1.UpdateOptions{}); err == nil {
 					return nil
+				} else {
+					klog.Infoln(err)
 				}
 			}
 		}
+		klog.Infoln(err)
 		return err
 	}
 	return nil
@@ -163,6 +167,7 @@ func (m *Manager) AnchorSelectiveDeployment(selectivedeployment *appsv1alpha2.Se
 	selectivedeploymentanchor.Spec.SecretName = secretName
 	if _, err := m.remoteedgeclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchor.GetNamespace()).Create(context.TODO(), selectivedeploymentanchor, metav1.CreateOptions{}); err != nil {
 		if errors.IsAlreadyExists(err) {
+			klog.Infoln(err)
 			if currentSelectiveDeploymentAnchor, err := m.remoteedgeclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchor.GetNamespace()).Get(context.TODO(), selectivedeploymentanchor.GetName(), metav1.GetOptions{}); err == nil {
 				if reflect.DeepEqual(currentSelectiveDeploymentAnchor.Spec, selectivedeploymentanchor.Spec) {
 					return nil
@@ -170,9 +175,12 @@ func (m *Manager) AnchorSelectiveDeployment(selectivedeployment *appsv1alpha2.Se
 				currentSelectiveDeploymentAnchor.Spec = selectivedeploymentanchor.Spec
 				if _, err := m.remoteedgeclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchor.GetNamespace()).Update(context.TODO(), currentSelectiveDeploymentAnchor, metav1.UpdateOptions{}); err == nil {
 					return nil
+				} else {
+					klog.Infoln(err)
 				}
 			}
 		}
+		klog.Infoln(err)
 		return err
 	}
 	return nil
