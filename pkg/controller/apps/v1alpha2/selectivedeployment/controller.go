@@ -454,7 +454,7 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 			annotations := selectivedeploymentCopy.GetAnnotations()
 			if value, ok := annotations["edge-net.io/selective-deployment"]; ok && value == "follower" {
 				// Create the workloads defined in the selective deployment and check if there is any failure
-				if ok := c.createWorkloads(selectivedeploymentCopy); ok {
+				if ok := c.createWorkloads(selectivedeploymentCopy); !ok {
 					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageWorkloadDeploymentFailed)
 					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageWorkloadDeploymentFailed)
 					return
@@ -462,8 +462,8 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeNormal, appsv1alpha2.StatusCreated, messageWorkloadDeploymentMade)
 				c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusCreated, messageWorkloadDeploymentMade)
 			} else {
-				subnamespace, _ := c.edgenetclientset.CoreV1alpha1().SubNamespaces(namespaceLabels["edge-net.io/parent-namespace"]).Get(context.TODO(), namespaceLabels["edge-net.io/owner"], metav1.GetOptions{})
-				if subnamespace.Spec.Workspace != nil && subnamespace.Spec.Workspace.Scope == "federation" {
+				subnamespace, err := c.edgenetclientset.CoreV1alpha1().SubNamespaces(namespaceLabels["edge-net.io/parent-namespace"]).Get(context.TODO(), namespaceLabels["edge-net.io/owner"], metav1.GetOptions{})
+				if err == nil && subnamespace.Spec.Workspace != nil && subnamespace.Spec.Workspace.Scope == "federation" {
 					multiproviderManager, fedmanagerUID, ok := c.prepareMultiProviderManager()
 					if !ok {
 						c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageCredsFailed)
@@ -503,9 +503,9 @@ func (c *Controller) makeSelectiveDeployment(selectivedeploymentCopy *appsv1alph
 	// We will create the anchor object in the federation manager. It will trigger the FedScheduler to make scheduling decision at the level of the federation.
 	// Following the scheduling decision, this object will be propagated across the federation if needed.
 	// Once it reaches the destination federation manager, workloads will be created in the selected clusters.
-	propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, fedmanagerUID)
+	propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, string(fedmanagerUID))
 	// Prepare the selective deployment secret and deploy it to the federation manager
-	remoteSecret, enqueue, err := multiproviderManager.PrepareSecretForRemoteCluster(string(selectivedeploymentCopy.GetUID()), propagationNamespace, clusterUID)
+	remoteSecret, enqueue, err := multiproviderManager.PrepareSecretForRemoteCluster(string(selectivedeploymentCopy.GetUID()), selectivedeploymentCopy.GetNamespace(), clusterUID, string(selectivedeploymentCopy.GetUID()), propagationNamespace)
 	if err != nil {
 		if enqueue {
 			c.enqueueSelectiveDeploymentAfter(selectivedeploymentCopy, 1*time.Minute)
@@ -539,7 +539,7 @@ func (c *Controller) prepareMultiProviderManager() (*multiprovider.Manager, []by
 		return nil, nil, false
 	}
 	multiproviderManager := multiprovider.NewManager(c.kubeclientset, remotekubeclientset, remoteedgeclientset)
-	return multiproviderManager, fedmanagerSecret.Data["cluster-uid"], true
+	return multiproviderManager, fedmanagerSecret.Data["remote-cluster-uid"], true
 }
 
 // reconcileWithWorkloads checks if the workloads defined in the selective deployment exist or not.
