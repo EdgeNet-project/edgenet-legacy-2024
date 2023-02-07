@@ -190,6 +190,7 @@ func (m *Manager) AnchorSelectiveDeployment(selectivedeployment *appsv1alpha2.Se
 func (m *Manager) UpdateSelectiveDeploymentClusterStatus(name, namespace, clusterUID string, status appsv1alpha2.WorkloadClusterStatus) bool {
 	originatingSelectivedeployment, err := m.remoteedgeclientset.AppsV1alpha2().SelectiveDeployments(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
+		klog.Infoln(err)
 		return false
 	}
 	updateStatus := true
@@ -205,6 +206,7 @@ func (m *Manager) UpdateSelectiveDeploymentClusterStatus(name, namespace, cluste
 	if updateStatus {
 		originatingSelectivedeployment.Status.Clusters[clusterUID] = status
 		if _, err := m.remoteedgeclientset.AppsV1alpha2().SelectiveDeployments(namespace).UpdateStatus(context.TODO(), originatingSelectivedeployment, metav1.UpdateOptions{}); err != nil {
+			klog.Infoln(err)
 			return false
 		}
 	}

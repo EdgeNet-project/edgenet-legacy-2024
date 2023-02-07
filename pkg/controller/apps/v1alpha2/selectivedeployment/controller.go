@@ -61,22 +61,22 @@ const (
 
 	messageResourceSynced = "Selective deployment synced successfully"
 
-	messageServiceAccountFailed                   = "Service account creation failed"
-	messageAuthSecretFailed                       = "Secret storing selective deployment's token cannot be created"
-	messageBindingFailed                          = "Role binding failed"
-	messageWorkloadDeploymentFailed               = "Workload deployment failed"
-	messageWorkloadDeploymentMade                 = "Workload deployment is successful"
-	messageWorkloadCannotBeCreated                = "Cannot create %s %s"
-	messageCredsFailed                            = "Credentials for selective deployment access cannot be prepared"
-	messageRemoteSecretFailed                     = "Remote secret cannot be created from the secret of credentials"
-	messageRemoteSecretDeploymentFailed           = "Remote secret cannot be deployed to the remote cluster"
-	messageAnchorMade                             = "Anchor has dropped in the federation manager"
-	messageAnchorFailed                           = "Anchor cannot be dropped in the federation manager"
-	messageMissingSecretFMAuth                    = "Secret storing federation manager's token is missing"
-	messageRemoteClientFailed                     = "Clientset for remote cluster cannot be created"
-	messageOriginatingSelectivedeploymentNotFound = "Originating selective deployment is not found"
-	messageStatusUpdateFailed                     = "Originating selective deployment status cannot be updated"
-	messageReconciliationDone                     = "Reconciliation of the selective deployment at the scope of federation is done"
+	messageServiceAccountFailed                = "Service account creation failed"
+	messageAuthSecretFailed                    = "Secret storing selective deployment's token cannot be created"
+	messageBindingFailed                       = "Role binding failed"
+	messageWorkloadDeploymentFailed            = "Workload deployment failed"
+	messageWorkloadDeploymentMade              = "Workload deployment is successful"
+	messageWorkloadCannotBeCreated             = "Cannot create %s %s"
+	messageCredsFailed                         = "Credentials for selective deployment access cannot be prepared"
+	messageRemoteSecretFailed                  = "Remote secret cannot be created from the secret of credentials"
+	messageRemoteSecretDeploymentFailed        = "Remote secret cannot be deployed to the remote cluster"
+	messageAnchorMade                          = "Anchor has dropped in the federation manager"
+	messageAnchorFailed                        = "Anchor cannot be dropped in the federation manager"
+	messageMissingSecretFMAuth                 = "Secret storing federation manager's token is missing"
+	messageRemoteClientFailed                  = "Clientset for remote cluster cannot be created"
+	messageOriginalSelectivedeploymentNotFound = "Original selective deployment is not found"
+	messageStatusUpdateFailed                  = "Original selective deployment status cannot be updated"
+	messageReconciliationDone                  = "Reconciliation of the selective deployment at the scope of federation is done"
 )
 
 // Controller is the controller implementation for Selective Deployment resources
@@ -411,14 +411,14 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 	if permitted {
 		switch selectivedeploymentCopy.Status.State {
 		case appsv1alpha2.StatusCreated:
-			multiproviderManager, fedmanagerUID, ok := c.prepareMultiProviderManager()
-			if !ok {
-				c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusReconciliation, messageCredsFailed)
-				c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusReconciliation, messageCredsFailed)
-				return
-			}
 			annotations := selectivedeploymentCopy.GetAnnotations()
 			if value, ok := annotations["edge-net.io/selective-deployment"]; ok && value == "follower" {
+				multiproviderManager, _, ok := c.prepareMultiProviderManager(selectivedeploymentCopy.GetNamespace(), annotations["edge-net.io/origin-selective-deployment-uid"])
+				if !ok {
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusReconciliation, messageCredsFailed)
+					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusReconciliation, messageCredsFailed)
+					return
+				}
 				// Check the workloads of the selective deployment and prepare a deployment status for the cluster.
 				// This status will be used to update the status of originating selective deployment.
 				workloadClusterStatus, ok := c.reconcileWithWorkloads(selectivedeploymentCopy)
@@ -436,6 +436,12 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 					return
 				}
 			} else {
+				multiproviderManager, fedmanagerUID, ok := c.prepareMultiProviderManager("edgenet", "federation")
+				if !ok {
+					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusReconciliation, messageCredsFailed)
+					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusReconciliation, messageCredsFailed)
+					return
+				}
 				// Reconcile with the anchor in the federation manager
 				if enqueue, err := c.makeSelectiveDeployment(selectivedeploymentCopy, multiproviderManager, namespaceLabels["edge-net.io/cluster-uid"], fedmanagerUID); err != nil {
 					if enqueue {
@@ -464,7 +470,7 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 			} else {
 				subnamespace, err := c.edgenetclientset.CoreV1alpha1().SubNamespaces(namespaceLabels["edge-net.io/parent-namespace"]).Get(context.TODO(), namespaceLabels["edge-net.io/owner"], metav1.GetOptions{})
 				if err == nil && subnamespace.Spec.Workspace != nil && subnamespace.Spec.Workspace.Scope == "federation" {
-					multiproviderManager, fedmanagerUID, ok := c.prepareMultiProviderManager()
+					multiproviderManager, fedmanagerUID, ok := c.prepareMultiProviderManager("edgenet", "federation")
 					if !ok {
 						c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusFailed, messageCredsFailed)
 						c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusFailed, messageCredsFailed)
@@ -524,12 +530,12 @@ func (c *Controller) makeSelectiveDeployment(selectivedeploymentCopy *appsv1alph
 	return false, nil
 }
 
-func (c *Controller) prepareMultiProviderManager() (*multiprovider.Manager, []byte, bool) {
-	fedmanagerSecret, err := c.kubeclientset.CoreV1().Secrets("edgenet").Get(context.TODO(), "federation", metav1.GetOptions{})
+func (c *Controller) prepareMultiProviderManager(namespace, name string) (*multiprovider.Manager, []byte, bool) {
+	secret, err := c.kubeclientset.CoreV1().Secrets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, nil, false
 	}
-	config := bootstrap.PrepareRestConfig(string(fedmanagerSecret.Data["server"]), string(fedmanagerSecret.Data["token"]), fedmanagerSecret.Data["ca.crt"])
+	config := bootstrap.PrepareRestConfig(string(secret.Data["server"]), string(secret.Data["token"]), secret.Data["ca.crt"])
 	remotekubeclientset, err := bootstrap.CreateKubeClientset(config)
 	if err != nil {
 		return nil, nil, false
@@ -539,7 +545,7 @@ func (c *Controller) prepareMultiProviderManager() (*multiprovider.Manager, []by
 		return nil, nil, false
 	}
 	multiproviderManager := multiprovider.NewManager(c.kubeclientset, remotekubeclientset, remoteedgeclientset)
-	return multiproviderManager, fedmanagerSecret.Data["remote-cluster-uid"], true
+	return multiproviderManager, secret.Data["remote-cluster-uid"], true
 }
 
 // reconcileWithWorkloads checks if the workloads defined in the selective deployment exist or not.
@@ -550,51 +556,55 @@ func (c *Controller) reconcileWithWorkloads(selectivedeploymentCopy *appsv1alpha
 		workloadClusterStatus.Workloads.Deployment = make(map[string]string)
 		for _, deployment := range selectivedeploymentCopy.Spec.Workloads.Deployment {
 			name := selectivedeploymentCopy.GetName() + "-" + deployment.GetName()
-			deployment, err := c.kubeclientset.AppsV1().Deployments(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{})
+			actualDeployment, err := c.kubeclientset.AppsV1().Deployments(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{})
 			if err != nil {
 				return workloadClusterStatus, false
 			}
-			workloadClusterStatus.Workloads.Deployment[name] = fmt.Sprintf("%d/%d", deployment.Status.AvailableReplicas, deployment.Status.Replicas)
+			workloadClusterStatus.Workloads.Deployment[name] = fmt.Sprintf("%d/%d", actualDeployment.Status.AvailableReplicas, actualDeployment.Status.Replicas)
 		}
 	}
 	if len(selectivedeploymentCopy.Spec.Workloads.StatefulSet) > 0 {
 		workloadClusterStatus.Workloads.StatefulSet = make(map[string]string)
 		for _, statefulset := range selectivedeploymentCopy.Spec.Workloads.StatefulSet {
 			name := selectivedeploymentCopy.GetName() + "-" + statefulset.GetName()
-			if _, err := c.kubeclientset.AppsV1().StatefulSets(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+			actualStatefulset, err := c.kubeclientset.AppsV1().StatefulSets(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{})
+			if err != nil {
 				return workloadClusterStatus, false
 			}
-			workloadClusterStatus.Workloads.StatefulSet[name] = fmt.Sprintf("%d/%d", statefulset.Status.ReadyReplicas, statefulset.Status.Replicas)
+			workloadClusterStatus.Workloads.StatefulSet[name] = fmt.Sprintf("%d/%d", actualStatefulset.Status.ReadyReplicas, actualStatefulset.Status.Replicas)
 		}
 	}
 	if len(selectivedeploymentCopy.Spec.Workloads.DaemonSet) > 0 {
 		workloadClusterStatus.Workloads.DaemonSet = make(map[string]string)
 		for _, daemonset := range selectivedeploymentCopy.Spec.Workloads.DaemonSet {
 			name := selectivedeploymentCopy.GetName() + "-" + daemonset.GetName()
-			if _, err := c.kubeclientset.AppsV1().DaemonSets(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+			actualDaemonset, err := c.kubeclientset.AppsV1().DaemonSets(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{})
+			if err != nil {
 				return workloadClusterStatus, false
 			}
-			workloadClusterStatus.Workloads.Deployment[name] = fmt.Sprintf("%d/%d", daemonset.Status.CurrentNumberScheduled, daemonset.Status.DesiredNumberScheduled)
+			workloadClusterStatus.Workloads.DaemonSet[name] = fmt.Sprintf("%d/%d", actualDaemonset.Status.CurrentNumberScheduled, actualDaemonset.Status.DesiredNumberScheduled)
 		}
 	}
 	if len(selectivedeploymentCopy.Spec.Workloads.Job) > 0 {
 		workloadClusterStatus.Workloads.Job = make(map[string]string)
 		for _, job := range selectivedeploymentCopy.Spec.Workloads.Job {
 			name := selectivedeploymentCopy.GetName() + "-" + job.GetName()
-			if _, err := c.kubeclientset.BatchV1().Jobs(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+			actualJob, err := c.kubeclientset.BatchV1().Jobs(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{})
+			if err != nil {
 				return workloadClusterStatus, false
 			}
-			workloadClusterStatus.Workloads.Deployment[name] = fmt.Sprintf("Active: %d, Succeeded: %d, Failed: %d", job.Status.Active, job.Status.Succeeded, job.Status.Failed)
+			workloadClusterStatus.Workloads.Job[name] = fmt.Sprintf("Active: %d, Succeeded: %d, Failed: %d", actualJob.Status.Active, actualJob.Status.Succeeded, actualJob.Status.Failed)
 		}
 	}
 	if len(selectivedeploymentCopy.Spec.Workloads.CronJob) > 0 {
 		workloadClusterStatus.Workloads.CronJob = make(map[string]string)
 		for _, cronjob := range selectivedeploymentCopy.Spec.Workloads.CronJob {
 			name := selectivedeploymentCopy.GetName() + "-" + cronjob.GetName()
-			if _, err := c.kubeclientset.BatchV1().CronJobs(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+			actualCronJob, err := c.kubeclientset.BatchV1().CronJobs(selectivedeploymentCopy.GetNamespace()).Get(context.TODO(), name, metav1.GetOptions{})
+			if err != nil {
 				return workloadClusterStatus, false
 			}
-			workloadClusterStatus.Workloads.Deployment[name] = fmt.Sprintf("Active %v", cronjob.Status.Active)
+			workloadClusterStatus.Workloads.CronJob[name] = fmt.Sprintf("Active %v", actualCronJob.Status.Active)
 		}
 	}
 	return workloadClusterStatus, true
