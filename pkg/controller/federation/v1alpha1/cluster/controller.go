@@ -35,6 +35,7 @@ import (
 	multitenancy "github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -410,6 +411,30 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageCredsFailed)
 				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageCredsFailed)
 				return
+			}
+			// This part binds a ClusterRole to the service account to grant the predefined permissions to the serviceaccount in the provider's namespace
+			roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: federationv1alpha1.RemoteClusterRole}
+			rbSubjects := []rbacv1.Subject{{Kind: "ServiceAccount", Name: clusterCopy.Spec.UID, Namespace: propagationNamespace}}
+			roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", federationv1alpha1.RemoteClusterRole, clusterCopy.Spec.UID), Namespace: clusterCopy.GetNamespace()},
+				Subjects: rbSubjects, RoleRef: roleRef}
+			roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
+			roleBind.SetLabels(roleBindLabels)
+			if _, err := c.kubeclientset.RbacV1().RoleBindings(clusterCopy.GetNamespace()).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
+				if !errors.IsAlreadyExists(err) {
+					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageCredsFailed)
+					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageCredsFailed)
+					return
+				}
+				if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(clusterCopy.GetNamespace()).Get(context.TODO(), roleBind.GetName(), metav1.GetOptions{}); err == nil {
+					roleBinding.RoleRef = roleBind.RoleRef
+					roleBinding.Subjects = roleBind.Subjects
+					roleBinding.SetLabels(roleBind.GetLabels())
+					if _, err := c.kubeclientset.RbacV1().RoleBindings(clusterCopy.GetNamespace()).Update(context.TODO(), roleBinding, metav1.UpdateOptions{}); err != nil {
+						c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageCredsFailed)
+						c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageCredsFailed)
+						return
+					}
+				}
 			}
 			c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusCredsPrepared, messageCredsPrepared)
 			c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusCredsPrepared, messageCredsPrepared)

@@ -217,6 +217,9 @@ func (c *Controller) updateClusterResourceStatus() {
 	// Below is the logic to calculate the total allocatable resources and total capacity resources of all nodes in the cluster.
 	// It also prepares the bundledAllocatableResourcesList.
 	nodeRaw, _ := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/access=public,edge-net.io/access-scope=federation"})
+	if len(nodeRaw.Items) == 0 {
+		return
+	}
 	for _, nodeRow := range nodeRaw.Items {
 		for key, value := range nodeRow.Status.Allocatable {
 			if allocatableQuantity, ok := overallAllocatableResources[key]; ok {
@@ -225,6 +228,8 @@ func (c *Controller) updateClusterResourceStatus() {
 			} else {
 				overallAllocatableResources[key] = value
 			}
+		}
+		if len(bundledAllocatableResourcesList) > 0 {
 			for key, bundledAllocatableResources := range bundledAllocatableResourcesList {
 				if reflect.DeepEqual(bundledAllocatableResources, nodeRow.Status.Allocatable) {
 					bundledAllocatableResourcesList[key].Count++
@@ -233,6 +238,8 @@ func (c *Controller) updateClusterResourceStatus() {
 					bundledAllocatableResourcesList = append(bundledAllocatableResourcesList, federationv1alpha1.BundledAllocatableResources{Count: 1, ResourceList: nodeRow.Status.Allocatable})
 				}
 			}
+		} else {
+			bundledAllocatableResourcesList = append(bundledAllocatableResourcesList, federationv1alpha1.BundledAllocatableResources{Count: 1, ResourceList: nodeRow.Status.Allocatable})
 		}
 		for key, value := range nodeRow.Status.Capacity {
 			if capacityQuantity, ok := overallCapacityResources[key]; ok {
@@ -274,6 +281,10 @@ func (c *Controller) updateClusterResourceStatus() {
 	if cluster, err := remoteedgeclientset.FederationV1alpha1().Clusters(string(fedmanagerSecret.Data["assigned-cluster-namespace"])).Get(context.TODO(), string(fedmanagerSecret.Data["assigned-cluster-name"]), metav1.GetOptions{}); err == nil {
 		cluster.Status.RelativeResourceAvailability = clusterStatus
 		cluster.Status.AllocatableResources = bundledAllocatableResourcesList
-		remoteedgeclientset.FederationV1alpha1().Clusters(string(fedmanagerSecret.Data["assigned-cluster-namespace"])).UpdateStatus(context.TODO(), cluster, metav1.UpdateOptions{})
+		if _, err := remoteedgeclientset.FederationV1alpha1().Clusters(string(fedmanagerSecret.Data["assigned-cluster-namespace"])).UpdateStatus(context.TODO(), cluster, metav1.UpdateOptions{}); err != nil {
+			klog.Infoln(err)
+		}
+	} else {
+		klog.Infoln(err)
 	}
 }
