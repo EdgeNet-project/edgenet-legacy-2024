@@ -349,6 +349,8 @@ type NodeContributionStatus struct {
 	Message string `json:"message"`
 	// Failed sets the backoff limit.
 	Failed int `json:"failed"`
+	// UpdateTimestamp is the last time the status was updated.
+	UpdateTimestamp *metav1.Time `json:"updateTimestamp"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
