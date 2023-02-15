@@ -46,7 +46,7 @@ const (
 	NormalResources            = "Normal"
 	LimitedResources           = "Limited"
 	ScarceResources            = "Scarcity"
-	FederationManagerRole      = "Federation"
+	FederationManagerRole      = "Manager"
 	WorkloadRole               = "Workload"
 )
 
@@ -103,6 +103,8 @@ type ClusterStatus struct {
 	AllocatableResources []BundledAllocatableResources `json:"allocatableResources"`
 	// Failed sets the backoff limit.
 	Failed int `json:"failed"`
+	// UpdateTimestamp is the last time the status was updated.
+	UpdateTimestamp *metav1.Time `json:"updateTimestamp"`
 }
 
 // BundledAllocatableResources is the struct to bundle the allocatable resources
@@ -217,6 +219,8 @@ type ManagerCacheSpec struct {
 	Hierarchy Hierarchy `json:"hierarchy"`
 	// Clusters form a list of workload clusters that are managed by the federation manager
 	Clusters map[string]ClusterCache `json:"clusters"`
+	// LatestUpdateTimestamp is the last time the managercache resource was updated by its federation manager
+	LatestUpdateTimestamp *metav1.Time `json:"latestUpdateTimestamp"`
 	// Enabled indicates whether the federation manager is open to the federation or not
 	Enabled bool `json:"enabled"`
 }
@@ -226,7 +230,7 @@ type Hierarchy struct {
 	// Level is the hierarchy level of the federation manager
 	Level int `json:"level"`
 	// Parent is the info of the federation manager's parent
-	Parent AssociatedManager `json:"parent"`
+	Parent *AssociatedManager `json:"parent"`
 	// Children is the info of the federation manager's children
 	Children []AssociatedManager `json:"children"`
 }
@@ -259,6 +263,8 @@ type ManagerCacheStatus struct {
 	Message string `json:"message"`
 	// Failed sets the backoff limit.
 	Failed int `json:"failed"`
+	// UpdateTimestamp is the last time the status was updated.
+	UpdateTimestamp *metav1.Time `json:"updateTimestamp"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

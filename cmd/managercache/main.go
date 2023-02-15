@@ -58,7 +58,7 @@ func main() {
 	}
 
 	// Start the controller to provide the functionalities of managercache resource
-	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Hour*1)
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Minute*10)
 
 	controller := managercache.NewController(
 		kubeclientset,

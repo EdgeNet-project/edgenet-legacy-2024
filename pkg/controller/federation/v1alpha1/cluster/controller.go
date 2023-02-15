@@ -258,9 +258,12 @@ func (c *Controller) enqueueClusterAfter(obj interface{}, after time.Duration) {
 
 func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 	// Crashloop backoff limit to avoid endless loop
-	if exceedsBackoffLimit := clusterCopy.Status.Failed >= backoffLimit; exceedsBackoffLimit {
-		return
+	if clusterCopy.Status.UpdateTimestamp != nil && clusterCopy.Status.UpdateTimestamp.Add(24*time.Hour).After(time.Now()) {
+		if exceedsBackoffLimit := clusterCopy.Status.Failed >= backoffLimit; exceedsBackoffLimit {
+			return
+		}
 	}
+
 	multitenancyManager := multitenancy.NewManager(c.kubeclientset, c.edgenetclientset)
 	permitted, _, namespaceLabels := multitenancyManager.EligibilityCheck(clusterCopy.GetNamespace())
 	if permitted {
@@ -293,11 +296,13 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 				return
 			}
 			multiproviderManager = multiprovider.NewManager(c.kubeclientset, remotekubeclientset, remoteedgeclientset)
+			updateTimestamp := metav1.Now()
 			managerCache, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), namespaceLabels["edge-net.io/cluster-uid"], metav1.GetOptions{})
 			if err != nil {
 				newManagerCache := new(federationv1alpha1.ManagerCache)
 				newManagerCache.SetName(namespaceLabels["edge-net.io/cluster-uid"])
 				newManagerCache.Spec.Enabled = true
+				newManagerCache.Spec.LatestUpdateTimestamp = &updateTimestamp
 				_, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Create(context.TODO(), newManagerCache, metav1.CreateOptions{})
 				if err != nil {
 					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageManagerCacheMissing)
@@ -308,7 +313,7 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 				return
 			}
 			clusterLabels := clusterCopy.GetLabels()
-			if clusterCopy.Spec.Role == "Federation" {
+			if clusterCopy.Spec.Role == federationv1alpha1.FederationManagerRole {
 				if managerCache.Spec.Hierarchy.Children == nil {
 					managerCache.Spec.Hierarchy.Children = []federationv1alpha1.AssociatedManager{}
 				}
@@ -325,6 +330,7 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 				}
 				if !isExists {
 					managerCache.Spec.Hierarchy.Children = append(managerCache.Spec.Hierarchy.Children, child)
+					managerCache.Spec.LatestUpdateTimestamp = &updateTimestamp
 				}
 
 				// Create a manager cache in the remote cluster
@@ -333,10 +339,11 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 				parent := federationv1alpha1.AssociatedManager{}
 				parent.Name = namespaceLabels["edge-net.io/cluster-uid"]
 				parent.Enabled = managerCache.Spec.Enabled
-				remoteManagerCache.Spec.Hierarchy.Parent = parent
+				remoteManagerCache.Spec.Hierarchy.Parent = &parent
 				remoteManagerCache.Spec.Hierarchy.Level = managerCache.Spec.Hierarchy.Level + 1 // The level of this manager cluster is one level higher than the federation manager
 				remoteManagerCache.SetLabels(clusterLabels)
-				if err := multiproviderManager.CreateManagerCache(remoteManagerCache); err != nil {
+				remoteManagerCache.Spec.LatestUpdateTimestamp = &updateTimestamp
+				if err := multiproviderManager.CreateManagerCache(remoteManagerCache); err != nil && !errors.IsAlreadyExists(err) {
 					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteManagerCacheCreationFailed)
 					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteManagerCacheCreationFailed)
 					return
@@ -361,6 +368,7 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 					managerCache.Spec.Clusters = make(map[string]federationv1alpha1.ClusterCache)
 				}
 				managerCache.Spec.Clusters[clusterCopy.Spec.UID] = clusterCache
+				managerCache.Spec.LatestUpdateTimestamp = &updateTimestamp
 			}
 			if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Update(context.TODO(), managerCache, metav1.UpdateOptions{}); err != nil {
 				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageManagerCacheUpdateFailed)
@@ -511,7 +519,7 @@ func (c *Controller) reconcile(clusterCopy *federationv1alpha1.Cluster, propagat
 
 	// Check if the manager cache at the remote cluster exists and holds the correct information
 	managerCache, _ := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), fedmanagerUID, metav1.GetOptions{})
-	if clusterCopy.Spec.Role == "Federation" {
+	if clusterCopy.Spec.Role == federationv1alpha1.FederationManagerRole {
 		// Update the manager cache of the federation manager to include the newly added cluster as a child
 		ok := false
 		for _, child := range managerCache.Spec.Hierarchy.Children {
@@ -558,6 +566,11 @@ func (c *Controller) reconcile(clusterCopy *federationv1alpha1.Cluster, propagat
 	// If the cluster status is not ready, update it
 	if state != federationv1alpha1.StatusReady {
 		c.updateStatus(context.TODO(), clusterCopy, state, message)
+	} else {
+		if clusterCopy.Status.Failed != 0 {
+			clusterCopy.Status.Failed = 0
+			c.updateStatus(context.TODO(), clusterCopy, state, message)
+		}
 	}
 }
 
@@ -584,6 +597,8 @@ func (c *Controller) updateStatus(ctx context.Context, clusterCopy *federationv1
 	clusterCopy.Status.Message = message
 	if clusterCopy.Status.State == federationv1alpha1.StatusFailed {
 		clusterCopy.Status.Failed++
+		now := metav1.Now()
+		clusterCopy.Status.UpdateTimestamp = &now
 	}
 	if _, err := c.edgenetclientset.FederationV1alpha1().Clusters(clusterCopy.GetNamespace()).UpdateStatus(ctx, clusterCopy, metav1.UpdateOptions{}); err != nil {
 		klog.Infoln(err)
