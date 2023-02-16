@@ -288,7 +288,7 @@ func (c *Controller) processSelectiveDeploymentAnchor(selectivedeploymentanchorC
 			c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeNormal, federationv1alpha1.StatusDelegated, messageDelegationComplete)
 			c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusDelegated, messageDelegationComplete)
 		default:
-			if selectivedeploymentanchorCopy.Spec.FederationManager != nil && selectivedeploymentanchorCopy.Spec.WorkloadClusters != nil && len(selectivedeploymentanchorCopy.Spec.WorkloadClusters) > 0 {
+			if selectivedeploymentanchorCopy.Spec.FederationManager != nil {
 				c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeNormal, federationv1alpha1.StatusAssigned, messageFedManagerAssigned)
 				c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusAssigned, messageFedManagerAssigned)
 				return
@@ -297,7 +297,6 @@ func (c *Controller) processSelectiveDeploymentAnchor(selectivedeploymentanchorC
 			// The goal is to avoid concurrency issues that delay scheduling decisions.
 			go func() {
 				time.Sleep(5 * time.Second)
-				klog.Infoln("TESTTEST")
 				klog.Infoln(selectivedeploymentanchorCopy.Status.State)
 				c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusPendingScheduler, messagePending)
 			}()
@@ -401,43 +400,52 @@ func (c *Controller) conveySelectiveDeploymentAnchor(selectivedeploymentanchorCo
 	nextFederationManager := selectivedeploymentanchorCopy.Spec.FederationManager.Path[0]
 	// Get the secret containing the creds of the parent federation manager cluster
 	parentFedmanagerSecret, err := c.kubeclientset.CoreV1().Secrets("edgenet").Get(context.TODO(), "federation", metav1.GetOptions{})
-	if err != nil {
-		return false
-	}
+	klog.Infoln(err)
+	klog.Infoln(errors.IsNotFound(err))
+
 	// Compare the parent's UID with the next federation manager's UID. If they are the same, then the next federation manager is the parent.
 	// Otherwise, the next federation manager is a child of the current one. The remote clientsets will be created depending on this information.
-	if nextFederationManager == string(parentFedmanagerSecret.Data["cluster-uid"]) {
+	if err == nil && nextFederationManager == string(parentFedmanagerSecret.Data["remote-cluster-uid"]) {
 		parentConfig := bootstrap.PrepareRestConfig(string(parentFedmanagerSecret.Data["server"]), string(parentFedmanagerSecret.Data["token"]), parentFedmanagerSecret.Data["ca.crt"])
 		remotekubeclientset, err = bootstrap.CreateKubeClientset(parentConfig)
 		if err != nil {
+			klog.Infoln(err)
 			return false
 		}
 		remoteedgeclientset, err = bootstrap.CreateEdgeNetClientset(parentConfig)
 		if err != nil {
+			klog.Infoln(err)
 			return false
 		}
 	} else {
 		// List all clusters to retrieve the next federation manager's secret containing auth creds
 		clusterRaw, err := c.edgenetclientset.FederationV1alpha1().Clusters(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
+			klog.Infoln(err)
 			return false
 		}
 		match := false
 	clusterLoop:
 		for _, clusterRow := range clusterRaw.Items {
+			klog.Infoln(clusterRow.Spec.UID)
+			klog.Infoln(clusterRow.Spec.Role)
+			klog.Infoln(nextFederationManager)
 			if clusterRow.Spec.Role == federationv1alpha1.FederationManagerRole && nextFederationManager == clusterRow.Spec.UID {
 				match = true
 				childFedmanagerSecret, err := c.kubeclientset.CoreV1().Secrets(clusterRow.GetNamespace()).Get(context.TODO(), clusterRow.Spec.SecretName, metav1.GetOptions{})
 				if err != nil {
+					klog.Infoln(err)
 					return false
 				}
-				config := bootstrap.PrepareRestConfig(string(childFedmanagerSecret.Data["server"]), string(childFedmanagerSecret.Data["token"]), childFedmanagerSecret.Data["ca.crt"])
+				config := bootstrap.PrepareRestConfig(clusterRow.Spec.Server, string(childFedmanagerSecret.Data["token"]), childFedmanagerSecret.Data["ca.crt"])
 				remotekubeclientset, err = bootstrap.CreateKubeClientset(config)
 				if err != nil {
+					klog.Infoln(err)
 					return false
 				}
 				remoteedgeclientset, err = bootstrap.CreateEdgeNetClientset(config)
 				if err != nil {
+					klog.Infoln(err)
 					return false
 				}
 				break clusterLoop
@@ -446,18 +454,21 @@ func (c *Controller) conveySelectiveDeploymentAnchor(selectivedeploymentanchorCo
 		// If the next federation manager is not found, then return false.
 		// It indicates the FedScheduler wrongly generates the path or one of the anchors carried false information.
 		if !match {
+			klog.Infoln("The next federation manager is not found")
 			return false
 		}
 	}
 	// Create the propagation namespace if it does not exist
-	remoteNamespace := new(corev1.Namespace)
+	/*remoteNamespace := new(corev1.Namespace)
 	remoteNamespace.SetName(selectivedeploymentanchorCopy.GetNamespace())
 	if _, err := remotekubeclientset.CoreV1().Namespaces().Create(context.TODO(), remoteNamespace, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+		klog.Infoln(err)
 		return false
-	}
+	}*/
 	// Create the selective deployment anchor with the originating selective deployment's secret in the next federation manager
 	selectiveDeploymentSecret, err := c.kubeclientset.CoreV1().Secrets(selectivedeploymentanchorCopy.GetNamespace()).Get(context.TODO(), selectivedeploymentanchorCopy.Spec.OriginRef.UID, metav1.GetOptions{})
 	if err != nil {
+		klog.Infoln(err)
 		return false
 	}
 	remoteSelectiveDeploymentSecret := new(corev1.Secret)
@@ -465,6 +476,7 @@ func (c *Controller) conveySelectiveDeploymentAnchor(selectivedeploymentanchorCo
 	remoteSelectiveDeploymentSecret.SetNamespace(selectiveDeploymentSecret.GetNamespace())
 	remoteSelectiveDeploymentSecret.Data = selectiveDeploymentSecret.Data
 	if _, err := remotekubeclientset.CoreV1().Secrets(remoteSelectiveDeploymentSecret.GetNamespace()).Create(context.TODO(), remoteSelectiveDeploymentSecret, metav1.CreateOptions{}); err != nil {
+		klog.Infoln(err)
 		return false
 	}
 	remoteSelectiveDeploymentAnchor := new(federationv1alpha1.SelectiveDeploymentAnchor)
@@ -472,8 +484,12 @@ func (c *Controller) conveySelectiveDeploymentAnchor(selectivedeploymentanchorCo
 	remoteSelectiveDeploymentAnchor.SetNamespace(selectivedeploymentanchorCopy.GetNamespace())
 	remoteSelectiveDeploymentAnchor.Spec = selectivedeploymentanchorCopy.Spec
 	// Remove the next federation manager from the path before creating the anchor in it
-	remoteSelectiveDeploymentAnchor.Spec.FederationManager.Path = remoteSelectiveDeploymentAnchor.Spec.FederationManager.Path[1:]
+	remoteSelectiveDeploymentAnchor.Spec.FederationManager.Path = nil
+	if len(remoteSelectiveDeploymentAnchor.Spec.FederationManager.Path) > 1 {
+		remoteSelectiveDeploymentAnchor.Spec.FederationManager.Path = selectivedeploymentanchorCopy.Spec.FederationManager.Path[1:]
+	}
 	if _, err := remoteedgeclientset.FederationV1alpha1().SelectiveDeploymentAnchors(remoteSelectiveDeploymentAnchor.GetNamespace()).Create(context.TODO(), remoteSelectiveDeploymentAnchor, metav1.CreateOptions{}); err != nil {
+		klog.Infoln(err)
 		return false
 	}
 	return true
