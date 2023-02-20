@@ -31,6 +31,7 @@ import (
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/federation/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -349,6 +350,8 @@ func (c *Controller) reconcileWithChildren() bool {
 						if !reflect.DeepEqual(managercacheMap[remotemanagercacheRow.GetName()].Spec, remotemanagercacheRow.Spec) || managercacheMap[remotemanagercacheRow.GetName()].Status.State != remotemanagercacheRow.Status.State {
 							return false
 						}
+					} else {
+						return false
 					}
 				}
 			} else {
@@ -367,6 +370,7 @@ func (c *Controller) applyCache(managercacheCopy *federationv1alpha1.ManagerCach
 			managercacheMap[managercacheRow.GetName()] = managercacheRow
 		}
 	} else {
+		klog.Infoln(err)
 		return err
 	}
 
@@ -401,21 +405,154 @@ func (c *Controller) applyCache(managercacheCopy *federationv1alpha1.ManagerCach
 							if !reflect.DeepEqual(currentManagercache.Spec, remotemanagercacheRow.Spec) {
 								currentManagercache.Spec = remotemanagercacheRow.Spec
 								if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Update(context.TODO(), &currentManagercache, metav1.UpdateOptions{}); err != nil {
+									klog.Infoln(err)
 									return err
 								}
 							}
 							if !reflect.DeepEqual(currentManagercache.Status, remotemanagercacheRow.Status) {
-								if remoteManagerCacheCopy, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), remotemanagercacheRow.GetName(), metav1.GetOptions{}); err == nil {
-									currentManagercache.Status = remoteManagerCacheCopy.Status
-									if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().UpdateStatus(context.TODO(), &currentManagercache, metav1.UpdateOptions{}); err != nil {
+								if currentManagerCacheCopy, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), currentManagercache.GetName(), metav1.GetOptions{}); err == nil {
+									currentManagerCacheCopy.Status = remotemanagercacheRow.Status
+									if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().UpdateStatus(context.TODO(), currentManagerCacheCopy, metav1.UpdateOptions{}); err != nil {
+										klog.Infoln(err)
 										return err
 									}
 								}
 							}
 						}
+					} else {
+						newManagerCache := new(federationv1alpha1.ManagerCache)
+						newManagerCache.SetName(remotemanagercacheRow.GetName())
+						newManagerCache.Spec = remotemanagercacheRow.Spec
+						if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Create(context.TODO(), newManagerCache, metav1.CreateOptions{}); err != nil {
+							klog.Infoln(err)
+							return err
+						}
+						if currentManagerCacheCopy, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), newManagerCache.GetName(), metav1.GetOptions{}); err == nil {
+							currentManagerCacheCopy.Status = remotemanagercacheRow.Status
+							if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().UpdateStatus(context.TODO(), currentManagerCacheCopy, metav1.UpdateOptions{}); err != nil {
+								klog.Infoln(err)
+								return err
+							}
+						}
 					}
 				}
 			} else {
+				klog.Infoln(err)
+				return err
+			}
+
+			/*klog.Infoln("clusterUID: ", clusterUID)
+			klog.Infoln("managercacheCopy.GetName(): ", managercacheCopy.GetName())
+			if managercacheCopy.GetName() == clusterUID {
+				klog.Infoln("UIDs are equal")
+				if err := c.updateChildManagerCache(managercacheCopy, clusterRow.Spec.Server, childFedManagerSecret.Data["token"], childFedManagerSecret.Data["ca.crt"]); err != nil {
+					klog.Infoln(err)
+					return err
+				}
+			}*/
+		}
+	}
+
+	managercacheMap = nil
+	managercacheMap = make(map[string]federationv1alpha1.ManagerCache)
+	managercacheRaw, err = c.edgenetclientset.FederationV1alpha1().ManagerCaches().List(context.TODO(), metav1.ListOptions{})
+	if err == nil {
+		for _, managercacheRow := range managercacheRaw.Items {
+			managercacheMap[managercacheRow.GetName()] = managercacheRow
+			propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, managercacheRow.GetName())
+			remoteNamespace := new(corev1.Namespace)
+			remoteNamespace.SetName(propagationNamespace)
+			if _, err := c.kubeclientset.CoreV1().Namespaces().Create(context.TODO(), remoteNamespace, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+				klog.Infoln(err)
+				return err
+			}
+			fedmanagerNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, clusterUID)
+
+			// This part binds a ClusterRole to the service account to grant the predefined permissions to the serviceaccount
+			roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: federationv1alpha1.RemoteClusterRole}
+			rbSubjects := []rbacv1.Subject{{Kind: "ServiceAccount", Name: managercacheRow.GetName(), Namespace: fedmanagerNamespace}}
+			roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", federationv1alpha1.RemoteClusterRole, managercacheRow.GetName()), Namespace: propagationNamespace},
+				Subjects: rbSubjects, RoleRef: roleRef}
+			roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
+			roleBind.SetLabels(roleBindLabels)
+			if _, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
+				if !errors.IsAlreadyExists(err) {
+					klog.Infoln(err)
+					return err
+				}
+				if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Get(context.TODO(), roleBind.GetName(), metav1.GetOptions{}); err == nil {
+					roleBinding.RoleRef = roleBind.RoleRef
+					roleBinding.Subjects = roleBind.Subjects
+					roleBinding.SetLabels(roleBind.GetLabels())
+					if _, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Update(context.TODO(), roleBinding, metav1.UpdateOptions{}); err != nil {
+						klog.Infoln(err)
+						return err
+					}
+				} else {
+					klog.Infoln(err)
+					return err
+				}
+			}
+		}
+	} else {
+		klog.Infoln(err)
+		return err
+	}
+	for _, clusterRow := range clusterRaw.Items {
+		if clusterRow.Spec.Role == federationv1alpha1.FederationManagerRole {
+			childFedManagerSecret, err := c.kubeclientset.CoreV1().Secrets(clusterRow.GetNamespace()).Get(context.TODO(), clusterRow.Spec.SecretName, metav1.GetOptions{})
+			if err != nil {
+				klog.Infoln(err)
+				return err
+			}
+
+			config := bootstrap.PrepareRestConfig(clusterRow.Spec.Server, string(childFedManagerSecret.Data["token"]), childFedManagerSecret.Data["ca.crt"])
+			remoteedgeclientset, err := bootstrap.CreateEdgeNetClientset(config)
+			if err != nil {
+				klog.Infoln(err)
+				return err
+			}
+
+			if remotemanagercacheRaw, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().List(context.TODO(), metav1.ListOptions{}); err == nil {
+				for _, remotemanagercacheRow := range remotemanagercacheRaw.Items {
+					if currentManagercache, ok := managercacheMap[remotemanagercacheRow.GetName()]; ok {
+						if remotemanagercacheRow.Spec.LatestUpdateTimestamp.Before(currentManagercache.Spec.LatestUpdateTimestamp) {
+							if !reflect.DeepEqual(currentManagercache.Spec, remotemanagercacheRow.Spec) {
+								remotemanagercacheRow.Spec = currentManagercache.Spec
+								if _, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Update(context.TODO(), &remotemanagercacheRow, metav1.UpdateOptions{}); err != nil {
+									klog.Infoln(err)
+									return err
+								}
+							}
+							if !reflect.DeepEqual(currentManagercache.Status, remotemanagercacheRow.Status) {
+								if remoteManagerCacheCopy, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), remotemanagercacheRow.GetName(), metav1.GetOptions{}); err == nil {
+									remoteManagerCacheCopy.Status = remotemanagercacheRow.Status
+									if _, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().UpdateStatus(context.TODO(), remoteManagerCacheCopy, metav1.UpdateOptions{}); err != nil {
+										klog.Infoln(err)
+										return err
+									}
+								}
+							}
+						}
+					} else {
+						newManagerCache := new(federationv1alpha1.ManagerCache)
+						newManagerCache.SetName(remotemanagercacheRow.GetName())
+						newManagerCache.Spec = remotemanagercacheRow.Spec
+						if _, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Create(context.TODO(), newManagerCache, metav1.CreateOptions{}); err != nil {
+							klog.Infoln(err)
+							return err
+						}
+						if remoteManagerCacheCopy, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), newManagerCache.GetName(), metav1.GetOptions{}); err == nil {
+							remoteManagerCacheCopy.Status = remotemanagercacheRow.Status
+							if _, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().UpdateStatus(context.TODO(), remoteManagerCacheCopy, metav1.UpdateOptions{}); err != nil {
+								klog.Infoln(err)
+								return err
+							}
+						}
+					}
+				}
+			} else {
+				klog.Infoln(err)
 				return err
 			}
 
