@@ -343,6 +343,7 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 				remoteManagerCache.Spec.Hierarchy.Level = managerCache.Spec.Hierarchy.Level + 1 // The level of this manager cluster is one level higher than the federation manager
 				remoteManagerCache.SetLabels(clusterLabels)
 				remoteManagerCache.Spec.LatestUpdateTimestamp = &updateTimestamp
+				remoteManagerCache.Spec.Enabled = clusterCopy.Spec.Enabled
 				if err := multiproviderManager.CreateManagerCache(remoteManagerCache); err != nil && !errors.IsAlreadyExists(err) {
 					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteManagerCacheCreationFailed)
 					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteManagerCacheCreationFailed)
