@@ -55,6 +55,7 @@ const controllerAgentName = "nodecontribution-controller"
 // Definitions of the state of the nodecontribution resource
 const (
 	backoffLimit = 3
+	dailyLimit   = 24
 
 	successSynced  = "Synced"
 	setupProcedure = "Setup"
@@ -388,15 +389,17 @@ func (c *Controller) handleObject(obj interface{}) {
 			return
 		}
 
-		c.enqueueNodeContribution(nodecontribution)
+		c.enqueueNodeContributionAfter(nodecontribution, 15*time.Minute)
 		return
 	}
 }
 
 func (c *Controller) processNodeContribution(nodecontributionCopy *corev1alpha1.NodeContribution) {
-	if exceedsBackoffLimit := nodecontributionCopy.Status.Failed >= backoffLimit; exceedsBackoffLimit {
-		c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageFailed)
-		return
+	if nodecontributionCopy.Status.UpdateTimestamp != nil && nodecontributionCopy.Status.UpdateTimestamp.Add(24*time.Hour).After(time.Now()) {
+		if exceedsBackoffLimit := nodecontributionCopy.Status.Failed >= backoffLimit; exceedsBackoffLimit {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageFailed)
+			return
+		}
 	}
 	recordType := multiprovider.GetRecordType(nodecontributionCopy.Spec.Host)
 	if recordType == "" {
@@ -451,6 +454,7 @@ func (c *Controller) processNodeContribution(nodecontributionCopy *corev1alpha1.
 			}
 
 			if nodecontributionCopy.Status.State != corev1alpha1.StatusReady {
+				nodecontributionCopy.Status.Failed = 0
 				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusAccessed, messageReconciliation)
 				c.updateStatus(context.TODO(), nodecontributionCopy)
 				return
@@ -764,6 +768,8 @@ func startShell(sess *ssh.Session) (*ssh.Session, error) {
 func (c *Controller) updateStatus(ctx context.Context, nodecontributionCopy *corev1alpha1.NodeContribution) {
 	if nodecontributionCopy.Status.State == corev1alpha1.StatusFailed {
 		nodecontributionCopy.Status.Failed++
+		now := metav1.Now()
+		nodecontributionCopy.Status.UpdateTimestamp = &now
 	}
 	if _, err := c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(ctx, nodecontributionCopy, metav1.UpdateOptions{}); err != nil {
 		klog.Infoln(err)

@@ -357,6 +357,10 @@ func addARecordRoute53(config *aws.Config, input *route53.ChangeResourceRecordSe
 			case route53.ErrCodeNoSuchHealthCheck:
 				log.Println(route53.ErrCodeNoSuchHealthCheck, aerr.Error())
 			case route53.ErrCodeInvalidChangeBatch:
+				// TODO: Better error handling here
+				if strings.Contains(aerr.Error(), "it already exists") {
+					return true, ""
+				}
 				log.Println(route53.ErrCodeInvalidChangeBatch, aerr.Error())
 			case route53.ErrCodeInvalidInput:
 				log.Println(route53.ErrCodeInvalidInput, aerr.Error())

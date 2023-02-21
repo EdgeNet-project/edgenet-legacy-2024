@@ -396,6 +396,12 @@ func (c *Controller) processTenantRequest(tenantrequest *registrationv1alpha1.Te
 
 	switch tenantrequest.Status.State {
 	case registrationv1alpha1.StatusCreated:
+		sendNotification("[EdgeNet] Tenant request approved", "tenant-request-approved", []string{tenantrequest.Spec.Contact.Email})
+	case registrationv1alpha1.StatusApproved:
+		tenantrequestCopy := tenantrequest.DeepCopy()
+		tenantrequestCopy.Status.Notified = false
+		c.edgenetclientset.RegistrationV1alpha1().TenantRequests().UpdateStatus(context.TODO(), tenantrequestCopy, metav1.UpdateOptions{})
+	case registrationv1alpha1.StatusPending:
 		// The function below notifies those who have the right to approve this tenant request.
 		// As tenant requests are cluster-wide resources, we check the permissions granted by Cluster Role Binding following a pattern to avoid overhead.
 		// Furthermore, only those that hold "edge-net.io/notification=true" label receive a notification email.
@@ -427,14 +433,8 @@ func (c *Controller) processTenantRequest(tenantrequest *registrationv1alpha1.Te
 		}
 		if len(emailList) > 0 {
 			klog.Infoln(emailList)
-			sendNotification("[EdgeNet] Tenant request approved", "tenant-request-approved", emailList)
+			sendNotification("[EdgeNet Admin] A tenant request made", "tenant-request-made", emailList)
 		}
-	case registrationv1alpha1.StatusApproved:
-		tenantrequestCopy := tenantrequest.DeepCopy()
-		tenantrequestCopy.Status.Notified = false
-		c.edgenetclientset.RegistrationV1alpha1().TenantRequests().UpdateStatus(context.TODO(), tenantrequestCopy, metav1.UpdateOptions{})
-	case registrationv1alpha1.StatusPending:
-		sendNotification("[EdgeNet Admin] A tenant request made", "tenant-request-made", []string{tenantrequest.Spec.Contact.Email})
 	}
 }
 
@@ -461,6 +461,12 @@ func (c *Controller) processRoleRequest(rolerequest *registrationv1alpha1.RoleRe
 
 	switch rolerequest.Status.State {
 	case registrationv1alpha1.StatusBound:
+		sendNotification("[EdgeNet] Role request approved", "role-request-approved", []string{rolerequest.Spec.Email})
+	case registrationv1alpha1.StatusApproved:
+		rolerequestCopy := rolerequest.DeepCopy()
+		rolerequestCopy.Status.Notified = false
+		c.edgenetclientset.RegistrationV1alpha1().RoleRequests(rolerequestCopy.GetNamespace()).UpdateStatus(context.TODO(), rolerequestCopy, metav1.UpdateOptions{})
+	case registrationv1alpha1.StatusPending:
 		emailList := []string{}
 		if roleBindingRaw, err := c.kubeclientset.RbacV1().RoleBindings(rolerequest.GetNamespace()).List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/notification=true"}); err == nil {
 			for _, roleBindingRow := range roleBindingRaw.Items {
@@ -489,14 +495,8 @@ func (c *Controller) processRoleRequest(rolerequest *registrationv1alpha1.RoleRe
 			}
 		}
 		if len(emailList) > 0 {
-			sendNotification("[EdgeNet] Role request approved", "role-request-approved", emailList)
+			sendNotification("[EdgeNet Admin] A role request made", "role-request-made", emailList)
 		}
-	case registrationv1alpha1.StatusApproved:
-		rolerequestCopy := rolerequest.DeepCopy()
-		rolerequestCopy.Status.Notified = false
-		c.edgenetclientset.RegistrationV1alpha1().RoleRequests(rolerequestCopy.GetNamespace()).UpdateStatus(context.TODO(), rolerequestCopy, metav1.UpdateOptions{})
-	case registrationv1alpha1.StatusPending:
-		sendNotification("[EdgeNet Admin] A role request made", "role-request-made", []string{rolerequest.Spec.Email})
 	}
 }
 
@@ -522,6 +522,12 @@ func (c *Controller) processClusterRoleRequest(clusterrolerequest *registrationv
 
 	switch clusterrolerequest.Status.State {
 	case registrationv1alpha1.StatusBound:
+		sendNotification("[EdgeNet] Cluster role request approved", "clusterrole-request-approved", []string{clusterrolerequest.Spec.Email})
+	case registrationv1alpha1.StatusApproved:
+		clusterrolerequestCopy := clusterrolerequest.DeepCopy()
+		clusterrolerequestCopy.Status.Notified = false
+		c.edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().UpdateStatus(context.TODO(), clusterrolerequestCopy, metav1.UpdateOptions{})
+	case registrationv1alpha1.StatusPending:
 		emailList := []string{}
 		if roleBindingRaw, err := c.kubeclientset.RbacV1().ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/notification=true"}); err == nil {
 			for _, roleBindingRow := range roleBindingRaw.Items {
@@ -549,13 +555,7 @@ func (c *Controller) processClusterRoleRequest(clusterrolerequest *registrationv
 			}
 		}
 		if len(emailList) > 0 {
-			sendNotification("[EdgeNet] Cluster role request approved", "clusterrole-request-approved", emailList)
+			sendNotification("[EdgeNet Admin] A cluster role request made", "clusterrole-request-made", emailList)
 		}
-	case registrationv1alpha1.StatusApproved:
-		clusterrolerequestCopy := clusterrolerequest.DeepCopy()
-		clusterrolerequestCopy.Status.Notified = false
-		c.edgenetclientset.RegistrationV1alpha1().ClusterRoleRequests().UpdateStatus(context.TODO(), clusterrolerequestCopy, metav1.UpdateOptions{})
-	case registrationv1alpha1.StatusPending:
-		sendNotification("[EdgeNet Admin] A cluster role request made", "clusterrole-request-made", []string{clusterrolerequest.Spec.Email})
 	}
 }
