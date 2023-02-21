@@ -363,214 +363,43 @@ func (c *Controller) reconcileWithChildren() bool {
 }
 
 func (c *Controller) applyCache(managercacheCopy *federationv1alpha1.ManagerCache, clusterUID string) error {
-	managercacheMap := make(map[string]federationv1alpha1.ManagerCache)
 	managercacheRaw, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().List(context.TODO(), metav1.ListOptions{})
-	if err == nil {
-		for _, managercacheRow := range managercacheRaw.Items {
-			managercacheMap[managercacheRow.GetName()] = managercacheRow
-		}
-	} else {
+	if err != nil {
 		klog.Infoln(err)
 		return err
 	}
-
+	localCacheMap := c.constructCacheMap(managercacheRaw)
 	// We list children federation manager clusters and create/update the cache
 	clusterRaw, err := c.edgenetclientset.FederationV1alpha1().Clusters(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		klog.Infoln(err)
 		return err
 	}
-	for _, clusterRow := range clusterRaw.Items {
-		if clusterRow.Spec.Role == federationv1alpha1.FederationManagerRole {
-			childFedManagerSecret, err := c.kubeclientset.CoreV1().Secrets(clusterRow.GetNamespace()).Get(context.TODO(), clusterRow.Spec.SecretName, metav1.GetOptions{})
-			if err != nil {
-				klog.Infoln(err)
-				return err
-			}
-
-			config := bootstrap.PrepareRestConfig(clusterRow.Spec.Server, string(childFedManagerSecret.Data["token"]), childFedManagerSecret.Data["ca.crt"])
-			remoteedgeclientset, err := bootstrap.CreateEdgeNetClientset(config)
-			if err != nil {
-				klog.Infoln(err)
-				return err
-			}
-
-			if remotemanagercacheRaw, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().List(context.TODO(), metav1.ListOptions{}); err == nil {
-				for _, remotemanagercacheRow := range remotemanagercacheRaw.Items {
-					if remotemanagercacheRow.GetName() == clusterUID {
-						continue
-					}
-					if currentManagercache, ok := managercacheMap[remotemanagercacheRow.GetName()]; ok {
-						if remotemanagercacheRow.Spec.LatestUpdateTimestamp.After(currentManagercache.Spec.LatestUpdateTimestamp.Time) {
-							if !reflect.DeepEqual(currentManagercache.Spec, remotemanagercacheRow.Spec) {
-								currentManagercache.Spec = remotemanagercacheRow.Spec
-								if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Update(context.TODO(), &currentManagercache, metav1.UpdateOptions{}); err != nil {
-									klog.Infoln(err)
-									return err
-								}
-							}
-							if !reflect.DeepEqual(currentManagercache.Status, remotemanagercacheRow.Status) {
-								if currentManagerCacheCopy, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), currentManagercache.GetName(), metav1.GetOptions{}); err == nil {
-									currentManagerCacheCopy.Status = remotemanagercacheRow.Status
-									if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().UpdateStatus(context.TODO(), currentManagerCacheCopy, metav1.UpdateOptions{}); err != nil {
-										klog.Infoln(err)
-										return err
-									}
-								}
-							}
-						}
-					} else {
-						newManagerCache := new(federationv1alpha1.ManagerCache)
-						newManagerCache.SetName(remotemanagercacheRow.GetName())
-						newManagerCache.Spec = remotemanagercacheRow.Spec
-						if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Create(context.TODO(), newManagerCache, metav1.CreateOptions{}); err != nil {
-							klog.Infoln(err)
-							return err
-						}
-						if currentManagerCacheCopy, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), newManagerCache.GetName(), metav1.GetOptions{}); err == nil {
-							currentManagerCacheCopy.Status = remotemanagercacheRow.Status
-							if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().UpdateStatus(context.TODO(), currentManagerCacheCopy, metav1.UpdateOptions{}); err != nil {
-								klog.Infoln(err)
-								return err
-							}
-						}
-					}
-				}
-			} else {
-				klog.Infoln(err)
-				return err
-			}
-
-			/*klog.Infoln("clusterUID: ", clusterUID)
-			klog.Infoln("managercacheCopy.GetName(): ", managercacheCopy.GetName())
-			if managercacheCopy.GetName() == clusterUID {
-				klog.Infoln("UIDs are equal")
-				if err := c.updateChildManagerCache(managercacheCopy, clusterRow.Spec.Server, childFedManagerSecret.Data["token"], childFedManagerSecret.Data["ca.crt"]); err != nil {
-					klog.Infoln(err)
-					return err
-				}
-			}*/
+	// We list caches in children to create/update local caches based on the source of truth caches
+	localCacheMap, err = c.syncCaches(clusterRaw, localCacheMap, clusterUID, true)
+	if err != nil {
+		if err != nil {
+			klog.Infoln(err)
+			return err
 		}
 	}
-
-	managercacheMap = nil
-	managercacheMap = make(map[string]federationv1alpha1.ManagerCache)
-	managercacheRaw, err = c.edgenetclientset.FederationV1alpha1().ManagerCaches().List(context.TODO(), metav1.ListOptions{})
-	if err == nil {
-		for _, managercacheRow := range managercacheRaw.Items {
-			managercacheMap[managercacheRow.GetName()] = managercacheRow
-			propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, managercacheRow.GetName())
-			remoteNamespace := new(corev1.Namespace)
-			remoteNamespace.SetName(propagationNamespace)
-			if _, err := c.kubeclientset.CoreV1().Namespaces().Create(context.TODO(), remoteNamespace, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-				klog.Infoln(err)
-				return err
-			}
-			fedmanagerNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, clusterUID)
-
-			// This part binds a ClusterRole to the service account to grant the predefined permissions to the serviceaccount
-			roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: federationv1alpha1.RemoteClusterRole}
-			rbSubjects := []rbacv1.Subject{{Kind: "ServiceAccount", Name: managercacheRow.GetName(), Namespace: fedmanagerNamespace}}
-			roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", federationv1alpha1.RemoteClusterRole, managercacheRow.GetName()), Namespace: propagationNamespace},
-				Subjects: rbSubjects, RoleRef: roleRef}
-			roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
-			roleBind.SetLabels(roleBindLabels)
-			if _, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
-				if !errors.IsAlreadyExists(err) {
-					klog.Infoln(err)
-					return err
-				}
-				if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Get(context.TODO(), roleBind.GetName(), metav1.GetOptions{}); err == nil {
-					roleBinding.RoleRef = roleBind.RoleRef
-					roleBinding.Subjects = roleBind.Subjects
-					roleBinding.SetLabels(roleBind.GetLabels())
-					if _, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Update(context.TODO(), roleBinding, metav1.UpdateOptions{}); err != nil {
-						klog.Infoln(err)
-						return err
-					}
-				} else {
-					klog.Infoln(err)
-					return err
-				}
-			}
-		}
-	} else {
+	// Below we create/update fedeation manager specific namespaces in the local federation manager cluster
+	if err := c.prepareManagerSpecificNamespaces(localCacheMap, clusterUID); err != nil {
 		klog.Infoln(err)
 		return err
 	}
-	for _, clusterRow := range clusterRaw.Items {
-		if clusterRow.Spec.Role == federationv1alpha1.FederationManagerRole {
-			childFedManagerSecret, err := c.kubeclientset.CoreV1().Secrets(clusterRow.GetNamespace()).Get(context.TODO(), clusterRow.Spec.SecretName, metav1.GetOptions{})
-			if err != nil {
-				klog.Infoln(err)
-				return err
-			}
-
-			config := bootstrap.PrepareRestConfig(clusterRow.Spec.Server, string(childFedManagerSecret.Data["token"]), childFedManagerSecret.Data["ca.crt"])
-			remoteedgeclientset, err := bootstrap.CreateEdgeNetClientset(config)
-			if err != nil {
-				klog.Infoln(err)
-				return err
-			}
-
-			if remotemanagercacheRaw, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().List(context.TODO(), metav1.ListOptions{}); err == nil {
-				for _, remotemanagercacheRow := range remotemanagercacheRaw.Items {
-					if currentManagercache, ok := managercacheMap[remotemanagercacheRow.GetName()]; ok {
-						if remotemanagercacheRow.Spec.LatestUpdateTimestamp.Before(currentManagercache.Spec.LatestUpdateTimestamp) {
-							if !reflect.DeepEqual(currentManagercache.Spec, remotemanagercacheRow.Spec) {
-								remotemanagercacheRow.Spec = currentManagercache.Spec
-								if _, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Update(context.TODO(), &remotemanagercacheRow, metav1.UpdateOptions{}); err != nil {
-									klog.Infoln(err)
-									return err
-								}
-							}
-							if !reflect.DeepEqual(currentManagercache.Status, remotemanagercacheRow.Status) {
-								if remoteManagerCacheCopy, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), remotemanagercacheRow.GetName(), metav1.GetOptions{}); err == nil {
-									remoteManagerCacheCopy.Status = remotemanagercacheRow.Status
-									if _, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().UpdateStatus(context.TODO(), remoteManagerCacheCopy, metav1.UpdateOptions{}); err != nil {
-										klog.Infoln(err)
-										return err
-									}
-								}
-							}
-						}
-					} else {
-						newManagerCache := new(federationv1alpha1.ManagerCache)
-						newManagerCache.SetName(remotemanagercacheRow.GetName())
-						newManagerCache.Spec = remotemanagercacheRow.Spec
-						if _, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Create(context.TODO(), newManagerCache, metav1.CreateOptions{}); err != nil {
-							klog.Infoln(err)
-							return err
-						}
-						if remoteManagerCacheCopy, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), newManagerCache.GetName(), metav1.GetOptions{}); err == nil {
-							remoteManagerCacheCopy.Status = remotemanagercacheRow.Status
-							if _, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().UpdateStatus(context.TODO(), remoteManagerCacheCopy, metav1.UpdateOptions{}); err != nil {
-								klog.Infoln(err)
-								return err
-							}
-						}
-					}
-				}
-			} else {
-				klog.Infoln(err)
-				return err
-			}
-
-			klog.Infoln("clusterUID: ", clusterUID)
-			klog.Infoln("managercacheCopy.GetName(): ", managercacheCopy.GetName())
-			if managercacheCopy.GetName() == clusterUID {
-				klog.Infoln("UIDs are equal")
-				if err := c.updateChildManagerCache(managercacheCopy, clusterRow.Spec.Server, childFedManagerSecret.Data["token"], childFedManagerSecret.Data["ca.crt"]); err != nil {
-					klog.Infoln(err)
-					return err
-				}
-			}
+	// We list children federation manager clusters where we create/update remote caches based on the local, source of truth caches
+	_, err = c.syncCaches(clusterRaw, localCacheMap, clusterUID, false)
+	if err != nil {
+		if err != nil {
+			klog.Infoln(err)
+			return err
 		}
 	}
-
 	return nil
 }
 
+/*
 func (c *Controller) updateChildManagerCache(managercacheCopy *federationv1alpha1.ManagerCache, server string, token, certificateAuthorityData []byte) error {
 	config := bootstrap.PrepareRestConfig(server, string(token), certificateAuthorityData)
 	remoteedgeclientset, err := bootstrap.CreateEdgeNetClientset(config)
@@ -636,6 +465,122 @@ func (c *Controller) updateChildManagerCache(managercacheCopy *federationv1alpha
 	}
 	return nil
 }
+*/
+
+func (c *Controller) constructCacheMap(managercacheRaw *federationv1alpha1.ManagerCacheList) map[string]federationv1alpha1.ManagerCache {
+	managercacheMap := make(map[string]federationv1alpha1.ManagerCache)
+	for _, managercacheRow := range managercacheRaw.Items {
+		managercacheMap[managercacheRow.GetName()] = managercacheRow
+	}
+	return managercacheMap
+}
+
+func (c *Controller) prepareManagerSpecificNamespaces(cacheMap map[string]federationv1alpha1.ManagerCache, clusterUID string) error {
+	for key := range cacheMap {
+		propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, key)
+		remoteNamespace := new(corev1.Namespace)
+		remoteNamespace.SetName(propagationNamespace)
+		if _, err := c.kubeclientset.CoreV1().Namespaces().Create(context.TODO(), remoteNamespace, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+			klog.Infoln(err)
+			return err
+		}
+		fedmanagerNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, clusterUID)
+
+		// This part binds a ClusterRole to the service account to grant the predefined permissions to the serviceaccount
+		roleRef := rbacv1.RoleRef{Kind: "ClusterRole", Name: federationv1alpha1.RemoteClusterRole}
+		rbSubjects := []rbacv1.Subject{{Kind: "ServiceAccount", Name: key, Namespace: fedmanagerNamespace}}
+		roleBind := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", federationv1alpha1.RemoteClusterRole, key), Namespace: propagationNamespace},
+			Subjects: rbSubjects, RoleRef: roleRef}
+		roleBindLabels := map[string]string{"edge-net.io/generated": "true"}
+		roleBind.SetLabels(roleBindLabels)
+		if _, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err != nil {
+			if !errors.IsAlreadyExists(err) {
+				klog.Infoln(err)
+				return err
+			}
+			if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Get(context.TODO(), roleBind.GetName(), metav1.GetOptions{}); err == nil {
+				roleBinding.RoleRef = roleBind.RoleRef
+				roleBinding.Subjects = roleBind.Subjects
+				roleBinding.SetLabels(roleBind.GetLabels())
+				if _, err := c.kubeclientset.RbacV1().RoleBindings(propagationNamespace).Update(context.TODO(), roleBinding, metav1.UpdateOptions{}); err != nil {
+					klog.Infoln(err)
+					return err
+				}
+			} else {
+				klog.Infoln(err)
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (c *Controller) syncCaches(clusterRaw *federationv1alpha1.ClusterList, localCacheMap map[string]federationv1alpha1.ManagerCache, clusterUID string, local bool) (map[string]federationv1alpha1.ManagerCache, error) {
+	for _, clusterRow := range clusterRaw.Items {
+		if clusterRow.Spec.Role == federationv1alpha1.FederationManagerRole {
+			childFedManagerSecret, err := c.kubeclientset.CoreV1().Secrets(clusterRow.GetNamespace()).Get(context.TODO(), clusterRow.Spec.SecretName, metav1.GetOptions{})
+			if err != nil {
+				klog.Infoln(err)
+				return nil, err
+			}
+			config := bootstrap.PrepareRestConfig(clusterRow.Spec.Server, string(childFedManagerSecret.Data["token"]), childFedManagerSecret.Data["ca.crt"])
+			remoteedgeclientset, err := bootstrap.CreateEdgeNetClientset(config)
+			if err != nil {
+				klog.Infoln(err)
+				return nil, err
+			}
+			remotemanagercacheRaw, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().List(context.TODO(), metav1.ListOptions{})
+			if err != nil {
+				klog.Infoln(err)
+				return nil, err
+			}
+			if local {
+				localCacheMap, err = c.syncLocalCaches(remotemanagercacheRaw, localCacheMap, clusterUID)
+				if err != nil {
+					klog.Infoln(err)
+					return nil, err
+				}
+			} else {
+				remoteCacheMap := c.constructCacheMap(remotemanagercacheRaw)
+				if err := syncRemoteCaches(remoteedgeclientset, localCacheMap, remoteCacheMap, clusterUID); err != nil {
+					klog.Infoln(err)
+					return nil, err
+				}
+			}
+		}
+	}
+	return localCacheMap, nil
+}
+
+func (c *Controller) syncLocalCaches(remotecacheRaw *federationv1alpha1.ManagerCacheList, cacheMap map[string]federationv1alpha1.ManagerCache, clusterUID string) (map[string]federationv1alpha1.ManagerCache, error) {
+	var err error
+	for _, remotecacheRow := range remotecacheRaw.Items {
+		if remotecacheRow.GetName() == clusterUID {
+			continue
+		}
+		if localCache, ok := cacheMap[remotecacheRow.GetName()]; ok {
+			if remotecacheRow.Spec.LatestUpdateTimestamp.After(localCache.Spec.LatestUpdateTimestamp.Time) {
+				localCache, err = updateCache(c.edgenetclientset, remotecacheRow, localCache)
+				if err != nil {
+					klog.Infoln(err)
+					return nil, err
+				}
+				cacheMap[remotecacheRow.GetName()] = localCache
+			}
+		} else {
+			newManagerCache := new(federationv1alpha1.ManagerCache)
+			newManagerCache.SetName(remotecacheRow.GetName())
+			newManagerCache.Spec = remotecacheRow.Spec
+			newCache, err := createCache(c.edgenetclientset, newManagerCache, remotecacheRow.Status)
+			if err != nil {
+				klog.Infoln(err)
+				return nil, err
+			}
+			cacheMap[remotecacheRow.GetName()] = *newCache
+		}
+	}
+	return cacheMap, nil
+}
 
 // updateStatus calls the API to update the managercache status.
 func (c *Controller) updateStatus(ctx context.Context, managercacheCopy *federationv1alpha1.ManagerCache, state, message string) {
@@ -649,4 +594,83 @@ func (c *Controller) updateStatus(ctx context.Context, managercacheCopy *federat
 	if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().UpdateStatus(ctx, managercacheCopy, metav1.UpdateOptions{}); err != nil {
 		klog.Infoln(err)
 	}
+}
+
+func syncRemoteCaches(client clientset.Interface, localCacheMap, remoteCacheMap map[string]federationv1alpha1.ManagerCache, clusterUID string) error {
+	for localCacheName, localCache := range localCacheMap {
+		if remoteCache, ok := remoteCacheMap[localCacheName]; ok {
+			if remoteCache.Spec.LatestUpdateTimestamp.Before(localCache.Spec.LatestUpdateTimestamp) {
+				if localCacheName == clusterUID && localCache.Status.State == federationv1alpha1.StatusReconciliation {
+					localCache.Status.State = federationv1alpha1.StatusReady
+					localCache.Status.Message = messageReady
+				}
+				updateCache(client, localCache, remoteCache)
+			}
+		} else {
+			newManagerCache := new(federationv1alpha1.ManagerCache)
+			newManagerCache.SetName(localCacheName)
+			newManagerCache.Spec = localCache.Spec
+			newManagerStatus := localCache.Status
+			if localCacheName == clusterUID && localCache.Status.State == federationv1alpha1.StatusReconciliation {
+				newManagerStatus.State = federationv1alpha1.StatusReady
+				newManagerStatus.Message = messageReady
+			}
+			_, err := createCache(client, newManagerCache, newManagerStatus)
+			if err != nil {
+				klog.Infoln(err)
+				return err
+			}
+		}
+
+		/*klog.Infoln("clusterUID: ", clusterUID)
+		klog.Infoln("managercacheCopy.GetName(): ", managercacheCopy.GetName())
+		if managercacheCopy.GetName() == clusterUID {
+			klog.Infoln("UIDs are equal")
+			if err := c.updateChildManagerCache(managercacheCopy, clusterRow.Spec.Server, childFedManagerSecret.Data["token"], childFedManagerSecret.Data["ca.crt"]); err != nil {
+				klog.Infoln(err)
+				return err
+			}
+		}*/
+	}
+	return nil
+}
+
+func createCache(client clientset.Interface, managercache *federationv1alpha1.ManagerCache, status federationv1alpha1.ManagerCacheStatus) (*federationv1alpha1.ManagerCache, error) {
+	if _, err := client.FederationV1alpha1().ManagerCaches().Create(context.TODO(), managercache, metav1.CreateOptions{}); err != nil {
+		klog.Infoln(err)
+		return nil, err
+	}
+	managerCacheCopy, err := client.FederationV1alpha1().ManagerCaches().Get(context.TODO(), managercache.GetName(), metav1.GetOptions{})
+	if err != nil {
+		klog.Infoln(err)
+		return nil, err
+	}
+	managerCacheCopy.Status = status
+	if _, err := client.FederationV1alpha1().ManagerCaches().UpdateStatus(context.TODO(), managerCacheCopy, metav1.UpdateOptions{}); err != nil {
+		klog.Infoln(err)
+		return nil, err
+	}
+	return managerCacheCopy, nil
+}
+
+func updateCache(client clientset.Interface, sotManagercache, currentManagercache federationv1alpha1.ManagerCache) (federationv1alpha1.ManagerCache, error) {
+	// `sot` means source of truth
+	if !reflect.DeepEqual(currentManagercache.Spec, sotManagercache.Spec) {
+		currentManagercache.Spec = sotManagercache.Spec
+		if _, err := client.FederationV1alpha1().ManagerCaches().Update(context.TODO(), &currentManagercache, metav1.UpdateOptions{}); err != nil {
+			klog.Infoln(err)
+			return currentManagercache, err
+		}
+	}
+	if !reflect.DeepEqual(currentManagercache.Status, sotManagercache.Status) {
+		if currentManagerCacheCopy, err := client.FederationV1alpha1().ManagerCaches().Get(context.TODO(), currentManagercache.GetName(), metav1.GetOptions{}); err == nil {
+			currentManagerCacheCopy.Status = sotManagercache.Status
+			if _, err := client.FederationV1alpha1().ManagerCaches().UpdateStatus(context.TODO(), currentManagerCacheCopy, metav1.UpdateOptions{}); err != nil {
+				klog.Infoln(err)
+				return currentManagercache, err
+			}
+			currentManagercache.Status = sotManagercache.Status
+		}
+	}
+	return currentManagercache, nil
 }

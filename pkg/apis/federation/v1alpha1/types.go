@@ -48,6 +48,7 @@ const (
 	ScarceResources            = "Scarcity"
 	FederationManagerRole      = "Manager"
 	WorkloadRole               = "Workload"
+	PeerRole                   = "Peer"
 )
 
 // +genclient
@@ -69,7 +70,7 @@ type Cluster struct {
 type ClusterSpec struct {
 	// UID is the unique identifier of the cluster
 	UID string `json:"uid"`
-	// Role can be 'Workload' or 'Federation'
+	// Role can be 'Workload', 'Manager', or 'Peer'
 	Role string `json:"role"`
 	// Server is the API server of the cluster
 	Server string `json:"server"`

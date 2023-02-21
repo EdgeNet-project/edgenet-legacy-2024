@@ -544,7 +544,7 @@ func (c *Controller) prepareMultiProviderManager(namespace, name string) (*multi
 	if err != nil {
 		return nil, nil, false
 	}
-	multiproviderManager := multiprovider.NewManager(c.kubeclientset, remotekubeclientset, remoteedgeclientset)
+	multiproviderManager := multiprovider.NewManager(c.kubeclientset, remotekubeclientset, c.edgenetclientset, remoteedgeclientset)
 	return multiproviderManager, secret.Data["remote-cluster-uid"], true
 }
 

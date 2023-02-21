@@ -209,7 +209,7 @@ func (c *Controller) setClusterGeolocation(clusterCopy *federationv1alpha1.Clust
 	if clusterCopy.Status.State != federationv1alpha1.StatusReady {
 		return
 	}
-	multiproviderManager := multiprovider.NewManager(c.kubeclientset, nil, nil)
+	multiproviderManager := multiprovider.NewManager(c.kubeclientset, nil, c.edgenetclientset, nil)
 	klog.Infof("IP: %s", clusterCopy.Spec.Server)
 	if geoLabels, ok := multiproviderManager.GetGeolocationLabelsByIP(
 		c.maxmindURL,

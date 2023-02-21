@@ -31,6 +31,8 @@ import (
 type Manager struct {
 	// kubeclientset is a standard kubernetes clientset
 	kubeclientset kubernetes.Interface
+	// edgeclientset is a clientset for the EdgeNet API groups
+	edgeclientset clientset.Interface
 	// remotekubeclientset is a standard kubernetes clientset for remote clusters
 	remotekubeclientset kubernetes.Interface
 	// remoteedgeclientset is a clientset for the EdgeNet API groups for remote clusters
@@ -38,8 +40,8 @@ type Manager struct {
 }
 
 // NewManager returns a new multitenancy manager
-func NewManager(kubeclientset, remotekubeclientset kubernetes.Interface, remoteedgeclientset clientset.Interface) *Manager {
-	return &Manager{kubeclientset, remotekubeclientset, remoteedgeclientset}
+func NewManager(kubeclientset, remotekubeclientset kubernetes.Interface, edgeclientset, remoteedgeclientset clientset.Interface) *Manager {
+	return &Manager{kubeclientset, edgeclientset, remotekubeclientset, remoteedgeclientset}
 }
 
 // GeoFence function determines whether the point is inside a polygon by using the crossing number method.

@@ -284,7 +284,7 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteClientFailed)
 				return
 			}
-			multiproviderManager := multiprovider.NewManager(c.kubeclientset, remotekubeclientset, nil)
+			multiproviderManager := multiprovider.NewManager(c.kubeclientset, remotekubeclientset, c.edgenetclientset, nil)
 			// The federation framework uses a manager cache to keep track of the hierarchy of the manager clusters along with their location information.
 			// In addition to that, a manager cache contains information regarding the resources and the locations of their workload clusters.
 			// Thus, the manager cache is the source of truth for the federation framework to make scheduling decisions at the federation scale.
@@ -295,7 +295,7 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteClientFailed)
 				return
 			}
-			multiproviderManager = multiprovider.NewManager(c.kubeclientset, remotekubeclientset, remoteedgeclientset)
+			multiproviderManager = multiprovider.NewManager(c.kubeclientset, remotekubeclientset, c.edgenetclientset, remoteedgeclientset)
 			updateTimestamp := metav1.Now()
 			managerCache, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), namespaceLabels["edge-net.io/cluster-uid"], metav1.GetOptions{})
 			if err != nil {
@@ -402,7 +402,7 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 		default:
 			// Below creates a secret tied to a service account along with a role binding for the remote cluster.
 			// The remote cluster will use this secret to communicate with its federation manager, thus gaining access to the federated resources.
-			multiproviderManager := multiprovider.NewManager(c.kubeclientset, nil, nil)
+			multiproviderManager := multiprovider.NewManager(c.kubeclientset, nil, c.edgenetclientset, nil)
 			// TODO: We should support both using the IP address of the cluster or do a DNS lookup if it is a hostname]
 			host, _, err := net.SplitHostPort(clusterCopy.Spec.Server)
 			if err != nil {

@@ -61,7 +61,7 @@ func (g *testGroup) Init() {
 			},
 		},
 	}
-	multiproviderManager := NewManager(testclient.NewSimpleClientset(), nil, nil)
+	multiproviderManager := NewManager(testclient.NewSimpleClientset(), nil, nil, nil)
 	g.multiproviderManager = multiproviderManager
 }
 
