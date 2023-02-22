@@ -230,7 +230,7 @@ func (m *Manager) CreateManagerCache(managerCache *federationv1alpha1.ManagerCac
 }
 
 // DisableChildrenManagers closes the children managers to the federation
-func (m *Manager) DisableChildrenManagers(managerCache *federationv1alpha1.ManagerCache) error {
+func (m *Manager) DisableChildrenManagers() error {
 	if clusterRaw, err := m.remoteedgeclientset.FederationV1alpha1().Clusters("").List(context.TODO(), metav1.ListOptions{}); err == nil {
 		for _, clusterRow := range clusterRaw.Items {
 			if clusterRow.Spec.Role == federationv1alpha1.FederationManagerRole && !clusterRow.Spec.Enabled {

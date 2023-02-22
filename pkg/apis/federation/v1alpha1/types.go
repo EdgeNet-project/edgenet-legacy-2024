@@ -154,6 +154,8 @@ type SelectiveDeploymentAnchorSpec struct {
 	WorkloadClusters []string `json:"workloadClusters,omitempty"`
 	// FederationManager is the federation manager that is responsible for the selective deployment
 	FederationManager *SelectedFederationManager `json:"federationManagers,omitempty"`
+	// FederationUID is the unique identifier of the federation that the selected federation manager belongs to
+	FederationUID *string `json:"federationUID"`
 	// SecretName is the name of the secret that contains the token to access the original selective deployment
 	SecretName string `json:"secretName"`
 }
@@ -216,8 +218,10 @@ type ManagerCache struct {
 
 // ManagerCacheSpec is the spec to define the desired state of the managercache resource
 type ManagerCacheSpec struct {
+	// FederationUID is the UID of the federation that the federation manager belongs to
+	FederationUID string `json:"federationUID"`
 	// Hierarchical information related to the federation manager
-	Hierarchy Hierarchy `json:"hierarchy"`
+	Hierarchy *Hierarchy `json:"hierarchy"`
 	// Clusters form a list of workload clusters that are managed by the federation manager
 	Clusters map[string]ClusterCache `json:"clusters"`
 	// LatestUpdateTimestamp is the last time the managercache resource was updated by its federation manager
