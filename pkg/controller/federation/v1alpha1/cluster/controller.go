@@ -75,6 +75,7 @@ const (
 	messageInvalidHost                      = "Server field must be an IP Address"
 	messageChildrenManagerDisableFailed     = "Children managers cannot be disabled"
 	messageManagerCacheMissing              = "Manager cache is missing"
+	messageRemoteManagerCacheListFailed     = "Peering federation's caches cannot be listed in the remote cluster"
 )
 
 // Controller is the controller implementation for Cluster resources
@@ -284,125 +285,155 @@ func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
 				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteClientFailed)
 				return
 			}
-			multiproviderManager := multiprovider.NewManager(c.kubeclientset, remotekubeclientset, c.edgenetclientset, nil)
-			// The federation framework uses a manager cache to keep track of the hierarchy of the manager clusters along with their location information.
-			// In addition to that, a manager cache contains information regarding the resources and the locations of their workload clusters.
-			// Thus, the manager cache is the source of truth for the federation framework to make scheduling decisions at the federation scale.
-			// Below checks if the cluster's role is being a federation manager. If so, it adds the cluster as a child to its federation manager cache and then creates a manager cache of the cluster in the remote cluster.
 			remoteedgeclientset, err := bootstrap.CreateEdgeNetClientset(config)
 			if err != nil {
 				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteClientFailed)
 				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteClientFailed)
 				return
 			}
-			multiproviderManager = multiprovider.NewManager(c.kubeclientset, remotekubeclientset, c.edgenetclientset, remoteedgeclientset)
-			updateTimestamp := metav1.Now()
-			managerCache, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), namespaceLabels["edge-net.io/cluster-uid"], metav1.GetOptions{})
-			if err != nil {
-				// Create a manager cache for the root-level node
-				newManagerCache := new(federationv1alpha1.ManagerCache)
-				newManagerCache.SetName(namespaceLabels["edge-net.io/cluster-uid"])
-				newManagerCache.Spec.FederationUID = namespaceLabels["edge-net.io/cluster-uid"]
-				newManagerCache.Spec.Enabled = true
-				newManagerCache.Spec.LatestUpdateTimestamp = &updateTimestamp
-				newManagerCache.SetLabels(map[string]string{"edge-net.io/federation-uid": namespaceLabels["edge-net.io/cluster-uid"]})
-				_, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Create(context.TODO(), newManagerCache, metav1.CreateOptions{})
+			multiproviderManager := multiprovider.NewManager(c.kubeclientset, remotekubeclientset, c.edgenetclientset, remoteedgeclientset)
+			// The federation framework uses a manager cache to keep track of the hierarchy of the manager clusters along with their location information.
+			// In addition to that, a manager cache contains information regarding the resources and the locations of their workload clusters.
+			// Thus, the manager cache is the source of truth for the federation framework to make scheduling decisions at the federation scale.
+			// Below checks if the cluster's role is being a federation manager. If so, it adds the cluster as a child to its federation manager cache and then creates a manager cache of the cluster in the remote cluster.
+			if clusterCopy.Spec.Role == federationv1alpha1.PeerRole {
+				peeringFedCacheRaw, err := remoteedgeclientset.FederationV1alpha1().ManagerCaches().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/federation-uid=" + clusterCopy.Spec.UID})
 				if err != nil {
-					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageManagerCacheMissing)
-					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageManagerCacheMissing)
+					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteManagerCacheListFailed)
+					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteManagerCacheListFailed)
 					return
 				}
-				c.enqueueCluster(clusterCopy)
-				return
-			}
-			localCacheLabels := managerCache.GetLabels()
-			clusterLabels := clusterCopy.GetLabels()
-			if clusterCopy.Spec.Role == federationv1alpha1.FederationManagerRole {
-				if managerCache.Spec.Hierarchy.Children == nil {
-					managerCache.Spec.Hierarchy.Children = []federationv1alpha1.AssociatedManager{}
-				}
-				// Update the manager cache of the federation manager to include the cluster as a child
-				child := federationv1alpha1.AssociatedManager{}
-				child.Name = clusterCopy.Spec.UID
-				child.Enabled = clusterCopy.Spec.Enabled
-				isExists := false
-				for key, value := range managerCache.Spec.Hierarchy.Children {
-					if value.Name == clusterCopy.Spec.UID {
-						managerCache.Spec.Hierarchy.Children[key] = child
-						isExists = true
+				for _, peeringFedCacheRow := range peeringFedCacheRaw.Items {
+					if peeringFedCacheRow.Status.State == federationv1alpha1.StatusReady {
+						newManagerCache := new(federationv1alpha1.ManagerCache)
+						newManagerCache.SetName(peeringFedCacheRow.GetName())
+						newManagerCache.Spec = peeringFedCacheRow.Spec
+						newManagerCache.SetLabels(peeringFedCacheRow.GetLabels())
+						_, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Create(context.TODO(), newManagerCache, metav1.CreateOptions{})
+						if err != nil {
+							c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageManagerCacheMissing)
+							c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageManagerCacheMissing)
+							return
+						}
+						createdPeerCache, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), peeringFedCacheRow.GetName(), metav1.GetOptions{})
+						if err != nil {
+							c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageManagerCacheMissing)
+							c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageManagerCacheMissing)
+							return
+						}
+						createdPeerCache.Status = peeringFedCacheRow.Status
+						c.edgenetclientset.FederationV1alpha1().ManagerCaches().UpdateStatus(context.TODO(), createdPeerCache, metav1.UpdateOptions{})
 					}
 				}
-				if !isExists {
-					managerCache.Spec.Hierarchy.Children = append(managerCache.Spec.Hierarchy.Children, child)
+			} else {
+				updateTimestamp := metav1.Now()
+				managerCache, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Get(context.TODO(), namespaceLabels["edge-net.io/cluster-uid"], metav1.GetOptions{})
+				if err != nil {
+					// Create a manager cache for the root-level node
+					newManagerCache := new(federationv1alpha1.ManagerCache)
+					newManagerCache.SetName(namespaceLabels["edge-net.io/cluster-uid"])
+					newManagerCache.Spec.FederationUID = namespaceLabels["edge-net.io/cluster-uid"]
+					newManagerCache.Spec.Enabled = true
+					newManagerCache.Spec.LatestUpdateTimestamp = &updateTimestamp
+					newManagerCache.SetLabels(map[string]string{"edge-net.io/federation-uid": namespaceLabels["edge-net.io/cluster-uid"]})
+					_, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Create(context.TODO(), newManagerCache, metav1.CreateOptions{})
+					if err != nil {
+						c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageManagerCacheMissing)
+						c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageManagerCacheMissing)
+						return
+					}
+					c.enqueueCluster(clusterCopy)
+					return
+				}
+				localCacheLabels := managerCache.GetLabels()
+				clusterLabels := clusterCopy.GetLabels()
+				if clusterCopy.Spec.Role == federationv1alpha1.FederationManagerRole {
+					if managerCache.Spec.Hierarchy.Children == nil {
+						managerCache.Spec.Hierarchy.Children = []federationv1alpha1.AssociatedManager{}
+					}
+					// Update the manager cache of the federation manager to include the cluster as a child
+					child := federationv1alpha1.AssociatedManager{}
+					child.Name = clusterCopy.Spec.UID
+					child.Enabled = clusterCopy.Spec.Enabled
+					isExists := false
+					for key, value := range managerCache.Spec.Hierarchy.Children {
+						if value.Name == clusterCopy.Spec.UID {
+							managerCache.Spec.Hierarchy.Children[key] = child
+							isExists = true
+						}
+					}
+					if !isExists {
+						managerCache.Spec.Hierarchy.Children = append(managerCache.Spec.Hierarchy.Children, child)
+						managerCache.Spec.LatestUpdateTimestamp = &updateTimestamp
+					}
+
+					// Create a manager cache in the remote cluster
+					remoteManagerCache := new(federationv1alpha1.ManagerCache)
+					remoteManagerCache.SetName(clusterCopy.Spec.UID)
+					parent := federationv1alpha1.AssociatedManager{}
+					parent.Name = namespaceLabels["edge-net.io/cluster-uid"]
+					parent.Enabled = managerCache.Spec.Enabled
+					remoteManagerCache.Spec.Hierarchy.Parent = &parent
+					remoteManagerCache.Spec.Hierarchy.Level = managerCache.Spec.Hierarchy.Level + 1 // The level of this manager cluster is one level higher than the federation manager
+					remoteCacheLabels := clusterLabels
+					remoteCacheLabels["edge-net.io/federation-uid"] = localCacheLabels["edge-net.io/federation-uid"]
+					remoteManagerCache.SetLabels(remoteCacheLabels)
+					remoteManagerCache.Spec.LatestUpdateTimestamp = &updateTimestamp
+					remoteManagerCache.Spec.Enabled = clusterCopy.Spec.Enabled
+					if err := multiproviderManager.CreateManagerCache(remoteManagerCache); err != nil && !errors.IsAlreadyExists(err) {
+						c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteManagerCacheCreationFailed)
+						c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteManagerCacheCreationFailed)
+						return
+					}
+					if err := multiproviderManager.DisableChildrenManagers(); err != nil {
+						c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageChildrenManagerDisableFailed)
+						c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageChildrenManagerDisableFailed)
+						return
+					}
+				} else {
+					clusterCache := federationv1alpha1.ClusterCache{}
+					clusterCache.Enabled = clusterCopy.Spec.Enabled
+					clusterCache.AllocatableResources = clusterCopy.Status.AllocatableResources
+					clusterCache.RelativeResourceAvailability = clusterCopy.Status.RelativeResourceAvailability
+					if clusterCache.Characteristics == nil {
+						clusterCache.Characteristics = make(map[string]string)
+					}
+					for key, value := range clusterLabels {
+						clusterCache.Characteristics[key] = value
+					}
+					if managerCache.Spec.Clusters == nil {
+						managerCache.Spec.Clusters = make(map[string]federationv1alpha1.ClusterCache)
+					}
+					managerCache.Spec.Clusters[clusterCopy.Spec.UID] = clusterCache
 					managerCache.Spec.LatestUpdateTimestamp = &updateTimestamp
 				}
+				if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Update(context.TODO(), managerCache, metav1.UpdateOptions{}); err != nil {
+					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageManagerCacheUpdateFailed)
+					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageManagerCacheUpdateFailed)
+					return
+				}
 
-				// Create a manager cache in the remote cluster
-				remoteManagerCache := new(federationv1alpha1.ManagerCache)
-				remoteManagerCache.SetName(clusterCopy.Spec.UID)
-				parent := federationv1alpha1.AssociatedManager{}
-				parent.Name = namespaceLabels["edge-net.io/cluster-uid"]
-				parent.Enabled = managerCache.Spec.Enabled
-				remoteManagerCache.Spec.Hierarchy.Parent = &parent
-				remoteManagerCache.Spec.Hierarchy.Level = managerCache.Spec.Hierarchy.Level + 1 // The level of this manager cluster is one level higher than the federation manager
-				remoteCacheLabels := clusterLabels
-				remoteCacheLabels["edge-net.io/federation-uid"] = localCacheLabels["edge-net.io/federation-uid"]
-				remoteManagerCache.SetLabels(remoteCacheLabels)
-				remoteManagerCache.Spec.LatestUpdateTimestamp = &updateTimestamp
-				remoteManagerCache.Spec.Enabled = clusterCopy.Spec.Enabled
-				if err := multiproviderManager.CreateManagerCache(remoteManagerCache); err != nil && !errors.IsAlreadyExists(err) {
-					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteManagerCacheCreationFailed)
-					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteManagerCacheCreationFailed)
+				// Here we prepare a secret to be deployed to the remote cluster by using the secret that is created while setting up the access credentials.
+				// This secret has additional information about the API server, namespace, the cluster UID of federation manager.
+				// The remote cluster will be consuming these information to access the federation manager and drive necessary operations.
+				remoteSecret, enqueue, err := multiproviderManager.PrepareSecretForRemoteCluster(clusterCopy.Spec.UID, propagationNamespace, namespaceLabels["edge-net.io/cluster-uid"], "federation", "edgenet")
+				remoteSecret.Data["assigned-cluster-namespace"] = []byte(clusterCopy.GetNamespace())
+				remoteSecret.Data["assigned-cluster-name"] = []byte(clusterCopy.GetName())
+				remoteSecret.Data["federation-uid"] = []byte(localCacheLabels["edge-net.io/federation-uid"])
+				if err != nil {
+					if enqueue {
+						c.enqueueClusterAfter(clusterCopy, 1*time.Minute)
+						return
+					}
+					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteSecretFailed)
+					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteSecretFailed)
 					return
 				}
-				if err := multiproviderManager.DisableChildrenManagers(); err != nil {
-					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageChildrenManagerDisableFailed)
-					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageChildrenManagerDisableFailed)
+				if err := multiproviderManager.DeploySecret(remoteSecret); err != nil {
+					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteSecretDeploymentFailed)
+					c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteSecretDeploymentFailed)
 					return
 				}
-			} else {
-				clusterCache := federationv1alpha1.ClusterCache{}
-				clusterCache.Enabled = clusterCopy.Spec.Enabled
-				clusterCache.AllocatableResources = clusterCopy.Status.AllocatableResources
-				clusterCache.RelativeResourceAvailability = clusterCopy.Status.RelativeResourceAvailability
-				if clusterCache.Characteristics == nil {
-					clusterCache.Characteristics = make(map[string]string)
-				}
-				for key, value := range clusterLabels {
-					clusterCache.Characteristics[key] = value
-				}
-				if managerCache.Spec.Clusters == nil {
-					managerCache.Spec.Clusters = make(map[string]federationv1alpha1.ClusterCache)
-				}
-				managerCache.Spec.Clusters[clusterCopy.Spec.UID] = clusterCache
-				managerCache.Spec.LatestUpdateTimestamp = &updateTimestamp
-			}
-			if _, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().Update(context.TODO(), managerCache, metav1.UpdateOptions{}); err != nil {
-				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageManagerCacheUpdateFailed)
-				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageManagerCacheUpdateFailed)
-				return
-			}
-
-			// Here we prepare a secret to be deployed to the remote cluster by using the secret that is created while setting up the access credentials.
-			// This secret has additional information about the API server, namespace, the cluster UID of federation manager.
-			// The remote cluster will be consuming these information to access the federation manager and drive necessary operations.
-			remoteSecret, enqueue, err := multiproviderManager.PrepareSecretForRemoteCluster(clusterCopy.Spec.UID, propagationNamespace, namespaceLabels["edge-net.io/cluster-uid"], "federation", "edgenet")
-			remoteSecret.Data["assigned-cluster-namespace"] = []byte(clusterCopy.GetNamespace())
-			remoteSecret.Data["assigned-cluster-name"] = []byte(clusterCopy.GetName())
-			remoteSecret.Data["federation-uid"] = []byte(localCacheLabels["edge-net.io/federation-uid"])
-			if err != nil {
-				if enqueue {
-					c.enqueueClusterAfter(clusterCopy, 1*time.Minute)
-					return
-				}
-				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteSecretFailed)
-				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteSecretFailed)
-				return
-			}
-			if err := multiproviderManager.DeploySecret(remoteSecret); err != nil {
-				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageRemoteSecretDeploymentFailed)
-				c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusFailed, messageRemoteSecretDeploymentFailed)
-				return
 			}
 			c.recorder.Event(clusterCopy, corev1.EventTypeNormal, federationv1alpha1.StatusReady, messageReady)
 			c.updateStatus(context.TODO(), clusterCopy, federationv1alpha1.StatusReady, messageReady)
@@ -558,17 +589,19 @@ func (c *Controller) reconcile(clusterCopy *federationv1alpha1.Cluster, propagat
 			message = messageRemoteManagerCacheCreationFailed
 		}
 	} else {
-		if managerCache.Spec.Clusters != nil {
-			if clusterCache, ok := managerCache.Spec.Clusters[clusterCopy.Spec.UID]; !ok || !reflect.DeepEqual(clusterCache.AllocatableResources, clusterCopy.Status.AllocatableResources) || !reflect.DeepEqual(clusterCache.Characteristics, clusterCopy.GetLabels()) ||
-				clusterCache.RelativeResourceAvailability != clusterCopy.Status.RelativeResourceAvailability {
+		if clusterCopy.Spec.Role == federationv1alpha1.WorkloadRole {
+			if managerCache.Spec.Clusters != nil {
+				if clusterCache, ok := managerCache.Spec.Clusters[clusterCopy.Spec.UID]; !ok || !reflect.DeepEqual(clusterCache.AllocatableResources, clusterCopy.Status.AllocatableResources) || !reflect.DeepEqual(clusterCache.Characteristics, clusterCopy.GetLabels()) ||
+					clusterCache.RelativeResourceAvailability != clusterCopy.Status.RelativeResourceAvailability {
+					c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageManagerCacheUpdateFailed)
+					state = federationv1alpha1.StatusReconciliation
+					message = messageManagerCacheUpdateFailed
+				}
+			} else {
 				c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageManagerCacheUpdateFailed)
 				state = federationv1alpha1.StatusReconciliation
 				message = messageManagerCacheUpdateFailed
 			}
-		} else {
-			c.recorder.Event(clusterCopy, corev1.EventTypeWarning, federationv1alpha1.StatusReconciliation, messageManagerCacheUpdateFailed)
-			state = federationv1alpha1.StatusReconciliation
-			message = messageManagerCacheUpdateFailed
 		}
 	}
 	// If the cluster status is not ready, update it
