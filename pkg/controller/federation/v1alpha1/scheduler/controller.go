@@ -15,6 +15,8 @@ import (
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/federation/v1alpha1"
 	multitenancy "github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,8 +39,11 @@ const (
 
 	successSynced = "Synced"
 
-	messageResourceSynced = "Cluster synced successfully"
-	messageUpdateFailed   = "Failed to update following the scheduling decision"
+	messageResourceSynced         = "Cluster synced successfully"
+	messageUpdateFailed           = "Failed to update following the scheduling decision"
+	messageNoFeasibleWorker       = "No feasible worker node found"
+	messageNoFeasibleManager      = "No feasible manager node found"
+	messageSchedulingDecisionMade = "Scheduling decision made"
 )
 
 type Node struct {
@@ -220,31 +225,97 @@ func (c *Controller) processSelectiveDeploymentAnchor(selectivedeploymentanchorC
 			selector, _ := metav1.LabelSelectorAsSelector(selectivedeploymentanchorCopy.Spec.ClusterAffinity)
 			// First of all, to make a faster scheduling decision, we check if the cluster affinity is satisfied by one of the workload clusters owned by the federation manager
 			if selectivedeploymentanchorCopy.Spec.FederationManager == nil || selectivedeploymentanchorCopy.Spec.FederationManager.Name == namespaceLabels["edge-net.io/cluster-uid"] {
-				if feasibleWorkloadClusters, err := c.getFeasibleChildWorkloadClusters(selector.String(), selectivedeploymentanchorCopy.Spec.ClusterReplicas); err == nil && len(feasibleWorkloadClusters) > 0 {
-					// If the cluster affinity is satisfied by one of the workload clusters owned by the federation manager,
-					// we assign the current federation manager and the workload cluster(s) to the SDA.
-					selectivedeploymentanchorCopy.Spec.FederationManager = &federationv1alpha1.SelectedFederationManager{Name: namespaceLabels["edge-net.io/cluster-uid"]}
-					selectivedeploymentanchorCopy.Spec.WorkloadClusters = append(selectivedeploymentanchorCopy.Spec.WorkloadClusters, feasibleWorkloadClusters...)
-					if _, err := c.edgenetclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchorCopy.GetNamespace()).Update(context.TODO(), selectivedeploymentanchorCopy, metav1.UpdateOptions{}); err != nil {
-						c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeWarning, federationv1alpha1.StatusAssigned, messageUpdateFailed)
-						c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusAssigned, messageUpdateFailed)
+				if feasibleWorkloadClusters, err := c.getFeasibleChildWorkloadClusters(selector.String(), selectivedeploymentanchorCopy.Spec.ClusterReplicas); err == nil {
+					if len(feasibleWorkloadClusters) > 0 {
+						// If the cluster affinity is satisfied by one of the workload clusters owned by the federation manager,
+						// we assign the current federation manager and the workload cluster(s) to the SDA.
+						selectivedeploymentanchorCopy.Spec.FederationManager = &federationv1alpha1.SelectedFederationManager{Name: namespaceLabels["edge-net.io/cluster-uid"]}
+						selectivedeploymentanchorCopy.Spec.WorkloadClusters = append(selectivedeploymentanchorCopy.Spec.WorkloadClusters, feasibleWorkloadClusters...)
+						if _, err := c.edgenetclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchorCopy.GetNamespace()).Update(context.TODO(), selectivedeploymentanchorCopy, metav1.UpdateOptions{}); err != nil {
+							c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageUpdateFailed)
+							c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusFailed, messageUpdateFailed)
+						}
+						c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeNormal, federationv1alpha1.StatusAssigned, messageSchedulingDecisionMade)
+						return
+					} else {
+						if selectivedeploymentanchorCopy.Spec.FederationManager != nil {
+							c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageNoFeasibleWorker)
+							c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusFailed, messageNoFeasibleWorker)
+							return
+						}
 					}
-					return
 				}
 			}
-			// If no workload cluster satisfies the cluster affinity, we scan all manager clusters in the federation hierarchy to see if any of them can satisfy the affinity
-			if selectivedeploymentanchorCopy.Spec.FederationManager == nil {
-				feasibleFederationManager, path, ok := c.scanFederationManagers(namespaceLabels["edge-net.io/cluster-uid"], selector.String())
-				if !ok {
+			// If no workload cluster satisfies the cluster affinity, we scan all manager caches in the federation to see if any of them can satisfy the affinity
+			var federationUID string
+			sdaLabels := selectivedeploymentanchorCopy.GetLabels()
+			parentManagerSecret, err := c.kubeclientset.CoreV1().Secrets(selectivedeploymentanchorCopy.GetNamespace()).Get(context.TODO(), "parent-manager", metav1.GetOptions{})
+			if err != nil {
+				if !errors.IsNotFound(err) {
 					c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageUpdateFailed)
 					c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusFailed, messageUpdateFailed)
 					return
 				}
-				selectivedeploymentanchorCopy.Spec.FederationManager = &federationv1alpha1.SelectedFederationManager{Name: feasibleFederationManager, Path: path}
-				if _, err := c.edgenetclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchorCopy.GetNamespace()).Update(context.TODO(), selectivedeploymentanchorCopy, metav1.UpdateOptions{}); err != nil {
-					c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeWarning, federationv1alpha1.StatusAssigned, messageUpdateFailed)
-					c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusAssigned, messageUpdateFailed)
+				federationUID = namespaceLabels["edge-net.io/cluster-uid"]
+			} else {
+				federationUID = string(parentManagerSecret.Data["federation-uid"])
+			}
+
+			if selectivedeploymentanchorCopy.Spec.FederationManager == nil ||
+				(selectivedeploymentanchorCopy.Spec.FederationManager != nil && len(selectivedeploymentanchorCopy.Spec.FederationManager.Path) == 0 && sdaLabels["edge-net.io/origin-federation-uid"] != "" && sdaLabels["edge-net.io/origin-federation-uid"] != federationUID) {
+				federationReq, err := labels.NewRequirement("edge-net.io/federation-uid", selection.In, []string{federationUID})
+				if err != nil {
+					c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageUpdateFailed)
+					c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusFailed, messageUpdateFailed)
+					return
 				}
+				selectorForCurrentFederation := selector
+				selectorForCurrentFederation.Add(*federationReq)
+				if feasibleFederationManager, path, ok := c.scanHierarchicalFederationManagers(namespaceLabels["edge-net.io/cluster-uid"], selectorForCurrentFederation.String()); ok {
+					selectivedeploymentanchorCopy.Spec.FederationUID = &federationUID
+					selectivedeploymentanchorCopy.Spec.FederationManager = &federationv1alpha1.SelectedFederationManager{Name: feasibleFederationManager, Path: path}
+					if value, ok := sdaLabels["edge-net.io/origin-federation-uid"]; !ok || value == "" {
+						selectivedeploymentanchorCopy.SetLabels(map[string]string{"edge-net.io/origin-federation-uid": federationUID})
+					}
+					if _, err := c.edgenetclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchorCopy.GetNamespace()).Update(context.TODO(), selectivedeploymentanchorCopy, metav1.UpdateOptions{}); err != nil {
+						c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageUpdateFailed)
+						c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusFailed, messageUpdateFailed)
+						return
+					}
+				} else {
+					if value, ok := sdaLabels["edge-net.io/origin-federation-uid"]; ok && value != "" {
+						if federationUID != value {
+							c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageNoFeasibleManager)
+							c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusFailed, messageNoFeasibleManager)
+							return
+						}
+					}
+					federationReq, err := labels.NewRequirement("edge-net.io/federation-uid", selection.NotIn, []string{federationUID})
+					if err != nil {
+						c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageUpdateFailed)
+						c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusFailed, messageUpdateFailed)
+						return
+					}
+					selectorForPeeringFederation := selector
+					selectorForPeeringFederation.Add(*federationReq)
+					feasibleFederationUID, feasibleFederationManager, ok := c.scanPeeringFederationManagers(namespaceLabels["edge-net.io/cluster-uid"], selectorForPeeringFederation.String())
+					if !ok {
+						c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageNoFeasibleManager)
+						c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusFailed, messageNoFeasibleManager)
+						return
+					}
+					selectivedeploymentanchorCopy.Spec.FederationUID = &feasibleFederationUID
+					selectivedeploymentanchorCopy.Spec.FederationManager = &federationv1alpha1.SelectedFederationManager{Name: feasibleFederationManager}
+					if value, ok := sdaLabels["edge-net.io/origin-federation-uid"]; !ok || value == "" {
+						selectivedeploymentanchorCopy.SetLabels(map[string]string{"edge-net.io/origin-federation-uid": federationUID})
+					}
+					if _, err := c.edgenetclientset.FederationV1alpha1().SelectiveDeploymentAnchors(selectivedeploymentanchorCopy.GetNamespace()).Update(context.TODO(), selectivedeploymentanchorCopy, metav1.UpdateOptions{}); err != nil {
+						c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeWarning, federationv1alpha1.StatusFailed, messageUpdateFailed)
+						c.updateStatus(context.TODO(), selectivedeploymentanchorCopy, federationv1alpha1.StatusFailed, messageUpdateFailed)
+						return
+					}
+				}
+				c.recorder.Event(selectivedeploymentanchorCopy, corev1.EventTypeNormal, federationv1alpha1.StatusAssigned, messageSchedulingDecisionMade)
 			}
 		}
 	}
@@ -280,8 +351,8 @@ func (c *Controller) getFeasibleChildWorkloadClusters(labelSelector string, clus
 	return pickedClusterList, nil
 }
 
-// scanFederationManagers returns the federation manager with the highest score and the shortest path to it
-func (c *Controller) scanFederationManagers(currentFederationManager string, labelSelector string) (string, []string, bool) {
+// scanHierarchicalFederationManagers returns the federation manager with the highest score and the shortest path to it
+func (c *Controller) scanHierarchicalFederationManagers(currentFederationManager string, labelSelector string) (string, []string, bool) {
 	// managerList is a struct to store the parent and children of a manager and its score
 	type managerList struct {
 		parent   string
@@ -374,6 +445,60 @@ func (c *Controller) scanFederationManagers(currentFederationManager string, lab
 		}
 	}
 	return destinationNode.Name, path[1:], true
+}
+
+// scanPeeringFederationManagers returns the federation manager at peering federation with the highest score and the shortest path to it
+func (c *Controller) scanPeeringFederationManagers(currentFederationManager string, labelSelector string) (string, string, bool) {
+	// managerList is a struct to store the parent and children of a manager and its score
+	type managerList struct {
+		federationUID string
+		score         int
+	}
+	federationManagers := make(map[string]managerList)
+	// keys is a list of manager names to be used while sorting federation managers by their scores
+	keys := []string{}
+	// Get the list of manager caches that match the cluster affinity provided in the spec
+	// Thus, we have a list of managers that are eligible to be selected
+	managerCachesRaw, err := c.edgenetclientset.FederationV1alpha1().ManagerCaches().List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil || len(managerCachesRaw.Items) == 0 {
+		klog.Infoln("No manager cache found")
+		return "", "", false
+	}
+	// Iterate over the list of manager caches and calculate the score of each manager
+	for _, managerCacheRow := range managerCachesRaw.Items {
+		if !managerCacheRow.Spec.Enabled {
+			continue
+		}
+		score := 0
+		for _, managedCluster := range managerCacheRow.Spec.Clusters {
+			if !managedCluster.Enabled {
+				continue
+			}
+			switch managedCluster.RelativeResourceAvailability {
+			case "Abundance":
+				score += 3
+			case "Normal":
+				score += 2
+			case "Limited":
+				score += 1
+			default:
+				continue
+			}
+		}
+		keys = append(keys, managerCacheRow.GetName())
+		cacheLabels := managerCacheRow.GetLabels()
+		federationManagers[managerCacheRow.GetName()] = managerList{federationUID: cacheLabels["edge-net.io/federation-uid"], score: score}
+	}
+	if len(keys) == 0 {
+		klog.Infoln("No federation manager found")
+		return "", "", false
+	}
+	// Sort the federation managers by their scores
+	sort.SliceStable(keys, func(i, j int) bool {
+		return federationManagers[keys[i]].score > federationManagers[keys[j]].score
+	})
+	selectedManager := federationManagers[keys[0]]
+	return selectedManager.federationUID, keys[0], true
 }
 
 // createTree creates a tree structure of the federation managers
