@@ -517,13 +517,13 @@ func (c *Controller) prepareManagerSpecificNamespaces(cacheMap map[string]federa
 
 func (c *Controller) syncCaches(clusterRaw *federationv1alpha1.ClusterList, localCacheMap map[string]federationv1alpha1.ManagerCache, clusterUID string, local bool) (map[string]federationv1alpha1.ManagerCache, error) {
 	for _, clusterRow := range clusterRaw.Items {
-		if clusterRow.Spec.Role == federationv1alpha1.FederationManagerRole {
-			childFedManagerSecret, err := c.kubeclientset.CoreV1().Secrets(clusterRow.GetNamespace()).Get(context.TODO(), clusterRow.Spec.SecretName, metav1.GetOptions{})
+		if clusterRow.Spec.Role == federationv1alpha1.FederationManagerRole || clusterRow.Spec.Role == federationv1alpha1.PeerRole {
+			fedManagerSecret, err := c.kubeclientset.CoreV1().Secrets(clusterRow.GetNamespace()).Get(context.TODO(), clusterRow.Spec.SecretName, metav1.GetOptions{})
 			if err != nil {
 				klog.Infoln(err)
 				return nil, err
 			}
-			config := bootstrap.PrepareRestConfig(clusterRow.Spec.Server, string(childFedManagerSecret.Data["token"]), childFedManagerSecret.Data["ca.crt"])
+			config := bootstrap.PrepareRestConfig(clusterRow.Spec.Server, string(fedManagerSecret.Data["token"]), fedManagerSecret.Data["ca.crt"])
 			remoteedgeclientset, err := bootstrap.CreateEdgeNetClientset(config)
 			if err != nil {
 				klog.Infoln(err)
