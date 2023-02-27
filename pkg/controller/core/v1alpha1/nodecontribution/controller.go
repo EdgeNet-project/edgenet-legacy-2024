@@ -471,58 +471,58 @@ func (c *Controller) processNodeContribution(nodecontributionCopy *corev1alpha1.
 				return
 			}
 			c.enqueueNodeContributionAfter(nodecontributionCopy, 1*time.Minute)
-		} else if !isReady {
-			if hasTimedOut {
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageUnready)
-				nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
-				nodecontributionCopy.Status.Message = messageUnready
-				c.updateStatus(context.TODO(), nodecontributionCopy)
-				return
-			}
-			if isSynced := c.syncResources(nodecontributionCopy, nodeName); isSynced {
-				c.enqueueNodeContributionAfter(nodecontributionCopy, 10*time.Minute)
-			}
 		} else {
 			if isSynced := c.syncResources(nodecontributionCopy, nodeName); !isSynced {
 				return
 			}
-			klog.Infof("DNS configuration started: %s", nodeName)
-			// Use AWS Route53 for registration
-			awsIDPath := "/edgenet/aws/id"
-			if flag.Lookup("aws-id-path") != nil {
-				awsIDPath = flag.Lookup("aws-id-path").Value.(flag.Getter).Get().(string)
-			}
-			awsSecretPath := "/edgenet/aws/secret"
-			if flag.Lookup("aws-secret-path") != nil {
-				awsSecretPath = flag.Lookup("aws-secret-path").Value.(flag.Getter).Get().(string)
-			}
-			awsID, err := ioutil.ReadFile(awsIDPath)
-			if err != nil {
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
-				nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
-				nodecontributionCopy.Status.Message = messageDNSFailed
+			if !isReady {
+				if hasTimedOut {
+					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageUnready)
+					nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+					nodecontributionCopy.Status.Message = messageUnready
+					c.updateStatus(context.TODO(), nodecontributionCopy)
+					return
+				}
+				c.enqueueNodeContributionAfter(nodecontributionCopy, 10*time.Minute)
+			} else {
+				klog.Infof("DNS configuration started: %s", nodeName)
+				// Use AWS Route53 for registration
+				awsIDPath := "/edgenet/aws/id"
+				if flag.Lookup("aws-id-path") != nil {
+					awsIDPath = flag.Lookup("aws-id-path").Value.(flag.Getter).Get().(string)
+				}
+				awsSecretPath := "/edgenet/aws/secret"
+				if flag.Lookup("aws-secret-path") != nil {
+					awsSecretPath = flag.Lookup("aws-secret-path").Value.(flag.Getter).Get().(string)
+				}
+				awsID, err := ioutil.ReadFile(awsIDPath)
+				if err != nil {
+					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
+					nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+					nodecontributionCopy.Status.Message = messageDNSFailed
+					c.updateStatus(context.TODO(), nodecontributionCopy)
+					return
+				}
+				awsSecret, err := ioutil.ReadFile(awsSecretPath)
+				if err != nil {
+					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
+					nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+					nodecontributionCopy.Status.Message = messageDNSFailed
+					c.updateStatus(context.TODO(), nodecontributionCopy)
+					return
+				}
+				if updated, _ := multiprovider.SetHostnameRoute53(awsID, awsSecret, c.route53hostedZone, nodeName, nodecontributionCopy.Spec.Host, recordType); !updated {
+					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
+					nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+					nodecontributionCopy.Status.Message = messageDNSFailed
+					c.updateStatus(context.TODO(), nodecontributionCopy)
+					return
+				}
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, corev1alpha1.StatusReady, messageSuccessful)
+				nodecontributionCopy.Status.State = corev1alpha1.StatusReady
+				nodecontributionCopy.Status.Message = messageSuccessful
 				c.updateStatus(context.TODO(), nodecontributionCopy)
-				return
 			}
-			awsSecret, err := ioutil.ReadFile(awsSecretPath)
-			if err != nil {
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
-				nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
-				nodecontributionCopy.Status.Message = messageDNSFailed
-				c.updateStatus(context.TODO(), nodecontributionCopy)
-				return
-			}
-			if updated, _ := multiprovider.SetHostnameRoute53(awsID, awsSecret, c.route53hostedZone, nodeName, nodecontributionCopy.Spec.Host, recordType); !updated {
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
-				nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
-				nodecontributionCopy.Status.Message = messageDNSFailed
-				c.updateStatus(context.TODO(), nodecontributionCopy)
-				return
-			}
-			c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, corev1alpha1.StatusReady, messageSuccessful)
-			nodecontributionCopy.Status.State = corev1alpha1.StatusReady
-			nodecontributionCopy.Status.Message = messageSuccessful
-			c.updateStatus(context.TODO(), nodecontributionCopy)
 		}
 	default:
 		if _, isJoined, isReady, _ := c.getNodeInfo(nodecontributionCopy.GetCreationTimestamp(), nodeName); isJoined && isReady {
