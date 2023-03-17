@@ -56,6 +56,7 @@ func (m *Manager) CreateTenant(tenantRequest *registrationv1alpha1.TenantRequest
 	tenant.Spec.ShortName = tenantRequest.Spec.ShortName
 	tenant.Spec.URL = tenantRequest.Spec.URL
 	tenant.Spec.ClusterNetworkPolicy = tenantRequest.Spec.ClusterNetworkPolicy
+	tenant.Spec.Description = tenantRequest.Spec.Description
 	tenant.Spec.Enabled = true
 	tenant.SetLabels(map[string]string{"edge-net.io/request-uid": string(tenantRequest.GetUID())})
 	tenant.SetAnnotations(tenantRequest.GetAnnotations())

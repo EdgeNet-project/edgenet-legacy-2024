@@ -71,6 +71,8 @@ type TenantRequestSpec struct {
 	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
 	// If the tenant is approved or not by the administrators.
 	Approved bool `json:"approved"`
+	// Description provides additional information about the tenant.
+	Description string `json:"description"`
 }
 
 // TenantRequestStatus is the status for a TenantRequest resource

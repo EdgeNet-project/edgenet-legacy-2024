@@ -95,6 +95,8 @@ type TenantSpec struct {
 	ClusterNetworkPolicy bool `json:"clusternetworkpolicy"`
 	// If the tenant is active then this field is true.
 	Enabled bool `json:"enabled"`
+	// Description provides additional information about the tenant.
+	Description string `json:"description"`
 }
 
 // Address describes postal address of tenant
