@@ -219,6 +219,25 @@ func (m *Manager) GetGeolocationByIP(
 	return result
 }
 
+func CompareAvailableResources(oldObj *corev1.Node, newObj *corev1.Node) bool {
+	if oldObj.Status.Allocatable.Cpu().Cmp(*newObj.Status.Allocatable.Cpu()) != 0 {
+		return true
+	}
+	if oldObj.Status.Allocatable.Memory().Cmp(*newObj.Status.Allocatable.Memory()) != 0 {
+		return true
+	}
+	if oldObj.Status.Allocatable.Pods().Cmp(*newObj.Status.Allocatable.Pods()) != 0 {
+		return true
+	}
+	if oldObj.Status.Allocatable.Storage().Cmp(*newObj.Status.Allocatable.Storage()) != 0 {
+		return true
+	}
+	if oldObj.Status.Allocatable.StorageEphemeral().Cmp(*newObj.Status.Allocatable.StorageEphemeral()) != 0 {
+		return true
+	}
+	return false
+}
+
 // CompareIPAddresses makes a comparison between old and new objects of the node
 // to return the information of the match
 func CompareIPAddresses(oldObj *corev1.Node, newObj *corev1.Node) bool {

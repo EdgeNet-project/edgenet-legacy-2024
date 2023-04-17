@@ -22,8 +22,12 @@ import (
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	appsv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha1"
 	fakeappsv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha1/fake"
+	appsv1alpha2 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha2"
+	fakeappsv1alpha2 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha2/fake"
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha1"
 	fakecorev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha1/fake"
+	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/federation/v1alpha1"
+	fakefederationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/federation/v1alpha1/fake"
 	networkingv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/networking/v1alpha1"
 	fakenetworkingv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/networking/v1alpha1/fake"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/registration/v1alpha1"
@@ -87,9 +91,19 @@ func (c *Clientset) AppsV1alpha1() appsv1alpha1.AppsV1alpha1Interface {
 	return &fakeappsv1alpha1.FakeAppsV1alpha1{Fake: &c.Fake}
 }
 
+// AppsV1alpha2 retrieves the AppsV1alpha2Client
+func (c *Clientset) AppsV1alpha2() appsv1alpha2.AppsV1alpha2Interface {
+	return &fakeappsv1alpha2.FakeAppsV1alpha2{Fake: &c.Fake}
+}
+
 // CoreV1alpha1 retrieves the CoreV1alpha1Client
 func (c *Clientset) CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface {
 	return &fakecorev1alpha1.FakeCoreV1alpha1{Fake: &c.Fake}
+}
+
+// FederationV1alpha1 retrieves the FederationV1alpha1Client
+func (c *Clientset) FederationV1alpha1() federationv1alpha1.FederationV1alpha1Interface {
+	return &fakefederationv1alpha1.FakeFederationV1alpha1{Fake: &c.Fake}
 }
 
 // NetworkingV1alpha1 retrieves the NetworkingV1alpha1Client

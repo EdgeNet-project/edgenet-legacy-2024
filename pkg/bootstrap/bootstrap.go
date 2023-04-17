@@ -70,67 +70,47 @@ func getKubeconfigPath() string {
 	return kubeconfigPath
 }
 
-// CreateEdgeNetClientset generates the clientset to interact with the custom resources
-func CreateEdgeNetClientset(by string) (*clientset.Clientset, error) {
-	var edgenetclientset *clientset.Clientset
-	var generateClientset = func(config *rest.Config) *clientset.Clientset {
-		// Create the clientset
-		edgenetclientset, err := clientset.NewForConfig(config)
-		if err != nil {
-			// TODO: Error handling
-			panic(err.Error())
-		}
-		return edgenetclientset
-	}
-
+func GetRestConfig(by string) (*rest.Config, error) {
+	var config *rest.Config
+	var err error
 	if by == "kubeconfig" {
 		// Use the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", getKubeconfigPath())
-		if err != nil {
-			log.Println(err.Error())
-			panic(err.Error())
-		}
-		edgenetclientset = generateClientset(config)
+		config, err = clientcmd.BuildConfigFromFlags("", getKubeconfigPath())
 	} else {
 		// Creates the in-cluster config
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			panic(err.Error())
-		}
-		edgenetclientset = generateClientset(config)
+		config, err = rest.InClusterConfig()
+	}
+	return config, err
+}
+
+func PrepareRestConfig(server, token string, certificateAuthorityData []byte) *rest.Config {
+	config := new(rest.Config)
+	config.Host = server
+	config.BearerToken = token
+	config.CAData = certificateAuthorityData
+	return config
+}
+
+// CreateEdgeNetClientset generates the clientset to interact with the custom resources
+func CreateEdgeNetClientset(config *rest.Config) (*clientset.Clientset, error) {
+	// Create the clientset
+	edgenetclientset, err := clientset.NewForConfig(config)
+	if err != nil {
+		// TODO: Error handling
+		log.Println(err.Error())
+		panic(err.Error())
 	}
 	return edgenetclientset, nil
 }
 
-// CreateClientset generates the clientset to interact with the Kubernetes resources
-func CreateClientset(by string) (*kubernetes.Clientset, error) {
-	var kubeclientset *kubernetes.Clientset
-	var generateClientset = func(config *rest.Config) *kubernetes.Clientset {
-		// Create the clientset
-		kubeclientset, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			// TODO: Error handling
-			panic(err.Error())
-		}
-		return kubeclientset
-	}
-
-	if by == "kubeconfig" {
-		// Use the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", getKubeconfigPath())
-		if err != nil {
-			// TODO: Error handling
-			panic(err.Error())
-		}
-		kubeclientset = generateClientset(config)
-	} else {
-		// Creates the in-cluster config
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			// TODO: Error handling
-			panic(err.Error())
-		}
-		kubeclientset = generateClientset(config)
+// CreateKubeClientset generates the clientset to interact with the Kubernetes resources
+func CreateKubeClientset(config *rest.Config) (*kubernetes.Clientset, error) {
+	// Create the clientset
+	kubeclientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		// TODO: Error handling
+		log.Println(err.Error())
+		panic(err.Error())
 	}
 	return kubeclientset, nil
 }
@@ -147,33 +127,11 @@ func CreateNamecheapClient() (*namecheap.Client, error) {
 }
 
 // CreateAntreaClientset generates the clientset to interact with the Antrea resources
-func CreateAntreaClientset(by string) (*antrea.Clientset, error) {
-	var antreaclientset *antrea.Clientset
-	var generateClientset = func(config *rest.Config) *antrea.Clientset {
-		// Create the clientset
-		antreaclientset, err := antrea.NewForConfig(config)
-		if err != nil {
-			// TODO: Error handling
-			panic(err.Error())
-		}
-		return antreaclientset
-	}
-
-	if by == "kubeconfig" {
-		// Use the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", getKubeconfigPath())
-		if err != nil {
-			log.Println(err.Error())
-			panic(err.Error())
-		}
-		antreaclientset = generateClientset(config)
-	} else {
-		// Creates the in-cluster config
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			panic(err.Error())
-		}
-		antreaclientset = generateClientset(config)
+func CreateAntreaClientset(config *rest.Config) (*antrea.Clientset, error) {
+	antreaclientset, err := antrea.NewForConfig(config)
+	if err != nil {
+		// TODO: Error handling
+		panic(err.Error())
 	}
 	return antreaclientset, nil
 }

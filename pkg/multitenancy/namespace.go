@@ -49,15 +49,21 @@ func (m *Manager) EligibilityCheck(objNamespace string) (bool, *corev1.Namespace
 		return false, nil, nil
 	}
 	namespaceLabels := namespace.GetLabels()
-	if systemNamespace.GetUID() == types.UID(namespaceLabels["edge-net.io/cluster-uid"]) {
-		tenant, err := m.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), strings.ToLower(namespaceLabels["edge-net.io/tenant"]), metav1.GetOptions{})
-		if err != nil {
-			klog.Infoln(err)
+	if namespaceLabels["edge-net.io/cluster-uid"] != "" {
+		if systemNamespace.GetUID() == types.UID(namespaceLabels["edge-net.io/cluster-uid"]) {
+			tenant, err := m.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), strings.ToLower(namespaceLabels["edge-net.io/tenant"]), metav1.GetOptions{})
+			if err != nil {
+				klog.Infoln(err)
+				return false, nil, nil
+			}
+			if tenant.GetUID() != types.UID(namespaceLabels["edge-net.io/tenant-uid"]) || !tenant.Spec.Enabled {
+				return false, nil, nil
+			}
+		} else {
 			return false, nil, nil
 		}
-		if tenant.GetUID() != types.UID(namespaceLabels["edge-net.io/tenant-uid"]) || !tenant.Spec.Enabled {
-			return false, nil, nil
-		}
+	} else {
+		namespaceLabels["edge-net.io/cluster-uid"] = string(systemNamespace.GetUID())
 	}
 	return true, namespace, namespaceLabels
 }

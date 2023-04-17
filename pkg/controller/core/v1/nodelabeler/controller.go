@@ -195,7 +195,7 @@ func (c *Controller) setNodeGeolocation(obj interface{}) {
 	internalIP, externalIP := multiprovider.GetNodeIPAddresses(nodeObj)
 	result := false
 
-	multiproviderManager := multiprovider.NewManager(c.kubeclientset)
+	multiproviderManager := multiprovider.NewManager(c.kubeclientset, nil, nil, nil)
 
 	// 1. Use the VPNPeer endpoint address if available.
 	peer, err := c.edgenetclientset.NetworkingV1alpha1().VPNPeers().Get(context.TODO(), nodeObj.Name, v1.GetOptions{})
