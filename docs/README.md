@@ -9,12 +9,12 @@ The EdgeNet software can be installed on any kubernetes cluster. The documentati
 ### Edge Computing
 With cloud computing, providers can offer their computational resources to clients and bill according to their usage. One of the key concepts of cloud computing is to allow a pay-as-you-go model. With the maintenance burden of the hardware on some of the software stack being handled by the provider, clients can only use the services the provider offers and cut expenses. 
 
-Different service models are offered by different cloud providers such as IaaS (Infrastructure as a Service), PaaS (Platform as a Service), and SaaS (Software as a Service). There are also other alternatives for more specific cases. For instance, in recent years it has been seen that the overhead of creating VMs is not tolerable for edge computing cases. Thus a new term CaaS (Container as a Service) is started to be used in the industry. 
+Different service models are offered by different cloud providers such as [IaaS](https://www.ibm.com/topics/iaas) (Infrastructure as a Service), [PaaS](https://www.ibm.com/topics/paas) (Platform as a Service), and [SaaS](https://www.ibm.com/topics/saas) (Software as a Service). There are also other alternatives for more specific cases. For instance, in recent years it has been seen that the overhead of creating VMs is not tolerable for edge computing cases. Thus a new term [CaaS](https://www.redhat.com/en/topics/cloud-computing/what-is-caas) (Container as a Service) is started to be used in the industry. 
 
 CaaS enabled lower overhead when creating and running workloads since container technology does not require a hypervisor and is more agile than VMs. This is why EdgeNet, which has been designed to be compatible for edge environments, is developed with the CaaS service model in mind. So it can run in edge and in cloud with lower overhead.
 
 ### Multi-Tenancy
-Generally, the need for multi-tenancy arises when more than one user wants to use the service that is offered by the provider at the same time. To make sure the tenants do not harm others they need to be isolated from each other. Different isolation techniques are used to enable multi-tenancy by different projects. For example, Virtual Kubelet based frameworks, such as Liqo, Virtual Kubelet, and tensile-kube enables multi-tenancy by creating multiple separate clusters. Other's such as Virtual Cluster, k3v, vcluster, and Kamaji runs a separate control plane for each tenant. EdgeNet's multi-tenancy approach is to have only one control plane and separate the tenants logically. This approach is also named single-instance native. Other projects enable this kind of multi-tenancy such as HNC, Capsule, kiosk, and Arktos.
+Generally, the need for multi-tenancy arises when more than one user wants to use the service that is offered by the provider at the same time. To make sure the tenants do not harm others they need to be isolated from each other. Different isolation techniques are used to enable multi-tenancy by different projects. For example, Virtual Kubelet based frameworks, such as [Liqo](https://github.com/liqotech/liqo), [Virtual Kubelet](https://github.com/virtual-kubelet/virtual-kubelet), and [tensile-kube](https://github.com/virtual-kubelet/tensile-kube) enables multi-tenancy by creating multiple separate clusters. Other's such as [Virtual Cluster](https://github.com/kubernetes-sigs/cluster-api-provider-nested/tree/main/virtualcluster), [k3v](https://github.com/ibuildthecloud/k3v), [vcluster](https://github.com/loft-sh/vcluster), and [Kamaji](https://github.com/clastix/kamaji) runs a separate control plane for each tenant. EdgeNet's multi-tenancy approach is to have only one control plane and separate the tenants logically. This approach is also named single-instance native. Other projects enable this kind of multi-tenancy such as [HNC](https://github.com/kubernetes-sigs/hierarchical-namespaces), [Capsule](https://github.com/clastix/capsule), [kiosk](https://github.com/loft-sh/kiosk), and [Arktos](https://github.com/CentaurusInfra/arktos).
 
 In EdgeNet a tenant is the fundamental entity that can manipulate workloads.
 
@@ -26,14 +26,20 @@ EdgeNet supports both of these modes of tenancy. So that tenants can resell thei
 ### Tenant Resource Quota
 To bill their customers and prevent excessive use, cloud providers put resource quotas on their tenants and limit their usage. In the Kubernetes, resource quotas can be put on namespaces. EdgeNet also supports hierarchical namespaces. Combining these two EdgeNet allows tenant's resources to be propagated hierarchically.
 
-The HNC (Hierarchical Namespace Controller) project also implements this functionality however, there is no requirement for a quota to be attributed to each namespace. Since it creates logical problems in multi-tenant environments, EdgeNet makes it compulsatory to assign resource quotas to namespaces.
+The [HNC](https://github.com/kubernetes-sigs/hierarchical-namespaces) (Hierarchical Namespace Controller) project also implements this functionality however, there is no requirement for a quota to be attributed to each namespace. Since it creates logical problems in multi-tenant environments, EdgeNet makes it compulsatory to assign resource quotas to namespaces.
+
+### Variable Slice Granularity
+Slicing in EdgeNet context, refers to the allocation of a larger pool of resources into smaller portions. Each portion is exclusively assigned to a tenant. This resource is generally a node in the cluster exclusively designated for a tenant. This is called Node-level-slicing. However, in some cases, a node might be too large to be used efficiently. For instance, a node can be underutilized by a tenant where the whole node is allocated. For such cases, EdgeNet implements Sub-node-level-slicing. Which exclusively divides and allocates resources for tenants. 
+
+EdgeNet implements an automatic mechanism to create slices for tenants. These slices can be at the node-level or sub-node-level.
 
 ### Kubernetes Custom Resources
 EdgeNet extends the Kubernetes API server instead of modifying a fork of it. In this way, the EdgeNet can work with different versions of Kubernetes and the repository doesn't need to be updated for every change in Kubernetes' main repository. This is done by having CRDs (Custom Resource Definitions) and custom controllers. CRDs in Kubernetes are the most straightforward methods of adding extra functionalities. EdgeNet comes with different CRDs for functioning which will be explained in the next chapter. 
 
 ## Components of EdgeNet
-EdgeNet adds [custom resource definitions](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) (CRDs) to Kubernetes to extend its capabilities to edge computing. We have divided these components into 3 groups. Please refer to the following list of components:
-* Multitenancy
+As discussed to flexibly add functionalities to the Kubernetes API server without the burden of updating the codebase, EdgeNet introduces novel  [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/). We have devised 4 major categories for EdgeNet and assigned the CRDs to their places. However, this classification does not fully differentiate CRDs. For instance, the Selective Deployment CRD is used in both federation and location-based node selection category. 
+Here are the categories and their associated CRDs:
+* CRDs for multi-tenancy features
     * [Tenant](custom_resources.md#tenant)
     * [Tenant Resource Quota](custom_resources.md#tenant-resource-quota)
     * [Subnamespace](custom_resources.md#subnamespace)
@@ -42,11 +48,13 @@ EdgeNet adds [custom resource definitions](https://kubernetes.io/docs/concepts/e
     * [Tenant Request](custom_resources.md#tenant-request)
     * [Role Request](custom_resources.md#role-request)
     * [Cluster Role Request](custom_resources.md#cluster-role-request)
-* Multi-provider
+* CRDs for multi-provider features
     * [Node Contribution](custom_resources.md#node-contribution)
     * [VPN Peer](custom_resources.md#vpn-peer)
-* Locations-based node selection
+* CRDs for locations-based node selection features
     * [Selective Deployment](custom_resources.md#selective-deployment)
+* CRDs for federation features
+    * [Selective Deployment Anchor]()
 
 EdgeNet also provides custom [controllers](https://kubernetes.io/docs/concepts/architecture/controller/) for these resources. These controllers check the states of the CRDs in a loop and try to make them closer to their specs. In Kubernetes world, status represents the current state of the objects and specs represent the desired states.
 
