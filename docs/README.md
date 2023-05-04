@@ -1,9 +1,35 @@
 # EdgeNet Documentation
 
 ## What is EdgeNet?
-EdgeNet is an open-source edge cloud orchestration software that is built on top of industry-standard cloud software [Kubernetes](https://kubernetes.io/) and utilizes [Docker](https://www.docker.com/) for containerization. The source code can be found [here](https://github.com/EdgeNet-project/edgenet).
+EdgeNet is an open-source edge cloud orchestration software extensions that is built on top of industry-standard cloud software [Kubernetes](https://kubernetes.io/) and utilizes [Docker](https://www.docker.com/) for containerization. The source code can be found [here](https://github.com/EdgeNet-project/edgenet).
 
-In the EdgeNet Project, we provide [EdgeNet Testbed](https://edge-net.org) which is a globally distributed edge cloud for Internet researchers. We encourage everybody to contribute a node to the testbed. For more info please visit the [website](https://edge-net.org).
+The EdgeNet software can be installed on any kubernetes cluster. The documentation of EdgeNet software is distinct from the [EdgeNet Testbed](https://edge-net.org) which is a globally distributed edge cloud for Internet researchers. We encourage everybody to contribute a node to the testbed. For more info please visit the [website](https://edge-net.org).
+
+## EdgeNet's Features
+### Edge Computing
+With cloud computing, providers can offer their computational resources to clients and bill according to their usage. One of the key concepts of cloud computing is to allow a pay-as-you-go model. With the maintenance burden of the hardware on some of the software stack being handled by the provider, clients can only use the services the provider offers and cut expenses. 
+
+Different service models are offered by different cloud providers such as IaaS (Infrastructure as a Service), PaaS (Platform as a Service), and SaaS (Software as a Service). There are also other alternatives for more specific cases. For instance, in recent years it has been seen that the overhead of creating VMs is not tolerable for edge computing cases. Thus a new term CaaS (Container as a Service) is started to be used in the industry. 
+
+CaaS enabled lower overhead when creating and running workloads since container technology does not require a hypervisor and is more agile than VMs. This is why EdgeNet, which has been designed to be compatible for edge environments, is developed with the CaaS service model in mind. So it can run in edge and in cloud with lower overhead.
+
+### Multi-Tenancy
+Generally, the need for multi-tenancy arises when more than one user wants to use the service that is offered by the provider at the same time. To make sure the tenants do not harm others they need to be isolated from each other. Different isolation techniques are used to enable multi-tenancy by different projects. For example, Virtual Kubelet based frameworks, such as Liqo, Virtual Kubelet, and tensile-kube enables multi-tenancy by creating multiple separate clusters. Other's such as Virtual Cluster, k3v, vcluster, and Kamaji runs a separate control plane for each tenant. EdgeNet's multi-tenancy approach is to have only one control plane and separate the tenants logically. This approach is also named single-instance native. Other projects enable this kind of multi-tenancy such as HNC, Capsule, kiosk, and Arktos.
+
+In EdgeNet a tenant is the fundamental entity that can manipulate workloads.
+
+### Consumer and Vendor Tenancy
+In general cloud services support two types of tenancy. The first is called Consumer Mode, in which the tenant is the user. It can create, delete, and update workloads. The second is called Vendor Mode. In this mode, the tenant can resell the access to the resources to others.
+
+EdgeNet supports both of these modes of tenancy. So that tenants can resell their resources and use them at the same time.
+
+### Tenant Resource Quota
+To bill their customers and prevent excessive use, cloud providers put resource quotas on their tenants and limit their usage. In the Kubernetes, resource quotas can be put on namespaces. EdgeNet also supports hierarchical namespaces. Combining these two EdgeNet allows tenant's resources to be propagated hierarchically.
+
+The HNC (Hierarchical Namespace Controller) project also implements this functionality however, there is no requirement for a quota to be attributed to each namespace. Since it creates logical problems in multi-tenant environments, EdgeNet makes it compulsatory to assign resource quotas to namespaces.
+
+### Kubernetes Custom Resources
+EdgeNet extends the Kubernetes API server instead of modifying a fork of it. In this way, the EdgeNet can work with different versions of Kubernetes and the repository doesn't need to be updated for every change in Kubernetes' main repository. This is done by having CRDs (Custom Resource Definitions) and custom controllers. CRDs in Kubernetes are the most straightforward methods of adding extra functionalities. EdgeNet comes with different CRDs for functioning which will be explained in the next chapter. 
 
 ## Components of EdgeNet
 EdgeNet adds [custom resource definitions](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) (CRDs) to Kubernetes to extend its capabilities to edge computing. We have divided these components into 3 groups. Please refer to the following list of components:
