@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha1/clusterrolerequest"
@@ -41,7 +42,7 @@ func main() {
 	}
 
 	// Start the controller to provide the functionalities of clusterrolerequest resource
-	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
 
 	controller := clusterrolerequest.NewController(kubeclientset,
 		edgenetclientset,
