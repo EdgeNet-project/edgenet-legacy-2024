@@ -7,10 +7,14 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/EdgeNet-project/edgenet.svg)](https://pkg.go.dev/github.com/EdgeNet-project/edgenet)
 
 EdgeNet is Kubernetes adapted for the network edge. It allows you to deploy applications to hundreds of nodes
-that are scattered across the internet, rather than to just one or a small number of centralized datacenters.
+that are scattered across the internet, rather than just one or a small number of centralized data centers.
 
 The code that we are developing here is in production powering [the EdgeNet testbed](https://www.edge-net.org/),
 on which researchers worldwide conduct experiments in distributed systems and internet measurements.
+
+## Documentation
+
+EdgeNet provides extensive documentation and various tutorials to make the adoption easier and faster. All of the documentation currently resides in the doc folder and can be accessed by clicking [here](./docs/README.md).
 
 ## Support
 
@@ -18,7 +22,7 @@ To chat with a member of the EdgeNet team live, please [open our tawk.to window]
 
 ## Architecture and code layout
 
-EdgeNet extends Kubernetes in the areas of multitenancy, user management, multiprovider support, and the ability to make selective deployments. This is described in the [architecture document](https://github.com/EdgeNet-project/edgenet/tree/release-1.0-documentation/docs/architecture).
+EdgeNet extends Kubernetes in the areas of multitenancy, user management, multi-provider support, and the ability to make selective deployments. This is described in the [architecture document](https://github.com/EdgeNet-project/edgenet/tree/release-1.0-documentation/docs/architecture).
 
 If you are familiar with the [Standard Go Project Layout](https://github.com/golang-standards/project-layout) used
 by other Kubernetes-related projects, you will easily be able to navigate this repository.
@@ -31,11 +35,11 @@ A good way to start familiarizing yourself with the code is to help us write uni
 
 To get a sense of where we are heading, please see our 
 [planned features board](https://github.com/orgs/EdgeNet-project/projects/1).
-We follow an agile development approach, with two week sprints, each one leading to a new production version of the 
+We follow an agile development approach, with two-week sprints, each one leading to a new production version of the 
 code. Our current sprint is one of the milestones, and you can see more near-term issues in our 
 [project backlog](https://github.com/orgs/EdgeNet-project/projects/2).
-You can pick one of these to work on, or suggest your own.
+You can pick one of these to work on or suggest your own.
 
 To start work, clone the latest release branch.
-If you add new code, please be sure to preface it with the standard copyright notice and license information found elsewhere in the code.
+If you add a new code, please be sure to preface it with the standard copyright notice and license information found elsewhere in the code.
 When you have something you would like us to look at, please create a pull request for @bsenel to review.
