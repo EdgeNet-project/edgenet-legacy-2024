@@ -1,4 +1,0 @@
-# Hello, World
-This is a Hello, World tutorial, first used at the MERIF workshop May 30, 2019.  In this tutorial, students create a Daemon Set which calls a server (must be stood up) with a simple greeting.  The server can dump the hellos it's heard in either plaintext or JSON format
-There are two directories here: server, which contains a simple flask server, and a client, which contains a simple YAML file used for deployment.
-Both server and client have hardcoded stuff which should be put into variables, particularly on the server side.  On the server side, the list of sites is hardcoded: this should be pulled down in JSON from the portal.  On the client side, the URL of the server is hardcoded -- because the alternative otherwise is to take time in the tutorial for the students to edit it.
