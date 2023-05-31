@@ -35,21 +35,28 @@ Here are the categories and their associated CRDs:
     * [Selective Deployment](custom_resources.md#selective-deployment)
 
 * Cluster Federation:
-    * [Selective Deployment Anchor]()
+    * [Selective Deployment Anchor](custom_resources.md#selective-deployment-anchor)
 
 EdgeNet also provides custom [controllers](https://kubernetes.io/docs/concepts/architecture/controller/) for these resources. These controllers check the states of the CRDs in a loop and try to make them closer to their specs. In the Kubernetes world, status represents the current state of the objects and specs represent the desired states.
 
 These controllers usually run inside the cluster and communicate with the kube-api server to fulfill certain functionalities. To see how the system is designed see the [architecture document](/docs/architecture/README.md).
 
-<!-- ## Scheduling with Selective Deployment -->
+<!-- FOR THE DOCUMENTORS! We can add more specific documentation such as the ones below as time progresses. -->
+<!-- ## Scheduling and Selective Deployment -->
+<!-- ## Federating Clusters -->
 
-## Contributing
+## Development and Contributing
 
-
-<!-- To get a sense of where we are heading, please see our [planned features board](https://github.com/orgs/EdgeNet-project/projects/1). We follow an agile development approach, with two-week sprints, each one leading to a new production version of the code. Our current sprint is one of the milestones, and you can see more near-term issues in our [project backlog](https://github.com/orgs/EdgeNet-project/projects/2). You can pick one of these to work on or suggest your own. -->
+To get a sense of where we are heading, please see our [planned features board](https://github.com/orgs/EdgeNet-project/projects/1). We follow an agile development approach, with two-week sprints, each one leading to a new production version of the code. Our current sprint is one of the milestones, and you can see more near-term issues in our [project backlog](https://github.com/orgs/EdgeNet-project/projects/2). You can pick one of these to work on or suggest your own.
 
 To start work, clone the latest release branch. If you add a new code, please be sure to preface it with the standard copyright notice and license information found elsewhere in the code. When you have something you would like us to look at, please create a pull request for [@bsenel](https://github.com/bsenel) to review.
+
+Please refer to the [contributing guidelines](/docs/guidelines/contribution_guidelines.md) before creating a pull request.
+
 ### Unit Tests
-A good way to start familiarizing yourself with the code is to help us write unit tests. Take a look at the [architecture document](/docs/architecture/README.md) and follow the links to individual code files, and dig in!
+
+To make sure the code works correctly it is important to have high-quality unit tests. You can find the [unit test guidelines](/docs/guidelines/unit_test_guidelines.md) for creating unit tests.
 
 ### Branches
+* The `master` branch reflects the currently-deployed version of EdgeNet.
+* The latest `release` branch is where we prepare the next EdgeNet release. Please use this branch for all of the pull requests.
