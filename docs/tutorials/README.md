@@ -8,3 +8,6 @@ We have also provided some of the tutorials below:
 * [Configure user permissions](/docs/tutorials/user_permissions.md)
 * [Role request](/docs/tutorials/role_request.md)
 * [Cluster role request](/docs/tutorials/cluster_role_request.md)
+
+## Old Tutorials
+Old EdgeNet tutorials can be accessed [here](/docs/tutorials/old/README.md).
