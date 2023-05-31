@@ -1,6 +1,6 @@
 # Unit Tests
 
-To enhance code quality and maintainability, unit tests play a crucial role in verifying the functionality of isolated functions. We highly encourage and appreciate contributions of unit tests to EdgeNet. Please feel free to contribute by adding unit tests to the codebase. You can find some of the references and guide in this document.
+To enhance code quality and maintainability, unit tests play a crucial role in verifying the functionality of isolated functions. We highly encourage and appreciate contributions of unit tests to EdgeNet. Please feel free to contribute by adding unit tests to the codebase. You can find some of the references and guides in this document.
 
 ## What are Unit Tests?
 Unit testing is an essential part of software development in Go. It helps ensure the reliability and correctness of individual units of code. This document provides guidelines for writing effective unit tests in Go to enhance the quality and maintainability of your project.
@@ -49,7 +49,7 @@ Unit testing is an essential part of software development in Go. It helps ensure
 
     When it comes to testing custom controllers, the ["k8s.io/client-go/kubernetes/fake"](https://pkg.go.dev/k8s.io/client-go/kubernetes/fake) package proves to be a valuable tool. By utilizing this package, a fake clientset can be generated, enabling the execution of Kubernetes API calls for testing purposes. An excellent illustration of this approach can be observed in the sample-controller test file of the Kubernetes example project, which can be accessed [here](https://github.com/kubernetes/sample-controller/blob/master/controller_test.go).
 
-    There are other testing libraries that provides different functionalities. These are given below.
+    Other testing libraries provide different functionalities. These are given below.
 
       - [AFERO](https://github.com/spf13/afero): A filesystem abstraction for go.
 
