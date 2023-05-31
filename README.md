@@ -13,6 +13,10 @@ EdgeNet is Kubernetes adapted for the network edge. It allows you to deploy appl
 
 EdgeNet software runs all around the world and it makes edgenet-test bed possible. We encourage people to contribute to nodes and join the EdgeNet-Testbed. For more information visit the [website](https://edge-net.org).
 
+## Getting Started
+
+You can install EdgeNet to your Kubernetes cluster easily by following the [getting started tutorial](/docs/installation/README.md). 
+
 ## Features
 To extend, and adapt Kubernetes into edge computing, EdgeNet employs various features. 
 * Multitenancy: EdgeNet enables the utilization of a shared cluster by multiple tenants who lack trust in each other. Tenants can allocate resource quotas or slices, and they also have the ability to offer their resources to other tenants. This functionality empowers tenants to function both as providers and consumers, operating in both vendor and consumer modes
@@ -41,7 +45,7 @@ The architecture is described extensively in the [architecture document](/docs/a
 ## Tutorials and Documentation
 EdgeNet provides extensive documentation and tutorials to make the adoption easier and faster. All of the documentation currently resides in the doc folder and can be accessed by clicking [here](./docs/README.md).
 
-You can directly access all of the tutorials by clicking [here](./docs/tutorials/README.md).
+You can directly access all of the [tutorials](./docs/tutorials/README.md) from EdgeNet's documentation.
 
 ## Support
 
@@ -49,4 +53,4 @@ To chat with a member of the EdgeNet team live, please [open our tawk.to window]
 
 ## Contributing
 
-The EdgeNet software is free and open source, licensed under the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0); we invite you to contribute.
+The EdgeNet software is free and open source, licensed under the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0); we invite you to contribute. You can access [contribution guide](/docs/guides/contribution_guides.md) for more information on how to contribute.
