@@ -51,11 +51,11 @@ To get a sense of where we are heading, please see our [planned features board](
 
 To start work, clone the latest release branch. If you add a new code, please be sure to preface it with the standard copyright notice and license information found elsewhere in the code. When you have something you would like us to look at, please create a pull request for [@bsenel](https://github.com/bsenel) to review.
 
-Please refer to the [contributing guidelines](/docs/guidelines/contribution_guidelines.md) before creating a pull request.
+Please refer to the [contributing guides](/docs/guides/contribution_guides.md) before creating a pull request.
 
 ### Unit Tests
 
-To make sure the code works correctly it is important to have high-quality unit tests. You can find the [unit test guidelines](/docs/guidelines/unit_test_guidelines.md) for creating unit tests.
+To make sure the code works correctly it is important to have high-quality unit tests. You can find the [unit test guides](/docs/guides/unit_test_guides.md) for creating unit tests.
 
 ### Branches
 * The `master` branch reflects the currently-deployed version of EdgeNet.
