@@ -17,11 +17,11 @@ Here are the categories and their associated CRDs:
 
 * Multitenancy:
     * [Tenant](/docs/custom_resources.md#tenant)
+    * [Tenant Request](custom_resources.md#tenant-request)
     * [Tenant Resource Quota](custom_resources.md#tenant-resource-quota)
     * [Subnamespace](custom_resources.md#subnamespace)
     * [Slice](custom_resources.md#slice)
     * [Slice Claim](custom_resources.md#slice-claim)
-    * [Tenant Request](custom_resources.md#tenant-request)
     * [Role Request](custom_resources.md#role-request)
     * [Cluster Role Request](custom_resources.md#cluster-role-request)
 
