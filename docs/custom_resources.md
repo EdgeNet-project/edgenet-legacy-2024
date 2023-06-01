@@ -749,6 +749,16 @@ It's important to note that the federation feature is currently in the early sta
 
 ## Selective Deployment Anchor
 
+When a workload is designated for outsourcing, the originating cluster transmits the relevant information of the selective deployment to the federation cluster. This action triggers the creation of a "federation selective deployment anchor" on the federation cluster. The purpose of this anchor is to serve as a reference point, indicating the specific selective deployment that needs to be scheduled on the new working cluster.
+
+The "federation selective deployment anchor" object includes several important fields to facilitate its functionality within the EdgeNet federation framework.
+
+Firstly, the object contains an "origin reference" field that serves as a pointer to the original selective deployment object. This reference establishes the connection between the federation selective deployment anchor and its corresponding selective deployment, allowing for proper tracking and management of the outsourced workload.
+
+Additionally, the "federation selective deployment anchor" utilizes the "cluster affinity" field, which contains selectors for both the cluster and workload cluster. These selectors define the criteria for identifying eligible clusters within the federation. The cluster selector determines the suitable federation cluster to host the selective deployment, while the workload cluster selector identifies the specific working cluster where the selective deployment should be scheduled.
+
+By leveraging the origin reference and cluster affinity fields, the federation selective deployment anchor maintains the necessary associations and criteria to effectively orchestrate the outsourcing of workloads across the EdgeNet federation.
+
 ```yaml
 openAPIV3Schema:
   type: object
@@ -806,4 +816,139 @@ openAPIV3Schema:
 
 ## Manager Cache
 
+The "Manager cache" plays a crucial role in propagating resource information across federation clusters within the EdgeNet system. It serves as a mechanism to exchange and synchronize vital data regarding the available resources in different working clusters.
+
+The manager cache object comprises several key components. Firstly, it contains "hierarchy information" that provides details about the position of the federation cluster within the broader multi-clustered universe. This hierarchy information helps establish the relationships and structure between federation clusters, enabling efficient resource management and workload distribution.
+
+Furthermore, the manager cache holds "available resource information" of other working clusters within the federation. This information gives insights into the resources, such as compute capacity, storage, and networking capabilities, present in each working cluster. By maintaining an up-to-date record of available resources, the federation cluster can make informed decisions when scheduling and distributing workloads.
+Regular synchronization is performed between federation clusters to keep the manager cache objects consistent and accurate. As a result, the manager cache includes a "last update time" field indicating when the synchronization occurred, ensuring that the cached resource information remains current.
+
+Lastly, the manager cache features an "enabled" field that can be toggled to enable or disable the scheduling of workloads on the federation cluster. This capability provides flexibility and control, allowing administrators to selectively enable or disable a federation cluster based on specific requirements or maintenance activities.
+
+```yaml
+openAPIV3Schema:
+  type: object
+  properties:
+    spec:
+      type: object
+      properties:
+        hierarchy:
+          type: object
+          properties:
+            level: 
+              type: integer
+              minimum: 0
+            parent:
+              type: string
+        cluster:
+          type: array
+          items:
+            type: object
+            properties:
+              characteristic:
+                type: array
+                items:
+                  type: string
+              resourceAvailability:
+                enum:
+                  - Abundance
+                  - Normal
+                  - Limited
+                  - Scarcity
+                type: string
+    status:
+      type: object
+      properties:
+        state:
+          type: string
+        message:
+          type: string
+        updatedAt:
+          type: string
+```
+
 ## Cluster
+
+```yaml
+openAPIV3Schema:
+  type: object
+  properties:
+    spec:
+      type: object
+      properties:
+        uuid:
+          type: string
+        role:
+          type: string
+          enum:
+          - Workload
+          - Federation
+        server:
+          type: string
+        preferences:
+          type: object
+          properties:
+            allowlist:
+              type: object
+              properties:
+                matchExpressions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                      operator:
+                        enum:
+                          - In
+                          - NotIn
+                          - Exists
+                          - DoesNotExist
+                        type: string
+                      values:
+                        type: array
+                        items:
+                          type: string
+                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                matchLabels:
+                  x-kubernetes-preserve-unknown-fields: true
+            denylist:
+              type: object
+              properties:
+                matchExpressions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                      operator:
+                        enum:
+                          - In
+                          - NotIn
+                          - Exists
+                          - DoesNotExist
+                        type: string
+                      values:
+                        type: array
+                        items:
+                          type: string
+                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                matchLabels:
+                  x-kubernetes-preserve-unknown-fields: true
+        visibility:
+          type: string
+          enum:
+          - Private
+          # - Protected
+          - Public
+        secretName:
+          type: string
+    status:
+      type: object
+      properties:
+        state:
+          type: string
+        message:
+          type: string
+```
