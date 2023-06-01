@@ -636,19 +636,173 @@ penAPIV3Schema:
 
 # Locations-Based Node Selection
 
-
+The true value of EdgeNet to its users resides in its extensive geographical and topological distribution spanning across the globe and throughout the internet. To harness the inherent benefits of this distribution, users require the capability to deploy their services in a distributed manner, rather than being limited to a small cluster of closely located nodes. This is where the "selective deployment" extension comes into play, enabling users to strategically deploy their workloads to leverage the full potential of edge computing. By selectively deploying services across diverse nodes within the network, users can fully utilize the advantages of geographic and topological dispersion, ensuring optimal performance, scalability, and resilience for their applications.
 
 ## Selective Deployment
 
-<!-- Selective deployment as the name suggests allows deployments to be run in nodes where the geographic information is specified. -->
+Selective deployment, as the name suggests, enables the execution of deployments on specific nodes based on specified geographic information. Alongside its federation support, EdgeNet allows the outsourcing of workloads declared with selective deployments, further enhancing its capabilities.
+
+The selective deployment feature primarily consists of two key fields. The first field is the "workloads" field, which encompasses workload definitions that adhere to regular Kubernetes standards. Currently, the supported workloads include deployments, daemonsets, statefulsets, jobs, and cronjobs. This enables users to employ a variety of workload types when leveraging selective deployment in EdgeNet.
+
+The second field is the "selector," which offers flexibility in specifying the geographic criteria for deployment. Users can select geographic areas based on various parameters such as city, country, state, continent, or define a custom area using a polygon selector. Additionally, the "operator" and "quantity" fields provide further control, allowing users to specify whether to include or exclude nodes based on their geographic information.
+
+By utilizing the selective deployment feature in EdgeNet, users gain the ability to strategically deploy their workloads to specific geographic locations, optimizing performance, data locality, and resource utilization as per their specific requirements.
+
+```yaml
+APIV3Schema:
+  type: object
+  properties:
+    spec:
+      type: object
+      required:
+        - workloads
+        - selector
+      properties:
+        workloads:
+          type: object
+          properties:
+            deployment:
+              type: array
+              items:
+                type: object
+                x-kubernetes-embedded-resource: true
+                x-kubernetes-preserve-unknown-fields: true
+              nullable: true
+            daemonset:
+              type: array
+              items:
+                type: object
+                x-kubernetes-embedded-resource: true
+                x-kubernetes-preserve-unknown-fields: true
+              nullable: true
+            statefulset:
+              type: array
+              items:
+                type: object
+                x-kubernetes-embedded-resource: true
+                x-kubernetes-preserve-unknown-fields: true
+              nullable: true
+            job:
+              type: array
+              items:
+                type: object
+                x-kubernetes-embedded-resource: true
+                x-kubernetes-preserve-unknown-fields: true
+              nullable: true
+            cronjob:
+              type: array
+              items:
+                type: object
+                x-kubernetes-embedded-resource: true
+                x-kubernetes-preserve-unknown-fields: true
+              nullable: true
+        selector:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                enum:
+                  - City
+                  - State
+                  - Country
+                  - Continent
+                  - Polygon
+              value:
+                type: array
+                items:
+                  type: string
+              operator:
+                type: string
+                enum:
+                  - In
+                  - NotIn
+              quantity:
+                type: integer
+                description: The count of nodes that will be picked for this selector.
+                minimum: 1
+                nullable: true
+          minimum: 1
+        recovery:
+          type: boolean
+    status:
+      type: object
+      properties:
+        ready:
+          type: string
+        state:
+          type: string
+        message:
+          type: array
+          items:
+            type: stringdo
+```
 
 # Cluster Federation
 
-<!-- EdgeNet allows the federation of multiple clusters to share and outsource workloads. Currently, this feature is in alpha and hasn't yet been fully implemented. -->
+EdgeNet introduces the concept of federation, enabling the collaboration and sharing of workloads across multiple clusters. This federation capability allows tenants to leverage resources from other worker clusters that are federated by EdgeNet.
+
+To accomplish this, a tenant can deploy a selective deployment within their local worker cluster. If the selection criteria fail to find a suitable node within the local cluster, the selective deployment can be sent to a remote cluster to outsource the workload. The federation cluster then examines available workload clusters to identify a suitable destination for the workload. If a compatible workload cluster is found, selective deployment is scheduled for that particular cluster.
+
+It's important to note that the federation feature is currently in the early stages of implementation, and not all aspects of the feature have been fully developed and implemented at this time. However, the overall vision of EdgeNet's federation capability is to enable the efficient sharing and outsourcing of workloads across federated clusters, allowing tenants to seamlessly utilize resources from remote clusters as needed.
 
 ## Selective Deployment Anchor
 
-<!-- When a workload is scheduled to be outsourced, the cluster sends the `selective deployment` information to the federation cluster. This creates a `federation selective deployment anchor` on the federation cluster to indicate the `selective deployment` to be scheduled on the new working cluster. -->
+```yaml
+openAPIV3Schema:
+  type: object
+  properties:
+    spec:
+      type: object
+      properties:
+        originRef:
+          type: object
+          properties:
+            uuid:
+              type: string
+            namespace:
+              type: string
+            name:
+              type: string
+        clusterAffinity:
+          type: object
+          properties:
+            matchExpressions:
+              type: array
+              items:
+                type: object
+                properties:
+                  key:
+                    type: string
+                  operator:
+                    enum:
+                      - In
+                      - NotIn
+                      - Exists
+                      - DoesNotExist
+                    type: string
+                  values:
+                    type: array
+                    items:
+                      type: string
+                      pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+            matchLabels:
+              x-kubernetes-preserve-unknown-fields: true
+        federationManagerNames:
+          type: array
+          items:
+            type: string
+        secretName:
+          type: string
+    status:
+      type: object
+      properties:
+        state:
+          type: string
+        message:
+          type: string
+```
 
 ## Manager Cache
 
