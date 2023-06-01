@@ -34,8 +34,11 @@ Here are the categories and their associated CRDs:
 * Locations-Based Node Selection:
     * [Selective Deployment](custom_resources.md#selective-deployment)
 
+
 * Cluster Federation:
     * [Selective Deployment Anchor](custom_resources.md#selective-deployment-anchor)
+    * [Manager Cache](custom_resources.md#manager-cache)
+    * [Cluster](custom_resources.md#cluster)
 
 EdgeNet also provides custom [controllers](https://kubernetes.io/docs/concepts/architecture/controller/) for these resources. These controllers check the states of the CRDs in a loop and try to make them closer to their specs. In the Kubernetes world, status represents the current state of the objects and specs represent the desired states.
 

@@ -376,3 +376,7 @@ EdgeNet allows the federation of multiple clusters to share and outsource worklo
 ## Selective Deployment Anchor
 
 When a workload is scheduled to be outsourced, the cluster sends the `selective deployment` information to the federation cluster. This creates a `federation selective deployment anchor` on the federation cluster to indicate the `selective deployment` to be scheduled on the new working cluster.
+
+## Manager Cache
+
+## Cluster
