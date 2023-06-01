@@ -14,7 +14,7 @@ Multitenancy is a standard feature of the three well-known cloud service models;
 
 To create a tenant in EdgeNet it s required to create a tenant request 
 
-Below a tenant's open API schema is presented.
+Below a tenant's OpenAPI schema is presented.
 
 ```yaml
 openAPIV3Schema:
@@ -86,7 +86,7 @@ openAPIV3Schema:
 ```
 
 ## Tenant Request
-To create a tenant in EdgeNet it is required to first create a tenant request. The request should contain the tenant and admin of the tenant's contact information. To create a tenant we recommend to follow the tenant registration tutorial. The open API scheme is given below as a yaml file.
+To create a tenant in EdgeNet it is required to first create a tenant request. The request should contain the tenant and admin of the tenant's contact information. To create a tenant we recommend to follow the tenant registration tutorial. The OpenAPI scheme is given below as a yaml file.
 
 Note that the admission control mechanism prevents `tenant requests` to be created with the field `approved: true`.
 
@@ -170,7 +170,7 @@ openAPIV3Schema:
 
 ## Tenant Resource Quota
 
-To prevent starvation or excessive use it is beneficial to put resource quotas on tenants. These resources are standard Kubernetes resources. The resource quota contains two fields for either claiming a resource or dropping it off. The expiration dates can also be defined. The open API scheme is given below as a yaml file.
+To prevent starvation or excessive use it is beneficial to put resource quotas on tenants. These resources are standard Kubernetes resources. The resource quota contains two fields for either claiming a resource or dropping it off. The expiration dates can also be defined. The OpenAPI scheme is given below as a yaml file.
 
 ```yaml
 openAPIV3Schema:
@@ -330,52 +330,325 @@ openAPIV3Schema:
 
 ## Slice
 
-Slice describes the repartitioning of resources. A slice object claims certain types of resources such as memory, CPU or disk, or a node until the expiration.
+A slice in EdgeNet defines the distribution and allocation of resources. There are two types of slices available: node-level slices and resource slices.
+
+Node-level slices reserve one or more nodes based on a node selector criteria and establish a subcluster dedicated to a specific tenant. This allows the tenant to have exclusive access to the reserved nodes within the subcluster.
+
+On the other hand, resource slices allocate the specified resources to the tenant. These slices ensure that the tenant receives the designated amount of resources according to their requirements.
+
+When a slice reaches its expiration, a one-minute grace period is provided to any workloads utilizing that particular slice. During this grace period, the workloads are given the opportunity to terminate gracefully and wrap up any ongoing operations.
+
+After the grace period, if any workloads are still active, they are terminated in a controlled manner to ensure a smooth transition and proper resource cleanup. This ensures efficient resource management and allows for the timely release of resources associated with the expired slice.
+
+```yaml
+openAPIV3Schema:
+  type: object
+  properties:
+    spec:
+      type: object
+      required:
+        - nodeselector
+      properties:
+        sliceclassname:
+          type: string
+          default: "Node"
+          enum:
+            - Node
+            - Resource
+        claimref:
+          type: object
+          x-kubernetes-embedded-resource: true
+          x-kubernetes-preserve-unknown-fields: true
+        nodeselector:
+          type: object
+          required:
+            - selector
+            - nodecount
+            - resources
+          properties:
+            selector:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+            nodecount:
+              type: integer
+              minimum: 1
+            resources:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+    status:
+      type: object
+      properties:
+        state:
+          type: string
+        message:
+          type: string
+        expiry:
+          type: string
+          format: dateTime
+          nullable: true
+```
 
 ## Slice Claim
 
-Slice Claim represents a request for certain resources that a tenant describes. It also contains a node selector where the inapplicable or unwanted nodes can be filtered out before granting the slice to the tenant.
+To create a slice in EdgeNet, the initial step involves submitting a slice request. This request is encapsulated within a slice claim, which contains all the necessary information for the creation of the desired slice. Below is a yaml file that outlines the OpenAPI specification for describing the slice claim.
+
+```yaml
+hema:
+  type: object
+  properties:
+    spec:
+      type: object
+      required:
+        - slicename
+        - nodeselector
+      properties:
+        sliceclassname:
+          type: string
+          default: "Node"
+          enum:
+            - Node
+            - Resource
+        slicename:
+          type: string
+        nodeselector:
+          type: object
+          required:
+            - selector
+            - nodecount
+            - resources
+          properties:
+            selector:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+            nodecount:
+              type: integer
+              minimum: 1
+            resources:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+        expiry:
+          type: string
+          format: dateTime
+          nullable: true
+    status:
+      type: object
+      properties:
+        state:
+          type: string
+        message:
+          type: string
+```
 
 ## Role Request
 
-Roles are composed of operations or actions that the holder can perform. These roles do not have cluster-wide capabilities instead they are only effective on subnamespaces. Role requests of the user with the associated user email address, are sent to the tenant of the user. If the tenant accepts the action space of the user changes accordingly. 
+In the cluster, there exist two types of roles: cluster roles, which encompass cluster-wide roles, and normal roles, which pertain to roles specific to namespaces. These roles facilitate the assignment of user permissions and determine their accessibility to various resources within the cluster. For further information on role-based access control in Kubernetes, you can refer to the [role-based access documentation](https://kubernetes.io/docs/reference/access-authn-authz/rbac/).
+
+EdgeNet introduces a request mechanism to create predefined roles, enhancing the role management capabilities. Below, you will find the OpenAPI specification of a role request object.
+
+```yaml
+openAPIV3Schema:
+  type: object
+  properties:
+    spec:
+      type: object
+      required:
+        - email
+        - roleref
+      properties:
+        firstname:
+          type: string
+        lastname:
+          type: string
+        email:
+          type: string
+          format: email
+        roleref:
+          type: object
+          required:
+          - kind
+          - name
+          properties:
+            kind:
+              type: string
+              enum:
+                - Role
+                - ClusterRole
+            name:
+              type: string
+              pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
+        approved:
+          type: boolean
+    status:
+      type: object
+      properties:
+        expiry:
+          type: string
+          format: dateTime
+          nullable: true
+        state:
+          type: string
+        message:
+          type: string
+        notified:
+          type: boolean
+          default: false
+```
 
 ## Cluster Role Request
 
-Cluster roles are composed of operations or actions that the holder can perform. These roles have cluster-wide capabilities. Cluster role requests of the user with the associated user email address, are sent to the EdgeNet administrators. If EdgeNet admins accept the action space of the user changes accordingly. 
+As discussed above, cluster roles are roles that have cluster-wide access. Here an OpenAPI specification of the cluster role request is given.
+
+```yaml
+openAPIV3Schema:
+  type: object
+  properties:
+    spec:
+      type: object
+      required:
+        - email
+        - rolename
+      properties:
+        firstname:
+          type: string
+        lastname:
+          type: string
+        email:
+          type: string
+          format: email
+        rolename:
+          type: string
+          pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
+        approved:
+          type: boolean
+    status:
+      type: object
+      properties:
+        expiry:
+          type: string
+          format: dateTime
+          nullable: true
+        state:
+          type: string
+        message:
+          type: string
+        notified:
+          type: boolean
+          default: false
+```
 
 # Multiprovider
 
-A multi-provider environment differs from conventional single-provider environments by the number of vendors. There are more than more providers providing node resources to the cluster.
-
-With EdgeNet, it is possible to easily contribute a node to the cluster.
+EdgeNet nodes are not all furnished out of a single data center, or even a small number of data centers, but rather from large numbers of individuals and institutions, who may be users of the system, or simply those wishing to contribute to the system. The “node contribution” extensions enable this.
 
 ## Node Contribution
 
-EdgeNet is designed in such a way that it allows multiple providers to contribute their nodes in a single cluster. This information is held in the cluster by node contribution objects.
+When a new node is added to the cluster using a [bootstrap script](https://github.com/EdgeNet-project/node/blob/main/bootstrap.sh), it triggers the activation of a node contribution object. This object encompasses vital information regarding the node provider, SSH details, limitations, and user-related data. Below is the OpenAPI specification for the node contribution object in yaml format.
 
-When a new node is added to the cluster which is done by a bootstrap script, it is necessary to configure connection settings. Node Contribution objects are used for setting up the ssh communication channel.
+```yaml
+openAPIV3Schema:
+  type: object
+  properties:
+    spec:
+      type: object
+      required:
+        - host
+        - port
+        - enabled
+      properties:
+        tenant:
+          type: string
+          nullable: true
+          pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 1
+        user:
+          type: string
+          default: edgenet
+        enabled:
+          type: boolean
+        limitations:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              kind:
+                type: string
+                enum:
+                  - Tenant
+                  - Namespace
+              identifier:
+                type: string
+                pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
+    status:
+      type: object
+      properties:
+        state:
+          type: string
+        message:
+          type: string
+```
 
 ## VPN Peer
 
-EdgeNet nodes are distributed around the world. To connect these nodes in the same network a VPN connection is used. Additionally, VPN is used for overcoming the limitations of NAT.
-  
+To facilitate the connectivity between EdgeNet nodes distributed worldwide, a Virtual Private Network (VPN) is employed. This VPN enables seamless communication and access among the nodes, thereby forming a connected network.
+
+The VPN serves a dual purpose: it not only establishes connectivity between the nodes but also overcomes the limitations imposed by Network Address Translation (NAT). NAT can hinder direct communication between nodes with private IP addresses, but the VPN mitigates this issue by providing a secure and private communication channel.
+
+In the process of setting up the nodes, a VPN peer is created using the [bootstrap script](https://github.com/EdgeNet-project/node/blob/main/bootstrap.sh). This script handles the configuration and establishment of the VPN peer, ensuring that each node can effectively communicate and interoperate within the EdgeNet cluster.
+
+```yaml
+penAPIV3Schema:
+  type: object
+  properties:
+    spec:
+      type: object
+      required:
+        - addressV4
+        - addressV6
+        - publicKey
+      properties:
+        addressV4:
+          type: string
+          pattern: '^[0-9.]+$'
+          description: The IPv4 address assigned to the node's VPN interface.
+        addressV6:
+          type: string
+          pattern: '^[a-f0-9:]+$'
+          description: The IPv6 address assigned to the node's VPN interface.
+        endpointAddress:
+          type: string
+          pattern: '^[a-f0-9.:]+$'
+          nullable: true
+          description: The public IPv4/v6 address of the node. Required for NAT-NAT communications.
+        endpointPort:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: The port on which WireGuard is listening. Required for NAT-NAT communications.
+        publicKey:
+          type: string
+          descripti
+```
 
 # Locations-Based Node Selection
 
-Edge computing requires low latency. This is why the physical location of the nodes that are running the programs is extremely important. EdgeNet provides this mechanism by allowing location-based deployment.
+
 
 ## Selective Deployment
 
-Selective deployment as the name suggests allows deployments to be run in nodes where the geographic information is specified.
+<!-- Selective deployment as the name suggests allows deployments to be run in nodes where the geographic information is specified. -->
 
 # Cluster Federation
 
-EdgeNet allows the federation of multiple clusters to share and outsource workloads. Currently, this feature is in alpha and hasn't yet been fully implemented.
+<!-- EdgeNet allows the federation of multiple clusters to share and outsource workloads. Currently, this feature is in alpha and hasn't yet been fully implemented. -->
 
 ## Selective Deployment Anchor
 
-When a workload is scheduled to be outsourced, the cluster sends the `selective deployment` information to the federation cluster. This creates a `federation selective deployment anchor` on the federation cluster to indicate the `selective deployment` to be scheduled on the new working cluster.
+<!-- When a workload is scheduled to be outsourced, the cluster sends the `selective deployment` information to the federation cluster. This creates a `federation selective deployment anchor` on the federation cluster to indicate the `selective deployment` to be scheduled on the new working cluster. -->
 
 ## Manager Cache
 
