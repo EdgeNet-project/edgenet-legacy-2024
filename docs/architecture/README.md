@@ -1,8 +1,10 @@
 # EdgeNet's Architecture Documentation
 
-Following image is the architecture diagram of the EdgeNet. It shows how multitenancy and slices functions. 
+Following image is the architecture diagram of the EdgeNet. It shows how multitenancy and slices functions.
 
 ![EdgeNet Architecture Diagram](/docs/architecture/architecture.png)
+
+
 
 ## Edge Computing
 With cloud computing, providers can offer their computational resources to clients and bill according to their usage. One of the key concepts of cloud computing is to allow a pay-as-you-go model. With the maintenance burden of the hardware on some of the software stack being handled by the provider, clients can only use the services the provider offers and cut expenses. 
@@ -16,17 +18,17 @@ Generally, the need for multi-tenancy arises when more than one user wants to us
 
 In EdgeNet a tenant is the fundamental entity that can manipulate workloads.
 
-## Consumer and Vendor Tenancy
+### Consumer and Vendor Tenancy
 In general cloud services support two types of tenancy. The first is called Consumer Mode, in which the tenant is the user. It can create, delete, and update workloads. The second is called Vendor Mode. In this mode, the tenant can resell the access to the resources to others.
 
 EdgeNet supports both of these modes of tenancy. So that tenants can resell their resources and use them at the same time.
 
-## Tenant Resource Quota
+### Tenant Resource Quota
 To bill their customers and prevent excessive use, cloud providers put resource quotas on their tenants and limit their usage. In the Kubernetes, resource quotas can be put on namespaces. EdgeNet also supports hierarchical namespaces. Combining these two EdgeNet allows tenant's resources to be propagated hierarchically.
 
 The [HNC](https://github.com/kubernetes-sigs/hierarchical-namespaces) (Hierarchical Namespace Controller) project also implements this functionality however, there is no requirement for a quota to be attributed to each namespace. Since it creates logical problems in multi-tenant environments, EdgeNet makes it compulsatory to assign resource quotas to namespaces.
 
-## Variable Slice Granularity
+### Variable Slice Granularity
 Slicing in EdgeNet context, refers to the allocation of a larger pool of resources into smaller portions. Each portion is exclusively assigned to a tenant. This resource is generally a node in the cluster exclusively designated for a tenant. This is called Node-level-slicing. However, in some cases, a node might be too large to be used efficiently. For instance, a node can be underutilized by a tenant where the whole node is allocated. For such cases, EdgeNet implements Sub-node-level-slicing. Which exclusively divides and allocates resources for tenants. 
 
 EdgeNet implements an automatic mechanism to create slices for tenants. These slices can be at the node level or sub-node level.
