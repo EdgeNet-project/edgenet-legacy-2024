@@ -18,71 +18,71 @@ Below a tenant's OpenAPI schema is presented.
 
 ```yaml
 openAPIV3Schema:
-    type: object
-    properties:
+  type: object
+  properties:
     spec:
-        type: object
-        required:
+      type: object
+      required:
         - fullname
         - shortname
         - url
         - address
         - contact
         - enabled
-        properties:
+      properties:
         fullname:
-            type: string
+          type: string
         shortname:
-            type: string
+          type: string
         url:
-            type: string
+          type: string
         address:
-            type: object
-            required:
+          type: object
+          required:
             - street
             - zip
             - city
             - country
-            properties:
+          properties:
             street:
-                type: string
+              type: string
             zip:
-                type: string
+              type: string
             city:
-                type: string
+              type: string
             region:
-                type: string
-                description: region or state
+              type: string
+              description: region or state
             country:
-                type: string
+              type: string
         contact:
-            type: object
-            required:
+          type: object
+          required:
             - firstname
             - lastname
             - email
             - phone
-            properties:
+          properties:
             firstname:
-                type: string
+              type: string
             lastname:
-                type: string
+              type: string
             email:
-                type: string
+              type: string
             phone:
-                type: string
+              type: string
         clusternetworkpolicy:
-            type: boolean
-            default: false
+          type: boolean
+          default: false
         enabled:
-            type: boolean
+          type: boolean
     status:
-        type: object
-        properties:
+      type: object
+      properties:
         state:
-            type: string
+          type: string
         message:
-            type: string
+          type: string
 ```
 
 ## Tenant Request
@@ -92,80 +92,80 @@ Note that the admission control mechanism prevents `tenant requests` to be creat
 
 ```yaml
 openAPIV3Schema:
-    type: object
-    properties:
+  type: object
+  properties:
     spec:
-        type: object
-        required:
+      type: object
+      required:
         - fullname
         - shortname
         - url
         - address
         - contact
-        properties:
+      properties:
         fullname:
-            type: string
+          type: string
         shortname:
-            type: string
+          type: string
         url:
-            type: string
+          type: string
         address:
-            type: object
-            required:
+          type: object
+          required:
             - street
             - zip
             - city
             - country
-            properties:
+          properties:
             street:
-                type: string
+              type: string
             zip:
-                type: string
+              type: string
             city:
-                type: string
+              type: string
             region:
-                type: string
-                description: region or state
+              type: string
+              description: region or state
             country:
-                type: string
+              type: string
         contact:
-            type: object
-            required:
+          type: object
+          required:
             - firstname
             - lastname
             - email
             - phone
-            properties:
+          properties:
             firstname:
-                type: string
+              type: string
             lastname:
-                type: string
+              type: string
             email:
-                type: string
+              type: string
             phone:
-                type: string
+              type: string
         clusternetworkpolicy:
-            type: boolean
-            default: true
+          type: boolean
+          default: true
         resourceallocation:
-            type: object
-            x-kubernetes-preserve-unknown-fields: true
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
         approved:
-            type: boolean
+          type: boolean
     status:
-        type: object
-        properties:
+      type: object
+      properties:
         expiry:
-            type: string
-            format: dateTime
-            nullable: true
+          type: string
+          format: dateTime
+          nullable: true
         state:
-            type: string
+          type: string
         message:
-            type: string
+          type: string
         notified:
-            type: boolean
-            default: false
+          type: boolean
+          default: false
 ```
 
 ## Tenant Resource Quota
@@ -174,18 +174,18 @@ To prevent starvation or excessive use it is beneficial to put resource quotas o
 
 ```yaml
 openAPIV3Schema:
-    type: object
-    properties:
+  type: object
+  properties:
     spec:
-        type: object
-        required:
+      type: object
+      required:
         - claim
-        properties:
+      properties:
         claim:
-            type: object
-            x-kubernetes-preserve-unknown-fields: true 
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
 #           # example
-#           my-claim:
+#           claim:
 #               resourceList:
 #                   cpu: 100m # Corresponds to 1 cpu core
 #                   memory: 2GiB
@@ -193,15 +193,15 @@ openAPIV3Schema:
 #                   ephemeral-storage: 5GiB
 #               expiry: "2023-06-01 11:20:49.431444" # No expiration if not specified 
         drop:
-            type: object
-            x-kubernetes-preserve-unknown-fields: true
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
     status:
-        type: object
-        properties:
+      type: object
+      properties:
         state:
-            type: string
+          type: string
         message:
-            type: string
+          type: string
 ```
 
 ## Subnamespace
@@ -223,17 +223,17 @@ Lastly, an expiration date can be specified for the subnamespace. If this date i
 
 ```yaml
 openAPIV3Schema:
-    type: object
-    properties:
+  type: object
+  properties:
     spec:
-        type: object
-        properties:
+      type: object
+      properties:
         workspace:
-            type: object
-            properties:
+          type: object
+          properties:
             resourceallocation:
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
 #           # example
 #           resourceList:
 #               cpu: 100m # Corresponds to 1 cpu core
@@ -241,91 +241,91 @@ openAPIV3Schema:
 #               storage: 10 GiB
 #               ephemeral-storage: 5GiB
             inheritance:
-                type: object
-                properties:
+              type: object
+              properties:
                 rbac: 
-                    type: boolean
-                    default: true
+                  type: boolean
+                  default: true
                 networkpolicy:
-                    type: boolean
-                    default: true
+                  type: boolean
+                  default: true
                 limitrange:
-                    type: boolean
-                    default: true
+                  type: boolean
+                  default: true
                 secret:
-                    type: boolean
-                    default: false
+                  type: boolean
+                  default: false
                 configmap:
-                    type: boolean
-                    default: false
+                  type: boolean
+                  default: false
                 serviceaccount:
-                    type: boolean
-                    default: false
+                  type: boolean
+                  default: false
             scope:
-                type: string
-                default: "local"
+              type: string
+              default: "local"
             sync:
-                type: boolean
-                default: true
+              type: boolean
+              default: true
             owner:
-                type: object
-                required:
+              type: object
+              required:
                 - email
-                nullable: true
-                properties:
+              nullable: true
+              properties:
                 firstname:
-                    type: string
+                  type: string
                 lastname:
-                    type: string
+                  type: string
                 email:
-                    type: string
+                  type: string
                 phone:
-                    type: string
+                  type: string
             sliceclaim:
-                type: string
-                nullable: true
+              type: string
+              nullable: true
         subtenant:
-            type: object
-            properties:
+          type: object
+          properties:
             resourceallocation:
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
-#               # example
-#               resourceList:
-#                   cpu: 100m # Corresponds to 1 cpu core
-#                   memory: 2GiB
-#                   storage: 10 GiB
-#                   ephemeral-storage: 5GiB
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+#           # example
+#           resourceList:
+#               cpu: 100m # Corresponds to 1 cpu core
+#               memory: 2GiB
+#               storage: 10 GiB
+#               ephemeral-storage: 5GiB
             owner:
-                type: object
-                required:
+              type: object
+              required:
                 - firstname
                 - lastname
                 - email
                 - phone
-                properties:
+              properties:
                 firstname:
-                    type: string
+                  type: string
                 lastname:
-                    type: string
+                  type: string
                 email:
-                    type: string
+                  type: string
                 phone:
-                    type: string
+                  type: string
             sliceclaim:
-                type: string
-                nullable: true
+              type: string
+              nullable: true
         expiry:
-            type: string
-            format: dateTime
-            nullable: true 
+          type: string
+          format: dateTime
+          nullable: true 
     status:
-        type: object
-        properties:
+      type: object
+      properties:
         state:
-            type: string
+          type: string
         message:
-            type: string
+          type: string
 ```
 
 ## Slice
@@ -868,6 +868,10 @@ openAPIV3Schema:
 ```
 
 ## Cluster
+
+In EdgeNet, a cluster object serves as a representation of a peer, workload, or manager cluster, each associated with its own set of definitions. Additionally, the cluster object incorporates cluster preferences, which determine the permissions granted or denied to specific tenants. The `visibility` and `enabled` fields further enable the modification of visibility and scheduling capabilities.
+
+To establish a connection with the Kubernetes API server of the adjacent cluster, a secret is created, aligning with a corresponding service account in said cluster. The cluster object conveniently stores the name of this secret, facilitating access to the adjacent cluster and its resources.
 
 ```yaml
 openAPIV3Schema:
