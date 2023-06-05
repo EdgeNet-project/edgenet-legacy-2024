@@ -19,7 +19,7 @@ This repository contains the source code and documentation for EdgeNet software.
 # Using EdgeNet
 ## Getting Started
 
-EdgeNet can be deployed in any Kubernetes cluster with a couple of simple steps. To deploy EdgeNet to your private Kubernetes cluster please refer to the [deploying EdgeNet to Kubernetes tutorial](/docs/tutorials/deploy_edgenet_to_kube.md). 
+EdgeNet can be deployed in any Kubernetes cluster with a couple of simple steps. To deploy EdgeNet to your private Kubernetes cluster please refer to the [Deploying EdgeNet to Kubernetes Tutorial](/docs/tutorials/deploy_edgenet_to_kube.md). 
 
 ## Features
 To extend, and adapt Kubernetes into edge computing, EdgeNet employs various features. You can click on them to go through detailed documentation. 
@@ -32,18 +32,10 @@ To extend, and adapt Kubernetes into edge computing, EdgeNet employs various fea
 
 * [Federation support](/docs/custom_resources.md#cluster-federation): EdgeNet envisions the federation of Kubernetes clusters worldwide, starting from the edge. By granting clusters the ability to assume worker or federation roles, EdgeNet enables the outsourcing of workloads to these clusters, fostering a seamless and globally interconnected network of distributed computing resources.
 
-<!-- ## About the Source Code
-If you are familiar with the [Standard Go Project Layout](https://github.com/golang-standards/project-layout) used by other Kubernetes-related projects, you will easily be able to navigate this repository.
-
-EdgeNet extends Kubernetes via [custom controllers](https://kubernetes.io/docs/concepts/architecture/controller/). They check for state changes of custom EdgeNet resources and try to converge the current state with the desired state. We EdgeNet source code contains these controllers' source code. You can find the docker controller images in [EdgeNet's DockerHub](https://hub.docker.com/u/edgenetio).
-
-
-The architecture of EdgeNet is described in the [architecture document](/docs/architecture/README.md). -->
-
 ## Tutorials and Documentation
 If you are planning to use EdgeNet software in your Kubernetes cluster, we highly encourage you to check out the [documentation](/docs/README.md).
 
-You can directly access all of the [tutorials](./docs/tutorials/README.md) under the `doc` folder in the main repository.
+You can access all of the [tutorials](./docs/README.md#tutorials) with the main documentation or by navigating to the `doc` folder in the main repository.
 
 ## Support
 
