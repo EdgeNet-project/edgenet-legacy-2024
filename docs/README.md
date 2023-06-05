@@ -5,8 +5,7 @@
 - [Tutorials](#tutorials)
 - [Design](#design)
   - [Extending Kubernetes](#extending-kubernetes)
-  - [Architecture](#architecture)
-    - [Multitenancy and Slicing](#multitenancy-and-slicing)
+  - [Multitenant Design](#multitenant-design)
 - [Components](#components)
 - [Development and Contributing](#development-and-contributing)
     - [Unit Tests](#unit-tests)
@@ -41,16 +40,20 @@ To extend Kubernetes API, EdgeNet makes use of Kubernetes [CRDs](https://kuberne
 
 A [controller](https://kubernetes.io/docs/concepts/architecture/controller/) in Kubernetes listens for changes in an object. Then it tries to converge the desired state of the object with the current state. It is also possible to implement custom controllers that may contain business logic for custom objects. EdgeNet employs its custom controllers can be found under the `pkg/controllers` folder and uses the design of Kubernetes' [sample-controller](https://github.com/kubernetes/sample-controller) example. Additionally, custom controllers usually run inside the cluster in a production environment. The images of these custom controllers can be found on [EdgeNet's DockerHub](https://hub.docker.com/u/edgenetio) page.
 
-## Architecture
-### Multitenancy and Slicing
-The multitenancy architecture of the EdgeNet can be seen below. Here 3 tenants are using a Kubernetes cluster with EdgeNet installed. The EdgeNet custom resources and controllers are running in the control plane along with default Kubernetes components. To ensure better isolation of workloads, we advise to use [Kata Containers](https://katacontainers.io/) as the container runtime, but this is optional and any container runtime can be configured when creating the Kubernetes cluster. You can refer to official Kubernetes documentation on [how to create Kubernetes clusters](https://kubernetes.io/docs/tutorials/kubernetes-basics/create-cluster/) for more information.
+## Multitenant Design
+The architecture of the EdgeNet custom resources and controllers runs in the control plane along with other Kubernetes components. To ensure better isolation of workloads, we advise using [Kata Containers](https://katacontainers.io/) as the container runtime, but this is optional and any container runtime can be configured when creating the Kubernetes cluster. You can refer to official Kubernetes documentation on [how to create Kubernetes clusters](https://kubernetes.io/docs/tutorials/kubernetes-basics/create-cluster/) for more information.
 
-![Architecture Diagram](/docs/architecture/architecture.png)
+EdgeNet uses the [tenant](/docs/custom_resources.md#tenant) custom resource to represent a tenant where each tenant is a customer that contracts for services on behalf of one or more users. EdgeNet provides multitenancy support to Kubernetes clusters it has installed. This means a tenant and its workloads cannot access resources, or objects reserved for other tenants or their workloads. 
 
-As seen the tenant A has reserved the working node. This mechanism is named slicing in EdgeNet. A tenant may chose to create two types of slices; on node-level slices whole nodes are allocated just for a single tenant, furthermore on subnode-level slices the resource of the nodes can be reserved. 
-
+In some cases, we want to ensure the resources are reserved for a specific tenant. This requirement is satisfied by a mechanism called [slicing](/docs/custom_resources.md#slice), which is assigned to tenants by creating [slice claims](/docs/custom_resources.md#slice-claim). There are two types to create two types of slices; Node-level slices allow the reservation of whole nodes just for a single tenant. Sub-node-level slices, on the other hand, allow granular resources on a selected node to be reserved.
 
 ![Slicing](/docs/architecture/slicing.png)
+
+There is also the [subnamespace](/docs/custom_resources.md#subnamespace) mechanism implemented in EdgeNet to ensure tenants create non-flat namespaces with specific resource quotas. The resource limitations are also propagated when a new subnamespace is added. This can be seen in the figure below. `r` represents the root namespace which has a specified quota of 100 units. Note that, `r` doesn't have a quota directly since it is an abstraction. However, each other namespace exists in the flat namespaces of Kubernetes thus, they also have a quota assigned to them. For example, when the two subnamespaces `aa` and `ab` are added to the subnamespace `a`, the 60-unit resource is divided by 3 to 20, 25, and 15 units. 
+
+![D](/docs/architecture/subnamespaces.png)
+
+Lastly, the tenants can have [tenant resource quotas](/docs/custom_resources.md#tenant-resource-quota). Which puts a limit to a tenant's usabale resource quota.
 
 # Components
 To flexibly add functionalities to the Kubernetes API server without the burden of updating the codebase, EdgeNet introduces it's own [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/). We have devised 4 major categories for EdgeNet and assigned the CRDs to their places. However, this classification does not fully differentiate CRDs. For instance, the Selective Deployment CRD takes role in both federation and location-based node selection categories. 
