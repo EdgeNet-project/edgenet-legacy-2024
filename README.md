@@ -16,12 +16,55 @@ If you are looking for [EdgeNet-Testbed](https://edge-net.org), a globally distr
 
 This repository contains the source code and documentation for EdgeNet software.
 
-# Using EdgeNet
-## Getting Started
+# Create an EdgeNet Cluster
 
-EdgeNet can be deployed in any Kubernetes cluster with a couple of simple steps. To deploy EdgeNet to your private Kubernetes cluster please refer to the [Deploying EdgeNet to Kubernetes Tutorial](/docs/tutorials/deploy_edgenet_to_kube.md). 
+To create an EdgeNet cluster you need to have access to a Kubernetes cluster. If you want to create one, you can see the Kubernetes cluster creating with [minikube](https://kubernetes.io/docs/tutorials/kubernetes-basics/create-cluster/) or [kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/) from the official documentation.
 
-## Features
+
+You first need to download the `all-in-one.yaml` file to install all of the features. If you only want to use a specific set of features you can check out our [advanced installation guide](/docs/tutorials/deploy_edgenet_to_kube.md). To download, you need to specify the branch of EdgeNet. The default is currently `release-1.0`.
+
+```bash
+RELEASE=release-1.0
+
+curl -so all-in-one.yaml https://raw.githubusercontent.com/EdgeNet-project/edgenet/$RELEASE/build/yamls/kubernetes/all-in-one.yaml
+```
+
+Then edit the secrets for using the external API features, such as Slack, email, geological ip database, etc. If you leave them blank, you won't be able to use specific features but other features will continue to work.
+
+```yaml
+
+  headnode.yaml: |
+    # dns: "<Root domain>"
+    # ip: "<IP address of the control plane node>"
+  smtp.yaml: |
+    # host: "<Hostname of the smtp server>"
+    # port: "<Port of the smtp client>"
+    # from: "<Mail address of the sender of notifications>"
+    # username : "<Username of the account>"
+    # password : "<Password of the account>"
+    # to: "<Mail address of the administrator>"
+  console.yaml: |
+    # url: "<URL of the console>"
+  namecheap.yaml: |
+    # Provide the namecheap credentials for DNS records.
+    # app: "<App name>"
+    # apiUser : "<API user>"
+    # apiToken : "<API Token>"
+    # username : "<Username>"
+  maxmind-account-id: "<MaxMind GeoIP2 precision API account id>"
+  maxmind-license-key: "<MaxMind GeoIP2 precision API license key>"
+
+```
+
+Then simply apply the changes with `kubectl`.
+
+```bash
+kubectl apply -f all-in-one.yaml
+```
+
+You are done! you just need to wait for Kubernetes to spin the EdgeNet controllers.
+
+# Features
 To extend, and adapt Kubernetes into edge computing, EdgeNet employs various features. You can click on them to go through detailed documentation. 
     
 * [Multitenancy](/docs/custom_resources.md#multitenancy): EdgeNet enables the utilization of a shared cluster by multiple tenants who lack trust in each other. Tenants can allocate resource quotas or slices, and they also have the ability to offer their resources to other tenants. This functionality empowers tenants to function both as providers and consumers, operating in both vendor and consumer modes
@@ -32,15 +75,15 @@ To extend, and adapt Kubernetes into edge computing, EdgeNet employs various fea
 
 * [Federation support](/docs/custom_resources.md#cluster-federation): EdgeNet envisions the federation of Kubernetes clusters worldwide, starting from the edge. By granting clusters the ability to assume worker or federation roles, EdgeNet enables the outsourcing of workloads to these clusters, fostering a seamless and globally interconnected network of distributed computing resources.
 
-## Tutorials and Documentation
-If you are planning to use EdgeNet software in your Kubernetes cluster, we highly encourage you to check out the [documentation](/docs/README.md).
+# Tutorials and Documentation
+If you are planning to use EdgeNet software in your Kubernetes cluster, we highly encourage you to check out the [EdgeNet's documentation](/docs/README.md).
 
-You can access all of the [tutorials](./docs/README.md#tutorials) with the main documentation or by navigating to the `doc` folder in the main repository.
+You can access all of [EdgeNet's tutorials](./docs/README.md#tutorials) with the main documentation or by navigating to the `doc` folder in the main repository.
 
-## Support
+# Support
 
 To chat with a member of the EdgeNet team live, please [open our tawk.to window](https://tawk.to/edgenet).
 
-## Contributing
+# Contributing
 
 The EdgeNet software is free and open source, licensed under the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0); we invite you to contribute. You can access [contribution guide](/docs/guides/contribution_guides.md) for more information on how to contribute.
