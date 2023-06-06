@@ -1,6 +1,6 @@
 # Deploying EdgeNet to a Kubernetes Cluster
 
-This documentation describes how to create a working EdgeNet cluster in your environment. You can refer to this tutorial for deploying EdgeNet software to a local, sandbox or a production cluster.
+This documentation describes how to create a working EdgeNet cluster in your environment. You can refer to this tutorial for deploying EdgeNet software to a local, sandbox, or production cluster.
 
 ## Technologies you will use
 
@@ -12,9 +12,9 @@ There are many alternatives for creating a cluster for test purposes you can use
 
 EdgeNet extension for Kubernetes consists of two parts, the custom resource definitions ([CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/)) and custom controllers. 
 
-CRDs (discussed [here](custom_resources.md)) are custom objects that are manipulated, created and destroyed by custom controllers.
+CRDs (discussed [here](custom_resources.md)) are custom objects that are manipulated, created, and destroyed by custom controllers.
 
-You will be creating CRDs and deploy custom controllers to the cluster.
+You will be creating CRDs and deploying custom controllers to the cluster.
 
 ### Other yaml files
 * `multi-tenancy.yaml` contains the feature pack for enabling multiple tenants. Please refer to [multi-tenancy](custom_resources.md#multitenancy) documentation for more information.
@@ -22,24 +22,24 @@ You will be creating CRDs and deploy custom controllers to the cluster.
 * `multi-provider.yaml` enables the cluster to have multi-provider functionality. For example, node contribution is contained in this file. Please refer to [multi-provider](custom_resources.md#multi-provider) to have more information.
 * `location-based-node-selection.yaml` contains a set of features that allows deployments to be made using the node's geographical information. Please refer to the [location-based node selection](custom_resources.md#location-based-node-selection) section for additional information.
 
-## Install the required CRDs and deploying controllers from `all-in-one.yaml`
+## Install the required CRDs and deploy controllers from `all-in-one.yaml`
 
-A handful of CRDs, controllers and additional objects required are for EdgeNet to function. All of these declarations are organized in `build/yamls/kubernetes/all-in-one.yaml` file.
+A handful of CRDs, controllers, and additional objects required are for EdgeNet to function. All of these declarations are organized in `build/yamls/kubernetes/all-in-one.yaml` file.
 
-This file contains all of the CRDs, Deployments, [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/) and other auxiliary definitions. Before applying this file it is important to configure the secrets.
+This file contains all of the CRDs, Deployments, [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/), and other auxiliary definitions. Before applying this file it is important to configure the secrets.
 
-Secrets in Kubernetes requires base 64 encoding. To achieve this you can use the following linux command to convert your secrets:
+Secrets in Kubernetes require base 64 encodings. To achieve this you can use the following Linux command to convert your secrets:
 
 ```
     echo "<token-or-secret>" | base64
 ```
 
-The following secrets needs to be edited for features to work properly:
+The following secrets need to be edited for features to work properly:
 
 ```yaml
 
   headnode.yaml: |
-    # dns: "<Root domain>"
+    # dns: "<Root domain>"
     # ip: "<IP address of the control plane node>"
   smtp.yaml: |
     # host: "<Hostname of the smtp server>"
@@ -54,8 +54,8 @@ The following secrets needs to be edited for features to work properly:
     # Provide the namecheap credentials for DNS records.
     # app: "<App name>"
     # apiUser : "<API user>"
-    # apiToken : "<API Token>"
-    # username : "<Username>"
+    # apiToken : "<API Token>"
+    # username : "<Username>"
   maxmind-account-id: "<MaxMind GeoIP2 precision API account id>"
   maxmind-license-key: "<MaxMind GeoIP2 precision API license key>"
 

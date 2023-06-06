@@ -31,7 +31,7 @@ For more info, you can see [how open-source works](https://opensource.guide/how-
 
 6. Communication and Collaboration
 
-    Engage with the EdgeNet community by participating in discussions, answering questions, and helping fellow contributors. Follow EdgeNet's communication channels and respond to notifications in a timely manner. Respect the opinions and viewpoints of others, fostering a positive and inclusive community environment.
+    Engage with the EdgeNet community by participating in discussions, answering questions, and helping fellow contributors. Follow EdgeNet's communication channels and respond to notifications promptly. Respect the opinions and viewpoints of others, fostering a positive and inclusive community environment.
 
 ## Conclusion
 Contributing to EdgeNet provides opportunities for learning, collaboration, making a positive impact, and understanding Kubernetes better. By following these guides and engaging with the project's community, you can become a valuable contributor and help shape the future of the project.

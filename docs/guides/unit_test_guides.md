@@ -15,7 +15,7 @@ Unit testing is an essential part of software development in Go. It helps ensure
 
     Begin the name of your test functions with Test followed by a descriptive name that highlights the functionality being tested. For example, `TestAddition()` or `TestCalculateTotal()`. Use camel case for the descriptive part of the test function names.
 
-    The test functions should have the signature `func TestFoo(t *testing.T)`, where `Foo` is the name of the functionality being tested. Use the `*testing.T` type parameter to report failures and manage test state.
+    The test functions should have the signature `func TestFoo(t *testing.T)`, where `Foo` is the name of the functionality being tested. Use the `*testing.T` type parameter to report failures and manage the test state.
 
 3. Table-Driven Testing
 
@@ -43,7 +43,7 @@ Unit testing is an essential part of software development in Go. It helps ensure
 
 5. Using Interfaces and Avoiding I/O
 
-    In Go, the functions are defined in interfaces and then implemented separately. This is idea comes handy when writing tests. For example, in a function that should read a file, you can use `io.Reader` interface. This interface defines some functions for reading from a byte sequence. In the real world, you can open a file and in the test case, you can use `strings.NewReader(s string)` to create an `io.Reader` interface that reads the given string.
+    In Go, the functions are defined in interfaces and then implemented separately. This idea comes in handy when writing tests. For example, in a function that should read a file, you can use `io.Reader` interface. This interface defines some functions for reading from a byte sequence. In the real world, you can open a file and in the test case, you can use `strings.NewReader(s string)` to create an `io.Reader` interface that reads the given string.
 
 6. Kubernetes Fake Clientset and Other Libraries
 

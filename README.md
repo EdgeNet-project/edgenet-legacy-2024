@@ -18,7 +18,7 @@ This repository contains the source code and documentation for EdgeNet software.
 
 # Create an EdgeNet Cluster
 
-To create an EdgeNet cluster you need to have access to a Kubernetes cluster. If you want to create one, you can see the Kubernetes cluster creating with [minikube](https://kubernetes.io/docs/tutorials/kubernetes-basics/create-cluster/) or [kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/) from the official documentation.
+To create an EdgeNet cluster you need to have access to a Kubernetes cluster. If you want to create one, you can see the Kubernetes cluster created with [minikube](https://kubernetes.io/docs/tutorials/kubernetes-basics/create-cluster/) or [kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/) from the official documentation.
 
 
 You first need to download the `all-in-one.yaml` file to install all of the features. If you only want to use a specific set of features you can check out our [advanced installation guide](/docs/tutorials/deploy_edgenet_to_kube.md). To download, you need to specify the branch of EdgeNet. The default is currently `release-1.0`.

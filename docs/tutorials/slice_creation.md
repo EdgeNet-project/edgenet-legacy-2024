@@ -20,7 +20,7 @@ You will use your user-specific kubeconfig file to create a *slice claim* object
 
 If you do not already have ``kubectl``, you will need to install it on your system. Follow the [Kubernetes documentation](https://kubernetes.io/docs/tasks/tools/install-kubectl/) for this.
 
-### Be sure the user-specific access credential located well
+### Be sure the user-specific access credential is located well
 
 An EdgeNet slice claim is a Kubernetes object, and to manipulate objects on a Kubernetes system, you need a kubeconfig file.
 You can fetch your kubeconfig file here: [https://landing.edge-net.org](https://landing.edge-net.org). In what follows, we will assume that it is saved in your working directory on your system as ``./edgenet.cfg``.

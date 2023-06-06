@@ -22,7 +22,7 @@ It is important to distinguish EdgeNet software and EdgeNet Testbed. If you are 
 EdgeNet is an open-source edge cloud orchestration software extension that is built on top of industry-standard cloud software [Kubernetes](https://kubernetes.io/). The EdgeNet's source code is hosted in the official [Github repository](https://github.com/EdgeNet-project/edgenet).
 
 # Tutorials
-You can install EdgeNet to your Kubernetes cluster and start using the features. To deploy EdgeNet to your cluster, we reccomend following the [Deploying EdgeNet to Kubernetes Tutorial](/docs/tutorials/deploy_edgenet_to_kube.md).
+You can install EdgeNet to your Kubernetes cluster and start using the features. To deploy EdgeNet to your cluster, we recommend following the [Deploying EdgeNet to Kubernetes Tutorial](/docs/tutorials/deploy_edgenet_to_kube.md).
 
 We have also provided some of the tutorials below for using different functionalities offered by EdgeNet.
 
@@ -34,7 +34,7 @@ We have also provided some of the tutorials below for using different functional
 - [Role Request](/docs/tutorials/role_request.md)
 - [Cluster Role Request](/docs/tutorials/cluster_role_request.md)
 
-Old EdgeNet tutorials can be accessed under `/doc/toturials/old` forlder. See the [old tutorial's Readme](/docs/tutorials/old/README.md).
+Old EdgeNet tutorials can be accessed under the `/doc/tutorials/old` folder. See the [old tutorial's Readme](/docs/tutorials/old/README.md).
 
 # Design
 ## Extending Kubernetes
@@ -55,7 +55,7 @@ There is also the [subnamespace](/docs/custom_resources.md#subnamespace) mechani
 
 ![D](/docs/architecture/subnamespaces.png)
 
-Lastly, the tenants can have [tenant resource quotas](/docs/custom_resources.md#tenant-resource-quota). Which puts a limit to a tenant's usabale resource quota.
+Lastly, the tenants can have [tenant resource quotas](/docs/custom_resources.md#tenant-resource-quota). Which puts a limit to a tenant's useable resource quota.
 
 ## Selective Deployments
 EdgeNet utilizes a custom resource known as [selective deployment](/docs/custom_resources.md#selective-deployment) to facilitate the specification of a deployment's geographic area. This feature enables users to precisely define the geographical boundaries within which their deployment operates. To support this mechanism, it is essential to determine the geographic locations of the nodes involved.
@@ -71,7 +71,7 @@ However, it is important to note that the federation features are currently in t
 
 
 # Components
-We have devised 4 major categories for EdgeNet and assigned the CRDs to their places. However, this classification does not fully differentiate CRDs. For instance, the Selective Deployment CRD takes role in both federation and location-based node selection categories. 
+We have devised 4 major categories for EdgeNet and assigned the CRDs to their places. However, this classification does not fully differentiate CRDs. For instance, the Selective Deployment CRD takes the role in both federation and location-based node selection categories. 
 
 Here are the categories and their associated CRDs:
 

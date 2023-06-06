@@ -6,7 +6,7 @@ Authorizations to use EdgeNet are handed out hierarchically, establishing a chai
 
 Our job is to ensure that only bona fide researchers can create and run local tenants. If you wish to create a tenant, please be sure to register with your institutional e-mail address, and please direct us to an institutional website or provide other evidence of your role. In general, we approve faculty members at institutions of higher education and senior researchers at research centers, but we will consider other cases as well.
 
-A local tenant owner also approves the creation of *subsidiary namespaces*, which allows to share tenant resource quota with a group of users. And an owner manages, either directly or through a user to whom they delegate this role, any *nodes* that are contributed on behalf of the tenant to the EdgeNet cluster.
+A local tenant owner also approves the creation of *subsidiary namespaces*, which allows sharing of tenant resource quota with a group of users. And an owner manages, either directly or through a user to whom they delegate this role, any *nodes* that are contributed on behalf of the tenant to the EdgeNet cluster.
 
 If you believe that you may be eligible to act as the local owner of a tenant, the remainder of this tutorial guides you through the registration process.
 
@@ -22,14 +22,14 @@ You will use [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview
 
 In order to obtain your user-specific kubeconfig file, you need to take yourself to the [landing application](https://landing.edge-net.org). 
 This application also provides a user interface design to facilitate the process.
-In this case, you no longer need to follow these instructions as it provides you a classical registration procedure.
+In this case, you no longer need to follow these instructions as it provides you with a classical registration procedure.
 
 ## What you will do
 
 You will authenticate yourself through the landing application to obtain your kubeconfig file from the landing application.
 Using this kubeconfig file, you will create a *tenant request* object that is associated with your e-mail address. 
-This will alert the central administrators of EdgeNet, who will, if all is in order, approve your request. 
-With approval, your tenant is prepared so as to allow you to act as both the local owner and a user of your tenant.
+This will alert the central administrators of EdgeNet, who will if all is in order, approve your request. 
+With approval, your tenant is prepared to allow you to act as both the local owner and a user of your tenant.
 
 ## Steps
 
@@ -109,4 +109,4 @@ kubectl create -f ./tenantrequest.yaml --kubeconfig ./edgenet.cfg
 
 At this point, the EdgeNet central administrators will, if needed, contact you, and, provided everything is in order, approve your role request. Upon approval, you will receive an email that confirms that your registration is complete and contains your tenant and user information.
 
-You can now start using EdgeNet, as both administrator of your local tenant and as a regular user, with your user-specific kubeconfig file.
+You can now start using EdgeNet, as both administrators of your local tenant and as a regular user, with your user-specific kubeconfig file.

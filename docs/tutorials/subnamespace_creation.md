@@ -2,9 +2,9 @@
 
 This tutorial describes how you can create a subsidiary namespace on EdgeNet, with yourself as the tenant owner or one of the tenant admins.
 
-Each tenant has a tenant resource quota on EdgeNet to share the cluster resources fairly. Once a tenant registers itself with EdgeNet, a core namespace is allocated to the tenant with an assigned overall resource quota. This resource quota is equal to the tenant's resource quota and applies to its whole namespace tree regarding hierarchical namespaces. Thereby, tenant users can deploy applications toward the cluster straightforward by core namespaces. Additionally, it is possible to collaborate with users in other tenants at the core namespace.
+Each tenant has a tenant resource quota on EdgeNet to share the cluster resources fairly. Once a tenant registers itself with EdgeNet, a core namespace is allocated to the tenant with an assigned overall resource quota. This resource quota is equal to the tenant's resource quota and applies to its whole namespace tree regarding hierarchical namespaces. Thereby, tenant users can deploy applications toward the cluster straightforwardly by core namespaces. Additionally, it is possible to collaborate with users in other tenants at the core namespace.
 
-However, for cases where the collaboration at the core namespace is unfavorable, the subsidiary namespace feature allows tenants to establish a hierarchy among namespaces. The use of the subnamespaces is not only limited by the collaboration with other tenants. It is also useful when a tenant owner wants to allocate part of the tenant resource quota to a group of its users. Or for any other situation where teams needed.
+However, for cases where the collaboration at the core namespace is unfavorable, the subsidiary namespace feature allows tenants to establish a hierarchy among namespaces. The use of the subnamespaces is not only limited by the collaboration with other tenants. It is also useful when a tenant owner wants to allocate part of the tenant resource quota to a group of its users. Or for any other situation where teams are needed.
 
 In simple terms, a subnamespace generates a child namespace that inherits role-based access control and network policy settings from its parent by default and eats from the resource quota of the core namespace. An expiry date can also be defined if desired.
 
@@ -14,7 +14,7 @@ You will use [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview
 
 ## What you will do
 
-You will use your user-specific kubeconfig file to create a *subsdiary namespace* object. Object creation generates a child namespace with a resource quota that you defined in the spec.
+You will use your user-specific kubeconfig file to create a *subsidiary namespace* object. Object creation generates a child namespace with a resource quota that you defined in the spec.
 
 ## Steps
 
@@ -22,7 +22,7 @@ You will use your user-specific kubeconfig file to create a *subsdiary namespace
 
 If you do not already have ``kubectl``, you will need to install it on your system. Follow the [Kubernetes documentation](https://kubernetes.io/docs/tasks/tools/install-kubectl/) for this.
 
-### Be sure the user-specific access credential located well
+### Be sure the user-specific access credential is located well
 
 An EdgeNet subnamespace is a Kubernetes object, and to manipulate objects on a Kubernetes system, you need a kubeconfig file.
 You can fetch your kubeconfig file here: [https://landing.edge-net.org](https://landing.edge-net.org). In what follows, we will assume that it is saved in your working directory on your system as ``./edgenet.cfg``.
