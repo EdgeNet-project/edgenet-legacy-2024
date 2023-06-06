@@ -6,6 +6,8 @@
 - [Design](#design)
   - [Extending Kubernetes](#extending-kubernetes)
   - [Multitenant Design](#multitenant-design)
+  - [Selective Deployments](#selective-deployments)
+  - [Federation of Multiple EdgeNet Clusters](#federation-of-multiple-edgenet-clusters)
 - [Components](#components)
 - [Development and Contributing](#development-and-contributing)
     - [Unit Tests](#unit-tests)
@@ -55,8 +57,21 @@ There is also the [subnamespace](/docs/custom_resources.md#subnamespace) mechani
 
 Lastly, the tenants can have [tenant resource quotas](/docs/custom_resources.md#tenant-resource-quota). Which puts a limit to a tenant's usabale resource quota.
 
+## Selective Deployments
+EdgeNet utilizes a custom resource known as [selective deployment](/docs/custom_resources.md#selective-deployment) to facilitate the specification of a deployment's geographic area. This feature enables users to precisely define the geographical boundaries within which their deployment operates. To support this mechanism, it is essential to determine the geographic locations of the nodes involved.
+
+To achieve this, EdgeNet employs a node labeler, which is responsible for assigning geographical labels to each node. The node labeler plays a crucial role in accurately identifying and categorizing the nodes based on their physical locations. By labeling the nodes accordingly, EdgeNet can effectively manage the selective deployment of resources and ensure that workloads are distributed within the specified geographic area.
+
+The combination of the selective deployment custom resource and the node labeler enhances EdgeNet's capabilities in achieving targeted and geographically constrained deployments. This enables users to have greater control over the geographical distribution of their resources and optimize their system's performance based on specific requirements or constraints.
+
+## Federation of Multiple EdgeNet Clusters
+The incorporation of federation support within EdgeNet empowers multiple clusters to collaborate and distribute workloads efficiently. This feature aims to facilitate the creation of a flexible system by enabling clusters from different providers. By leveraging the federation capabilities, EdgeNet users can harness the advantages of geographically distributed resources and optimize their workload management.
+
+However, it is important to note that the federation features are currently in the development phase and have not yet reached their full potential in the release-1.0 version of EdgeNet. The development team is actively working to enhance and refine these features to ensure their reliability and effectiveness. 
+
+
 # Components
-To flexibly add functionalities to the Kubernetes API server without the burden of updating the codebase, EdgeNet introduces it's own [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/). We have devised 4 major categories for EdgeNet and assigned the CRDs to their places. However, this classification does not fully differentiate CRDs. For instance, the Selective Deployment CRD takes role in both federation and location-based node selection categories. 
+We have devised 4 major categories for EdgeNet and assigned the CRDs to their places. However, this classification does not fully differentiate CRDs. For instance, the Selective Deployment CRD takes role in both federation and location-based node selection categories. 
 
 Here are the categories and their associated CRDs:
 
@@ -84,14 +99,6 @@ Here are the categories and their associated CRDs:
     - [Selective Deployment Anchor](custom_resources.md#selective-deployment-anchor)
     - [Manager Cache](custom_resources.md#manager-cache)
     - [Cluster](custom_resources.md#cluster)
-
-EdgeNet also provides custom [controllers](https://kubernetes.io/docs/concepts/architecture/controller/) for these resources. These controllers check the states of the CRDs in a loop and try to make them closer to their specs. In the Kubernetes world, status represents the current state of the objects and specs represent the desired states.
-
-These controllers usually run inside the cluster and communicate with the kube-api server to fulfill certain functionalities. To see how the system is designed see the [architecture document](/docs/architecture/README.md).
-
-<!-- FOR THE DOCUMENTORS! We can add more specific documentation such as the ones below as time progresses. -->
-<!-- ## Scheduling and Selective Deployment -->
-<!-- ## Federating Clusters -->
 
 # Development and Contributing
 
