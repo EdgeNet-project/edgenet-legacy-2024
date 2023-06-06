@@ -1,13 +1,4 @@
 # Multitenancy
-
-Some Kubernetes users need it to support multitenancy. A good example is a large organization with multiple teams, each of which is going to deploy services to a shared cluster. The organization doesn’t want one team’s work to interfere with another’s. EdgeNet presents a similar challenge, except that the teams that share a single EdgeNet cluster come from entirely separate organizations, so there can be no assumption of everyone being bound by common policies, aside from those that they explicitly agree to when joining and using EdgeNet. Because EdgeNet is also multiprovider-based, the need for tenant accountability is particularly acute: individuals and institutions will only provide nodes if they can trust the diverse actors that come from a multitenant environment.
-
-EdgeNet’s multitenancy extensions are built on top of the Kubernetes notions of [namespaces](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/) and [resource quotas](https://kubernetes.io/docs/concepts/policy/resource-quotas/). Namespaces provide isolation: users who are deploying services in one namespace do not see and cannot touch services that are deployed by other users in other namespaces. Resource quotas are a means to ensure that the overall resources of the cluster are shared out amongst the namespaces, so that, ideally, users in each namespace have sufficient resources in which to conduct their work.
-
-Using namespaces and resource quotas is a perfectly classic approach to handling Kubernetes multitenancy, and so is EdgeNet’s adoption of a hierarchical naming convention for the namespaces. Currently, the hierarchy is not limited and a tenant may choose to create any number of subnamespaces they deserve.
-
-With this description, the elements of EdgeNet that make possible multitenancy will be presented.
-
 ## Tenant
 
 Multitenancy is a standard feature of the three well-known cloud service models; SaaS (Software as a Service), PaaS (Platform as a Service), and IaaS (Infrastructure as a Service). Hence, a tenant is a customer of a multi-tenant cluster where there is no trust in between. In the EdgeNet context, a tenant can operate in two modes, vendor and consumer. In vendor mode, the tenant is allowed to resell its resources to other tenants. 
@@ -537,9 +528,6 @@ openAPIV3Schema:
 ```
 
 # Multiprovider
-
-EdgeNet nodes are not all furnished out of a single data center, or even a small number of data centers, but rather from large numbers of individuals and institutions, who may be users of the system, or simply those wishing to contribute to the system. The “node contribution” extensions enable this.
-
 ## Node Contribution
 
 When a new node is added to the cluster using a [bootstrap script](https://github.com/EdgeNet-project/node/blob/main/bootstrap.sh), it triggers the activation of a node contribution object. This object encompasses vital information regarding the node provider, SSH details, limitations, and user-related data. Below is the OpenAPI specification for the node contribution object in yaml format.
@@ -634,10 +622,7 @@ penAPIV3Schema:
           descripti
 ```
 
-# Locations-Based Node Selection
-
-The true value of EdgeNet to its users resides in its extensive geographical and topological distribution spanning across the globe and throughout the internet. To harness the inherent benefits of this distribution, users require the capability to deploy their services in a distributed manner, rather than being limited to a small cluster of closely located nodes. This is where the "selective deployment" extension comes into play, enabling users to strategically deploy their workloads to leverage the full potential of edge computing. By selectively deploying services across diverse nodes within the network, users can fully utilize the advantages of geographic and topological dispersion, ensuring optimal performance, scalability, and resilience for their applications.
-
+# Location-Based Node Selection
 ## Selective Deployment
 
 Selective deployment, as the name suggests, enables the execution of deployments on specific nodes based on specified geographic information. Alongside its federation support, EdgeNet allows the outsourcing of workloads declared with selective deployments, further enhancing its capabilities.
@@ -740,13 +725,6 @@ APIV3Schema:
 ```
 
 # Cluster Federation
-
-EdgeNet introduces the concept of federation, enabling the collaboration and sharing of workloads across multiple clusters. This federation capability allows tenants to leverage resources from other worker clusters that are federated by EdgeNet.
-
-To accomplish this, a tenant can deploy a selective deployment within their local worker cluster. If the selection criteria fail to find a suitable node within the local cluster, the selective deployment can be sent to a remote cluster to outsource the workload. The federation cluster then examines available workload clusters to identify a suitable destination for the workload. If a compatible workload cluster is found, selective deployment is scheduled for that particular cluster.
-
-It's important to note that the federation feature is currently in the early stages of implementation, and not all aspects of the feature have been fully developed and implemented at this time. However, the overall vision of EdgeNet's federation capability is to enable the efficient sharing and outsourcing of workloads across federated clusters, allowing tenants to seamlessly utilize resources from remote clusters as needed.
-
 ## Selective Deployment Anchor
 
 When a workload is designated for outsourcing, the originating cluster transmits the relevant information of the selective deployment to the federation cluster. This action triggers the creation of a "federation selective deployment anchor" on the federation cluster. The purpose of this anchor is to serve as a reference point, indicating the specific selective deployment that needs to be scheduled on the new working cluster.
