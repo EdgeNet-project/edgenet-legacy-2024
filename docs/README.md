@@ -108,6 +108,8 @@ To start work, clone the latest release branch. If you add a new code, please be
 
 Please refer to the [contributing guides](/docs/guides/contribution_guides.md) before creating a pull request.
 
+For [architectural design proposal](/docs/adrs/README.md) please create a ADR located under `/doc/adrs/`.
+
 ### Unit Tests
 
 To make sure the code works correctly it is important to have high-quality unit tests. You can find the [unit test guides](/docs/guides/unit_test_guides.md) for creating unit tests.
