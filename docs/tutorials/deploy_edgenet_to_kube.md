@@ -18,12 +18,19 @@ You will be creating CRDs and deploying custom controllers to the cluster.
 
 ### Other yaml files
 * `multi-tenancy.yaml` contains the feature pack for enabling multiple tenants. Please refer to [multi-tenancy](custom_resources.md#multitenancy) documentation for more information.
-* `notifier.yaml` contains the notification such as mailer & slack notifier.
 * `multi-provider.yaml` enables the cluster to have multi-provider functionality. For example, node contribution is contained in this file. Please refer to [multi-provider](custom_resources.md#multi-provider) to have more information.
+* `notifier.yaml` contains the notification such as mailer & slack notifier.
 * `location-based-node-selection.yaml` contains a set of features that allows deployments to be made using the node's geographical information. Please refer to the [location-based node selection](custom_resources.md#location-based-node-selection) section for additional information.
+* `federation.yaml` contains custom resource definitions and custom controller deployments for federation features.
 
-## Install the required CRDs and deploy controllers from `all-in-one.yaml`
+EdgeNet is designed portable thus if you only require certain features, it is possible to install EdgeNet without installing all of the features. Below you can find how to install different feature sets.
+* Install [all of the EdgeNet's features](#full-edgenet-install)
+* Install only the [multi-tenancy features](#edgenet-install-with-only-multi-tenancy-features)
+* Install only the [multi-provider features](#edgenet-install-with-only-multi-provider-features)
+* Install only the [location-based-node-selection features](#edgenet-install-with-only-location-based-node-selection-features)
+* Install only the [federation features](#edgenet-install-with-only-federation-features)
 
+## Full EdgeNet install
 A handful of CRDs, controllers, and additional objects required are for EdgeNet to function. All of these declarations are organized in `build/yamls/kubernetes/all-in-one.yaml` file.
 
 This file contains all of the CRDs, Deployments, [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/), and other auxiliary definitions. Before applying this file it is important to configure the secrets.
@@ -58,7 +65,6 @@ The following secrets need to be edited for features to work properly:
     # username : "<Username>"
   maxmind-account-id: "<MaxMind GeoIP2 precision API account id>"
   maxmind-license-key: "<MaxMind GeoIP2 precision API license key>"
-
 ```
 
 After you edit the file, you can use the following command to apply, the CRDs, and the deployment of the custom controllers.
@@ -69,4 +75,84 @@ After you edit the file, you can use the following command to apply, the CRDs, a
 
 This command creates all of the objects in Kubernetes including the deployments. Thus, it takes some time for them to start working.
 
+## EdgeNet install with only *multi-tenancy* features
+A handful of CRDs, controllers, and additional objects required are for EdgeNet's multi-tenancy features to function. All of these declarations are organized in `build/yamls/kubernetes/multi-tenancy.yaml` file.
 
+EdgeNet's multi-tenancy framework does not require any external services thus there is no need to configure any secrets. You can use the following command to apply, the CRDs, and the deployment of the custom controllers.
+
+```
+    kubectl -f apply ./build/yamls/kubernetes/multi-tenancy.yaml
+```
+
+This command creates all of the objects in Kubernetes including the deployments. Thus, it takes some time for them to start working.
+
+## EdgeNet install with only *multi-provider* features
+A handful of CRDs, controllers, and additional objects required are for EdgeNet's multi-provider features to function. All of these declarations are organized in `build/yamls/kubernetes/multi-provider.yaml` file.
+
+This file contains all of the CRDs, Deployments, [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/), and other auxiliary definitions. Before applying this file it is important to configure the secrets.
+
+Secrets in Kubernetes require base 64 encodings. To achieve this you can use the following Linux command to convert your secrets:
+
+```
+    echo "<token-or-secret>" | base64
+```
+
+The following secrets need to be edited for features to work properly:
+
+```yaml
+  namecheap.yaml: |
+    # Provide the namecheap credentials for DNS records.
+    # app: "<App name>"
+    # apiUser : "<API user>"
+    # apiToken : "<API Token>"
+    # username : "<Username>"
+  maxmind-account-id: "<MaxMind GeoIP2 precision API account id>"
+  maxmind-license-key: "<MaxMind GeoIP2 precision API license key>"
+```
+
+After you edit the file, you can use the following command to apply, the CRDs, and the deployment of the custom controllers.
+
+```
+    kubectl -f apply ./build/yamls/kubernetes/multi-provider.yaml
+```
+
+This command creates all of the objects in Kubernetes including the deployments. Thus, it takes some time for them to start working.
+
+## EdgeNet install with only *location-based-node-selection* features
+A handful of CRDs, controllers, and additional objects required are for EdgeNet's location-based-node-selection features to function. All of these declarations are organized in `build/yamls/kubernetes/location-based-node-selection.yaml` file.
+
+This file contains all of the CRDs, Deployments, [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/), and other auxiliary definitions. Before applying this file it is important to configure the secrets.
+
+Secrets in Kubernetes require base 64 encodings. To achieve this you can use the following Linux command to convert your secrets:
+
+```
+    echo "<token-or-secret>" | base64
+```
+
+The following secrets need to be edited for features to work properly:
+
+```yaml
+  maxmind-account-id: "<MaxMind GeoIP2 precision API account id>"
+  maxmind-license-key: "<MaxMind GeoIP2 precision API license key>"
+```
+
+After you edit the file, you can use the following command to apply, the CRDs, and the deployment of the custom controllers.
+
+```
+    kubectl -f apply ./build/yamls/kubernetes/location-based-node-selection.yaml
+```
+
+This command creates all of the objects in Kubernetes including the deployments. Thus, it takes some time for them to start working.
+
+## EdgeNet install with only *federation* features
+A handful of CRDs, controllers, and additional objects required are for EdgeNet's federation features to function. All of these declarations are organized in `build/yamls/kubernetes/federation.yaml` file.
+
+EdgeNet's multi-tenancy framework does not require any external services thus there is no need to configure any secrets. However, it is required to install the [multi-tenancy features](#edgenet-install-with-only-multi-tenancy-features) first. 
+
+After you installed the multi-tenancy features, you can use the following command to apply, the CRDs, and the deployment of the custom controllers.
+
+```
+    kubectl -f apply ./build/yamls/kubernetes/federation.yaml
+```
+
+This command creates all of the objects in Kubernetes including the deployments. Thus, it takes some time for them to start working.
