@@ -29,7 +29,7 @@ RELEASE=release-1.0
 curl -so all-in-one.yaml https://raw.githubusercontent.com/EdgeNet-project/edgenet/$RELEASE/build/yamls/kubernetes/all-in-one.yaml
 ```
 
-Then edit the secrets for using the external API features, such as Slack, email, geological ip database, etc. If you leave them blank, you won't be able to use specific features but other features will continue to work.
+Then edit the secrets for using the external API features, such as Slack, email, geological ip database, etc. If you leave them blank, you won't be able to use specific features but other features will continue to work. Don't forget to encode the tokens in base64. You can do it by using this command: `echo "<token-or-secret>" | base64`.
 
 ```yaml
 
