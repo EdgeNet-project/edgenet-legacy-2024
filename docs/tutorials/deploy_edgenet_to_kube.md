@@ -36,13 +36,13 @@ EdgeNet is designed portable thus if you only require certain features, it is po
 
 ---
 ### Install All Features of EdgeNet
-First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to a directory. Then use the following command to clone and go inside the EdgeNet repository.
+First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to an empty directory you can use. Then use the following command to clone and go inside the EdgeNet repository.
 
 ```bash
 git clone https://github.com/EdgeNet-project/edgenet.git && cd ./edgenet
 ```
 
-A handful of CRDs, controllers, and additional objects required are for EdgeNet to function. All of these declarations are organized in yaml files under `build/yamls/kubernetes/`. The file in which all of the features are grouped is named `all-in-one.yaml` file.
+A handful of CRDs, controllers, and additional objects are required for EdgeNet to function. All of these declarations are organized in yaml files under `build/yamls/kubernetes/`. The file in which all of the features are grouped is named `all-in-one.yaml` file.
 
 This file contains all of the [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), [Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/), [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/), and other auxiliary definitions. 
 
@@ -87,13 +87,13 @@ This command creates all of the objects in Kubernetes including the deployments.
 
 ---
 ### Install EdgeNet's *multi-tenancy* features
-First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to a directory. Then use the following command to clone and go inside the EdgeNet repository.
+First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to an empty directory you can use. Then use the following command to clone and go inside the EdgeNet repository.
 
 ```bash
 git clone https://github.com/EdgeNet-project/edgenet.git && cd ./edgenet
 ```
 
-A handful of CRDs, controllers, and additional objects required are for EdgeNet to function. All of these declarations are organized in yaml files under `build/yamls/kubernetes/`. The file in which all of the features of multitenancy are grouped is named `multi-tenancy.yaml` file.
+A handful of CRDs, controllers, and additional objects are required for EdgeNet to function. All of these declarations are organized in yaml files under `build/yamls/kubernetes/`. The file in which all of the features of multitenancy are grouped is named `multi-tenancy.yaml` file.
 
 This file contains all of the [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), [Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/), and other auxiliary definitions. 
 
@@ -107,13 +107,13 @@ This command creates all of the objects in Kubernetes including the deployments.
 
 ---
 ### Install EdgeNet's *multi-provider* features
-First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to a directory. Then use the following command to clone and go inside the EdgeNet repository.
+First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to an empty directory you can use. Then use the following command to clone and go inside the EdgeNet repository.
 
 ```bash
 git clone https://github.com/EdgeNet-project/edgenet.git && cd ./edgenet
 ```
 
-A handful of CRDs, controllers, and additional objects required are for EdgeNet to function. All of these declarations are organized in yaml files under `build/yamls/kubernetes/`. The file in which all of the features are grouped is named `multi-provider.yaml` file.
+A handful of CRDs, controllers, and additional objects are required for EdgeNet to function. All of these declarations are organized in yaml files under `build/yamls/kubernetes/`. The file in which all of the features are grouped is named `multi-provider.yaml` file.
 
 This file contains all of the [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), [Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/), [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/), and other auxiliary definitions. 
 
@@ -149,13 +149,13 @@ This command creates all of the objects in Kubernetes including the deployments.
 
 ---
 ### Install EdgeNet's *location-based-node-selection* features
-First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to a directory. Then use the following command to clone and go inside the EdgeNet repository.
+First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to an empty directory you can use. Then use the following command to clone and go inside the EdgeNet repository.
 
 ```bash
 git clone https://github.com/EdgeNet-project/edgenet.git && cd ./edgenet
 ```
 
-A handful of CRDs, controllers, and additional objects required are for EdgeNet to function. All of these declarations are organized in yaml files under `build/yamls/kubernetes/`. The file in which all of the features of location based node selection are grouped is named `location-based-node-selection.yaml` file.
+A handful of CRDs, controllers, and additional objects are required for EdgeNet to function. All of these declarations are organized in yaml files under `build/yamls/kubernetes/`. The file in which all of the features of location based node selection are grouped is named `location-based-node-selection.yaml` file.
 
 This file contains all of the [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), [Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/), [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/), and other auxiliary definitions. 
 
@@ -184,13 +184,13 @@ This command creates all of the objects in Kubernetes including the deployments.
 ---
 
 ### Install EdgeNet's *federation* features
-First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to a directory. Then use the following command to clone and go inside the EdgeNet repository.
+First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to an empty directory you can use. Then use the following command to clone and go inside the EdgeNet repository.
 
 ```bash
 git clone https://github.com/EdgeNet-project/edgenet.git && cd ./edgenet
 ```
 
-A handful of CRDs, controllers, and additional objects required are for EdgeNet to function. All of these declarations are organized in yaml files under `build/yamls/kubernetes/`. 
+A handful of CRDs, controllers, and additional objects are required for EdgeNet to function. All of these declarations are organized in yaml files under `build/yamls/kubernetes/`. 
 
 > The federation features are actively worked on and are experimental. The federation features are built on top of multitenancy, thuse before installing make sure you installed the [multitenancy features](#install-edgenets-multi-tenancy-features) to your Kubernetes cluster.
 

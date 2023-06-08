@@ -11,7 +11,9 @@
   - [Location-Based Node Selection](#location-based-node-selection)
   - [Federation of Multiple EdgeNet Clusters](#federation-of-multiple-edgenet-clusters)
 - [Development and Contributing](#development-and-contributing)
-    - [Unit Tests](#unit-tests)
+    - [Contributing Guides](#contributing-guides)
+    - [Architectural Design Proposals (ADRs)](#architectural-design-proposals-adrs)
+    - [Unit Tests Guides](#unit-tests-guides)
     - [Branches](#branches)
 
 # What is EdgeNet?
@@ -107,25 +109,20 @@ However, it is important to note that the federation features are currently in t
 # Development and Contributing
 If you are familiar with the [Standard Go Project Layout](https://github.com/golang-standards/project-layout) used by other Kubernetes-related projects, you will easily be able to navigate the EdgeNet repository.
 
-To get a sense of where we are heading, please see our [planned features board](https://github.com/orgs/EdgeNet-project/projects/1). We follow an agile development approach, with two-week sprints, each one leading to a new production version of the code. Our current sprint is one of the milestones, and you can see more near-term issues in our [project backlog](https://github.com/orgs/EdgeNet-project/projects/2).
+To get a sense of where we are heading, please see our [planned features board](https://github.com/orgs/EdgeNet-project/projects/1). We follow an agile development approach, with two-week sprints, each one leading to a new psroduction version of the code. Our current sprint is one of the milestones, and you can see more near-term issues in our [project backlog](https://github.com/orgs/EdgeNet-project/projects/2).
 
 To start work, clone the latest release branch. If you add a new piece of code, please make sure you have prefaced it with the standard copyright notice and license information found in other places in the code. If you have an idea or an implementation you would like us to look at, please create a pull request for [@bsenel](https://github.com/bsenel) to review.
 
+### Contributing Guides
 Please refer to the [contributing guides](/docs/guides/contribution_guides.md) before creating a pull request.
 
+### Architectural Design Proposals (ADRs)
 For [architectural design proposal](/docs/adrs/README.md) please create a ADR located under `/doc/adrs/`.
 
-### Unit Tests
+### Unit Tests Guides
 We make sure the code works correctly by having high-quality unit tests. You can find the [unit test guides](/docs/guides/unit_test_guides.md) for creating unit tests.
+
 
 ### Branches
 * The `master` branch reflects the currently-deployed version of EdgeNet.
 * The latest `release` branch is where we prepare the next EdgeNet release. Please use this branch for all of the pull requests.
-
-<!-- ## About the Source Code
-
-
-EdgeNet extends Kubernetes via [custom controllers](https://kubernetes.io/docs/concepts/architecture/controller/). They check for state changes of custom EdgeNet resources and try to converge the current state with the desired state. We EdgeNet source code contains these controllers' source code. You can find the docker controller images in [EdgeNet's DockerHub](https://hub.docker.com/u/edgenetio).
-
-
-The architecture of EdgeNet is described in the [architecture document](/docs/architecture/README.md). -->
