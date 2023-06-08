@@ -20,23 +20,23 @@ To extend, and adapt Kubernetes into edge computing, EdgeNet employs various fea
 
 <!-- You can click on them to go through [technical documentation](/docs/custom_resources.md) or see the [detailed concepts](/docs/README.md#concepts). -->
     
-* `Multitenancy`: EdgeNet enables the utilization of a shared cluster by multiple tenants who lack trust in each other. Tenants can allocate resource quotas or slices, and they also have the ability to offer their resources to other tenants. This functionality empowers tenants to function both as providers and consumers, operating in both vendor and consumer modes.
+* [Multitenancy](/docs/README.md#multitenancy): EdgeNet enables the utilization of a shared cluster by multiple tenants who lack trust in each other. Tenants can allocate resource quotas or slices, and they also have the ability to offer their resources to other tenants. This functionality empowers tenants to function both as providers and consumers, operating in both vendor and consumer modes.
 
-* `Multiprovider`: By accommodating the collaboration of diverse providers, EdgeNet encourages numerous entities to contribute to nodes, thus fostering a rich and expansive ecosystem that thrives on heterogeneity. With the power of multitenancy, contributors with different hardware can easily lend their hardware.
+* [Multiprovider](/docs/README.md#multiprovider): By accommodating the collaboration of diverse providers, EdgeNet encourages numerous entities to contribute to nodes, thus fostering a rich and expansive ecosystem that thrives on heterogeneity. With the power of multitenancy, contributors with different hardware can easily lend their hardware.
 
-* `Location-Based Node Selection`: While the involvement of multiple providers in EdgeNet extends beyond hardware vending, the possibilities encompass a broader spectrum. Node contributions can originate from individuals across the globe, and by leveraging a selective deployment mechanism, EdgeNet empowers the targeted deployment of resources to specific geographical regions, thereby augmenting localization capabilities and enabling efficient utilization of computing power where it is most needed.
+* [Location-Based Node Selection](/docs/README.md#location-based-node-selection)): While the involvement of multiple providers in EdgeNet extends beyond hardware vending, the possibilities encompass a broader spectrum. Node contributions can originate from individuals across the globe, and by leveraging a selective deployment mechanism, EdgeNet empowers the targeted deployment of resources to specific geographical regions, thereby augmenting localization capabilities and enabling efficient utilization of computing power where it is most needed.
 
-* `Federation`: EdgeNet envisions the federation of Kubernetes clusters worldwide, starting from the edge. By granting clusters the ability to assume worker or federation roles, EdgeNet enables the outsourcing of workloads to these clusters, fostering a seamless and globally interconnected network of distributed computing resources.
+* [Federation](/docs/README.md#federation-of-multiple-edgenet-clusters): EdgeNet envisions the federation of Kubernetes clusters worldwide, starting from the edge. By granting clusters the ability to assume worker or federation roles, EdgeNet enables the outsourcing of workloads to these clusters, fostering a seamless and globally interconnected network of distributed computing resources.
 
 # Create an EdgeNet Cluster
 To create an EdgeNet cluster you need to have admin access to a Kubernetes cluster. If you want to create one, you can see the Kubernetes cluster created with [minikube](https://kubernetes.io/docs/tutorials/kubernetes-basics/create-cluster/) or [kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/) from the official documentation.
 
-Before installing, you need to specify a version of EdgeNet by setting the `RELEASE` variable to a branch name. The default branch name is `release-1.0`. Then you can deploy EdgeNet to your Kubernetes cluster using only the `kubectl apply` command. To enable or disable specific features please refer to the [advanced installation tutorial](/docs/tutorials/deploy_edgenet_to_kube.md).
+Before installing, you need to specify a version of EdgeNet by setting the `RELEASE` variable to a branch name. The default branch name is `main`. Then you can deploy EdgeNet to your Kubernetes cluster using only the `kubectl apply` command. To enable or disable specific features please refer to the [advanced installation tutorial](/docs/tutorials/deploy_edgenet_to_kube.md).
 
 You can apply the following command to deploy EdgeNet to your Kubernetes cluster.
 
 ```bash
-RELEASE=release-1.0
+RELEASE=main
 
 kubectl apply -f https://raw.githubusercontent.com/EdgeNet-project/edgenet/$RELEASE/build/yamls/kubernetes/all-in-one.yaml
 ```

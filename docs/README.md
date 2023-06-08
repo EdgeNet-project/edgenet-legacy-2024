@@ -94,6 +94,8 @@ There is also the [subnamespace](/docs/custom_resources.md#subnamespace) mechani
 
 Lastly, the tenants can have [tenant resource quotas](/docs/custom_resources.md#tenant-resource-quota). Which puts a limit to a tenant's useable resource quota.
 
+<!-- ## Multiprovider -->
+
 ## Location-Based Node Selection
 EdgeNet utilizes a custom resource known as [selective deployment](/docs/custom_resources.md#selective-deployment) to facilitate the specification of a deployment's geographic area. This feature enables users to precisely define the geographical boundaries within which their deployment operates. To support this mechanism, it is essential to determine the geographic locations of the nodes involved.
 

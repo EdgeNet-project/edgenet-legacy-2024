@@ -37,12 +37,12 @@ kubectl -f delete ./build/yamls/kubernetes/all-in-one.yaml
 ### Remove EdgeNet Directly
 If you followed the ['Create an EdgeNet Cluster' tutorial in the main readme](/README.md#create-an-edgenet-cluster) and installed EdgeNet using the URL, we recommend you uninstall using the same way
 
-It is important to know which branch you installed EdgeNet from. By default, the branch is `release-1.0`.
+It is important to know which branch you installed EdgeNet from. By default, the branch is `main`.
 
 To remove go to the directory of the cloned EdgeNet repository. Then run the following command to remove all of the objects created with the installment of EdgeNet.
 
 ```bash
-RELEASE=release-1.0
+RELEASE=main
 
 kubectl delete -f https://raw.githubusercontent.com/EdgeNet-project/edgenet/$RELEASE/build/yamls/kubernetes/all-in-one.yaml
 ```
