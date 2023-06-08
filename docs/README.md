@@ -40,7 +40,7 @@ We have devised 4 major categories of features that EdgeNet offers and grouped t
 
 Here are the categories and their associated CRDs:
 
-- `Multitenancy`:
+- [Multitenancy](/docs/custom_resources.md#multitenancy):
     - [Tenant](/docs/custom_resources.md#tenant)
     - [Tenant Request](custom_resources.md#tenant-request)
     - [Tenant Resource Quota](custom_resources.md#tenant-resource-quota)
@@ -51,16 +51,16 @@ Here are the categories and their associated CRDs:
     - [Cluster Role Request](custom_resources.md#cluster-role-request)
 
 
-- `Multiprovider`:
+- [Multiprovider](/docs/custom_resources.md#multiprovider):
     - [Node Contribution](custom_resources.md#node-contribution)
     - [VPN Peer](custom_resources.md#vpn-peer)
   
 
-- `Location-Based Node Selection`:
+- [Location-Based Node Selection](/docs/custom_resources.md#location-based-node-selection):
     - [Selective Deployment](custom_resources.md#selective-deployment)
 
 
-- `Federation`:
+- [Federation](/docs/custom_resources.md#cluster-federation):
     - [Selective Deployment Anchor](custom_resources.md#selective-deployment-anchor)
     - [Manager Cache](custom_resources.md#manager-cache)
     - [Cluster](custom_resources.md#cluster)
