@@ -2,6 +2,7 @@
 - [Table of Contents](#table-of-contents)
 - [What is EdgeNet?](#what-is-edgenet)
 - [Prerequisites](#prerequisites)
+- [Installation](#installation)
 - [Tutorials](#tutorials)
 - [Components](#components)
 - [Concepts](#concepts)
@@ -23,8 +24,13 @@ The EdgeNet's source code is hosted in the official [Github repository](https://
 # Prerequisites
 To effectively understand how to use EdgeNet in your Kubernetes cluster, it is required to have a basic understanding of Kubernetes. For more information on how Kubernetes operates, you can refer to the [Kubernetes documentation](https://kubernetes.io/docs/).
 
+# Installation
+To deploy EdgeNet to your Kubernetes cluster, we recommend following the [advanced installation tutorial](/docs/tutorials/deploy_edgenet_to_kube.md).
+
+If you want to remove EdgeNet from your cluster, refer to the [removing EdgeNet from a Kubernetes cluster tutorial](/docs/tutorials/remove_edgenet_from_kube.md).
+
 # Tutorials
-To deploy EdgeNet to your Kubernetes cluster, we recommend following the [advanced installation tutorial](/docs/tutorials/deploy_edgenet_to_kube.md). We have also provided some of the tutorials below for using different functionalities:
+We have provided some of the tutorials below for using different functionalities:
 
 - [Registering a Tenant](/docs/tutorials/tenant_registration.md)
 - [Creating a Node-level Slice for Your Tenant](/docs/tutorials/slice_creation.md)

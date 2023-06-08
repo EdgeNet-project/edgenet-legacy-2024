@@ -49,7 +49,7 @@ This file contains all of the [CRDs](https://kubernetes.io/docs/concepts/extend-
 If you want to use certain APIs that EdgeNet supports, before installing you need to configure the secrets. Do not forget to encode the secrets to base64 by using the `base64` command.
 
 ```bash
-    echo "<token-or-secret>" | base64
+echo "<token-or-secret>" | base64
 ```
 
 The following fields in the `all-in-one.yaml` file can be configured.
@@ -80,7 +80,7 @@ The following fields in the `all-in-one.yaml` file can be configured.
 After you edit the file, you can use the following command to apply, the CRDs, and the deployment of the custom controllers.
 
 ```bash
-    kubectl -f apply ./build/yamls/kubernetes/all-in-one.yaml
+kubectl -f apply ./build/yamls/kubernetes/all-in-one.yaml
 ```
 
 This command creates all of the objects in Kubernetes including the deployments. Thus, it takes some time for all of the features to start working.
@@ -100,7 +100,7 @@ This file contains all of the [CRDs](https://kubernetes.io/docs/concepts/extend-
 In the multi-tenancy.yaml package EdgeNet does not use any external APIs, thus there is no need for a configuration. You can directly apply the yaml file with the following command:
 
 ```bash
-    kubectl -f apply ./build/yamls/kubernetes/multi-tenancy.yaml
+kubectl -f apply ./build/yamls/kubernetes/multi-tenancy.yaml
 ```
 
 This command creates all of the objects in Kubernetes including the deployments. Thus, it takes some time for all of the features to start working.
@@ -120,7 +120,7 @@ This file contains all of the [CRDs](https://kubernetes.io/docs/concepts/extend-
 If you want to use certain APIs that EdgeNet supports, before installing you need to configure the secrets. Do not forget to encode the secrets to base64 by using the `base64` command.
 
 ```bash
-    echo "<token-or-secret>" | base64
+echo "<token-or-secret>" | base64
 ```
 
 The following fields in the `multi-provider.yaml` file can be configured.
@@ -142,7 +142,7 @@ The following fields in the `multi-provider.yaml` file can be configured.
 After you edit the file, you can use the following command to apply, the CRDs, and the deployment of the custom controllers.
 
 ```bash
-    kubectl -f apply ./build/yamls/kubernetes/multi-provider.yaml
+kubectl -f apply ./build/yamls/kubernetes/multi-provider.yaml
 ```
 
 This command creates all of the objects in Kubernetes including the deployments. Thus, it takes some time for all of the features to start working.
@@ -162,7 +162,7 @@ This file contains all of the [CRDs](https://kubernetes.io/docs/concepts/extend-
 If you want to use certain APIs that EdgeNet supports, before installing you need to configure the secrets. Do not forget to encode the secrets to base64 by using the `base64` command.
 
 ```bash
-    echo "<token-or-secret>" | base64
+echo "<token-or-secret>" | base64
 ```
 
 The following fields in the `location-based-node-selection.yaml` file can be configured.
@@ -176,7 +176,7 @@ The following fields in the `location-based-node-selection.yaml` file can be con
 After you edit the file, you can use the following command to apply, the CRDs, and the deployment of the custom controllers.
 
 ```bash
-    kubectl -f apply ./build/yamls/kubernetes/location-based-node-selection.yaml
+kubectl -f apply ./build/yamls/kubernetes/location-based-node-selection.yaml
 ```
 
 This command creates all of the objects in Kubernetes including the deployments. Thus, it takes some time for all of the features to start working.
@@ -197,7 +197,7 @@ A handful of CRDs, controllers, and additional objects required are for EdgeNet 
 In the `federation.yaml` file, EdgeNet does not use any external APIs, thus there is no need for a configuration. You can directly apply the yaml file with the following command:
 
 ```bash
-    kubectl -f apply ./build/yamls/kubernetes/federation.yaml
+kubectl -f apply ./build/yamls/kubernetes/federation.yaml
 ```
 
 This command creates all of the objects in Kubernetes including the deployments. Thus, it takes some time for all of the features to start working.
