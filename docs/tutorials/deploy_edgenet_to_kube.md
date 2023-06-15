@@ -36,6 +36,8 @@ EdgeNet is designed portable thus if you only require certain features, it is po
 
 ---
 ### Install All Features of EdgeNet
+Before your installation of EdgeNet, install [cert-manager](https://cert-manager.io/docs/installation/). EdgeNet uses `cert-manager` to manage certificates in your Kubernetes cluster.
+
 First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to an empty directory you can use. Then use the following command to clone and go inside the EdgeNet repository.
 
 ```bash
@@ -87,6 +89,8 @@ This command creates all of the objects in Kubernetes including the deployments.
 
 ---
 ### Install EdgeNet's *multi-tenancy* features
+Before your installation of EdgeNet, install [cert-manager](https://cert-manager.io/docs/installation/). EdgeNet uses `cert-manager` to manage certificates in your Kubernetes cluster.
+
 First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to an empty directory you can use. Then use the following command to clone and go inside the EdgeNet repository.
 
 ```bash
@@ -107,6 +111,8 @@ This command creates all of the objects in Kubernetes including the deployments.
 
 ---
 ### Install EdgeNet's *multi-provider* features
+Before your installation of EdgeNet, install [cert-manager](https://cert-manager.io/docs/installation/). EdgeNet uses `cert-manager` to manage certificates in your Kubernetes cluster.
+
 First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to an empty directory you can use. Then use the following command to clone and go inside the EdgeNet repository.
 
 ```bash
@@ -149,6 +155,8 @@ This command creates all of the objects in Kubernetes including the deployments.
 
 ---
 ### Install EdgeNet's *location-based-node-selection* features
+Before your installation of EdgeNet, install [cert-manager](https://cert-manager.io/docs/installation/). EdgeNet uses `cert-manager` to manage certificates in your Kubernetes cluster.
+
 First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to an empty directory you can use. Then use the following command to clone and go inside the EdgeNet repository.
 
 ```bash
@@ -182,8 +190,9 @@ kubectl -f apply ./build/yamls/kubernetes/location-based-node-selection.yaml
 This command creates all of the objects in Kubernetes including the deployments. Thus, it takes some time for all of the features to start working.
 
 ---
-
 ### Install EdgeNet's *federation* features
+Before your installation of EdgeNet, install [cert-manager](https://cert-manager.io/docs/installation/). EdgeNet uses `cert-manager` to manage certificates in your Kubernetes cluster.
+
 First, you need to clone the official EdgeNet repository to your local file. Use the `cd` command to go to an empty directory you can use. Then use the following command to clone and go inside the EdgeNet repository.
 
 ```bash
