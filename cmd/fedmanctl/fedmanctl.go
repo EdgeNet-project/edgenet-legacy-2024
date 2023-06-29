@@ -108,13 +108,11 @@ var managerInitCmd = &cobra.Command{
 		}
 
 		token := args[0]
-		workerToken, err := fedmanctl.Detokenize(token)
+		err := fedmanctl.FederateByWorkerToken(kubeclientset, edgenetclientset, token)
 
 		if err != nil {
-			panic(errors.New("init command only needs <base4> token"))
+			panic(err.Error())
 		}
-
-		fmt.Printf("Federated the cluster %v\n", workerToken.UID)
 	},
 }
 
