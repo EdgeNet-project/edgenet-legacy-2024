@@ -83,6 +83,7 @@ const (
 	messageApplyFail           = "Child quota cannot be applied"
 	messageCreation            = "Subsidiary namespace created"
 	messageCreationFail        = "Subsidiary namespace cannot be created"
+	messageNSUpdateFail        = "Subsidiary namespace cannot be updated"
 	messageInheritanceFail     = "Inheritance from parent to child failed"
 	messageCollision           = "Name is not available. Please choose another one."
 	messageSubnamespaceDeleted = "Last created child subnamespace has been deleted due to insufficient quota "
@@ -652,7 +653,6 @@ func (c *Controller) processSubNamespace(subnamespaceCopy *corev1alpha1.SubNames
 				sliceclaimOwnerReferences = append(sliceclaimOwnerReferences, subnamespaceControllerRef)
 				sliceclaimCopy.SetOwnerReferences(sliceclaimOwnerReferences)
 				if _, err := c.edgenetclientset.CoreV1alpha1().SliceClaims(subnamespaceCopy.GetNamespace()).Update(context.TODO(), sliceclaimCopy, metav1.UpdateOptions{}); err != nil {
-					klog.Infoln("HOPHOPHOPHOP")
 					klog.Infoln(err)
 					c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureSlice, messageSliceFailure)
 					subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
@@ -939,8 +939,10 @@ func (c *Controller) returnParentResourceQuota(subnamespaceCopy *corev1alpha1.Su
 func (c *Controller) makeSubsidiaryNamespace(subnamespaceCopy *corev1alpha1.SubNamespace, tenant, childNameHashed string, parentAnnotations map[string]string, ownerReferences []metav1.OwnerReference) bool {
 	var annotations map[string]string
 	if parentAnnotations != nil {
-		if _, elementExists := parentAnnotations["scheduler.alpha.kubernetes.io/node-selector"]; elementExists {
-			annotations = map[string]string{"scheduler.alpha.kubernetes.io/node-selector": parentAnnotations["scheduler.alpha.kubernetes.io/node-selector"]}
+		if value, elementExists := parentAnnotations["scheduler.alpha.kubernetes.io/node-selector"]; elementExists {
+			if value != "edge-net.io/access=public,edge-net.io/slice=none" {
+				annotations = map[string]string{"scheduler.alpha.kubernetes.io/node-selector": parentAnnotations["scheduler.alpha.kubernetes.io/node-selector"]}
+			}
 		}
 	}
 	if annotations == nil {
@@ -956,12 +958,24 @@ func (c *Controller) makeSubsidiaryNamespace(subnamespaceCopy *corev1alpha1.SubN
 		childNamespaceObj.SetName(childNameHashed)
 		childNamespaceObj.SetAnnotations(annotations)
 		childNamespaceObj.SetLabels(labels)
-		if _, err := c.kubeclientset.CoreV1().Namespaces().Create(context.TODO(), childNamespaceObj, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-			c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureCreation, messageCreationFail)
-			subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
-			subnamespaceCopy.Status.Message = messageCreationFail
-			c.updateStatus(context.TODO(), subnamespaceCopy)
-			return false
+		if _, err := c.kubeclientset.CoreV1().Namespaces().Create(context.TODO(), childNamespaceObj, metav1.CreateOptions{}); err != nil {
+			if errors.IsAlreadyExists(err) {
+				childNamespace, _ := c.kubeclientset.CoreV1().Namespaces().Get(context.TODO(), childNamespaceObj.GetName(), metav1.GetOptions{})
+				childNamespace.SetAnnotations(annotations)
+				childNamespace.SetLabels(labels)
+				if _, err := c.kubeclientset.CoreV1().Namespaces().Update(context.TODO(), childNamespace, metav1.UpdateOptions{}); err != nil {
+					c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureUpdate, messageNSUpdateFail)
+					subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
+					subnamespaceCopy.Status.Message = messageNSUpdateFail
+					return false
+				}
+			} else {
+				c.recorder.Event(subnamespaceCopy, corev1.EventTypeWarning, failureCreation, messageCreationFail)
+				subnamespaceCopy.Status.State = corev1alpha1.StatusFailed
+				subnamespaceCopy.Status.Message = messageCreationFail
+				c.updateStatus(context.TODO(), subnamespaceCopy)
+				return false
+			}
 		}
 
 		objectName := "edgenet:workspace:owner"

@@ -51,12 +51,13 @@ const controllerAgentName = "slice-controller"
 const (
 	backoffLimit = 3
 
-	successSynced  = "Synced"
-	successBound   = "Bound"
-	successExpired = "Expired"
-	failureBound   = "Bound Failed"
-	failureSlice   = "Slice Failed"
-	failurePatch   = "Patch Failed"
+	successSynced      = "Synced"
+	successBound       = "Bound"
+	successProvisioned = "Provisioned"
+	successExpired     = "Expired"
+	failureBound       = "Bound Failed"
+	failureSlice       = "Slice Failed"
+	failurePatch       = "Patch Failed"
 
 	messageResourceSynced = "Slice synced successfully"
 	messageProvisioned    = "Desired resources are provisioned"
@@ -356,11 +357,12 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha1.Slice) {
 				if sliceClaimCopy.Status.State == corev1alpha1.StatusEmployed {
 					if isIsolated, ok := c.provisionSlice(sliceCopy); ok {
 						if isIsolated {
-							c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successBound, messageBound)
+							c.recorder.Event(sliceCopy, corev1.EventTypeNormal, successProvisioned, messageProvisioned)
 							sliceCopy.Status.State = corev1alpha1.StatusProvisioned
 							sliceCopy.Status.Message = messageProvisioned
 							c.updateStatus(context.TODO(), sliceCopy)
 						} else {
+							klog.Infoln("Enqueue slice after 60 seconds")
 							c.enqueueSliceAfter(sliceCopy, 60*time.Second)
 						}
 						return
@@ -373,6 +375,8 @@ func (c *Controller) processSlice(sliceCopy *corev1alpha1.Slice) {
 					sliceCopy.Status.Message = messageNotBound
 					c.updateStatus(context.TODO(), sliceCopy)
 				}
+			} else {
+				klog.Infoln(err)
 			}
 		}
 	case corev1alpha1.StatusReserved:
@@ -439,10 +443,18 @@ func (c *Controller) provisionSlice(sliceCopy *corev1alpha1.Slice) (bool, bool) 
 				return false, false
 			}
 			if podRaw, err := c.kubeclientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{FieldSelector: fmt.Sprintf("metadata.namespace!=kube-system,metadata.namespace!=edgenet,spec.nodeName=%s", nodeRow.GetName())}); err == nil {
+			isolationLoop:
 				for _, podRow := range podRaw.Items {
 					isSliceIsolated = false
 					var gracePeriod int64 = 60
-					c.kubeclientset.CoreV1().Pods(podRow.GetNamespace()).Delete(context.TODO(), podRow.GetName(), metav1.DeleteOptions{GracePeriodSeconds: &gracePeriod})
+					if err := c.kubeclientset.CoreV1().Pods(podRow.GetNamespace()).Delete(context.TODO(), podRow.GetName(), metav1.DeleteOptions{GracePeriodSeconds: &gracePeriod}); err != nil {
+						isSliceIsolated = false
+						klog.Infoln(err)
+						break isolationLoop
+					} else {
+						isSliceIsolated = true
+						klog.Infoln(err)
+					}
 				}
 			}
 		}
