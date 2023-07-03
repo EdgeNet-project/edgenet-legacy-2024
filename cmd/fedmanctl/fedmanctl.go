@@ -115,24 +115,80 @@ var workerResetCmd = &cobra.Command{
 
 var managerCmd = &cobra.Command{
 	Use:   "manager",
-	Short: "Manage worker cluster operations",
+	Short: "Manage manager cluster operations",
 }
 
 var managerInitCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Manage worker cluster operations",
+	Short: "Link worker cluster to the federation cluster with the generated token",
 	Run: func(cmd *cobra.Command, args []string) {
 		loadConfig()
 		if len(args) != 1 {
-			panic(errors.New("init command only needs <base4> token"))
+			panic(errors.New("init command only needs <base64> token"))
+		}
+
+		p := &fedmanctl.ManagerFederationPerformer{
+			Kubeclientset:    kubeclientset,
+			Edgenetclientset: edgenetclientset,
 		}
 
 		token := args[0]
-		err := fedmanctl.FederateByWorkerToken(kubeclientset, edgenetclientset, token)
+		err := p.FederateByWorkerToken(token)
 
 		if err != nil {
 			panic(err.Error())
 		}
+	},
+}
+
+var managerResetCmd = &cobra.Command{
+	Use:   "reset",
+	Short: "Unlink manager cluster with the worker cluster",
+	Run: func(cmd *cobra.Command, args []string) {
+		loadConfig()
+		if len(args) != 1 {
+			panic(errors.New("reset command requires the uid of the worker cluster"))
+		}
+
+		p := &fedmanctl.ManagerFederationPerformer{
+			Kubeclientset:    kubeclientset,
+			Edgenetclientset: edgenetclientset,
+		}
+
+		clusterUID := args[0]
+		err := p.ResetWorkerClusterFederation(clusterUID)
+
+		if err != nil {
+			panic(err.Error())
+		}
+	},
+}
+
+var managerListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "Get the list of federated worker clusters",
+	Run: func(cmd *cobra.Command, args []string) {
+		loadConfig()
+
+		p := &fedmanctl.ManagerFederationPerformer{
+			Kubeclientset:    kubeclientset,
+			Edgenetclientset: edgenetclientset,
+		}
+
+		workerClusters, err := p.ListWorkerClusters()
+
+		if err != nil {
+			panic(err.Error())
+		}
+
+		if len(workerClusters) != 0 {
+			for _, cluster := range workerClusters {
+				fmt.Printf("%v", cluster.Spec.UID)
+			}
+		} else {
+			fmt.Println("There are no worker clusters federated under this federation cluster.")
+		}
+
 	},
 }
 
@@ -148,6 +204,8 @@ func init() {
 	workerCmd.AddCommand(workerResetCmd)
 
 	managerCmd.AddCommand(managerInitCmd)
+	managerCmd.AddCommand(managerResetCmd)
+	managerCmd.AddCommand(managerListCmd)
 }
 
 func main() {

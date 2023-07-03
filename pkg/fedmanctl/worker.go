@@ -2,7 +2,7 @@ package fedmanctl
 
 import (
 	"context"
-	"fmt"
+	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -109,12 +109,12 @@ func (w WorkerFederationPerformer) configureFederationClusterAccess() (*corev1.S
 		return nil, err
 	}
 
-	var secret *corev1.Secret
 	requiredDataFieldList := []string{"ca.crt", "token", "namespace"}
 
 	// We have to wait until the secret certificates are generated. We check periodicaly
 	// if the fields are added to the
 	for {
+		time.Sleep(time.Millisecond * 50)
 		secret, err := w.Kubeclientset.CoreV1().Secrets("edgenet").Get(context.TODO(), "fedmanager", v1.GetOptions{})
 
 		if err != nil {
@@ -124,18 +124,18 @@ func (w WorkerFederationPerformer) configureFederationClusterAccess() (*corev1.S
 		numFields := 0
 		// Check for specific fields that we require from the secret
 		for _, field := range requiredDataFieldList {
-			if _, ok := secret.Data[field]; !ok {
-				return nil, fmt.Errorf("created kubernetes secret does not contian the field '%v'", field)
+			if _, ok := secret.Data[field]; ok {
+				numFields += 1
+			} else {
+				break
 			}
-			numFields += 1
 		}
 
 		if numFields == len(requiredDataFieldList) {
-			break
+			return secret, nil
 		}
 	}
 
-	return secret, nil
 }
 
 // Removes the secretes, rolebindings and service accounts configured for external federation cluster access.
