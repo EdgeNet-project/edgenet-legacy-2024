@@ -78,10 +78,16 @@ var workerCmd = &cobra.Command{
 
 var workerInitCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Manage worker cluster operations",
+	Short: "Initialize federation on a worker cluster",
 	Run: func(cmd *cobra.Command, args []string) {
 		loadConfig()
-		token, err := fedmanctl.CreateWorkerToken(kubeclientset, edgenetclientset)
+		p := &fedmanctl.WorkerFederationPerformer{
+			Kubeclientset:    kubeclientset,
+			Edgenetclientset: edgenetclientset,
+		}
+
+		token, err := p.CreateWorkerToken()
+
 		if err != nil {
 			fmt.Println("Canot create token an error occured:")
 			panic(err.Error())
@@ -90,6 +96,20 @@ var workerInitCmd = &cobra.Command{
 		fmt.Println("Created the token. Use the following command on your federation cluster to complete the federation of your worker cluster.")
 		fmt.Println("")
 		fmt.Printf("fedmanctl manager init %v\n", token)
+	},
+}
+
+var workerResetCmd = &cobra.Command{
+	Use:   "reset",
+	Short: "Reset the federation extensions from a worker cluster",
+	Run: func(cmd *cobra.Command, args []string) {
+		loadConfig()
+		p := &fedmanctl.WorkerFederationPerformer{
+			Kubeclientset:    kubeclientset,
+			Edgenetclientset: edgenetclientset,
+		}
+
+		p.ResetWorkerClusterFederation()
 	},
 }
 
@@ -125,6 +145,7 @@ func init() {
 	rootCmd.AddCommand(managerCmd)
 
 	workerCmd.AddCommand(workerInitCmd)
+	workerCmd.AddCommand(workerResetCmd)
 
 	managerCmd.AddCommand(managerInitCmd)
 }
