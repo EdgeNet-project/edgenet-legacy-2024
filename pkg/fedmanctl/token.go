@@ -5,14 +5,27 @@ import (
 	"encoding/json"
 )
 
-type WorkerClusterToken struct {
+// Contains information about the federation. Do not share this token,
+// it contians sensitive information.
+type WorkerClusterInfo struct {
+	// These 3 fields are gathered from the secret created on worker cluster
 	CACertificate string `json:"ca.crt"`
 	Namespace     string `json:"namespace"`
 	Token         string `json:"token"`
-	UID           string `json:"uid"`
+
+	// UID of the kube-system namespace
+	UID string `json:"uid"`
+
+	// Cluster IP/Port information
+	ClusterIP   string `json:"clusterIP"`
+	ClusterPort string `json:"clusterPort"`
+
+	// Can be "Public" or "Private"
+	Visibility string `json:"visibility"`
 }
 
-func Tokenize(w *WorkerClusterToken) (string, error) {
+// Converts the WorkerClusterInfo object to a base64 encoded string
+func TokenizeWorkerClusterInfo(w *WorkerClusterInfo) (string, error) {
 	src, err := json.Marshal(w)
 
 	if err != nil {
@@ -22,14 +35,15 @@ func Tokenize(w *WorkerClusterToken) (string, error) {
 	return b64.StdEncoding.EncodeToString(src), nil
 }
 
-func Detokenize(token string) (*WorkerClusterToken, error) {
+// Retrieves the WorkerClusterInfo object from the base64 encoded token
+func DetokenizeWorkerClusterInfo(token string) (*WorkerClusterInfo, error) {
 	src, err := b64.StdEncoding.DecodeString(token)
 
 	if err != nil {
 		return nil, err
 	}
 
-	w := &WorkerClusterToken{}
+	w := &WorkerClusterInfo{}
 
 	err = json.Unmarshal(src, w)
 
