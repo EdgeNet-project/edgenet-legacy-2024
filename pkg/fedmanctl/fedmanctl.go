@@ -1,14 +1,22 @@
 package fedmanctl
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
+	rbacv1 "k8s.io/api/rbac/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
 type Fedmanctl interface {
@@ -25,7 +33,7 @@ type Fedmanctl interface {
 	ResetWorkerCluster() error
 
 	// Generate the token of the worker cluster with the given labels
-	GenerateWorkerClusterToken(labels map[string]string) (string, error)
+	GenerateWorkerClusterToken(visibility string, labels map[string]string) (string, error)
 
 	// Link the worker cluster to the manager cluster. Configures the manager cluster by the token. Called by the manager context.
 	LinkToManagerCluster(token string) error
@@ -43,9 +51,8 @@ type fedmanctl struct {
 	Fedmanctl
 	edgenetClientset *versioned.Clientset
 	kubeClientset    *kubernetes.Clientset
+	clusterHost      string
 }
-
-var _ Fedmanctl = (*fedmanctl)(nil)
 
 // Create a new interface for fedmanctl
 func NewFedmanctl(kubeconfig, context string) (Fedmanctl, error) {
@@ -85,9 +92,12 @@ func NewFedmanctl(kubeconfig, context string) (Fedmanctl, error) {
 		return nil, err
 	}
 
+	fmt.Printf("config.Host: %v\n", config.Host)
+
 	return fedmanctl{
 		edgenetClientset: edgenetclientset,
 		kubeClientset:    kubeclientset,
+		clusterHost:      config.Host,
 	}, nil
 }
 
@@ -103,34 +113,184 @@ func (f fedmanctl) GetKubeClientset() *kubernetes.Clientset {
 
 // Initialize the given cluster as the worker cluster. Do not generate a token.
 func (f fedmanctl) InitWorkerCluster() error {
+	sa := &corev1.ServiceAccount{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "fedmanager",
+		},
+	}
+	_, err := f.GetKubeClientset().CoreV1().ServiceAccounts("edgenet").Create(context.TODO(), sa, v1.CreateOptions{})
+
+	if err != nil {
+		return err
+	}
+
+	s := &corev1.Secret{
+		Type: "kubernetes.io/service-account-token",
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "fedmanager",
+			Namespace: "edgenet",
+			Annotations: map[string]string{
+				"kubernetes.io/service-account.name": "fedmanager",
+			},
+		},
+	}
+
+	_, err = f.GetKubeClientset().CoreV1().Secrets("edgenet").Create(context.TODO(), s, v1.CreateOptions{})
+
+	if err != nil {
+		return err
+	}
+
+	crb := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "edgenet:fedmanager",
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Namespace: "edgenet",
+				Name:      "fedmanager",
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "ClusterRole",
+			Name:     "edgenet:federation:remotecluster",
+			APIGroup: "rbac.authorization.k8s.io",
+		},
+	}
+
+	_, err = f.GetKubeClientset().RbacV1().ClusterRoleBindings().Create(context.TODO(), crb, v1.CreateOptions{})
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // Delete and remove all the configuration of the worker cluster.
 func (f fedmanctl) ResetWorkerCluster() error {
+	f.GetKubeClientset().RbacV1().ClusterRoleBindings().Delete(context.TODO(), "edgenet:fedmanager", v1.DeleteOptions{})
+	f.GetKubeClientset().CoreV1().ServiceAccounts("edgenet").Delete(context.TODO(), "fedmanager", v1.DeleteOptions{})
+	f.GetKubeClientset().CoreV1().Secrets("edgenet").Delete(context.TODO(), "fedmanager", v1.DeleteOptions{})
 	return nil
 }
 
 // Generate the token of the worker cluster with the given labels
-func (f fedmanctl) GenerateWorkerClusterToken(labels map[string]string) (string, error) {
-	return "", nil
+func (f fedmanctl) GenerateWorkerClusterToken(visibility string, labels map[string]string) (string, error) {
+	clusterUID, err := f.getClusterUID()
+
+	if err != nil {
+		return "", err
+	}
+
+	secret, err := f.getSecret()
+
+	if err != nil {
+		return "", err
+	}
+
+	requiredDataFieldList := []string{"ca.crt", "token", "namespace"}
+	// Check for specific fields that we require from the secret
+	for _, field := range requiredDataFieldList {
+		if _, ok := secret.Data[field]; !ok {
+			return "", errors.New("worker cluster secret does not have required data, reset the worker or wait until controllers create secret certificate")
+		}
+	}
+
+	clusterIP, err := f.getClusterIP()
+
+	if err != nil {
+		return "", err
+	}
+
+	clusterPort, err := f.getClusterPort()
+
+	if err != nil {
+		return "", err
+	}
+
+	// base64 encoded secrets except the cluster uid
+	token := &WorkerClusterInfo{
+		CACertificate: string(secret.Data["ca.crt"]),
+		Namespace:     string(secret.Data["namespace"]),
+		Token:         string(secret.Data["token"]),
+		UID:           clusterUID,
+		ClusterIP:     clusterIP,
+		ClusterPort:   clusterPort,
+		Visibility:    visibility,
+		Labels:        labels,
+	}
+	return TokenizeWorkerClusterInfo(token)
 }
 
 // Link the worker cluster to the manager cluster. Configures the manager cluster by the token. Called by the manager context.
 func (f fedmanctl) LinkToManagerCluster(token string) error {
+
 	return nil
 }
 
 // Unlinks the worker cluster from manager cluster. Called by the manager context.
 func (f fedmanctl) UnlinkFromManagerCluster(uid string) error {
+
 	return nil
 }
 
 // List the worker cluster objects
 func (f fedmanctl) ListWorkerClusters() ([]v1alpha1.Cluster, error) {
-	return []v1alpha1.Cluster{}, nil
+	clusters, err := f.GetEdgeNetClientset().FederationV1alpha1().Clusters("edgenet-federation").List(context.TODO(), v1.ListOptions{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return clusters.Items, nil
 }
 
 func (f fedmanctl) Version() string {
 	return "v1.0.0"
+}
+
+// Get the current cluster's UID (kube-system uid)
+func (f fedmanctl) getClusterUID() (string, error) {
+	kubeNamespace, err := f.GetKubeClientset().CoreV1().Namespaces().Get(context.TODO(), "kube-system", v1.GetOptions{})
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(kubeNamespace.UID), nil
+}
+
+// Get the secret of the fedmanager
+func (f fedmanctl) getSecret() (*corev1.Secret, error) {
+	secret, err := f.GetKubeClientset().CoreV1().Secrets("edgenet").Get(context.TODO(), "fedmanager", v1.GetOptions{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return secret, nil
+}
+
+// Get the cluster ip and port
+func (f fedmanctl) getClusterIP() (string, error) {
+	strings := strings.Split(f.clusterHost, ":")
+
+	if len(strings) != 2 {
+		return "", errors.New("error parsing configs host, cannot split host:port")
+	}
+
+	return strings[0], nil
+}
+
+// Get the cluster ip and port
+func (f fedmanctl) getClusterPort() (string, error) {
+	strings := strings.Split(f.clusterHost, ":")
+
+	if len(strings) != 2 {
+		return "", errors.New("error parsing configs host, cannot split host:port")
+	}
+
+	return strings[1], nil
 }

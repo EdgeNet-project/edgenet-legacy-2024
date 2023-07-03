@@ -72,7 +72,9 @@ var workerTokenCmd = &cobra.Command{
 			"edge-net.io/country": country,
 		}
 
-		token, err := f.GenerateWorkerClusterToken(labels)
+		visibility, _ := cmd.Flags().GetString("visibility")
+
+		token, err := f.GenerateWorkerClusterToken(visibility, labels)
 
 		if err != nil {
 			panic(err.Error())
@@ -93,6 +95,7 @@ var workerTokenCmd = &cobra.Command{
 
 func init() {
 	workerTokenCmd.Flags().Bool("silent", false, "Only print the token")
+	workerTokenCmd.Flags().String("visibility", "Public", "Visibility of the cluster, Public or Private")
 	workerTokenCmd.Flags().String("city", "", "Override the city label of the cluster")
 	workerTokenCmd.Flags().String("country", "", "Override the country label of the cluster")
 
