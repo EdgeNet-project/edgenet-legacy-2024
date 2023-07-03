@@ -22,6 +22,9 @@ type WorkerClusterInfo struct {
 
 	// Can be "Public" or "Private"
 	Visibility string `json:"visibility"`
+
+	// Labels of the cluster
+	Labels map[string]string `json:"labels"`
 }
 
 // Converts the WorkerClusterInfo object to a base64 encoded string
