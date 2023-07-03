@@ -31,6 +31,8 @@ type WorkerClusterInfo struct {
 func TokenizeWorkerClusterInfo(w *WorkerClusterInfo) (string, error) {
 	src, err := json.Marshal(w)
 
+	// Remove empty labels to reduce token size
+
 	if err != nil {
 		return "", err
 	}

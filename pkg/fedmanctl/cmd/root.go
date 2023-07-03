@@ -20,7 +20,6 @@ var rootCmd = &cobra.Command{
 	Short: "fedmanctl federate Kubernetes clusters",
 	Long: `fedmanctl is a simple CLI for federating Kubernetes clusters using EdgeNet features. For more info 
 please visit the EdgeNet GitHub page available https://github.com/edgenet-project/edgenet`,
-	Run: func(cmd *cobra.Command, args []string) {},
 }
 
 func init() {
@@ -29,6 +28,7 @@ func init() {
 
 	rootCmd.AddCommand(workerCmd)
 	rootCmd.AddCommand(managerCmd)
+	rootCmd.AddCommand(versionCmd)
 }
 
 func Execute() {

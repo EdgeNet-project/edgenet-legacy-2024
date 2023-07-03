@@ -14,8 +14,9 @@ var managerCmd = &cobra.Command{
 }
 
 var managerLinkCmd = &cobra.Command{
-	Use:   "link",
+	Use:   "link <token>",
 	Short: "Link a worker cluster with the generated token.",
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := fedmanctl.NewFedmanctl(kubeconfig, context)
 
@@ -23,13 +24,20 @@ var managerLinkCmd = &cobra.Command{
 			panic(err.Error())
 		}
 
-		fmt.Printf("Not Implemented command of fedmanctl version: %v\n", f.Version())
+		err = f.LinkToManagerCluster(args[0])
+
+		if err != nil {
+			panic(err.Error())
+		}
+
+		fmt.Println("Linked worker cluster")
 	},
 }
 
 var managerUnlinkCmd = &cobra.Command{
-	Use:   "unlink",
+	Use:   "unlink <uid>",
 	Short: "Unlink a worker cluster with the uid.",
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := fedmanctl.NewFedmanctl(kubeconfig, context)
 
@@ -37,7 +45,13 @@ var managerUnlinkCmd = &cobra.Command{
 			panic(err.Error())
 		}
 
-		fmt.Printf("Not Implemented command of fedmanctl version: %v\n", f.Version())
+		err = f.UnlinkFromManagerCluster(args[0])
+
+		if err != nil {
+			panic(err.Error())
+		}
+
+		fmt.Println("Unlinked worker cluster")
 	},
 }
 
@@ -51,7 +65,20 @@ var managerListCmd = &cobra.Command{
 			panic(err.Error())
 		}
 
-		fmt.Printf("Not Implemented command of fedmanctl version: %v\n", f.Version())
+		clusters, err := f.ListWorkerClusters()
+
+		if err != nil {
+			panic(err.Error())
+		}
+
+		if len(clusters) == 0 {
+			fmt.Println("no worker clusters available")
+		} else {
+			// Just display the uids for now
+			for _, cluster := range clusters {
+				fmt.Printf("%v\n", cluster.Spec.UID)
+			}
+		}
 	},
 }
 
