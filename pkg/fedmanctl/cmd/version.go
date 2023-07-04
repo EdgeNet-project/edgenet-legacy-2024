@@ -11,7 +11,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "print the version of the fedmanctl",
 	Run: func(cmd *cobra.Command, args []string) {
-		f, err := fedmanctl.NewFedmanctl(kubeconfig, context)
+		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, false)
 
 		if err != nil {
 			panic(err.Error())

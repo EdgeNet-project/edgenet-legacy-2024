@@ -18,7 +18,7 @@ var managerLinkCmd = &cobra.Command{
 	Short: "Link a worker cluster with the generated token.",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		f, err := fedmanctl.NewFedmanctl(kubeconfig, context)
+		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
 
 		if err != nil {
 			panic(err.Error())
@@ -39,7 +39,7 @@ var managerUnlinkCmd = &cobra.Command{
 	Short: "Unlink a worker cluster with the uid.",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		f, err := fedmanctl.NewFedmanctl(kubeconfig, context)
+		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
 
 		if err != nil {
 			panic(err.Error())
@@ -59,7 +59,7 @@ var managerListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all of the federated clusters.",
 	Run: func(cmd *cobra.Command, args []string) {
-		f, err := fedmanctl.NewFedmanctl(kubeconfig, context)
+		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
 
 		if err != nil {
 			panic(err.Error())

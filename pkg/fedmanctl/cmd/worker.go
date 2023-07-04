@@ -17,7 +17,7 @@ var workerInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize the cluster as the worker cluster. Configure such that, it can receive and send workloads.",
 	Run: func(cmd *cobra.Command, args []string) {
-		f, err := fedmanctl.NewFedmanctl(kubeconfig, context)
+		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
 
 		if err != nil {
 			panic(err.Error())
@@ -37,7 +37,7 @@ var workerResetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: "Reset the configuration of the cluster as a workload cluster.",
 	Run: func(cmd *cobra.Command, args []string) {
-		f, err := fedmanctl.NewFedmanctl(kubeconfig, context)
+		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
 
 		if err != nil {
 			panic(err.Error())
@@ -57,7 +57,9 @@ var workerTokenCmd = &cobra.Command{
 	Use:   "token",
 	Short: "Generate the token to be fed to the manager cluster. Geo tags can be overwritten.",
 	Run: func(cmd *cobra.Command, args []string) {
-		f, err := fedmanctl.NewFedmanctl(kubeconfig, context)
+		silent, _ := cmd.Flags().GetBool("silent")
+
+		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, silent)
 
 		if err != nil {
 			panic(err.Error())
@@ -82,8 +84,6 @@ var workerTokenCmd = &cobra.Command{
 		if err != nil {
 			panic(err.Error())
 		}
-
-		silent, _ := cmd.Flags().GetBool("silent")
 
 		if !silent {
 			fmt.Println("Token generated use the following command to link the worker cluster with your manager cluster.")

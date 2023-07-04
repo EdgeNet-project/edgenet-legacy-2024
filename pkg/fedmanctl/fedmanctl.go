@@ -3,6 +3,7 @@ package fedmanctl
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -55,7 +56,7 @@ type fedmanctl struct {
 }
 
 // Create a new interface for fedmanctl
-func NewFedmanctl(kubeconfig, context string) (Fedmanctl, error) {
+func NewFedmanctl(kubeconfig, context string, silent bool) (Fedmanctl, error) {
 	var config *rest.Config
 	var err error
 
@@ -95,6 +96,10 @@ func NewFedmanctl(kubeconfig, context string) (Fedmanctl, error) {
 	hostname := config.Host
 
 	if strings.Contains(config.Host, "//") {
+		if !silent {
+			fmt.Println("Warning: The token generated contains a url instead of an ip:port. This might mean there is a proxy and federation might not work, override the ip and port using --ip and --port options.")
+			fmt.Println("")
+		}
 		hostname = strings.Split(hostname, "//")[1]
 	}
 
