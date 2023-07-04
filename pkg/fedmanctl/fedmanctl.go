@@ -275,7 +275,7 @@ func (f fedmanctl) getSecret() (*corev1.Secret, error) {
 
 // Get the cluster ip and port
 func (f fedmanctl) getClusterIP() (string, error) {
-	strings := strings.Split(f.clusterHost, ":")
+	strings := strings.Split(strings.Split(f.clusterHost, "//")[1], ":")
 
 	if len(strings) != 2 {
 		return "", errors.New("error parsing configs host, cannot split host:port")
@@ -286,7 +286,7 @@ func (f fedmanctl) getClusterIP() (string, error) {
 
 // Get the cluster ip and port
 func (f fedmanctl) getClusterPort() (string, error) {
-	strings := strings.Split(f.clusterHost, ":")
+	strings := strings.Split(strings.Split(f.clusterHost, "//")[1], ":")
 
 	if len(strings) != 2 {
 		return "", errors.New("error parsing configs host, cannot split host:port")
