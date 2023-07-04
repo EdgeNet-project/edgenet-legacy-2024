@@ -29,9 +29,18 @@ type WorkerClusterInfo struct {
 
 // Converts the WorkerClusterInfo object to a base64 encoded string
 func TokenizeWorkerClusterInfo(w *WorkerClusterInfo) (string, error) {
-	src, err := json.Marshal(w)
-
 	// Remove empty labels to reduce token size
+	strippedLabels := make(map[string]string, len(w.Labels))
+
+	for label, value := range w.Labels {
+		if value != "" {
+			strippedLabels[label] = value
+		}
+	}
+
+	w.Labels = strippedLabels
+
+	src, err := json.Marshal(w)
 
 	if err != nil {
 		return "", err
