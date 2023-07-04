@@ -58,6 +58,7 @@ var workerTokenCmd = &cobra.Command{
 	Short: "Generate the token to be fed to the manager cluster. Geo tags can be overwritten.",
 	Run: func(cmd *cobra.Command, args []string) {
 		silent, _ := cmd.Flags().GetBool("silent")
+		debug, _ := cmd.Flags().GetBool("debug")
 
 		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, silent)
 
@@ -79,7 +80,7 @@ var workerTokenCmd = &cobra.Command{
 
 		visibility, _ := cmd.Flags().GetString("visibility")
 
-		token, err := f.GenerateWorkerClusterToken(ip, port, visibility, labels)
+		token, err := f.GenerateWorkerClusterToken(ip, port, visibility, debug, labels)
 
 		if err != nil {
 			panic(err.Error())
@@ -98,6 +99,8 @@ var workerTokenCmd = &cobra.Command{
 
 func init() {
 	workerTokenCmd.Flags().Bool("silent", false, "Only print the token")
+	workerTokenCmd.Flags().Bool("debug", false, "Print the token in json format")
+
 	workerTokenCmd.Flags().String("visibility", "Public", "Visibility of the cluster, Public or Private")
 	workerTokenCmd.Flags().String("ip", "", "IP address of the kube-apiserver")
 	workerTokenCmd.Flags().String("port", "", "Port of the kube-apiserver")

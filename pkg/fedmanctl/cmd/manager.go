@@ -2,6 +2,7 @@ package fedmanctl
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/EdgeNet-project/edgenet/pkg/fedmanctl"
 	"github.com/spf13/cobra"
@@ -45,7 +46,12 @@ var managerUnlinkCmd = &cobra.Command{
 			panic(err.Error())
 		}
 
-		err = f.UnlinkFromManagerCluster(args[0])
+		clusterUID := args[0]
+
+		// If user inputs cluster-XXX format, convert it to normal uid
+		clusterUID = strings.Replace(clusterUID, "cluster-", "", 1)
+
+		err = f.UnlinkFromManagerCluster(clusterUID)
 
 		if err != nil {
 			panic(err.Error())
@@ -76,7 +82,7 @@ var managerListCmd = &cobra.Command{
 		} else {
 			// Just display the uids for now
 			for _, cluster := range clusters {
-				fmt.Printf("%v\n", cluster.Spec.UID)
+				fmt.Printf("%v\n", cluster.ObjectMeta.Name)
 			}
 		}
 	},

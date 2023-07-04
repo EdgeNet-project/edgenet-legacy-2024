@@ -2,6 +2,7 @@ package fedmanctl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -33,7 +34,7 @@ type Fedmanctl interface {
 	ResetWorkerCluster() error
 
 	// Generate the token of the worker cluster with the given labels
-	GenerateWorkerClusterToken(clusterIP, clusterPort, visibility string, labels map[string]string) (string, error)
+	GenerateWorkerClusterToken(clusterIP, clusterPort, visibility string, debug bool, labels map[string]string) (string, error)
 
 	// Link the worker cluster to the manager cluster. Configures the manager cluster by the token. Called by the manager context.
 	LinkToManagerCluster(token string) error
@@ -189,7 +190,7 @@ func (f fedmanctl) ResetWorkerCluster() error {
 }
 
 // Generate the token of the worker cluster with the given labels
-func (f fedmanctl) GenerateWorkerClusterToken(clusterIP, clusterPort, visibility string, labels map[string]string) (string, error) {
+func (f fedmanctl) GenerateWorkerClusterToken(clusterIP, clusterPort, visibility string, debug bool, labels map[string]string) (string, error) {
 	clusterUID, err := f.getClusterUID()
 
 	if err != nil {
@@ -232,17 +233,101 @@ func (f fedmanctl) GenerateWorkerClusterToken(clusterIP, clusterPort, visibility
 		Visibility:    visibility,
 		Labels:        labels,
 	}
+
+	if debug {
+		b, err := json.Marshal(token)
+
+		if err != nil {
+			return "", err
+		}
+
+		return string(b), nil
+	}
+
 	return TokenizeWorkerClusterInfo(token)
 }
 
 // Link the worker cluster to the manager cluster. Configures the manager cluster by the token. Called by the manager context.
 func (f fedmanctl) LinkToManagerCluster(token string) error {
+	workerClusterInfo, err := DetokenizeWorkerClusterInfo(token)
+
+	if err != nil {
+		return err
+	}
+
+	_, err = f.GetKubeClientset().CoreV1().Namespaces().Get(context.TODO(), "edgenet-federation", v1.GetOptions{})
+
+	if err != nil {
+		ns := &corev1.Namespace{
+			ObjectMeta: v1.ObjectMeta{
+				Name: "edgenet-federation",
+			},
+		}
+		_, err = f.GetKubeClientset().CoreV1().Namespaces().Create(context.TODO(), ns, v1.CreateOptions{})
+
+		if err != nil {
+			return err
+		}
+	}
+
+	// secretName has the convention "secret-XXX" where XXX is the UID of the cluster
+	secretName := strings.Join([]string{"secret", workerClusterInfo.UID}, "-")
+
+	// clusterName has the convention "cluster-XXX" where XXX is the UID of the cluster
+	clusterName := strings.Join([]string{"cluster", workerClusterInfo.UID}, "-")
+
+	secret := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      secretName,
+			Namespace: "edgenet-federation",
+		},
+		Data: map[string][]byte{
+			"ca.crt":    []byte(workerClusterInfo.CACertificate),
+			"token":     []byte(workerClusterInfo.Token),
+			"namespace": []byte(workerClusterInfo.Namespace),
+		},
+	}
+
+	_, err = f.GetKubeClientset().CoreV1().Secrets("edgenet-federation").Create(context.TODO(), secret, v1.CreateOptions{})
+
+	if err != nil {
+		return err
+	}
+
+	cluster := &v1alpha1.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      clusterName,
+			Namespace: "edgenet-federation",
+			Labels:    workerClusterInfo.Labels,
+		},
+		Spec: v1alpha1.ClusterSpec{
+			UID:        workerClusterInfo.UID,
+			Role:       "Workload",
+			Server:     strings.Join([]string{workerClusterInfo.ClusterIP, workerClusterInfo.ClusterPort}, ":"),
+			Visibility: workerClusterInfo.Visibility,
+			Enabled:    true,
+			SecretName: secretName,
+			// For now we do not employ any referance mechanism
+		},
+	}
+
+	_, err = f.GetEdgeNetClientset().FederationV1alpha1().Clusters("edgenet-federation").Create(context.TODO(), cluster, v1.CreateOptions{})
+
+	if err != nil {
+		fmt.Println("NONOON")
+		return err
+	}
 
 	return nil
 }
 
 // Unlinks the worker cluster from manager cluster. Called by the manager context.
 func (f fedmanctl) UnlinkFromManagerCluster(uid string) error {
+	secretName := strings.Join([]string{"secret", uid}, "-")
+	clusterName := strings.Join([]string{"cluster", uid}, "-")
+
+	f.GetKubeClientset().CoreV1().Secrets("edgenet-federation").Delete(context.TODO(), secretName, v1.DeleteOptions{})
+	f.GetEdgeNetClientset().FederationV1alpha1().Clusters("edgenet-federation").Delete(context.TODO(), clusterName, v1.DeleteOptions{})
 
 	return nil
 }
