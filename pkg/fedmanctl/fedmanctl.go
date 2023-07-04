@@ -3,7 +3,6 @@ package fedmanctl
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 
@@ -33,7 +32,7 @@ type Fedmanctl interface {
 	ResetWorkerCluster() error
 
 	// Generate the token of the worker cluster with the given labels
-	GenerateWorkerClusterToken(visibility string, labels map[string]string) (string, error)
+	GenerateWorkerClusterToken(clusterIP, clusterPort, visibility string, labels map[string]string) (string, error)
 
 	// Link the worker cluster to the manager cluster. Configures the manager cluster by the token. Called by the manager context.
 	LinkToManagerCluster(token string) error
@@ -51,7 +50,8 @@ type fedmanctl struct {
 	Fedmanctl
 	edgenetClientset *versioned.Clientset
 	kubeClientset    *kubernetes.Clientset
-	clusterHost      string
+	clusterIP        string
+	clusterPort      string
 }
 
 // Create a new interface for fedmanctl
@@ -92,12 +92,19 @@ func NewFedmanctl(kubeconfig, context string) (Fedmanctl, error) {
 		return nil, err
 	}
 
-	fmt.Printf("config.Host: %v\n", config.Host)
+	hostname := config.Host
+
+	if strings.Contains(config.Host, "//") {
+		hostname = strings.Split(hostname, "//")[1]
+	}
+
+	hostnames := strings.Split(hostname, ":")
 
 	return fedmanctl{
 		edgenetClientset: edgenetclientset,
 		kubeClientset:    kubeclientset,
-		clusterHost:      config.Host,
+		clusterIP:        hostnames[0],
+		clusterPort:      hostnames[1],
 	}, nil
 }
 
@@ -177,7 +184,7 @@ func (f fedmanctl) ResetWorkerCluster() error {
 }
 
 // Generate the token of the worker cluster with the given labels
-func (f fedmanctl) GenerateWorkerClusterToken(visibility string, labels map[string]string) (string, error) {
+func (f fedmanctl) GenerateWorkerClusterToken(clusterIP, clusterPort, visibility string, labels map[string]string) (string, error) {
 	clusterUID, err := f.getClusterUID()
 
 	if err != nil {
@@ -198,16 +205,15 @@ func (f fedmanctl) GenerateWorkerClusterToken(visibility string, labels map[stri
 		}
 	}
 
-	clusterIP, err := f.getClusterIP()
+	nClusterIP := f.clusterIP
+	nClusterPort := f.clusterPort
 
-	if err != nil {
-		return "", err
+	if clusterIP != "" {
+		nClusterIP = clusterIP
 	}
 
-	clusterPort, err := f.getClusterPort()
-
-	if err != nil {
-		return "", err
+	if clusterPort != "" {
+		nClusterPort = clusterPort
 	}
 
 	// base64 encoded secrets except the cluster uid
@@ -216,8 +222,8 @@ func (f fedmanctl) GenerateWorkerClusterToken(visibility string, labels map[stri
 		Namespace:     string(secret.Data["namespace"]),
 		Token:         string(secret.Data["token"]),
 		UID:           clusterUID,
-		ClusterIP:     clusterIP,
-		ClusterPort:   clusterPort,
+		ClusterIP:     nClusterIP,
+		ClusterPort:   nClusterPort,
 		Visibility:    visibility,
 		Labels:        labels,
 	}
@@ -271,26 +277,4 @@ func (f fedmanctl) getSecret() (*corev1.Secret, error) {
 	}
 
 	return secret, nil
-}
-
-// Get the cluster ip and port
-func (f fedmanctl) getClusterIP() (string, error) {
-	strings := strings.Split(strings.Split(f.clusterHost, "//")[1], ":")
-
-	if len(strings) != 2 {
-		return "", errors.New("error parsing configs host, cannot split host:port")
-	}
-
-	return strings[0], nil
-}
-
-// Get the cluster ip and port
-func (f fedmanctl) getClusterPort() (string, error) {
-	strings := strings.Split(strings.Split(f.clusterHost, "//")[1], ":")
-
-	if len(strings) != 2 {
-		return "", errors.New("error parsing configs host, cannot split host:port")
-	}
-
-	return strings[1], nil
 }
