@@ -361,7 +361,7 @@ spec:
       containers:
       - command:
         - ./selectivedeployment
-        image: bsenel/selectivedeployment:test
+        image: edgenetio/selectivedeployment:v1.0.0-alpha.5
         imagePullPolicy: Always
         name: selectivedeployment
       priorityClassName: system-cluster-critical
@@ -446,7 +446,7 @@ spec:
       containers:
       - command:
         - ./fedlet
-        image: bsenel/fedlet:test
+        image: edgenetio/fedlet:release-1.0
         imagePullPolicy: Always
         name: fedlet
       priorityClassName: system-cluster-critical

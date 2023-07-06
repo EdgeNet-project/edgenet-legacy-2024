@@ -425,7 +425,7 @@ spec:
       containers:
       - command:
         - ./cluster
-        image: bsenel/cluster:test
+        image: edgenetio/cluster:release-1.0
         imagePullPolicy: Always
         name: cluster
       priorityClassName: system-cluster-critical
@@ -525,7 +525,7 @@ spec:
       containers:
       - command:
         - ./managercache
-        image: bsenel/managercache:test
+        image: edgenetio/managercache:release-1.0
         imagePullPolicy: Always
         name: managercache
       priorityClassName: system-cluster-critical
@@ -616,7 +616,7 @@ spec:
       containers:
       - command:
         - ./selectivedeploymentanchor
-        image: bsenel/selectivedeploymentanchor:test
+        image: edgenetio/selectivedeploymentanchor:release-1.0
         imagePullPolicy: Always
         name: selectivedeploymentanchor
       priorityClassName: system-cluster-critical
@@ -704,7 +704,7 @@ spec:
       containers:
       - command:
         - ./fedscheduler
-        image: bsenel/fedscheduler:test
+        image: edgenetio/fedscheduler:release-1.0
         imagePullPolicy: Always
         name: fedscheduler
       priorityClassName: system-cluster-critical

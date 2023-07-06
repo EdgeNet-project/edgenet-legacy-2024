@@ -178,8 +178,8 @@ spec:
                               x-kubernetes-embedded-resource: true
                               x-kubernetes-preserve-unknown-fields: true
     - name: v1alpha1
-      served: true
-      storage: true
+      served: false
+      storage: false
       subresources:
         status: {}
       additionalPrinterColumns:
@@ -354,7 +354,7 @@ spec:
       containers:
       - command:
         - ./nodelabeler
-        image: edgenetio/nodelabeler:main
+        image: edgenetio/nodelabeler:v1.0.0-alpha.5
         imagePullPolicy: Always
         name: nodelabeler
         env:
@@ -456,7 +456,7 @@ spec:
       containers:
       - command:
         - ./selectivedeployment
-        image: edgenetio/selectivedeployment:main
+        image: edgenetio/selectivedeployment:v1.0.0-alpha.5
         imagePullPolicy: Always
         name: selectivedeployment
       priorityClassName: system-cluster-critical
