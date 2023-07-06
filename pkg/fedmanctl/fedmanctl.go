@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
+	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -255,8 +256,29 @@ func (f fedmanctl) LinkToManagerCluster(token string) error {
 		return err
 	}
 
-	_, err = f.GetKubeClientset().CoreV1().Namespaces().Get(context.TODO(), "edgenet-federation", v1.GetOptions{})
+	// Create the federated namespace
+	federationUID, err := f.getClusterUID()
 
+	if err != nil {
+		return err
+	}
+
+	federationNamespaceName := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, federationUID)
+	_, err = f.GetKubeClientset().CoreV1().Namespaces().Get(context.TODO(), federationNamespaceName, v1.GetOptions{})
+	if err != nil {
+		ns := &corev1.Namespace{
+			ObjectMeta: v1.ObjectMeta{
+				Name: federationNamespaceName,
+			},
+		}
+		_, err = f.GetKubeClientset().CoreV1().Namespaces().Create(context.TODO(), ns, v1.CreateOptions{})
+
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = f.GetKubeClientset().CoreV1().Namespaces().Get(context.TODO(), "edgenet-federation", v1.GetOptions{})
 	if err != nil {
 		ns := &corev1.Namespace{
 			ObjectMeta: v1.ObjectMeta{
