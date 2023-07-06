@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -95,23 +96,28 @@ func NewFedmanctl(kubeconfig, context string, silent bool) (Fedmanctl, error) {
 		return nil, err
 	}
 
-	hostname := config.Host
+	hostport := config.Host
 
 	if strings.Contains(config.Host, "//") {
 		if !silent {
 			fmt.Println("Warning: The token generated contains a url instead of an ip:port. This might mean there is a proxy and federation might not work, override the ip and port using --ip and --port options.")
 			fmt.Println("")
 		}
-		hostname = strings.Split(hostname, "//")[1]
+		hostport = strings.Split(hostport, "//")[1]
 	}
 
-	hostnames := strings.Split(hostname, ":")
+	// Split it like that so it also supports ipv6 addresses
+	host, port, err := net.SplitHostPort(hostport)
+
+	if err != nil {
+		return nil, err
+	}
 
 	return fedmanctl{
 		edgenetClientset: edgenetclientset,
 		kubeClientset:    kubeclientset,
-		clusterIP:        hostnames[0],
-		clusterPort:      hostnames[1],
+		clusterIP:        host,
+		clusterPort:      port,
 	}, nil
 }
 
