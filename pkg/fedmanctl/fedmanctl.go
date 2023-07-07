@@ -9,7 +9,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
 	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
@@ -45,7 +44,7 @@ type Fedmanctl interface {
 	UnlinkFromManagerCluster(uid string) error
 
 	// List the worker cluster objects
-	ListWorkerClusters() ([]v1alpha1.Cluster, error)
+	ListWorkerClusters() ([]federationv1alpha1.Cluster, error)
 
 	Version() string
 }
@@ -322,13 +321,13 @@ func (f fedmanctl) LinkToManagerCluster(token string) error {
 		return err
 	}
 
-	cluster := &v1alpha1.Cluster{
+	cluster := &federationv1alpha1.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      clusterName,
 			Namespace: "edgenet-federation",
 			Labels:    workerClusterInfo.Labels,
 		},
-		Spec: v1alpha1.ClusterSpec{
+		Spec: federationv1alpha1.ClusterSpec{
 			UID:        workerClusterInfo.UID,
 			Role:       "Workload",
 			Server:     strings.Join([]string{workerClusterInfo.ClusterIP, workerClusterInfo.ClusterPort}, ":"),
@@ -361,7 +360,7 @@ func (f fedmanctl) UnlinkFromManagerCluster(uid string) error {
 }
 
 // List the worker cluster objects
-func (f fedmanctl) ListWorkerClusters() ([]v1alpha1.Cluster, error) {
+func (f fedmanctl) ListWorkerClusters() ([]federationv1alpha1.Cluster, error) {
 	clusters, err := f.GetEdgeNetClientset().FederationV1alpha1().Clusters("edgenet-federation").List(context.TODO(), v1.ListOptions{})
 
 	if err != nil {
