@@ -5,6 +5,7 @@
 - [Installation](#installation)
 - [Tutorials](#tutorials)
 - [Components](#components)
+    - [Fedmanctl](#fedmanctl)
 - [Concepts](#concepts)
   - [Extending Kubernetes](#extending-kubernetes)
   - [Multitenancy](#multitenancy)
@@ -27,7 +28,7 @@ The EdgeNet's source code is hosted in the official [Github repository](https://
 To effectively understand how to use EdgeNet in your Kubernetes cluster, it is required to have a basic understanding of Kubernetes. For more information on how Kubernetes operates, you can refer to the [Kubernetes documentation](https://kubernetes.io/docs/).
 
 # Installation
-To deploy EdgeNet to your Kubernetes cluster, we recommend following the [advanced installation tutorial](/docs/tutorials/deploy_edgenet_to_kube.md).
+To deploy EdgeNet to your Kubernetes cluster, we recommend following the [advanced installation tutorial](/docs/tutorials/deploy_edgenet_to_kube.md). To use the command line tool `fedmanctl` we recommend following the [fedmanctl installation tutorial](/docs/tutorials/fedmanctl_installation.md).
 
 If you want to remove EdgeNet from your cluster, refer to the [removing EdgeNet from a Kubernetes cluster tutorial](/docs/tutorials/remove_edgenet_from_kube.md).
 
@@ -40,6 +41,9 @@ We have provided some of the tutorials below for using different functionalities
 - [Configure User Permissions](/docs/tutorials/user_permissions.md)
 - [Role Request](/docs/tutorials/role_request.md)
 - [Cluster Role Request](/docs/tutorials/cluster_role_request.md)
+
+We have also added tutorials for `fedmanctl` command line tool. They can be accessed here:
+- [Federating Worker Clusters with fedmanctl](/docs/tutorials/federating_worker_clusters_fedmanctl.md)
 
 Old EdgeNet tutorials can be accessed under the `/doc/tutorials/old` folder. See the [old tutorial's Readme](/docs/tutorials/old/README.md).
 
@@ -72,6 +76,15 @@ Here are the categories and their associated CRDs:
     - [Selective Deployment Anchor](custom_resources.md#selective-deployment-anchor)
     - [Manager Cache](custom_resources.md#manager-cache)
     - [Cluster](custom_resources.md#cluster)
+
+### Fedmanctl
+To facilitate federation capabilities, our EdgeNet project incorporates a command line utility called `fedmanctl`. This utility serves the purpose of enabling the federation of worker and federator Kubernetes clusters. 
+
+Currently, `fedmanctl` is undergoing active development, focusing primarily on implementing the core components related to federation features. While it is a work in progress, essential functionalities have already been incorporated. For the basic use case of federating a worker Kubernetes cluster, please consult the [fedmanctl federation tutorial](/docs/tutorials/federating_worker_clusters_fedmanctl.md).
+
+`fedmanctl` comprises two modules known as worker and manager. The worker module encompasses subcommands that initialize the federation capabilities of EdgeNet and generate a token for the manager cluster. This token contains sensitive information that grants external access to the worker cluster's API server. On the other hand, the manager subcommands are responsible for establishing a link between the worker cluster and the manager cluster using the token.
+
+In the future, additional subcommands may be developed to establish connections between manager Kubernetes clusters.
 
 # Concepts
 ## Extending Kubernetes
