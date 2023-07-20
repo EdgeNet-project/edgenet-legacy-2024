@@ -14,9 +14,9 @@ var managerCmd = &cobra.Command{
 	Short:   "Manage manager clusters",
 }
 
-var managerLinkCmd = &cobra.Command{
-	Use:   "link <token>",
-	Short: "Link a worker cluster with the generated token.",
+var managerFederateCmd = &cobra.Command{
+	Use:   "federate <token>",
+	Short: "Federate a worker cluster with the generated token.",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
@@ -25,7 +25,7 @@ var managerLinkCmd = &cobra.Command{
 			panic(err.Error())
 		}
 
-		err = f.LinkToManagerCluster(args[0])
+		err = f.FederateToManagerCluster(args[0])
 
 		if err != nil {
 			panic(err.Error())
@@ -35,9 +35,9 @@ var managerLinkCmd = &cobra.Command{
 	},
 }
 
-var managerUnlinkCmd = &cobra.Command{
-	Use:   "unlink <uid>",
-	Short: "Unlink a worker cluster with the uid.",
+var managerUnfederateCmd = &cobra.Command{
+	Use:   "unfederate <uid>",
+	Short: "Unfederate a worker cluster with the uid.",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
@@ -51,7 +51,7 @@ var managerUnlinkCmd = &cobra.Command{
 		// If user inputs cluster-XXX format, convert it to normal uid
 		clusterUID = strings.Replace(clusterUID, "cluster-", "", 1)
 
-		err = f.UnlinkFromManagerCluster(clusterUID)
+		err = f.UnfederateFromManagerCluster(clusterUID)
 
 		if err != nil {
 			panic(err.Error())
@@ -89,7 +89,7 @@ var managerListCmd = &cobra.Command{
 }
 
 func init() {
-	managerCmd.AddCommand(managerLinkCmd)
-	managerCmd.AddCommand(managerUnlinkCmd)
+	managerCmd.AddCommand(managerFederateCmd)
+	managerCmd.AddCommand(managerUnfederateCmd)
 	managerCmd.AddCommand(managerListCmd)
 }

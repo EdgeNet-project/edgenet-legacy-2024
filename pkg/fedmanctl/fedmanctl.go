@@ -38,10 +38,10 @@ type Fedmanctl interface {
 	GenerateWorkerClusterToken(clusterIP, clusterPort, visibility string, debug bool, labels map[string]string) (string, error)
 
 	// Link the worker cluster to the manager cluster. Configures the manager cluster by the token. Called by the manager context.
-	LinkToManagerCluster(token string) error
+	FederateToManagerCluster(token string) error
 
 	// Unlinks the worker cluster from manager cluster. Called by the manager context.
-	UnlinkFromManagerCluster(uid string) error
+	UnfederateFromManagerCluster(uid string) error
 
 	// List the worker cluster objects
 	ListWorkerClusters() ([]federationv1alpha1.Cluster, error)
@@ -254,7 +254,7 @@ func (f fedmanctl) GenerateWorkerClusterToken(clusterIP, clusterPort, visibility
 }
 
 // Link the worker cluster to the manager cluster. Configures the manager cluster by the token. Called by the manager context.
-func (f fedmanctl) LinkToManagerCluster(token string) error {
+func (f fedmanctl) FederateToManagerCluster(token string) error {
 	workerClusterInfo, err := DetokenizeWorkerClusterInfo(token)
 
 	if err != nil {
@@ -349,7 +349,7 @@ func (f fedmanctl) LinkToManagerCluster(token string) error {
 }
 
 // Unlinks the worker cluster from manager cluster. Called by the manager context.
-func (f fedmanctl) UnlinkFromManagerCluster(uid string) error {
+func (f fedmanctl) UnfederateToManagerCluster(uid string) error {
 	secretName := strings.Join([]string{"secret", uid}, "-")
 	clusterName := strings.Join([]string{"cluster", uid}, "-")
 
