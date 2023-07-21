@@ -63,7 +63,7 @@ kubectl apply -f build/yamls/kubernetes/multi-tenancy.yaml
 
 Wait until the creation of custom containers and it is done. You can test the multi-tenancy by first [registering a tenant](/docs/tutorials/tenant_registration.md). 
 
-Additionally, if you are in a test environment, you may want to remove the admission validation hook for testing multi-tenancy. However, **do not do this in a production environment**.
+<!-- Additionally, if you are in a test environment, you may want to remove the admission validation hook for testing multi-tenancy. However, **do not do this in a production environment**. -->
 
 ### 3.2 Install only Multi-provider
 The yaml file for multi-provider is located in `build/yamls/kubernetes/multi-provider.yaml`
