@@ -41,7 +41,7 @@ type Fedmanctl interface {
 	FederateWorkloadCluster(token, namespace string) error
 
 	// Unlinks the worker cluster from manager cluster. Called by the manager context.
-	UnfederateWorkloadCluster(uid, namespace string) error
+	SeparateWorkloadCluster(uid, namespace string) error
 
 	// List the worker cluster objects
 	ListWorkloadClusters() ([]federationv1alpha1.Cluster, error)
@@ -346,7 +346,7 @@ func (f fedmanctl) FederateWorkloadCluster(token, namespace string) error {
 }
 
 // Unlinks the worker cluster from manager cluster. Called by the manager context.
-func (f fedmanctl) UnfederateWorkloadCluster(uid, namespace string) error {
+func (f fedmanctl) SeparateWorkloadCluster(uid, namespace string) error {
 	secretName := strings.Join([]string{"secret", uid}, "-")
 	clusterName := strings.Join([]string{"cluster", uid}, "-")
 

@@ -37,9 +37,9 @@ var managerFederateCmd = &cobra.Command{
 	},
 }
 
-var managerUnfederateCmd = &cobra.Command{
-	Use:   "unfederate <uid> <namespace>",
-	Short: "Unfederate a worker cluster with the uid.",
+var managerSeparateCmd = &cobra.Command{
+	Use:   "separate <uid> <namespace>",
+	Short: "Separate a worker cluster with the uid.",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
@@ -53,7 +53,7 @@ var managerUnfederateCmd = &cobra.Command{
 		// If user inputs cluster-XXX format, convert it to normal uid
 		clusterUID = strings.Replace(clusterUID, "cluster-", "", 1)
 
-		err = f.UnfederateWorkloadCluster(clusterUID, args[1])
+		err = f.SeparateWorkloadCluster(clusterUID, args[1])
 
 		if err != nil {
 			panic(err.Error())
@@ -97,6 +97,6 @@ var managerListCmd = &cobra.Command{
 
 func init() {
 	managerCmd.AddCommand(managerFederateCmd)
-	managerCmd.AddCommand(managerUnfederateCmd)
+	managerCmd.AddCommand(managerSeparateCmd)
 	managerCmd.AddCommand(managerListCmd)
 }
