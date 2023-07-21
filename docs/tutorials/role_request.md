@@ -9,17 +9,17 @@ Upon approval of your request, you will receive permissions corresponding to the
 You will use [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview/), the [Kubernetes](https://kubernetes.io/) command-line interface.
 
 In order to obtain your user-specific kubeconfig file, you need to take yourself to the [landing application](https://landing.edge-net.org). 
-This application also provides a user interface design to facilitate the process if you plan to make request toward a tenant, not a subnamespace.
+This application also provides a user interface design to facilitate the process if you plan to make a request toward a tenant, not a subnamespace.
 In this case, you no longer need to follow these instructions as it provides you a classical registration procedure.
 <!--
-Or, you can register via [the console](https://console.edge-net.org/signup) with an attractive user interface design to facilitate the process. If you take yourself to the console, you no longer need to follow these instructions as it provides you a classical registration procedure.
+Or, you can register via [the console](https://console.edge-net.org/signup) with an attractive user interface design to facilitate the process. If you take yourself to the console, you no longer need to follow these instructions as it provides you with a classical registration procedure.
 -->
 
 ## What you will do
 
 You will authenticate yourself through the landing application to obtain your kubeconfig file from the landing application.
 Using this kubeconfig file, you will create a *role request* object that is associated with your e-mail address. 
-This will alert the administrators, who will, if all is in order, approve your request. 
+This will alert the administrators, who will if all is in order, approve your request. 
 With approval, corresponding permissions are granted through role binding so as to allow you to act as a user of the associated namespace from which you make the request.
 
 ## Steps
@@ -74,7 +74,7 @@ Using ``kubectl``, create a role request object:
 kubectl create -f ./rolerequest.yaml --kubeconfig ./edgenet.cfg
 ```
 
-### Wait for approval and receive of your corresponding permissions
+### Wait for approval and receive your corresponding permissions
 
 At this point, the administrators will, if needed, contact you, and, provided everything is in order, approve your role request. Upon approval, you will receive an email that confirms that your registration is complete and contains your user information.
 

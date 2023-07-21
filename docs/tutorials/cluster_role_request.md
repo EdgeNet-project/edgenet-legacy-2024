@@ -14,7 +14,7 @@ In order to obtain your user-specific kubeconfig file, you need to take yourself
 
 You will authenticate yourself through the landing application to obtain your kubeconfig file from the landing application.
 Using this kubeconfig file, you will create a *cluster role request* object that is associated with your e-mail address. 
-This will alert the central administrators of EdgeNet, who will, if all is in order, approve your request. 
+This will alert the central administrators of EdgeNet, who will if all is in order, approve your request. 
 With approval, corresponding permissions are granted through cluster role binding so as to allow your user to hold requested permissions.
 
 ## Steps
@@ -63,7 +63,7 @@ Using ``kubectl``, create a role request object:
 kubectl create -f ./clusterrolerequest.yaml --kubeconfig ./edgenet.cfg
 ```
 
-### Wait for approval and receive of your corresponding permissions
+### Wait for approval and receive your corresponding permissions
 
 At this point, the EdgeNet central administrators will, if needed, contact you, and, provided everything is in order, approve your role request. Upon approval, you will receive an email that confirms that your registration is complete and contains your user information.
 

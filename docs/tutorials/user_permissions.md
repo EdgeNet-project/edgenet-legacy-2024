@@ -12,7 +12,7 @@ You will use [``kubectl``](https://kubernetes.io/docs/reference/kubectl/overview
 
 ## What you will do
 
-You will use your user-specific kubeconfig file provided by EdgeNet to create a role binding object. This role binding object will be associated with the e-mail addresses of users you want to grant admin or collaborator roles.
+You will use your user-specific kubeconfig file provided by EdgeNet to create a role-binding object. This role-binding object will be associated with the e-mail addresses of users you want to grant admin or collaborator roles.
 
 ## Steps
 
@@ -28,7 +28,7 @@ The user-specific file does not allow any actions beyond the roles bound to your
 
 ### Prepare a description of your role binding
 
-The [``.yaml`` format](https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/) is used to describe Kubernetes objects. Create one for the role binding object, following the model of the example shown below. Your ``.yaml`` file must specify the following information regarding your future role binding:
+The [``.yaml`` format](https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/) is used to describe Kubernetes objects. Create one for the role-binding object, following the model of the example shown below. Your ``.yaml`` file must specify the following information regarding your future role binding:
 - the **role binding name** the EdgeNet system will use that; it must follow [Kubernetes' rules for names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/) and must be different from any existing role binding names in the namespace
 - the **namespace** of the role binding; this is an isolated environment where the role binding applies to
 - the **subjects** of the role binding; this field is to associate the role binding with users, groups, or service accounts
