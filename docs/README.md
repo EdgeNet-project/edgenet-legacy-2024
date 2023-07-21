@@ -43,7 +43,7 @@ We have provided some of the tutorials below for using different functionalities
 - [Cluster Role Request](/docs/tutorials/cluster_role_request.md)
 
 We have also added tutorials for `fedmanctl` command line tool. They can be accessed here:
-- [Federating Worker Clusters with fedmanctl](/docs/tutorials/federating_worker_clusters_fedmanctl.md)
+- [Federating Workload Clusters with fedmanctl](/docs/tutorials/federating_worker_clusters_fedmanctl.md)
 
 Old EdgeNet tutorials can be accessed under the `/doc/tutorials/old` folder. See the [old tutorial's Readme](/docs/tutorials/old/README.md).
 
@@ -78,11 +78,11 @@ Here are the categories and their associated CRDs:
     - [Cluster](custom_resources.md#cluster)
 
 ### Fedmanctl
-To facilitate federation capabilities, our EdgeNet project incorporates a command line utility called `fedmanctl`. This utility serves the purpose of enabling the federation of worker and federator Kubernetes clusters. 
+To facilitate federation capabilities, our EdgeNet project incorporates a command line utility called `fedmanctl`. This utility serves the purpose of enabling the federation of workload and manager Kubernetes clusters. 
 
-Currently, `fedmanctl` is undergoing active development, focusing primarily on implementing the core components related to federation features. While it is a work in progress, essential functionalities have already been incorporated. For the basic use case of federating a worker Kubernetes cluster, please consult the [fedmanctl federation tutorial](/docs/tutorials/federating_worker_clusters_fedmanctl.md).
+Currently, `fedmanctl` is undergoing active development, focusing primarily on implementing the core components related to federation features. While it is a work in progress, essential functionalities have already been incorporated. For the basic use case of federating a workload Kubernetes cluster, please consult the [fedmanctl federation tutorial](/docs/tutorials/federating_worker_clusters_fedmanctl.md).
 
-`fedmanctl` comprises two modules known as worker and manager. The worker module encompasses subcommands that initialize the federation capabilities of EdgeNet and generate a token for the manager cluster. This token contains sensitive information that grants external access to the worker cluster's API server. On the other hand, the manager subcommands are responsible for establishing a link between the worker cluster and the manager cluster using the token.
+`fedmanctl` comprises two modules known as workload and manager. The workload module encompasses subcommands that initialize the federation capabilities of EdgeNet and generate a token for the manager cluster. This token contains sensitive information that grants external access to the workload cluster's API server. On the other hand, the manager subcommands are responsible for establishing a link between the workload cluster and the manager cluster using the token.
 
 In the future, additional subcommands may be developed to establish connections between manager Kubernetes clusters.
 
