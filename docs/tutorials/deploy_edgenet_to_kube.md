@@ -61,7 +61,7 @@ Since it does not contain any configuration, you can directly apply and start us
 kubectl apply -f build/yamls/kubernetes/multi-tenancy.yaml
 ```
 
-Wait until the creation of custom containers and it is done. You can test the multi-tenancy by first [registering a tenant](/docs/tutorials/tenant_registration.md). 
+Wait until the creation of custom controllers and it is done. You can test the multi-tenancy by first [registering a tenant](/docs/tutorials/tenant_registration.md). 
 
 <!-- Additionally, if you are in a test environment, you may want to remove the admission validation hook for testing multi-tenancy. However, **do not do this in a production environment**. -->
 
@@ -96,7 +96,7 @@ After you edit the file, you can use the following command to apply, the CRDs, a
 kubectl -f apply ./build/yamls/kubernetes/multi-provider.yaml
 ```
 
-Wait until the creation of custom containers and it is done. 
+Wait until the creation of custom controllers and it is done. 
 <!-- More info is required on how to use multi-provider features, maybe a tutorial -->
 
 ### 3.3 Install only Location-based-node-selection
@@ -122,7 +122,7 @@ After you edit the file, you can use the following command to apply, the CRDs, a
 kubectl -f apply ./build/yamls/kubernetes/location-based-node-selection.yaml
 ```
 
-Wait until the creation of custom containers and it is done. 
+Wait until the creation of custom controllers and it is done. 
 
 ### 3.4 Install only Notifier
 The yaml file for the notifier is located in `build/yamls/kubernetes/notifier.yaml`
@@ -167,7 +167,7 @@ After you edit the file, you can use the following command to apply, the CRDs, a
 kubectl -f apply ./build/yamls/kubernetes/notifier.yaml
 ```
 
-Wait until the creation of custom containers and it is done. 
+Wait until the creation of custom controllers and it is done. 
 
 ### 3.5 Install Federation
 > The federation features are actively worked on and are experimental. The federation features are built on top of multitenancy, thuse before installing make sure you installed the [multitenancy features](#31-install-only-multi-tenancy) to your Kubernetes cluster.
@@ -183,6 +183,6 @@ kubectl -f apply ./build/yamls/kubernetes/federation-manager.yaml --context <MAN
 kubectl -f apply ./build/yamls/kubernetes/federation-workload.yaml --context <WORKLOAD>
 ```
 
-Wait until the creation of custom containers and it is done. 
+Wait until the creation of custom controllers and it is done. 
 
 > After installing the federation extensions to your manager and workload clusters, we recommend [installing fedmanctl](/docs/tutorials/fedmanctl_installation.md) for automated federation. Additionally, you can refer to [federation tutorial](/docs/tutorials/federating_worker_clusters_fedmanctl.md).
