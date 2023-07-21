@@ -27,7 +27,7 @@ var managerFederateCmd = &cobra.Command{
 			panic(err.Error())
 		}
 
-		err = f.FederateToManagerCluster(args[0], args[1])
+		err = f.FederateWorkloadCluster(args[0], args[1])
 
 		if err != nil {
 			panic(err.Error())
@@ -53,7 +53,7 @@ var managerUnfederateCmd = &cobra.Command{
 		// If user inputs cluster-XXX format, convert it to normal uid
 		clusterUID = strings.Replace(clusterUID, "cluster-", "", 1)
 
-		err = f.UnfederateFromManagerCluster(clusterUID, args[1])
+		err = f.UnfederateWorkloadCluster(clusterUID, args[1])
 
 		if err != nil {
 			panic(err.Error())
@@ -73,7 +73,7 @@ var managerListCmd = &cobra.Command{
 			panic(err.Error())
 		}
 
-		clusters, err := f.ListWorkerClusters()
+		clusters, err := f.ListWorkloadClusters()
 
 		if err != nil {
 			panic(err.Error())

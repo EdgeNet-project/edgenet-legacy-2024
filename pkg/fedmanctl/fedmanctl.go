@@ -29,22 +29,22 @@ type Fedmanctl interface {
 	GetKubeClientset() *kubernetes.Clientset
 
 	// Initialize the given cluster as the worker cluster. Do not generate a token.
-	InitWorkerCluster() error
+	InitWorkloadCluster() error
 
 	// Delete and remove all the configuration of the worker cluster.
-	ResetWorkerCluster() error
+	ResetWorkloadCluster() error
 
 	// Generate the token of the worker cluster with the given labels
-	GenerateWorkerClusterToken(clusterIP, clusterPort, visibility string, debug bool, labels map[string]string) (string, error)
+	GenerateWorkloadClusterToken(clusterIP, clusterPort, visibility string, debug bool, labels map[string]string) (string, error)
 
 	// Link the worker cluster to the manager cluster. Configures the manager cluster by the token. Called by the manager context.
-	FederateToManagerCluster(token, namespace string) error
+	FederateWorkloadCluster(token, namespace string) error
 
 	// Unlinks the worker cluster from manager cluster. Called by the manager context.
-	UnfederateFromManagerCluster(uid, namespace string) error
+	UnfederateWorkloadCluster(uid, namespace string) error
 
 	// List the worker cluster objects
-	ListWorkerClusters() ([]federationv1alpha1.Cluster, error)
+	ListWorkloadClusters() ([]federationv1alpha1.Cluster, error)
 
 	Version() string
 }
@@ -131,7 +131,7 @@ func (f fedmanctl) GetKubeClientset() *kubernetes.Clientset {
 }
 
 // Initialize the given cluster as the worker cluster. Do not generate a token.
-func (f fedmanctl) InitWorkerCluster() error {
+func (f fedmanctl) InitWorkloadCluster() error {
 	sa := &corev1.ServiceAccount{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "fedmanager",
@@ -188,7 +188,7 @@ func (f fedmanctl) InitWorkerCluster() error {
 }
 
 // Delete and remove all the configuration of the worker cluster.
-func (f fedmanctl) ResetWorkerCluster() error {
+func (f fedmanctl) ResetWorkloadCluster() error {
 	f.GetKubeClientset().RbacV1().ClusterRoleBindings().Delete(context.TODO(), "edgenet:fedmanager", v1.DeleteOptions{})
 	f.GetKubeClientset().CoreV1().ServiceAccounts("edgenet").Delete(context.TODO(), "fedmanager", v1.DeleteOptions{})
 	f.GetKubeClientset().CoreV1().Secrets("edgenet").Delete(context.TODO(), "fedmanager", v1.DeleteOptions{})
@@ -196,7 +196,7 @@ func (f fedmanctl) ResetWorkerCluster() error {
 }
 
 // Generate the token of the worker cluster with the given labels
-func (f fedmanctl) GenerateWorkerClusterToken(clusterIP, clusterPort, visibility string, debug bool, labels map[string]string) (string, error) {
+func (f fedmanctl) GenerateWorkloadClusterToken(clusterIP, clusterPort, visibility string, debug bool, labels map[string]string) (string, error) {
 	clusterUID, err := f.getClusterUID()
 
 	if err != nil {
@@ -229,7 +229,7 @@ func (f fedmanctl) GenerateWorkerClusterToken(clusterIP, clusterPort, visibility
 	}
 
 	// base64 encoded secrets except the cluster uid
-	token := &WorkerClusterInfo{
+	token := &WorkloadClusterInfo{
 		CACertificate: string(secret.Data["ca.crt"]),
 		Namespace:     string(secret.Data["namespace"]),
 		Token:         string(secret.Data["token"]),
@@ -250,24 +250,47 @@ func (f fedmanctl) GenerateWorkerClusterToken(clusterIP, clusterPort, visibility
 		return string(b), nil
 	}
 
-	return TokenizeWorkerClusterInfo(token)
+	return TokenizeWorkloadClusterInfo(token)
 }
 
 // Link the worker cluster to the manager cluster. Configures the manager cluster by the token. Called by the manager context.
-func (f fedmanctl) FederateToManagerCluster(token, namespace string) error {
-	workerClusterInfo, err := DetokenizeWorkerClusterInfo(token)
+func (f fedmanctl) FederateWorkloadCluster(token, namespace string) error {
+	workerClusterInfo, err := DetokenizeWorkloadClusterInfo(token)
 
 	if err != nil {
 		return err
 	}
 
-	federationNamespaceName := namespace
-
-	// Test if namespace exists
-	_, err = f.GetKubeClientset().CoreV1().Namespaces().Get(context.TODO(), federationNamespaceName, v1.GetOptions{})
+	// Create the federated namespace
+	federationUID, err := f.getClusterUID()
 
 	if err != nil {
 		return err
+	}
+
+	// Check if federation namespace "federation-XXX-XXX-XX-XXXX" exists, if not create.
+	federationNamespaceName := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, federationUID)
+
+	_, err = f.GetKubeClientset().CoreV1().Namespaces().Get(context.TODO(), federationNamespaceName, v1.GetOptions{})
+	if err != nil {
+		ns := &corev1.Namespace{
+			ObjectMeta: v1.ObjectMeta{
+				Name: federationNamespaceName,
+			},
+		}
+		_, err = f.GetKubeClientset().CoreV1().Namespaces().Create(context.TODO(), ns, v1.CreateOptions{})
+
+		if err != nil {
+			return err
+		}
+	}
+
+	// Check if the secret storage namespace exsits. If not create? No it is up to the user to create and give permissions.
+	_, err = f.GetKubeClientset().CoreV1().Namespaces().Get(context.TODO(), namespace, v1.GetOptions{})
+	if err != nil {
+		if err != nil {
+			return fmt.Errorf("cannot find given namespace, please ensure the namespace %q exist", namespace)
+		}
 	}
 
 	// secretName has the convention "secret-XXX" where XXX is the UID of the cluster
@@ -276,10 +299,11 @@ func (f fedmanctl) FederateToManagerCluster(token, namespace string) error {
 	// clusterName has the convention "cluster-XXX" where XXX is the UID of the cluster
 	clusterName := strings.Join([]string{"cluster", workerClusterInfo.UID}, "-")
 
+	// Create the secret in the given namespace
 	secret := &corev1.Secret{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      secretName,
-			Namespace: federationNamespaceName,
+			Namespace: namespace,
 		},
 		Data: map[string][]byte{
 			"ca.crt":    []byte(workerClusterInfo.CACertificate),
@@ -288,16 +312,17 @@ func (f fedmanctl) FederateToManagerCluster(token, namespace string) error {
 		},
 	}
 
-	_, err = f.GetKubeClientset().CoreV1().Secrets(federationNamespaceName).Create(context.TODO(), secret, v1.CreateOptions{})
+	_, err = f.GetKubeClientset().CoreV1().Secrets(namespace).Create(context.TODO(), secret, v1.CreateOptions{})
 
 	if err != nil {
 		return err
 	}
 
+	// create the cluster in the given namespace
 	cluster := &federationv1alpha1.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      clusterName,
-			Namespace: federationNamespaceName,
+			Namespace: namespace,
 			Labels:    workerClusterInfo.Labels,
 		},
 		Spec: federationv1alpha1.ClusterSpec{
@@ -311,7 +336,7 @@ func (f fedmanctl) FederateToManagerCluster(token, namespace string) error {
 		},
 	}
 
-	_, err = f.GetEdgeNetClientset().FederationV1alpha1().Clusters(federationNamespaceName).Create(context.TODO(), cluster, v1.CreateOptions{})
+	_, err = f.GetEdgeNetClientset().FederationV1alpha1().Clusters(namespace).Create(context.TODO(), cluster, v1.CreateOptions{})
 
 	if err != nil {
 		return err
@@ -321,20 +346,18 @@ func (f fedmanctl) FederateToManagerCluster(token, namespace string) error {
 }
 
 // Unlinks the worker cluster from manager cluster. Called by the manager context.
-func (f fedmanctl) UnfederateToManagerCluster(uid, namespace string) error {
+func (f fedmanctl) UnfederateWorkloadCluster(uid, namespace string) error {
 	secretName := strings.Join([]string{"secret", uid}, "-")
 	clusterName := strings.Join([]string{"cluster", uid}, "-")
 
-	federationNamespaceName := namespace
-
-	f.GetKubeClientset().CoreV1().Secrets(federationNamespaceName).Delete(context.TODO(), secretName, v1.DeleteOptions{})
-	f.GetEdgeNetClientset().FederationV1alpha1().Clusters(federationNamespaceName).Delete(context.TODO(), clusterName, v1.DeleteOptions{})
+	f.GetKubeClientset().CoreV1().Secrets(namespace).Delete(context.TODO(), secretName, v1.DeleteOptions{})
+	f.GetEdgeNetClientset().FederationV1alpha1().Clusters(namespace).Delete(context.TODO(), clusterName, v1.DeleteOptions{})
 
 	return nil
 }
 
 // List the worker cluster objects
-func (f fedmanctl) ListWorkerClusters() ([]federationv1alpha1.Cluster, error) {
+func (f fedmanctl) ListWorkloadClusters() ([]federationv1alpha1.Cluster, error) {
 	// Get all the cluster objects from all of the namespaces
 	clusters, err := f.GetEdgeNetClientset().FederationV1alpha1().Clusters("").List(context.TODO(), v1.ListOptions{})
 

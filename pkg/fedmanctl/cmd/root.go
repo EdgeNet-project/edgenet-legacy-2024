@@ -26,7 +26,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&kubeconfig, "kubeconfig", "", "Kubeconfig file to be used")
 	rootCmd.PersistentFlags().StringVar(&context, "context", "", "The context specified in the kubeconfig file")
 
-	rootCmd.AddCommand(workerCmd)
+	rootCmd.AddCommand(workloadCmd)
 	rootCmd.AddCommand(managerCmd)
 	rootCmd.AddCommand(versionCmd)
 }

@@ -7,15 +7,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var workerCmd = &cobra.Command{
-	Use:     "worker",
+var workloadCmd = &cobra.Command{
+	Use:     "workload",
 	Aliases: []string{"w"},
-	Short:   "Manage worker clusters",
+	Short:   "Manage workload clusters",
 }
 
-var workerInitCmd = &cobra.Command{
+var workloadInitCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize the cluster as the worker cluster. Configure such that, it can receive and send workloads.",
+	Short: "Initialize the cluster as the workload cluster. Configure such that, it can receive and send workloads.",
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
 
@@ -23,17 +23,17 @@ var workerInitCmd = &cobra.Command{
 			panic(err.Error())
 		}
 
-		err = f.InitWorkerCluster()
+		err = f.InitWorkloadCluster()
 
 		if err != nil {
 			panic(err.Error())
 		}
 
-		fmt.Println("Initialized worker cluster")
+		fmt.Println("Initialized workload cluster")
 	},
 }
 
-var workerResetCmd = &cobra.Command{
+var workloadResetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: "Reset the configuration of the cluster as a workload cluster.",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -43,17 +43,17 @@ var workerResetCmd = &cobra.Command{
 			panic(err.Error())
 		}
 
-		err = f.ResetWorkerCluster()
+		err = f.ResetWorkloadCluster()
 
 		if err != nil {
 			panic(err.Error())
 		}
 
-		fmt.Println("Reset worker cluster")
+		fmt.Println("Reset workload cluster")
 	},
 }
 
-var workerTokenCmd = &cobra.Command{
+var workloadTokenCmd = &cobra.Command{
 	Use:   "token",
 	Short: "Generate the token to be fed to the manager cluster. Geo tags can be overwritten.",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -80,14 +80,14 @@ var workerTokenCmd = &cobra.Command{
 
 		visibility, _ := cmd.Flags().GetString("visibility")
 
-		token, err := f.GenerateWorkerClusterToken(ip, port, visibility, debug, labels)
+		token, err := f.GenerateWorkloadClusterToken(ip, port, visibility, debug, labels)
 
 		if err != nil {
 			panic(err.Error())
 		}
 
 		if !silent {
-			fmt.Println("Token generated use the following command to link the worker cluster with your manager cluster.")
+			fmt.Println("Token generated use the following command to link the workload cluster with your manager cluster.")
 			fmt.Println("")
 			fmt.Printf("fedmanctl manager link %v\n", token)
 		} else {
@@ -98,17 +98,17 @@ var workerTokenCmd = &cobra.Command{
 }
 
 func init() {
-	workerTokenCmd.Flags().Bool("silent", false, "Only print the token")
-	workerTokenCmd.Flags().Bool("debug", false, "Print the token in json format")
+	workloadTokenCmd.Flags().Bool("silent", false, "Only print the token")
+	workloadTokenCmd.Flags().Bool("debug", false, "Print the token in json format")
 
-	workerTokenCmd.Flags().String("visibility", "Public", "Visibility of the cluster, Public or Private")
-	workerTokenCmd.Flags().String("ip", "", "IP address of the kube-apiserver")
-	workerTokenCmd.Flags().String("port", "", "Port of the kube-apiserver")
+	workloadTokenCmd.Flags().String("visibility", "Public", "Visibility of the cluster, Public or Private")
+	workloadTokenCmd.Flags().String("ip", "", "IP address of the kube-apiserver")
+	workloadTokenCmd.Flags().String("port", "", "Port of the kube-apiserver")
 
-	workerTokenCmd.Flags().String("city", "", "Override the city label of the cluster")
-	workerTokenCmd.Flags().String("country", "", "Override the country label of the cluster")
+	workloadTokenCmd.Flags().String("city", "", "Override the city label of the cluster")
+	workloadTokenCmd.Flags().String("country", "", "Override the country label of the cluster")
 
-	workerCmd.AddCommand(workerInitCmd)
-	workerCmd.AddCommand(workerResetCmd)
-	workerCmd.AddCommand(workerTokenCmd)
+	workloadCmd.AddCommand(workloadInitCmd)
+	workloadCmd.AddCommand(workloadResetCmd)
+	workloadCmd.AddCommand(workloadTokenCmd)
 }
