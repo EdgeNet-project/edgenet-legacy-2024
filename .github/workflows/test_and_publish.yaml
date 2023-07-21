@@ -64,12 +64,6 @@ jobs:
           - slice
           - notifier
           - admissioncontrol
-          - cluster
-          - clusterlabeler
-          - fedlet
-          - fedscheduler
-          - managercache
-          - selectivedeploymentanchor
     steps:
       - name: Check out the repo
         uses: actions/checkout@v2

@@ -529,12 +529,10 @@ func (wh *Webhook) validateSubNamespace(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		if oldSubnamespace.GetSliceClaim() != nil && subnamespace.GetSliceClaim() != nil {
-			if *oldSubnamespace.GetSliceClaim() != *subnamespace.GetSliceClaim() {
-				admissionResponse.Allowed = false
-				admissionResponse.Result = &metav1.Status{
-					Message: "subsidiary namespace slice cannot be set after creation",
-				}
+		if *oldSubnamespace.GetSliceClaim() != *subnamespace.GetSliceClaim() {
+			admissionResponse.Allowed = false
+			admissionResponse.Result = &metav1.Status{
+				Message: "subsidiary namespace slice cannot be set after creation",
 			}
 		}
 
