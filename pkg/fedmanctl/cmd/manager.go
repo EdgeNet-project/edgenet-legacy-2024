@@ -2,7 +2,9 @@ package fedmanctl
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/EdgeNet-project/edgenet/pkg/fedmanctl"
 	"github.com/spf13/cobra"
@@ -80,11 +82,15 @@ var managerListCmd = &cobra.Command{
 		if len(clusters) == 0 {
 			fmt.Println("no worker clusters available")
 		} else {
-			fmt.Printf("%v\t%v\n", "Cluster Name", "Cluster Namespace")
-			// Just display the uids for now
+			w := tabwriter.NewWriter(os.Stdout, 20, 20, 1, ' ', 0)
+
+			// Display these properties
+			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", "CLUSTER NAME", "CLUSTER NAMESPACE", "VISIBILITY", "ENABLED", "STATE")
+
 			for _, cluster := range clusters {
-				fmt.Printf("%v\t%v\n", cluster.ObjectMeta.Name, cluster.ObjectMeta.Namespace)
+				fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", cluster.ObjectMeta.Name, cluster.ObjectMeta.Namespace, cluster.Spec.Visibility, cluster.Spec.Enabled, cluster.Status.State)
 			}
+			w.Flush()
 		}
 	},
 }
