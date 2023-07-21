@@ -127,7 +127,9 @@ Wait until the creation of custom containers and it is done.
 ### 3.4 Install only Notifier
 The yaml file for the notifier is located in `build/yamls/kubernetes/notifier.yaml`
 
-Unlike multi-tenancy, location-based-node-selection features need some configuration in order to work. You can edit the yaml file. Note that the API-keys, tokens, etc. of the external services that EdgeNet uses need to be encoded in `base64`. You can find the command to encode the secrets.
+Unlike multi-tenancy, notifier features need some configuration in order to work. You can edit the yaml file. Note that the API-keys, tokens, etc. of the external services that EdgeNet uses need to be encoded in `base64`. You can find the command to encode the secrets.
+
+Notifier can handle email, Slack, and console notifications. You need to create a Slack bot for Slack notifications and an email client for emails. Additionally, [EdgeNet Console](https://github.com/EdgeNet-project/console) is used with the EdgeNet testbed. You can leave the fields empty if you don't plan to use those features.
 
 ```bash
 echo "<token-or-secret>" | base64
