@@ -38,10 +38,10 @@ type Fedmanctl interface {
 	GenerateWorkerClusterToken(clusterIP, clusterPort, visibility string, debug bool, labels map[string]string) (string, error)
 
 	// Link the worker cluster to the manager cluster. Configures the manager cluster by the token. Called by the manager context.
-	FederateToManagerCluster(token string) error
+	FederateToManagerCluster(token, namespace string) error
 
 	// Unlinks the worker cluster from manager cluster. Called by the manager context.
-	UnfederateFromManagerCluster(uid string) error
+	UnfederateFromManagerCluster(uid, namespace string) error
 
 	// List the worker cluster objects
 	ListWorkerClusters() ([]federationv1alpha1.Cluster, error)
@@ -254,47 +254,20 @@ func (f fedmanctl) GenerateWorkerClusterToken(clusterIP, clusterPort, visibility
 }
 
 // Link the worker cluster to the manager cluster. Configures the manager cluster by the token. Called by the manager context.
-func (f fedmanctl) FederateToManagerCluster(token string) error {
+func (f fedmanctl) FederateToManagerCluster(token, namespace string) error {
 	workerClusterInfo, err := DetokenizeWorkerClusterInfo(token)
 
 	if err != nil {
 		return err
 	}
 
-	// Create the federated namespace
-	federationUID, err := f.getClusterUID()
+	federationNamespaceName := namespace
+
+	// Test if namespace exists
+	_, err = f.GetKubeClientset().CoreV1().Namespaces().Get(context.TODO(), federationNamespaceName, v1.GetOptions{})
 
 	if err != nil {
 		return err
-	}
-
-	federationNamespaceName := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, federationUID)
-	_, err = f.GetKubeClientset().CoreV1().Namespaces().Get(context.TODO(), federationNamespaceName, v1.GetOptions{})
-	if err != nil {
-		ns := &corev1.Namespace{
-			ObjectMeta: v1.ObjectMeta{
-				Name: federationNamespaceName,
-			},
-		}
-		_, err = f.GetKubeClientset().CoreV1().Namespaces().Create(context.TODO(), ns, v1.CreateOptions{})
-
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err = f.GetKubeClientset().CoreV1().Namespaces().Get(context.TODO(), "edgenet-federation", v1.GetOptions{})
-	if err != nil {
-		ns := &corev1.Namespace{
-			ObjectMeta: v1.ObjectMeta{
-				Name: "edgenet-federation",
-			},
-		}
-		_, err = f.GetKubeClientset().CoreV1().Namespaces().Create(context.TODO(), ns, v1.CreateOptions{})
-
-		if err != nil {
-			return err
-		}
 	}
 
 	// secretName has the convention "secret-XXX" where XXX is the UID of the cluster
@@ -306,7 +279,7 @@ func (f fedmanctl) FederateToManagerCluster(token string) error {
 	secret := &corev1.Secret{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      secretName,
-			Namespace: "edgenet-federation",
+			Namespace: federationNamespaceName,
 		},
 		Data: map[string][]byte{
 			"ca.crt":    []byte(workerClusterInfo.CACertificate),
@@ -315,7 +288,7 @@ func (f fedmanctl) FederateToManagerCluster(token string) error {
 		},
 	}
 
-	_, err = f.GetKubeClientset().CoreV1().Secrets("edgenet-federation").Create(context.TODO(), secret, v1.CreateOptions{})
+	_, err = f.GetKubeClientset().CoreV1().Secrets(federationNamespaceName).Create(context.TODO(), secret, v1.CreateOptions{})
 
 	if err != nil {
 		return err
@@ -324,7 +297,7 @@ func (f fedmanctl) FederateToManagerCluster(token string) error {
 	cluster := &federationv1alpha1.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      clusterName,
-			Namespace: "edgenet-federation",
+			Namespace: federationNamespaceName,
 			Labels:    workerClusterInfo.Labels,
 		},
 		Spec: federationv1alpha1.ClusterSpec{
@@ -338,10 +311,9 @@ func (f fedmanctl) FederateToManagerCluster(token string) error {
 		},
 	}
 
-	_, err = f.GetEdgeNetClientset().FederationV1alpha1().Clusters("edgenet-federation").Create(context.TODO(), cluster, v1.CreateOptions{})
+	_, err = f.GetEdgeNetClientset().FederationV1alpha1().Clusters(federationNamespaceName).Create(context.TODO(), cluster, v1.CreateOptions{})
 
 	if err != nil {
-		fmt.Println("NONOON")
 		return err
 	}
 
@@ -349,19 +321,22 @@ func (f fedmanctl) FederateToManagerCluster(token string) error {
 }
 
 // Unlinks the worker cluster from manager cluster. Called by the manager context.
-func (f fedmanctl) UnfederateToManagerCluster(uid string) error {
+func (f fedmanctl) UnfederateToManagerCluster(uid, namespace string) error {
 	secretName := strings.Join([]string{"secret", uid}, "-")
 	clusterName := strings.Join([]string{"cluster", uid}, "-")
 
-	f.GetKubeClientset().CoreV1().Secrets("edgenet-federation").Delete(context.TODO(), secretName, v1.DeleteOptions{})
-	f.GetEdgeNetClientset().FederationV1alpha1().Clusters("edgenet-federation").Delete(context.TODO(), clusterName, v1.DeleteOptions{})
+	federationNamespaceName := namespace
+
+	f.GetKubeClientset().CoreV1().Secrets(federationNamespaceName).Delete(context.TODO(), secretName, v1.DeleteOptions{})
+	f.GetEdgeNetClientset().FederationV1alpha1().Clusters(federationNamespaceName).Delete(context.TODO(), clusterName, v1.DeleteOptions{})
 
 	return nil
 }
 
 // List the worker cluster objects
 func (f fedmanctl) ListWorkerClusters() ([]federationv1alpha1.Cluster, error) {
-	clusters, err := f.GetEdgeNetClientset().FederationV1alpha1().Clusters("edgenet-federation").List(context.TODO(), v1.ListOptions{})
+	// Get all the cluster objects from all of the namespaces
+	clusters, err := f.GetEdgeNetClientset().FederationV1alpha1().Clusters("").List(context.TODO(), v1.ListOptions{})
 
 	if err != nil {
 		return nil, err

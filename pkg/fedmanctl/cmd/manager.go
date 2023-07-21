@@ -15,9 +15,9 @@ var managerCmd = &cobra.Command{
 }
 
 var managerFederateCmd = &cobra.Command{
-	Use:   "federate <token>",
+	Use:   "federate <token> <namespace>",
 	Short: "Federate a worker cluster with the generated token.",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
 
@@ -25,7 +25,7 @@ var managerFederateCmd = &cobra.Command{
 			panic(err.Error())
 		}
 
-		err = f.FederateToManagerCluster(args[0])
+		err = f.FederateToManagerCluster(args[0], args[1])
 
 		if err != nil {
 			panic(err.Error())
@@ -36,9 +36,9 @@ var managerFederateCmd = &cobra.Command{
 }
 
 var managerUnfederateCmd = &cobra.Command{
-	Use:   "unfederate <uid>",
+	Use:   "unfederate <uid> <namespace>",
 	Short: "Unfederate a worker cluster with the uid.",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
 
@@ -51,7 +51,7 @@ var managerUnfederateCmd = &cobra.Command{
 		// If user inputs cluster-XXX format, convert it to normal uid
 		clusterUID = strings.Replace(clusterUID, "cluster-", "", 1)
 
-		err = f.UnfederateFromManagerCluster(clusterUID)
+		err = f.UnfederateFromManagerCluster(clusterUID, args[1])
 
 		if err != nil {
 			panic(err.Error())
@@ -80,9 +80,10 @@ var managerListCmd = &cobra.Command{
 		if len(clusters) == 0 {
 			fmt.Println("no worker clusters available")
 		} else {
+			fmt.Printf("%v\t%v\n", "Cluster Name", "Cluster Namespace")
 			// Just display the uids for now
 			for _, cluster := range clusters {
-				fmt.Printf("%v\n", cluster.ObjectMeta.Name)
+				fmt.Printf("%v\t%v\n", cluster.ObjectMeta.Name, cluster.ObjectMeta.Namespace)
 			}
 		}
 	},
