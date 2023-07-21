@@ -19,8 +19,8 @@ metadata:
 type: Opaque
 stringData:
   headnode.yaml: |
-    # DNS should contain the root domain consisting of domain name and top-level domain.
-    # dns: "<Root domain>"
+    # DNS should contain the root domain consisting of domain name and top-level domain.
+    # dns: "<Root domain>"
     # ip: "<IP address of the control plane node>"
   smtp.yaml: |
     # SMTP settings for mailer service. The 'to' field indicates the email address to receive the emails
@@ -116,7 +116,7 @@ spec:
       containers:
       - command:
         - ./notifier
-        image: edgenetio/notifier:v1.0.0-alpha.5
+        image: edgenetio/notifier:main
         imagePullPolicy: Always
         name: notifier
         volumeMounts:
