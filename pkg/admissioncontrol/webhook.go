@@ -529,14 +529,17 @@ func (wh *Webhook) validateSubNamespace(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		if *oldSubnamespace.GetSliceClaim() != *subnamespace.GetSliceClaim() {
-			admissionResponse.Allowed = false
-			admissionResponse.Result = &metav1.Status{
-				Message: "subsidiary namespace slice cannot be set after creation",
+		if oldSubnamespace.GetSliceClaim() != nil && subnamespace.GetSliceClaim() != nil {
+			if *oldSubnamespace.GetSliceClaim() != *subnamespace.GetSliceClaim() {
+				admissionResponse.Allowed = false
+				admissionResponse.Result = &metav1.Status{
+					Message: "subsidiary namespace slice cannot be set after creation",
+				}
 			}
 		}
 
-		if subnamespace.GetSliceClaim() != nil && !reflect.DeepEqual(oldSubnamespace.GetResourceAllocation(), subnamespace.GetResourceAllocation()) && admissionReviewRequest.Request.UserInfo.Username != "system:serviceaccount:edgenet:sliceclaim" {
+		if subnamespace.GetSliceClaim() != nil && !reflect.DeepEqual(oldSubnamespace.GetResourceAllocation(), subnamespace.GetResourceAllocation()) && admissionReviewRequest.Request.UserInfo.Username != "system:serviceaccount:edgenet:subnamespace" {
+			klog.Infoln(admissionReviewRequest.Request.UserInfo.Username)
 			admissionResponse.Allowed = false
 			admissionResponse.Result = &metav1.Status{
 				Message: "subsidiary namespace resource allocation cannot be updated when a slice is applied",

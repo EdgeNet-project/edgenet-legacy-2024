@@ -21,12 +21,13 @@ package bootstrap
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
-	"github.com/EdgeNet-project/edgenet/pkg/util"
+	"gopkg.in/yaml.v2"
 
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 	namecheap "github.com/billputer/go-namecheap"
@@ -35,6 +36,14 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// Structure of Namecheap access credentials
+type namecheapCred struct {
+	App      string `yaml:"app"`
+	APIUser  string `yaml:"apiUser"`
+	APIToken string `yaml:"apiToken"`
+	Username string `yaml:"username"`
+}
+
 func homeDir() string {
 	if h := os.Getenv("HOME"); h != "" {
 		return h
@@ -42,92 +51,73 @@ func homeDir() string {
 	return os.Getenv("USERPROFILE")
 }
 
+// GetDefaultKubeconfigPath returns the default kubeconfig path
 func GetDefaultKubeconfigPath() string {
 	var kubeconfigPath string
 	if home := homeDir(); home != "" {
 		kubeconfigPath = filepath.Join(home, ".kube", "config")
 	} else {
-		kubeconfigPath = "/edgenet/.kube"
+		kubeconfigPath = "/edgenet/.kube/config"
 	}
 	return kubeconfigPath
 }
 
 func getKubeconfigPath() string {
-	var kubeconfigPath string = GetDefaultKubeconfigPath()
+	kubeconfigPath := GetDefaultKubeconfigPath()
 	if flag.Lookup("kubeconfig-path") != nil {
 		kubeconfigPath = flag.Lookup("kubeconfig-path").Value.(flag.Getter).Get().(string)
 	}
 	return kubeconfigPath
 }
 
-// CreateEdgeNetClientset generates the clientset to interact with the custom resources
-func CreateEdgeNetClientset(by string) (*clientset.Clientset, error) {
-	var edgenetclientset *clientset.Clientset
-	var generateClientset = func(config *rest.Config) *clientset.Clientset {
-		// Create the clientset
-		edgenetclientset, err := clientset.NewForConfig(config)
-		if err != nil {
-			// TODO: Error handling
-			panic(err.Error())
-		}
-		return edgenetclientset
-	}
-
+func GetRestConfig(by string) (*rest.Config, error) {
+	var config *rest.Config
+	var err error
 	if by == "kubeconfig" {
 		// Use the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", getKubeconfigPath())
-		if err != nil {
-			log.Println(err.Error())
-			panic(err.Error())
-		}
-		edgenetclientset = generateClientset(config)
+		config, err = clientcmd.BuildConfigFromFlags("", getKubeconfigPath())
 	} else {
 		// Creates the in-cluster config
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			panic(err.Error())
-		}
-		edgenetclientset = generateClientset(config)
+		config, err = rest.InClusterConfig()
+	}
+	return config, err
+}
+
+func PrepareRestConfig(server, token string, certificateAuthorityData []byte) *rest.Config {
+	config := new(rest.Config)
+	config.Host = server
+	config.BearerToken = token
+	config.CAData = certificateAuthorityData
+	return config
+}
+
+// CreateEdgeNetClientset generates the clientset to interact with the custom resources
+func CreateEdgeNetClientset(config *rest.Config) (*clientset.Clientset, error) {
+	// Create the clientset
+	edgenetclientset, err := clientset.NewForConfig(config)
+	if err != nil {
+		// TODO: Error handling
+		log.Println(err.Error())
+		panic(err.Error())
 	}
 	return edgenetclientset, nil
 }
 
-// CreateClientset generates the clientset to interact with the Kubernetes resources
-func CreateClientset(by string) (*kubernetes.Clientset, error) {
-	var kubeclientset *kubernetes.Clientset
-	var generateClientset = func(config *rest.Config) *kubernetes.Clientset {
-		// Create the clientset
-		kubeclientset, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			// TODO: Error handling
-			panic(err.Error())
-		}
-		return kubeclientset
-	}
-
-	if by == "kubeconfig" {
-		// Use the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", getKubeconfigPath())
-		if err != nil {
-			// TODO: Error handling
-			panic(err.Error())
-		}
-		kubeclientset = generateClientset(config)
-	} else {
-		// Creates the in-cluster config
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			// TODO: Error handling
-			panic(err.Error())
-		}
-		kubeclientset = generateClientset(config)
+// CreateKubeClientset generates the clientset to interact with the Kubernetes resources
+func CreateKubeClientset(config *rest.Config) (*kubernetes.Clientset, error) {
+	// Create the clientset
+	kubeclientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		// TODO: Error handling
+		log.Println(err.Error())
+		panic(err.Error())
 	}
 	return kubeclientset, nil
 }
 
 // CreateNamecheapClient generates the client to interact with Namecheap API
 func CreateNamecheapClient() (*namecheap.Client, error) {
-	apiuser, apitoken, username, err := util.GetNamecheapCredentials()
+	apiuser, apitoken, username, err := getNamecheapCredentials()
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
@@ -137,33 +127,34 @@ func CreateNamecheapClient() (*namecheap.Client, error) {
 }
 
 // CreateAntreaClientset generates the clientset to interact with the Antrea resources
-func CreateAntreaClientset(by string) (*antrea.Clientset, error) {
-	var antreaclientset *antrea.Clientset
-	var generateClientset = func(config *rest.Config) *antrea.Clientset {
-		// Create the clientset
-		antreaclientset, err := antrea.NewForConfig(config)
-		if err != nil {
-			// TODO: Error handling
-			panic(err.Error())
-		}
-		return antreaclientset
-	}
-
-	if by == "kubeconfig" {
-		// Use the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", getKubeconfigPath())
-		if err != nil {
-			log.Println(err.Error())
-			panic(err.Error())
-		}
-		antreaclientset = generateClientset(config)
-	} else {
-		// Creates the in-cluster config
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			panic(err.Error())
-		}
-		antreaclientset = generateClientset(config)
+func CreateAntreaClientset(config *rest.Config) (*antrea.Clientset, error) {
+	antreaclientset, err := antrea.NewForConfig(config)
+	if err != nil {
+		// TODO: Error handling
+		panic(err.Error())
 	}
 	return antreaclientset, nil
+}
+
+// getNamecheapCredentials provides authentication info to have API Access
+func getNamecheapCredentials() (string, string, string, error) {
+	// The path of the yaml config file of namecheap
+	namecheapPath := "."
+	if flag.Lookup("configs-path") != nil {
+		namecheapPath = flag.Lookup("configs-path").Value.(flag.Getter).Get().(string)
+	}
+	file, err := os.Open(fmt.Sprintf("%s/namecheap.yaml", namecheapPath))
+	if err != nil {
+		log.Printf("unexpected error executing command: %v", err)
+		return "", "", "", err
+	}
+
+	decoder := yaml.NewDecoder(file)
+	var namecheapCred namecheapCred
+	err = decoder.Decode(&namecheapCred)
+	if err != nil {
+		log.Printf("unexpected error executing command: %v", err)
+		return "", "", "", err
+	}
+	return namecheapCred.APIUser, namecheapCred.APIToken, namecheapCred.Username, nil
 }

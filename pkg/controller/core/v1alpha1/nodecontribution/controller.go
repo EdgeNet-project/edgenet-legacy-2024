@@ -21,9 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
-	"reflect"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -33,13 +31,12 @@ import (
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/core/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/core/v1alpha1"
-	"github.com/EdgeNet-project/edgenet/pkg/node"
-	"github.com/EdgeNet-project/edgenet/pkg/remoteip"
+	multiprovider "github.com/EdgeNet-project/edgenet/pkg/multiprovider"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -57,43 +54,29 @@ const controllerAgentName = "nodecontribution-controller"
 
 // Definitions of the state of the nodecontribution resource
 const (
-	successSynced         = "Synced"
-	messageResourceSynced = "Node Contribution synced successfully"
-	setupProcedure        = "Setup"
-	messageSetupPhase     = "Setup process commenced"
-	messageDoneDNS        = "DNS record configured"
-	messageDoneSSH        = "SSH connection established"
-	messageDoneKubeadm    = "Bootstrap token created and join command has been invoked"
-	messageDonePatch      = "Node scheduling updated"
-	messageTimeout        = "Procedure terminated due to timeout"
-	messageEnd            = "Procedure finished"
-	inqueue               = "In Queue"
-	inprogress            = "In Progress"
-	failure               = "Failure"
-	incomplete            = "Halting"
-	success               = "Successful"
-	create                = "create"
-	update                = "update"
-	delete                = "delete"
-	trueStr               = "True"
-	falseStr              = "False"
-	unknownStr            = "Unknown"
-)
+	backoffLimit = 3
+	dailyLimit   = 24
 
-// Dictionary of status messages
-var statusDict = map[string]string{
-	"successful":              "Node is up and running",
-	"failure":                 "Node is unready",
-	"in-progress":             "Node setup in progress",
-	"in-queue":                "Node contribution is in queue to be processed",
-	"configuration-failure":   "Warning: Scheduling configuration failed",
-	"owner-reference-failure": "Warning: Setting owner reference failed",
-	"status-update":           "Error: Object update failure",
-	"invalid-host":            "Error: Host field must be an IP Address",
-	"ssh-failure":             "Error: SSH handshake failed",
-	"join-failure":            "Error: Node cannot join the cluster",
-	"timeout":                 "Error: Node contribution failed due to timeout",
-}
+	successSynced  = "Synced"
+	setupProcedure = "Setup"
+
+	messageResourceSynced       = "Node Contribution synced successfully"
+	messageDNSFailed            = "DNS record configuration failed"
+	messageDoneSSH              = "SSH connection established"
+	messageDoneKubeadm          = "Bootstrap token created and join command has been invoked"
+	messageDoneSchedulingPatch  = "Node scheduling updated"
+	messageDonePatch            = "Node is patched"
+	messageInvalidHost          = "Host field must be an IP Address"
+	messageSchedulingFailed     = "Scheduling configuration failed"
+	messageUnready              = "Node is unready"
+	messageSSHFailed            = "SSH handshake failed"
+	messageJoinFailed           = "Node cannot join the cluster"
+	messageOwnerReferenceNotSet = "Owner reference is not set"
+	messageSuccessful           = "Node is up and running"
+	messageReconciled           = "Reconciliation is done"
+	messageReconciliation       = "Reconciliation in progress"
+	messageFailed               = "Procedure failed"
+)
 
 // Controller is the controller implementation for Node Contribution resources
 type Controller struct {
@@ -116,9 +99,10 @@ type Controller struct {
 	workqueue workqueue.RateLimitingInterface
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
-	recorder          record.EventRecorder
-	route53hostedZone string
-	domainName        string
+	recorder             record.EventRecorder
+	route53hostedZone    string
+	domainName           string
+	multiproviderManager *multiprovider.Manager
 }
 
 // NewController returns a new controller
@@ -136,6 +120,8 @@ func NewController(
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
+	multiproviderManager := multiprovider.NewManager(kubeclientset, nil, nil, nil)
+
 	controller := &Controller{
 		kubeclientset:           kubeclientset,
 		edgenetclientset:        edgenetclientset,
@@ -147,6 +133,7 @@ func NewController(
 		recorder:                recorder,
 		route53hostedZone:       hostedZone,
 		domainName:              domain,
+		multiproviderManager:    multiproviderManager,
 	}
 
 	klog.Infoln("Setting up event handlers")
@@ -154,29 +141,93 @@ func NewController(
 	nodecontributionInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueNodeContribution,
 		UpdateFunc: func(old, new interface{}) {
-			newNodeContribution := new.(*corev1alpha1.NodeContribution)
-			oldNodeContribution := old.(*corev1alpha1.NodeContribution)
-			if reflect.DeepEqual(newNodeContribution.Spec, oldNodeContribution.Spec) && (newNodeContribution.Status.State != inqueue) {
-				return
-			}
 			controller.enqueueNodeContribution(new)
 		},
 	})
 
-	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newNode := new.(*corev1.Node)
-			oldNode := old.(*corev1.Node)
-			if newNode.ResourceVersion == oldNode.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
+	// Below sets incentives for those who contribute nodes to the cluster by indicating tenant.
+	// The goal is to attach a resource quota claim based on the capacity of the contributed node.
+	// The mechanism removes the quota increment when the node is unavailable or removed.
+	// TODO: Contribution incentives should not be limited to CPU and Memory. It should cover any
+	// resource the node has.
+	// TODO: Be sure that the node is exactly unavailable before removing the quota increment.
+	var setIncentives = func(kind, nodeName string, ownerReferences []metav1.OwnerReference, cpuCapacity, memoryCapacity *resource.Quantity) {
+		for _, owner := range ownerReferences {
+			if owner.Kind == "Tenant" {
+				tenantResourceQuota, err := edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Get(context.TODO(), owner.Name, metav1.GetOptions{})
+				if err == nil {
+					tenantResourceQuotaCopy := tenantResourceQuota.DeepCopy()
+					if kind == "incentive" {
+						cpuCapacityCopy := cpuCapacity.DeepCopy()
+						memoryCapacityCopy := memoryCapacity.DeepCopy()
+						cpuAward := int64(float64(cpuCapacity.Value()) * 1.5)
+						cpuCapacityCopy.Set(cpuAward)
+						memoryAward := int64(float64(memoryCapacity.Value()) * 1.3)
+						memoryCapacityCopy.Set(memoryAward)
 
-	node.Clientset = kubeclientset
+						if _, elementExists := tenantResourceQuotaCopy.Spec.Claim[nodeName]; elementExists {
+							if tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["cpu"].Equal(cpuCapacityCopy) ||
+								tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["memory"].Equal(memoryCapacityCopy) {
+								tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["cpu"] = cpuCapacityCopy
+								tenantResourceQuotaCopy.Spec.Claim[nodeName].ResourceList["memory"] = memoryCapacityCopy
+								edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuotaCopy, metav1.UpdateOptions{})
+							}
+						} else {
+							claim := corev1alpha1.ResourceTuning{
+								ResourceList: corev1.ResourceList{
+									corev1.ResourceCPU:    cpuCapacityCopy,
+									corev1.ResourceMemory: memoryCapacityCopy,
+								},
+							}
+							tenantResourceQuotaCopy.Spec.Claim[nodeName] = claim
+							edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuotaCopy, metav1.UpdateOptions{})
+						}
+					} else if kind == "disincentive" {
+						if _, elementExists := tenantResourceQuota.Spec.Claim[nodeName]; elementExists {
+							delete(tenantResourceQuota.Spec.Claim, nodeName)
+							edgenetclientset.CoreV1alpha1().TenantResourceQuotas().Update(context.TODO(), tenantResourceQuota, metav1.UpdateOptions{})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			nodeObj := obj.(*corev1.Node)
+			for key := range nodeObj.Labels {
+				if key == "node-role.kubernetes.io/master" {
+					return
+				}
+			}
+			if string(corev1.ConditionTrue) == multiprovider.GetConditionReadyStatus(nodeObj) {
+				setIncentives("incentive", nodeObj.GetName(), nodeObj.GetOwnerReferences(), nodeObj.Status.Capacity.Cpu(), nodeObj.Status.Capacity.Memory())
+			}
+		},
+		UpdateFunc: func(old, new interface{}) {
+			oldObj := old.(*corev1.Node)
+			newObj := new.(*corev1.Node)
+			oldReady := multiprovider.GetConditionReadyStatus(oldObj)
+			newReady := multiprovider.GetConditionReadyStatus(newObj)
+			if (oldReady == string(corev1.ConditionFalse) && newReady == string(corev1.ConditionTrue)) ||
+				(oldReady == string(corev1.ConditionUnknown) && newReady == string(corev1.ConditionTrue)) {
+				setIncentives("incentive", newObj.GetName(), newObj.GetOwnerReferences(), newObj.Status.Capacity.Cpu(), newObj.Status.Capacity.Memory())
+			} else if (oldReady == string(corev1.ConditionTrue) && newReady == string(corev1.ConditionFalse)) ||
+				(oldReady == string(corev1.ConditionTrue) && newReady == string(corev1.ConditionUnknown)) {
+				setIncentives("disincentive", newObj.GetName(), newObj.GetOwnerReferences(), nil, nil)
+				controller.handleObject(new)
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			nodeObj := obj.(*corev1.Node)
+			ready := multiprovider.GetConditionReadyStatus(nodeObj)
+			if ready == string(corev1.ConditionTrue) {
+				setIncentives("disincentive", nodeObj.GetName(), nodeObj.GetOwnerReferences(), nil, nil)
+				controller.handleObject(obj)
+			}
+		},
+	})
 
 	return controller
 }
@@ -273,87 +324,10 @@ func (c *Controller) syncHandler(key string) error {
 
 		return err
 	}
+	c.processNodeContribution(nodecontribution.DeepCopy())
 
-	if nodecontribution.Status.State != inqueue && nodecontribution.Status.State != inprogress && nodecontribution.Status.State != success {
-		nodecontributionCopy := nodecontribution.DeepCopy()
-		c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, inqueue, statusDict["in-queue"])
-		nodecontributionCopy.Status.State = inqueue
-		nodecontributionCopy.Status.Message = statusDict["in-queue"]
-		_, err := c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
-		klog.Infoln(err)
-		return nil
-	}
-
-	go c.init(nodecontribution)
 	c.recorder.Event(nodecontribution, corev1.EventTypeNormal, successSynced, messageResourceSynced)
 	return nil
-}
-
-func (c *Controller) init(nodecontribution *corev1alpha1.NodeContribution) {
-	nodecontributionCopy := nodecontribution.DeepCopy()
-	nodecontributionCopy.Status.Message = ""
-	nodeName := fmt.Sprintf("%s.%s", nodecontributionCopy.GetName(), c.domainName)
-
-	recordType := remoteip.GetRecordType(nodecontributionCopy.Spec.Host)
-	if recordType == "" {
-		c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, failure, statusDict["invalid-host"])
-		nodecontributionCopy.Status.State = failure
-		nodecontributionCopy.Status.Message = statusDict["invalid-host"]
-		c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
-		return
-	}
-	// Set the client config according to the node contribution,
-	// with the maximum time of 15 seconds to establist the connection.
-	// Get the SSH Private Key of the control plane node
-	sshPath := "./.ssh"
-	if flag.Lookup("ssh-path") != nil {
-		sshPath = flag.Lookup("ssh-path").Value.(flag.Getter).Get().(string)
-	}
-	key, err := ioutil.ReadFile(sshPath)
-	if err != nil {
-		klog.Info(err.Error())
-		panic(err.Error())
-	}
-
-	publicKey, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		klog.Info(err.Error())
-		panic(err.Error())
-	}
-	config := &ssh.ClientConfig{
-		User:            nodecontributionCopy.Spec.User,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(publicKey)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         15 * time.Second,
-	}
-	addr := fmt.Sprintf("%s:%d", nodecontributionCopy.Spec.Host, nodecontributionCopy.Spec.Port)
-	contributedNode, err := c.nodesLister.Get(nodeName)
-
-	if err == nil {
-		if contributedNode.Spec.Unschedulable != !nodecontributionCopy.Spec.Enabled {
-			err := node.SetNodeScheduling(nodeName, !nodecontributionCopy.Spec.Enabled)
-			if err != nil {
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, incomplete, statusDict["configuration-failure"])
-				nodecontributionCopy.Status.State = incomplete
-				nodecontributionCopy.Status.Message = statusDict["configuration-failure"]
-			} else {
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDonePatch)
-			}
-		}
-		if node.GetConditionReadyStatus(contributedNode.DeepCopy()) == trueStr {
-			c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, success, statusDict["successful"])
-			nodecontributionCopy.Status.State = success
-			nodecontributionCopy.Status.Message = statusDict["successful"]
-		} else {
-			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, failure, statusDict["failure"])
-			nodecontributionCopy.Status.State = failure
-			nodecontributionCopy.Status.Message = statusDict["failure"]
-		}
-		c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
-	} else {
-		c.balanceMultiThreading(5)
-		c.setup(addr, nodeName, recordType, config, nodecontributionCopy)
-	}
 }
 
 // enqueueNodeContribution takes a NodeContribution resource and converts it into a namespace/name
@@ -367,6 +341,19 @@ func (c *Controller) enqueueNodeContribution(obj interface{}) {
 		return
 	}
 	c.workqueue.Add(key)
+}
+
+// enqueueNodeContributionAfter takes a NodeContribution resource and converts it into a namespace/name
+// string which is then put onto the work queue after the specified date to try establishing an SSH connection with the node.
+// This method should *not* be passed resources of any type other than NodeContribution.
+func (c *Controller) enqueueNodeContributionAfter(obj interface{}, after time.Duration) {
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.workqueue.AddAfter(key, after)
 }
 
 // handleObject will take any resource implementing metav1.Object and attempt
@@ -402,232 +389,348 @@ func (c *Controller) handleObject(obj interface{}) {
 			return
 		}
 
-		if (node.GetConditionReadyStatus(object.(*corev1.Node)) == trueStr && nodecontribution.Status.State != success && nodecontribution.Status.State != inqueue) ||
-			(node.GetConditionReadyStatus(object.(*corev1.Node)) != trueStr && nodecontribution.Status.State == success) {
-			c.enqueueNodeContribution(nodecontribution)
-		}
+		c.enqueueNodeContributionAfter(nodecontribution, 15*time.Minute)
 		return
 	}
 }
 
-// balanceMultiThreading is a simple algorithm to limit concurrent threads
-func (c *Controller) balanceMultiThreading(limit int) {
-	var queue int
-	ncRaw, err := c.nodecontributionsLister.List(labels.Everything())
-	if err == nil {
-		for _, ncRow := range ncRaw {
-			if ncRow.Status.State == inqueue {
-				queue++
-			}
+func (c *Controller) processNodeContribution(nodecontributionCopy *corev1alpha1.NodeContribution) {
+	if nodecontributionCopy.Status.UpdateTimestamp != nil && nodecontributionCopy.Status.UpdateTimestamp.Add(24*time.Hour).After(time.Now()) {
+		if exceedsBackoffLimit := nodecontributionCopy.Status.Failed >= backoffLimit; exceedsBackoffLimit {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageFailed)
+			return
 		}
 	}
-
-	if queue >= limit {
-		rand.Seed(time.Now().UnixNano())
-		randomDuration := rand.Intn(queue * 1000)
-		time.Sleep(time.Duration(randomDuration) * time.Millisecond)
+	recordType := multiprovider.GetRecordType(nodecontributionCopy.Spec.Host)
+	if recordType == "" {
+		c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageInvalidHost)
+		nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+		nodecontributionCopy.Status.Message = messageInvalidHost
+		c.updateStatus(context.TODO(), nodecontributionCopy)
+		return
 	}
 
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
-check:
-	for ; true; <-ticker.C {
-		var threads int
-		ncRaw, err := c.nodecontributionsLister.List(labels.Everything())
-		if err == nil {
-			for _, ncRow := range ncRaw {
-				if ncRow.Status.State == inprogress {
-					threads++
+	nodeName := fmt.Sprintf("%s.%s", nodecontributionCopy.GetName(), c.domainName)
+	switch nodecontributionCopy.Status.State {
+	case corev1alpha1.StatusReady:
+		if contributedNode, isJoined, isReady, _ := c.getNodeInfo(nodecontributionCopy.GetCreationTimestamp(), nodeName); !isJoined {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusReconciliation, messageReconciliation)
+			nodecontributionCopy.Status.State = corev1alpha1.StatusReconciliation
+			nodecontributionCopy.Status.Message = messageReconciliation
+			c.updateStatus(context.TODO(), nodecontributionCopy)
+			return
+		} else if !isReady {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusAccessed, messageReconciliation)
+			nodecontributionCopy.Status.State = corev1alpha1.StatusAccessed
+			nodecontributionCopy.Status.Message = messageReconciliation
+			c.updateStatus(context.TODO(), nodecontributionCopy)
+			return
+		} else {
+			if contributedNode.Spec.Unschedulable != !nodecontributionCopy.Spec.Enabled {
+				if err := c.multiproviderManager.SetNodeScheduling(nodeName, !nodecontributionCopy.Spec.Enabled); err != nil {
+					nodecontributionCopy.Status.State = corev1alpha1.StatusAccessed
+					nodecontributionCopy.Status.Message = messageReconciliation
 				}
 			}
-			if threads < limit {
-				break check
+			if ownerRef := metav1.GetControllerOf(contributedNode); (ownerRef == nil) || (ownerRef != nil && ownerRef.Kind != "NodeContribution") {
+				nodecontributionCopy.Status.State = corev1alpha1.StatusAccessed
+				nodecontributionCopy.Status.Message = messageReconciliation
+			}
+			if nodecontributionCopy.Spec.Tenant != nil {
+				contributorTenant, err := c.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), *nodecontributionCopy.Spec.Tenant, metav1.GetOptions{})
+				if err == nil {
+					tenantRefExists := false
+					nodeOwnerReferences := contributedNode.GetOwnerReferences()
+					for _, value := range nodeOwnerReferences {
+						if value == contributorTenant.MakeOwnerReference() {
+							tenantRefExists = true
+						}
+					}
+					if !tenantRefExists {
+						nodecontributionCopy.Status.State = corev1alpha1.StatusAccessed
+						nodecontributionCopy.Status.Message = messageReconciliation
+					}
+				}
+			}
+
+			if nodecontributionCopy.Status.State != corev1alpha1.StatusReady {
+				nodecontributionCopy.Status.Failed = 0
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusAccessed, messageReconciliation)
+				c.updateStatus(context.TODO(), nodecontributionCopy)
+				return
+			}
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, corev1alpha1.StatusReconciliation, messageReconciled)
+		}
+	case corev1alpha1.StatusAccessed:
+		if _, isJoined, isReady, hasTimedOut := c.getNodeInfo(nodecontributionCopy.GetCreationTimestamp(), nodeName); !isJoined {
+			if hasTimedOut {
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageJoinFailed)
+				nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+				nodecontributionCopy.Status.Message = messageJoinFailed
+				c.updateStatus(context.TODO(), nodecontributionCopy)
+				return
+			}
+			c.enqueueNodeContributionAfter(nodecontributionCopy, 1*time.Minute)
+		} else {
+			if isSynced := c.syncResources(nodecontributionCopy, nodeName); !isSynced {
+				return
+			}
+			if !isReady {
+				if hasTimedOut {
+					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageUnready)
+					nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+					nodecontributionCopy.Status.Message = messageUnready
+					c.updateStatus(context.TODO(), nodecontributionCopy)
+					return
+				}
+				c.enqueueNodeContributionAfter(nodecontributionCopy, 10*time.Minute)
+			} else {
+				klog.Infof("DNS configuration started: %s", nodeName)
+				// Use AWS Route53 for registration
+				awsIDPath := "/edgenet/aws/id"
+				if flag.Lookup("aws-id-path") != nil {
+					awsIDPath = flag.Lookup("aws-id-path").Value.(flag.Getter).Get().(string)
+				}
+				awsSecretPath := "/edgenet/aws/secret"
+				if flag.Lookup("aws-secret-path") != nil {
+					awsSecretPath = flag.Lookup("aws-secret-path").Value.(flag.Getter).Get().(string)
+				}
+				awsID, err := ioutil.ReadFile(awsIDPath)
+				if err != nil {
+					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
+					nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+					nodecontributionCopy.Status.Message = messageDNSFailed
+					c.updateStatus(context.TODO(), nodecontributionCopy)
+					return
+				}
+				awsSecret, err := ioutil.ReadFile(awsSecretPath)
+				if err != nil {
+					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
+					nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+					nodecontributionCopy.Status.Message = messageDNSFailed
+					c.updateStatus(context.TODO(), nodecontributionCopy)
+					return
+				}
+				if updated, _ := multiprovider.SetHostnameRoute53(awsID, awsSecret, c.route53hostedZone, nodeName, nodecontributionCopy.Spec.Host, recordType); !updated {
+					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
+					nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+					nodecontributionCopy.Status.Message = messageDNSFailed
+					c.updateStatus(context.TODO(), nodecontributionCopy)
+					return
+				}
+				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, corev1alpha1.StatusReady, messageSuccessful)
+				nodecontributionCopy.Status.State = corev1alpha1.StatusReady
+				nodecontributionCopy.Status.Message = messageSuccessful
+				c.updateStatus(context.TODO(), nodecontributionCopy)
 			}
 		}
+	default:
+		if _, isJoined, isReady, _ := c.getNodeInfo(nodecontributionCopy.GetCreationTimestamp(), nodeName); isJoined && isReady {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneKubeadm)
+			nodecontributionCopy.Status.State = corev1alpha1.StatusAccessed
+			nodecontributionCopy.Status.Message = messageDoneKubeadm
+			c.updateStatus(context.TODO(), nodecontributionCopy)
+			return
+		}
+		// TODO: Include HostKeyCallback
+		signer, _, ok := getSSHConfigurations()
+		if !ok {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageSSHFailed)
+			nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+			nodecontributionCopy.Status.Message = messageSSHFailed
+			c.updateStatus(context.TODO(), nodecontributionCopy)
+			return
+		}
+		config := &ssh.ClientConfig{
+			User:            nodecontributionCopy.Spec.User,
+			Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			Timeout:         15 * time.Second,
+		}
+		addr := fmt.Sprintf("%s:%d", nodecontributionCopy.Spec.Host, nodecontributionCopy.Spec.Port)
+		klog.Infof("Establish SSH connection: %s", nodeName)
+		conn := new(ssh.Client)
+		isSuccessful := false
+		isConnected := make(chan bool, 1)
+		go c.sshDialRoutine(conn, config, addr, isConnected)
+		select {
+		case isSuccessful = <-isConnected:
+			break
+		case <-time.After(15 * time.Second):
+			break
+		}
+		if !isSuccessful {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageSSHFailed)
+			nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+			nodecontributionCopy.Status.Message = messageSSHFailed
+			c.updateStatus(context.TODO(), nodecontributionCopy)
+			return
+		}
+		c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneSSH)
+		defer conn.Close()
+		isCompleted := make(chan bool, 1)
+		isSuccessful = false
+		go c.join(conn, nodeName, isCompleted)
+		select {
+		case isSuccessful = <-isCompleted:
+			break
+		case <-time.After(5 * time.Minute):
+			break
+		}
+		if !isSuccessful {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageJoinFailed)
+			nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+			nodecontributionCopy.Status.Message = messageJoinFailed
+			c.updateStatus(context.TODO(), nodecontributionCopy)
+			return
+		}
+		c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneKubeadm)
+		nodecontributionCopy.Status.State = corev1alpha1.StatusAccessed
+		nodecontributionCopy.Status.Message = messageDoneKubeadm
+		c.updateStatus(context.TODO(), nodecontributionCopy)
 	}
 }
 
-// setup registers DNS record and makes the node join into the cluster
-func (c *Controller) setup(addr, nodeName, recordType string, config *ssh.ClientConfig, nodecontributionCopy *corev1alpha1.NodeContribution) error {
-	c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageSetupPhase)
-	// Steps in the procedure
-	endProcedure := make(chan bool, 1)
-	dnsConfiguration := make(chan bool, 1)
-	establishConnection := make(chan bool, 1)
-	kubeadm := make(chan bool, 1)
-	nodePatch := make(chan bool, 1)
+func (c *Controller) syncResources(nodecontributionCopy *corev1alpha1.NodeContribution, nodeName string) bool {
+	klog.Infof("Patch node and set owner references: %s", nodeName)
+	// Set the node as schedulable or unschedulable according to the node contribution
+	if err := c.multiproviderManager.SetNodeScheduling(nodeName, !nodecontributionCopy.Spec.Enabled); err != nil {
+		c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageSchedulingFailed)
+		nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+		nodecontributionCopy.Status.Message = messageSchedulingFailed
+		c.updateStatus(context.TODO(), nodecontributionCopy)
+		return false
+	}
+	c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneSchedulingPatch)
 
-	// Set the status as in progress
-	c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, inprogress, statusDict["in-progress"])
-	nodecontributionCopy.Status.State = inprogress
-	nodecontributionCopy.Status.Message = statusDict["in-progress"]
-	nodecontributionUpdated, err := c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(context.TODO(), nodecontributionCopy, metav1.UpdateOptions{})
+	ownerReferences := c.formOwnerReferences(nodecontributionCopy)
+	if err := c.multiproviderManager.SetOwnerReferences(nodeName, ownerReferences); err != nil {
+		c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageOwnerReferenceNotSet)
+		nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+		nodecontributionCopy.Status.Message = messageOwnerReferenceNotSet
+		c.updateStatus(context.TODO(), nodecontributionCopy)
+		return false
+	}
 
-	defer func() {
-		if !reflect.DeepEqual(nodecontributionCopy.Status, nodecontributionUpdated.Status) {
-			if _, err := c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(context.TODO(), nodecontributionUpdated, metav1.UpdateOptions{}); err != nil {
-				// TO-DO: Provide more information on error
-				klog.Info(err)
-			}
-		}
-	}()
-
-	var conn *ssh.Client
-	// connCounter to try establishing a connection for several times
-	connCounter := 0
-	// Start DNS configuration for domain
-	dnsConfiguration <- true
-	// This statement to organize tasks and put a general timeout on
-nodeSetupLoop:
-	for {
-		select {
-		case <-dnsConfiguration:
-			klog.Infof("DNS configuration started: %s", nodeName)
-			// Use AWS Route53 for registration
-			updated, _ := node.SetHostnameRoute53(c.route53hostedZone, nodeName, nodecontributionUpdated.Spec.Host, recordType)
-			// If the DNS record cannot be updated, update the status of the node contribution.
-			// However, the setup procedure keeps going on, so, it is not terminated.
-			if !updated {
-				recordError := fmt.Sprintf("Warning: Hostname %s or address %s couldn't added", nodeName, nodecontributionUpdated.Spec.Host)
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, incomplete, recordError)
-				nodecontributionUpdated.Status.State = incomplete
-				nodecontributionUpdated.Status.Message = recordError
-				klog.Info(recordError)
-			} else {
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneDNS)
-			}
-			establishConnection <- true
-		case <-establishConnection:
-			klog.Infof("Establish SSH connection: %s", nodeName)
-			go func() {
-				conn, err = ssh.Dial("tcp", addr, config)
-				if err != nil && connCounter < 3 {
-					klog.Info(err)
-					// Wait one minute to try establishing a connection again
-					time.Sleep(1 * time.Minute)
-					establishConnection <- true
-					connCounter++
-					return
-				} else if (conn == nil) || (err != nil && connCounter >= 3) {
-					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, failure, statusDict["ssh-failure"])
-					nodecontributionUpdated.Status.State = failure
-					nodecontributionUpdated.Status.Message = statusDict["ssh-failure"]
-					klog.Info(err)
-					endProcedure <- true
-					return
-				}
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneSSH)
-				kubeadm <- true
-			}()
-		case <-kubeadm:
-			klog.Infof("Create a token and run kubadm join: %s", nodeName)
-			// To prevent hanging forever during establishing a connection
-			go func() {
-				defer func() {
-					if conn != nil {
-						conn.Close()
-					}
-				}()
-				err := c.join(conn, nodeName)
-				if err != nil {
-					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, failure, statusDict["join-failure"])
-					nodecontributionUpdated.Status.State = failure
-					nodecontributionUpdated.Status.Message = statusDict["join-failure"]
-					klog.Info(err)
-					endProcedure <- true
-					return
-				}
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDoneKubeadm)
-				// TO-DO: Provide a better mechanism here
-				time.Sleep(30 * time.Second)
-				_, err = c.nodesLister.Get(nodeName)
-				if err == nil {
-					nodePatch <- true
-				}
-			}()
-		case <-nodePatch:
-			klog.Infof("Patch scheduling option: %s", nodeName)
-			// Set the node as schedulable or unschedulable according to the node contribution
-			err := node.SetNodeScheduling(nodeName, !nodecontributionUpdated.Spec.Enabled)
-			if err != nil {
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, incomplete, statusDict["configuration-failure"])
-				nodecontributionUpdated.Status.State = incomplete
-				nodecontributionUpdated.Status.Message = statusDict["configuration-failure"]
-			} else {
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDonePatch)
-			}
-			ownerReferences := SetAsOwnerReference(nodecontributionUpdated)
-			if nodecontributionUpdated.Spec.Tenant != nil {
-				contributorTenant, err := c.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), *nodecontributionUpdated.Spec.Tenant, metav1.GetOptions{})
-				if err == nil {
-					ownerReferences = append(ownerReferences, contributorTenant.MakeOwnerReference())
-				}
-			}
-			err = node.SetOwnerReferences(nodeName, ownerReferences)
-			if err != nil {
-				c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, incomplete, statusDict["owner-reference-failure"])
-				nodecontributionUpdated.Status.State = incomplete
-				nodecontributionUpdated.Status.Message = statusDict["owner-reference-failure"]
-			}
-			if vpnPeer, err := c.edgenetclientset.NetworkingV1alpha1().VPNPeers().Get(context.TODO(), nodecontributionUpdated.GetName(), metav1.GetOptions{}); err == nil {
-				vpnPeerCopy := vpnPeer.DeepCopy()
-				vpnPeerCopy.SetOwnerReferences(ownerReferences)
-				if _, err := c.edgenetclientset.NetworkingV1alpha1().VPNPeers().Update(context.TODO(), vpnPeerCopy, metav1.UpdateOptions{}); err != nil {
-					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, incomplete, statusDict["owner-reference-failure"])
-					nodecontributionUpdated.Status.State = incomplete
-					nodecontributionUpdated.Status.Message = statusDict["owner-reference-failure"]
-				}
-			}
-			endProcedure <- true
-		case <-endProcedure:
-			klog.Infof("Procedure completed: %s", nodeName)
-			c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageEnd)
-			break nodeSetupLoop
-		case <-time.After(5 * time.Minute):
-			klog.Infof("Timeout: %s", nodeName)
-			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, setupProcedure, messageTimeout)
-			// Terminate the procedure after 5 minutes
-			nodecontributionUpdated.Status.State = failure
-			nodecontributionUpdated.Status.Message = statusDict["timeout"]
-			klog.Info(err)
-			break nodeSetupLoop
+	if vpnPeer, err := c.edgenetclientset.NetworkingV1alpha1().VPNPeers().Get(context.TODO(), nodecontributionCopy.GetName(), metav1.GetOptions{}); err == nil {
+		vpnPeerCopy := vpnPeer.DeepCopy()
+		vpnPeerCopy.SetOwnerReferences(ownerReferences)
+		if _, err := c.edgenetclientset.NetworkingV1alpha1().VPNPeers().Update(context.TODO(), vpnPeerCopy, metav1.UpdateOptions{}); err != nil {
+			c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageOwnerReferenceNotSet)
+			nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
+			nodecontributionCopy.Status.Message = messageOwnerReferenceNotSet
+			c.updateStatus(context.TODO(), nodecontributionCopy)
+			return false
 		}
 	}
-	return err
+	c.recorder.Event(nodecontributionCopy, corev1.EventTypeNormal, setupProcedure, messageDonePatch)
+	return true
+}
+
+func (c *Controller) formOwnerReferences(nodecontributionCopy *corev1alpha1.NodeContribution) []metav1.OwnerReference {
+	ownerReference := nodecontributionCopy.MakeOwnerReference()
+	takeControl := true
+	ownerReference.Controller = &takeControl
+	ownerReferences := []metav1.OwnerReference{ownerReference}
+	if nodecontributionCopy.Spec.Tenant != nil {
+		contributorTenant, err := c.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), *nodecontributionCopy.Spec.Tenant, metav1.GetOptions{})
+		if err == nil {
+			ownerReferences = append(ownerReferences, contributorTenant.MakeOwnerReference())
+		}
+	}
+	return ownerReferences
+}
+func (c *Controller) getNodeInfo(contributionCreationTimestamp metav1.Time, nodeName string) (contributedNode *corev1.Node, isJoined bool, isReady bool, hasTimedOut bool) {
+	var err error
+	if contributedNode, err = c.nodesLister.Get(nodeName); err == nil {
+		if multiprovider.GetConditionReadyStatus(contributedNode) == string(corev1.ConditionTrue) {
+			isJoined, isReady = true, true
+		} else {
+			isJoined = true
+			if contributionCreationTimestamp.Add(10 * time.Minute).Before(time.Now()) {
+				hasTimedOut = true
+			}
+		}
+	} else {
+		if contributionCreationTimestamp.Add(5 * time.Minute).Before(time.Now()) {
+			hasTimedOut = true
+		}
+	}
+	return contributedNode, isJoined, isReady, hasTimedOut
+}
+
+func (c *Controller) sshDialRoutine(conn *ssh.Client, config *ssh.ClientConfig, addr string, done chan<- bool) {
+	clientConn, err := ssh.Dial("tcp", addr, config)
+	if err != nil {
+		done <- false
+		return
+	}
+	*conn = *clientConn
+	done <- true
+}
+
+func getSSHConfigurations() (ssh.Signer, ssh.HostKeyCallback, bool) {
+	// Set the client config according to the node contribution,
+	// with the maximum time of 15 seconds to establist the connection.
+	// Get the SSH Private Key of the control plane node
+	sshPath := "./.ssh"
+	if flag.Lookup("ssh-path") != nil {
+		sshPath = flag.Lookup("ssh-path").Value.(flag.Getter).Get().(string)
+	}
+	key, err := ioutil.ReadFile(fmt.Sprintf("%s/id_rsa", sshPath))
+	if err != nil {
+		klog.Infoln(err)
+		return nil, nil, false
+	}
+	signer, err := ssh.ParsePrivateKey(key)
+	if err != nil {
+		klog.Infoln(err)
+		return nil, nil, false
+	}
+	/*hostkeyCallback, err := knownhosts.New(fmt.Sprintf("%s/known_hosts", sshPath))
+	if err != nil {
+		klog.Infoln(err)
+		return nil, nil, false
+	}*/
+	return signer, nil, true
 }
 
 // join creates a token and runs kubeadm join command
-func (c *Controller) join(conn *ssh.Client, nodeName string) error {
+func (c *Controller) join(conn *ssh.Client, nodeName string, done chan<- bool) {
 	commands := []string{
 		"sudo su",
 		"kubeadm reset -f",
-		node.CreateJoinToken("30m", nodeName),
+		c.multiproviderManager.CreateJoinToken("30m", nodeName),
 	}
 	sess, err := startSession(conn)
 	if err != nil {
 		klog.Info(err)
-		return err
+		done <- false
+		return
 	}
 	defer sess.Close()
 	// StdinPipe for commands
 	stdin, err := sess.StdinPipe()
 	if err != nil {
 		klog.Info(err)
-		return err
+		done <- false
+		return
 	}
 	//sess.Stdout = os.Stdout
 	sess.Stderr = os.Stderr
 	sess, err = startShell(sess)
 	if err != nil {
 		klog.Info(err)
-		return err
+		done <- false
+		return
 	}
 	// Run commands sequentially
 	for _, cmd := range commands {
 		_, err = fmt.Fprintf(stdin, "%s\n", cmd)
 		if err != nil {
 			klog.Info(err)
-			return err
+			done <- false
+			return
 		}
 	}
 	stdin.Close()
@@ -635,9 +738,10 @@ func (c *Controller) join(conn *ssh.Client, nodeName string) error {
 	err = sess.Wait()
 	if err != nil {
 		klog.Info(err)
-		return err
+		done <- false
+		return
 	}
-	return nil
+	done <- true
 }
 
 // Start a new session in the connection
@@ -660,13 +764,14 @@ func startShell(sess *ssh.Session) (*ssh.Session, error) {
 	return sess, nil
 }
 
-// SetAsOwnerReference returns the nodecontribution as owner
-func SetAsOwnerReference(nodecontributionCopy *corev1alpha1.NodeContribution) []metav1.OwnerReference {
-	// The following section makes nodecontribution become the owner
-	ownerReferences := []metav1.OwnerReference{}
-	newRef := *metav1.NewControllerRef(nodecontributionCopy, corev1alpha1.SchemeGroupVersion.WithKind("NodeContribution"))
-	takeControl := true
-	newRef.Controller = &takeControl
-	ownerReferences = append(ownerReferences, newRef)
-	return ownerReferences
+// updateStatus calls the API to update the slice status.
+func (c *Controller) updateStatus(ctx context.Context, nodecontributionCopy *corev1alpha1.NodeContribution) {
+	if nodecontributionCopy.Status.State == corev1alpha1.StatusFailed {
+		nodecontributionCopy.Status.Failed++
+		now := metav1.Now()
+		nodecontributionCopy.Status.UpdateTimestamp = &now
+	}
+	if _, err := c.edgenetclientset.CoreV1alpha1().NodeContributions().UpdateStatus(ctx, nodecontributionCopy, metav1.UpdateOptions{}); err != nil {
+		klog.Infoln(err)
+	}
 }

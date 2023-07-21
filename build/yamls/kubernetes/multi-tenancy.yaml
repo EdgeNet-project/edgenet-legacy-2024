@@ -11,6 +11,114 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    edge-net.io/generated: "true"
+  name: edgenet:tenant-owner
+rules:
+- apiGroups:
+  - core.edgenet.io
+  resources:
+  - subnamespaces
+  - sliceclaims
+  verbs:
+  - '*'
+- apiGroups:
+  - core.edgenet.io
+  resources:
+  - subnamespaces/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps.edgenet.io
+  resources:
+  - selectivedeployments
+  verbs:
+  - '*'
+- apiGroups:
+  - registration.edgenet.io
+  resources:
+  - rolerequests
+  verbs:
+  - '*'
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  - rolebindings
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - endpoints
+  - persistentvolumeclaims
+  - pods
+  - pods/exec
+  - pods/log
+  - pods/attach
+  - pods/portforward
+  - replicationcontrollers
+  - services
+  - secrets
+  - serviceaccounts
+  verbs:
+  - '*'
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  - replicasets
+  - statefulsets
+  verbs:
+  - '*'
+- apiGroups:
+  - autoscaling
+  resources:
+  - horizontalpodautoscalers
+  verbs:
+  - '*'
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  - jobs
+  verbs:
+  - '*'
+- apiGroups:
+  - extensions
+  resources:
+  - daemonsets
+  - deployments
+  - ingresses
+  - networkpolicies
+  - replicasets
+  - replicationcontrollers
+  verbs:
+  - '*'
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  - networkpolicies
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - events
+  - controllerrevisions
+  verbs:
+  - get
+  - list
+  - watch
+---
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -101,10 +209,7 @@ spec:
                     owner:
                       type: object
                       required:
-                        - firstname
-                        - lastname
                         - email
-                        - phone
                       properties:
                         firstname:
                           type: string
@@ -128,6 +233,11 @@ spec:
                   type: string
                 message:
                   type: string
+                child:
+                  type: string
+                  nullable: true
+                failed:
+                  type: integer 
   scope: Namespaced
   names:
     plural: subnamespaces
@@ -178,7 +288,6 @@ spec:
                 - fullname
                 - shortname
                 - url
-                - address
                 - contact
                 - enabled
               properties:
@@ -190,11 +299,6 @@ spec:
                   type: string
                 address:
                   type: object
-                  required:
-                    - street
-                    - zip
-                    - city
-                    - country
                   properties:
                     street:
                       type: string
@@ -210,10 +314,7 @@ spec:
                 contact:
                   type: object
                   required:
-                    - firstname
-                    - lastname
                     - email
-                    - phone
                   properties:
                     firstname:
                       type: string
@@ -226,6 +327,8 @@ spec:
                 clusternetworkpolicy:
                   type: boolean
                   default: false
+                description:
+                  type: string
                 enabled:
                   type: boolean
             status:
@@ -235,6 +338,8 @@ spec:
                   type: string
                 message:
                   type: string
+                failed:
+                  type: integer 
   scope: Cluster
   names:
     plural: tenants
@@ -288,7 +393,6 @@ spec:
                 - fullname
                 - shortname
                 - url
-                - address
                 - contact
               properties:
                 fullname:
@@ -299,11 +403,6 @@ spec:
                   type: string
                 address:
                   type: object
-                  required:
-                    - street
-                    - zip
-                    - city
-                    - country
                   properties:
                     street:
                       type: string
@@ -319,10 +418,7 @@ spec:
                 contact:
                   type: object
                   required:
-                    - firstname
-                    - lastname
                     - email
-                    - phone
                   properties:
                     firstname:
                       type: string
@@ -335,6 +431,8 @@ spec:
                 clusternetworkpolicy:
                   type: boolean
                   default: true
+                description:
+                  type: string
                 resourceallocation:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
@@ -354,6 +452,8 @@ spec:
                 notified:
                   type: boolean
                   default: false
+                failed:
+                  type: integer 
   scope: Cluster
   names:
     plural: tenantrequests
@@ -403,6 +503,8 @@ spec:
                   type: string
                 message:
                   type: string
+                failed:
+                  type: integer 
   scope: Cluster
   names:
     plural: tenantresourcequotas
@@ -489,6 +591,8 @@ spec:
                 notified:
                   type: boolean
                   default: false
+                failed:
+                  type: integer 
   scope: Namespaced
   names:
     plural: rolerequests
@@ -564,6 +668,8 @@ spec:
                 notified:
                   type: boolean
                   default: false
+                failed:
+                  type: integer 
   scope: Cluster
   names:
     plural: clusterrolerequests
@@ -645,6 +751,8 @@ spec:
                   type: string
                 message:
                   type: string
+                failed:
+                  type: integer 
   scope: Namespaced
   names:
     plural: sliceclaims
@@ -724,6 +832,8 @@ spec:
                   type: string
                   format: dateTime
                   nullable: true
+                failed:
+                  type: integer 
   scope: Cluster
   names:
     plural: slices
@@ -748,7 +858,10 @@ metadata:
   name: edgenet:service:subnamespace
 rules:
 - apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces", "subnamespaces/status"]
+  resources: ["subnamespaces", "subnamespaces/status", "sliceclaims"]
+  verbs: ["*"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["rolerequests"]
   verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenants"]
@@ -837,9 +950,16 @@ spec:
       containers:
       - command:
         - ./subnamespace
-        image: edgenetio/subnamespace:main
+        image: edgenetio/subnamespace:v1.0.0-alpha.5
         imagePullPolicy: Always
         name: subnamespace
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m" 
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -872,7 +992,10 @@ metadata:
   name: edgenet:service:tenant
 rules:
 - apiGroups: ["core.edgenet.io"]
-  resources: ["tenants", "tenants/status", "subnamespaces"]
+  resources: ["tenants", "tenants/status", "subnamespaces", "sliceclaims"]
+  verbs: ["*"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["rolerequests"]
   verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenantresourcequotas"]
@@ -979,9 +1102,16 @@ spec:
       containers:
       - command:
         - ./tenant
-        image: edgenetio/tenant:main
+        image: edgenetio/tenant:v1.0.0-alpha.5
         imagePullPolicy: Always
         name: tenant
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m" 
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -1121,9 +1251,16 @@ spec:
       containers:
       - command:
         - ./tenantrequest
-        image: edgenetio/tenantrequest:main
+        image: edgenetio/tenantrequest:v1.0.0-alpha.5
         imagePullPolicy: Always
         name: tenantrequest
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m" 
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -1215,9 +1352,16 @@ spec:
       containers:
       - command:
         - ./tenantresourcequota
-        image: edgenetio/tenantresourcequota:main
+        image: edgenetio/tenantresourcequota:v1.0.0-alpha.5
         imagePullPolicy: Always
         name: tenantresourcequota
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m" 
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -1348,9 +1492,16 @@ spec:
       containers:
       - command:
         - ./rolerequest
-        image: edgenetio/rolerequest:main
+        image: edgenetio/rolerequest:v1.0.0-alpha.5
         imagePullPolicy: Always
         name: rolerequest
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m" 
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -1481,9 +1632,16 @@ spec:
       containers:
       - command:
         - ./clusterrolerequest
-        image: edgenetio/clusterrolerequest:main
+        image: edgenetio/clusterrolerequest:v1.0.0-alpha.5
         imagePullPolicy: Always
         name: clusterrolerequest
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m" 
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -1519,7 +1677,7 @@ rules:
   resources: ["sliceclaims", "sliceclaims/status", "slices", "slices/status"]
   verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces"]
+  resources: ["subnamespaces", "tenants"]
   verbs: ["get", "list", "watch", "update"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["subnamespaces/status"]
@@ -1575,9 +1733,16 @@ spec:
       containers:
       - command:
         - ./sliceclaim
-        image: edgenetio/sliceclaim:main
+        image: edgenetio/sliceclaim:v1.0.0-alpha.5
         imagePullPolicy: Always
         name: sliceclaim
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m" 
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -1591,10 +1756,6 @@ spec:
         key: node-role.kubernetes.io/control-plane
       - effect: NoSchedule
         key: node.kubernetes.io/unschedulable
-      volumes:
-      - name: configs
-        secret:
-          secretName: configs-secret
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -1673,9 +1834,16 @@ spec:
       containers:
       - command:
         - ./slice
-        image: edgenetio/slice:main
+        image: edgenetio/slice:v1.0.0-alpha.5
         imagePullPolicy: Always
         name: slice
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m" 
       priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
@@ -1756,7 +1924,7 @@ metadata:
   name: edgenet:registration
 rules:
 - apiGroups: ["registration.edgenet.io"]
-  resources: ["tenantrequests", "userrequests"]
+  resources: ["tenantrequests", "rolerequests", "clusterrolerequests"]
   verbs: ["create"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenants"]
@@ -1822,7 +1990,7 @@ spec:
     name: ca-root
     kind: ClusterIssuer
   secretName: api-server
-  duration: 2160h
+  duration: 4320h
   renewBefore: 360h
   dnsNames:
     - pod-bandwidth-mutate.edge-net.io
@@ -1851,7 +2019,7 @@ spec:
     name: ca-root
     kind: ClusterIssuer
   secretName: admission-control
-  duration: 2160h
+  duration: 4320h
   renewBefore: 360h
   dnsNames:
     - admission-control.edgenet.svc
@@ -1880,7 +2048,7 @@ spec:
     spec:
       containers:
         - name: admission-control-webhook
-          image: edgenetio/admissioncontrol:main
+          image: edgenetio/admissioncontrol:v1.0.0-alpha.5
           imagePullPolicy: Always
           ports:
             - containerPort: 443
@@ -1893,6 +2061,17 @@ spec:
               value: /tls/tls.crt
             - name: TLS_PRIVATE_KEY
               value: /tls/tls.key
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
       volumes:
         - name: cert
           secret:
@@ -1908,7 +2087,7 @@ spec:
     app: admission-control-webhook
   ports:
     - port: 443
-      targetPort: 443
+      targetPort: 8080
 ---
 kind: MutatingWebhookConfiguration
 apiVersion: admissionregistration.k8s.io/v1

@@ -21,14 +21,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/access"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/registration/v1alpha1"
-	"github.com/EdgeNet-project/edgenet/pkg/namespace"
+	multitenancy "github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -61,11 +60,6 @@ const (
 	messagePending          = "Waiting for approval"
 	messageBindingFailed    = "Role binding failed"
 	messageOwnershipFailure = "Role Request ownership cannot be granted"
-
-	statusFailed   = "Failed"
-	statusPending  = "Pending"
-	statusApproved = "Approved"
-	statusBound    = "Bound"
 )
 
 // Controller is the controller implementation for Role Request resources
@@ -125,11 +119,6 @@ func NewController(
 			controller.enqueueRoleRequest(new)
 		},
 	})
-
-	access.Clientset = kubeclientset
-	access.EdgenetClientset = edgenetclientset
-	namespace.Clientset = kubeclientset
-	namespace.EdgenetClientset = edgenetclientset
 
 	return controller
 }
@@ -269,8 +258,8 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha1.Ro
 		return
 	}
 
-	permitted := namespace.EligibilityCheck(roleRequestCopy.GetName(), roleRequestCopy.GetNamespace())
-
+	multitenancyManager := multitenancy.NewManager(c.kubeclientset, c.edgenetclientset)
+	permitted, _, _ := multitenancyManager.EligibilityCheck(roleRequestCopy.GetNamespace())
 	if permitted {
 		// Below is to ensure that the requested Role / ClusterRole exists before moving forward in the procedure.
 		// If not, the status of the object falls into an error state.
@@ -280,9 +269,9 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha1.Ro
 		}
 
 		switch roleRequestCopy.Status.State {
-		case statusBound:
-			c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, statusBound, messageRoleBound)
-		case statusApproved:
+		case registrationv1alpha1.StatusBound:
+			c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, registrationv1alpha1.StatusBound, messageRoleBound)
+		case registrationv1alpha1.StatusApproved:
 			// The following section handles role binding. There are two basic logical steps here.
 			// Check if role binding already exists; if not, create a role binding for the user.
 			// If role binding exists, check if the user already holds the role. If not, pin the role to the user.
@@ -299,10 +288,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha1.Ro
 					return
 				}
 
-				if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(requestedBinding.GetNamespace()).Get(context.TODO(), requestedBinding.GetName(), metav1.GetOptions{}); err != nil {
-					c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
-					return
-				} else {
+				if roleBinding, err := c.kubeclientset.RbacV1().RoleBindings(requestedBinding.GetNamespace()).Get(context.TODO(), requestedBinding.GetName(), metav1.GetOptions{}); err == nil {
 					isBound := false
 					for _, subjectRow := range roleBinding.Subjects {
 						if subjectRow.Kind == "User" && subjectRow.Name == roleRequestCopy.Spec.Email {
@@ -318,17 +304,20 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha1.Ro
 							return
 						}
 					}
+				} else {
+					c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureBinding, messageBindingFailed)
+					return
 				}
 
 			}
 
-			roleRequestCopy.Status.State = statusBound
+			roleRequestCopy.Status.State = registrationv1alpha1.StatusBound
 			roleRequestCopy.Status.Message = messageRoleBound
 			c.updateStatus(context.TODO(), roleRequestCopy)
-		case statusPending:
+		case registrationv1alpha1.StatusPending:
 			if roleRequestCopy.Spec.Approved {
-				c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, statusApproved, messageRoleApproved)
-				roleRequestCopy.Status.State = statusApproved
+				c.recorder.Event(roleRequestCopy, corev1.EventTypeNormal, registrationv1alpha1.StatusApproved, messageRoleApproved)
+				roleRequestCopy.Status.State = registrationv1alpha1.StatusApproved
 				roleRequestCopy.Status.Message = messageRoleApproved
 				c.updateStatus(context.TODO(), roleRequestCopy)
 			}
@@ -337,7 +326,7 @@ func (c *Controller) processRoleRequest(roleRequestCopy *registrationv1alpha1.Ro
 				return
 			}
 
-			roleRequestCopy.Status.State = statusPending
+			roleRequestCopy.Status.State = registrationv1alpha1.StatusPending
 			roleRequestCopy.Status.Message = messagePending
 			c.updateStatus(context.TODO(), roleRequestCopy)
 		}
@@ -361,15 +350,14 @@ func (c *Controller) grantRequestOwnership(roleRequestCopy *registrationv1alpha1
 		roleBind.ObjectMeta.OwnerReferences = []metav1.OwnerReference{roleRequestCopy.MakeOwnerReference()}
 		if _, err := c.kubeclientset.RbacV1().RoleBindings(roleRequestCopy.GetNamespace()).Create(context.TODO(), roleBind, metav1.CreateOptions{}); err == nil || errors.IsAlreadyExists(err) {
 			return true
-		} else {
-			klog.Infof("Couldn't create %s  role binding: %s", objectName, err)
 		}
+		klog.Infof("Couldn't create %s  role binding: %s", objectName, err)
 	} else {
 		klog.Infof("Couldn't create %s role: %s", objectName, err)
 	}
 
-	if roleRequestCopy.Status.State != statusFailed {
-		roleRequestCopy.Status.State = statusFailed
+	if roleRequestCopy.Status.State != registrationv1alpha1.StatusFailed {
+		roleRequestCopy.Status.State = registrationv1alpha1.StatusFailed
 		roleRequestCopy.Status.Message = messageOwnershipFailure
 		c.updateStatus(context.TODO(), roleRequestCopy)
 	}
@@ -399,7 +387,7 @@ func (c *Controller) checkForRequestedRole(roleRequestCopy *registrationv1alpha1
 	}
 
 	c.recorder.Event(roleRequestCopy, corev1.EventTypeWarning, failureFound, messageRoleNotFound)
-	roleRequestCopy.Status.State = statusFailed
+	roleRequestCopy.Status.State = registrationv1alpha1.StatusFailed
 	roleRequestCopy.Status.Message = messageRoleNotFound
 	return false
 }

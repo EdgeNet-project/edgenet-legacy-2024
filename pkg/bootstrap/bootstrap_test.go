@@ -20,15 +20,17 @@ func TestHomeDir(t *testing.T) {
 
 func TestClientSetCreation(t *testing.T) {
 	kubeconfigPath := getKubeconfigPath()
+	config, err := GetRestConfig("kubeconfig")
+	util.OK(t, err)
 	t.Run("preparing kubeconfig file", func(t *testing.T) {
 		util.Equals(t, filepath.Join(homeDir(), ".kube", "config"), kubeconfigPath)
 	})
 	t.Run("create edgenet clientset", func(t *testing.T) {
-		_, err := CreateEdgeNetClientset("kubeconfig")
+		_, err := CreateEdgeNetClientset(config)
 		util.OK(t, err)
 	})
 	t.Run("create kubernetes clientset", func(t *testing.T) {
-		_, err := CreateClientset("kubeconfig")
+		_, err := CreateKubeClientset(config)
 		util.OK(t, err)
 	})
 }

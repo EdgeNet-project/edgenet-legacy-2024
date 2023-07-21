@@ -24,6 +24,17 @@ import (
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 )
 
+// Values of Status.State
+const (
+	StatusFailed = "Failed"
+	// Tenant request
+	StatusPending  = "Pending"  // Also used for role request and cluster role request
+	StatusApproved = "Approved" // Also used for role request and cluster role request
+	StatusCreated  = "Created"
+	// Role request
+	StatusBound = "Bound" // Also used for cluster role request
+)
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -60,6 +71,8 @@ type TenantRequestSpec struct {
 	ResourceAllocation map[corev1.ResourceName]resource.Quantity `json:"resourceallocation"`
 	// If the tenant is approved or not by the administrators.
 	Approved bool `json:"approved"`
+	// Description provides additional information about the tenant.
+	Description string `json:"description"`
 }
 
 // TenantRequestStatus is the status for a TenantRequest resource

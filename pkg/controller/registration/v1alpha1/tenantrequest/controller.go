@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/access"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/registration/v1alpha1"
 	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/registration/v1alpha1"
+	"github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -58,11 +58,6 @@ const (
 	messageCreated          = "Tenant created successfully"
 	messagePending          = "Waiting for approval"
 	messageOwnershipFailure = "Cluster Role Request ownership cannot be granted"
-
-	statusFailed   = "Failed"
-	statusPending  = "Pending"
-	statusApproved = "Approved"
-	statusCreated  = "Created"
 )
 
 // Controller is the controller implementation for Tenant Request resources
@@ -123,9 +118,6 @@ func NewController(
 			controller.enqueueTenantRequest(new)
 		},
 	})
-
-	access.Clientset = kubeclientset
-	access.EdgenetClientset = edgenetclientset
 
 	return controller
 }
@@ -265,9 +257,9 @@ func (c *Controller) processTenantRequest(tenantRequestCopy *registrationv1alpha
 	}
 	if tenant, err := c.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), tenantRequestCopy.GetName(), metav1.GetOptions{}); err == nil {
 		labels := tenant.GetLabels()
-		if labels["edge-net.io/request-uid"] != string(tenantRequestCopy.GetUID()) && tenantRequestCopy.Status.State != statusFailed {
+		if labels["edge-net.io/request-uid"] != string(tenantRequestCopy.GetUID()) && tenantRequestCopy.Status.State != registrationv1alpha1.StatusFailed {
 			c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureTenantExists, messageExists)
-			tenantRequestCopy.Status.State = statusFailed
+			tenantRequestCopy.Status.State = registrationv1alpha1.StatusFailed
 			tenantRequestCopy.Status.Message = messageExists
 			c.updateStatus(context.TODO(), tenantRequestCopy)
 			return
@@ -275,56 +267,41 @@ func (c *Controller) processTenantRequest(tenantRequestCopy *registrationv1alpha
 	}
 
 	switch tenantRequestCopy.Status.State {
-	case statusCreated:
-		c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, statusCreated, messageCreated)
-	case statusApproved:
-		if err := access.CreateTenant(tenantRequestCopy); err == nil || errors.IsAlreadyExists(err) {
-			c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, statusCreated, messageCreated)
+	case registrationv1alpha1.StatusCreated:
+		c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, registrationv1alpha1.StatusCreated, messageCreated)
+	case registrationv1alpha1.StatusApproved:
+		multitenancyManager := multitenancy.NewManager(c.kubeclientset, c.edgenetclientset)
+		if err := multitenancyManager.CreateTenant(tenantRequestCopy); err == nil || errors.IsAlreadyExists(err) {
+			c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, registrationv1alpha1.StatusCreated, messageCreated)
 		} else {
 			klog.Infoln(err)
 			c.recorder.Event(tenantRequestCopy, corev1.EventTypeWarning, failureTenantCreation, messageCreationFailed)
 			return
 		}
 
-		tenantRequestCopy.Status.State = statusCreated
+		tenantRequestCopy.Status.State = registrationv1alpha1.StatusCreated
 		tenantRequestCopy.Status.Message = messageCreated
 		c.updateStatus(context.TODO(), tenantRequestCopy)
-	case statusPending:
+	case registrationv1alpha1.StatusPending:
 		if tenantRequestCopy.Spec.Approved {
-			c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, statusApproved, messageApproved)
-			tenantRequestCopy.Status.State = statusApproved
+			c.recorder.Event(tenantRequestCopy, corev1.EventTypeNormal, registrationv1alpha1.StatusApproved, messageApproved)
+			tenantRequestCopy.Status.State = registrationv1alpha1.StatusApproved
 			tenantRequestCopy.Status.Message = messageApproved
 			c.updateStatus(context.TODO(), tenantRequestCopy)
 		}
 	default:
-		if ownershipGranted := c.grantRequestOwnership(tenantRequestCopy); !ownershipGranted {
+		multitenancyManager := multitenancy.NewManager(c.kubeclientset, c.edgenetclientset)
+		if err := multitenancyManager.GrantObjectOwnership("registration.edgenet.io", "tenantrequests", tenantRequestCopy.GetName(), tenantRequestCopy.Spec.Contact.Email, []metav1.OwnerReference{tenantRequestCopy.MakeOwnerReference()}); err != nil {
+			tenantRequestCopy.Status.State = registrationv1alpha1.StatusFailed
+			tenantRequestCopy.Status.Message = messageOwnershipFailure
+			c.updateStatus(context.TODO(), tenantRequestCopy)
 			return
 		}
 
-		tenantRequestCopy.Status.State = statusPending
+		tenantRequestCopy.Status.State = registrationv1alpha1.StatusPending
 		tenantRequestCopy.Status.Message = messagePending
 		c.updateStatus(context.TODO(), tenantRequestCopy)
 	}
-}
-
-func (c *Controller) grantRequestOwnership(tenantRequestCopy *registrationv1alpha1.TenantRequest) bool {
-	if clusterRole, err := access.CreateObjectSpecificClusterRole("registration.edgenet.io", "tenantrequests", tenantRequestCopy.GetName(), "owner", []string{"get", "update", "patch", "delete"}, []metav1.OwnerReference{tenantRequestCopy.MakeOwnerReference()}); err == nil || errors.IsAlreadyExists(err) {
-		if err := access.CreateObjectSpecificClusterRoleBinding(clusterRole, tenantRequestCopy.Spec.Contact.Email, map[string]string{"edge-net.io/generated": "true"}, []metav1.OwnerReference{tenantRequestCopy.MakeOwnerReference()}); err == nil || errors.IsAlreadyExists(err) {
-			return true
-		} else {
-			klog.Infof("Couldn't create cluster role binding %s: %s", tenantRequestCopy.GetName(), err)
-		}
-	} else {
-		klog.Infof("Couldn't create owner cluster role %s: %s", tenantRequestCopy.GetName(), err)
-	}
-
-	if tenantRequestCopy.Status.State != statusFailed {
-		tenantRequestCopy.Status.State = statusFailed
-		tenantRequestCopy.Status.Message = messageOwnershipFailure
-		c.updateStatus(context.TODO(), tenantRequestCopy)
-	}
-
-	return false
 }
 
 // updateStatus calls the API to update the cluster role request status.

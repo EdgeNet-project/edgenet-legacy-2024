@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/EdgeNet-project/edgenet/pkg/bootstrap"
 	"github.com/EdgeNet-project/edgenet/pkg/controller/registration/v1alpha1/tenantrequest"
@@ -24,19 +25,24 @@ func main() {
 	if authentication = strings.TrimSpace(os.Getenv("AUTHENTICATION_STRATEGY")); authentication != "kubeconfig" {
 		authentication = "serviceaccount"
 	}
-	kubeclientset, err := bootstrap.CreateClientset(authentication)
+	config, err := bootstrap.GetRestConfig(authentication)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	edgenetclientset, err := bootstrap.CreateEdgeNetClientset(authentication)
+	kubeclientset, err := bootstrap.CreateKubeClientset(config)
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	edgenetclientset, err := bootstrap.CreateEdgeNetClientset(config)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
 
 	// Start the controller to provide the functionalities of tenantrequest resource
-	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
+	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, time.Second*30)
 
 	controller := tenantrequest.NewController(kubeclientset,
 		edgenetclientset,

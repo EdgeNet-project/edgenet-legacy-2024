@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/access"
 	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
@@ -60,9 +59,6 @@ func TestMain(m *testing.M) {
 		}
 	}()
 
-	access.Clientset = kubeclientset
-	access.EdgenetClientset = edgenetclientset
-	access.CreateClusterRoles()
 	kubeSystemNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}}
 	kubeclientset.CoreV1().Namespaces().Create(context.TODO(), kubeSystemNamespace, metav1.CreateOptions{})
 
@@ -129,7 +125,7 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, expected.Month(), tenantRequest.Status.Expiry.Month())
 	util.Equals(t, expected.Year(), tenantRequest.Status.Expiry.Year())
 
-	util.Equals(t, statusPending, tenantRequest.Status.State)
+	util.Equals(t, registrationv1alpha1.StatusPending, tenantRequest.Status.State)
 	util.Equals(t, messagePending, tenantRequest.Status.Message)
 
 	tenantRequest.Spec.Approved = true
@@ -138,7 +134,7 @@ func TestStartController(t *testing.T) {
 	time.Sleep(250 * time.Millisecond)
 	tenantRequest, err = edgenetclientset.RegistrationV1alpha1().TenantRequests().Get(context.TODO(), tenantRequestTest.GetName(), metav1.GetOptions{})
 	util.OK(t, err)
-	util.Equals(t, statusCreated, tenantRequest.Status.State)
+	util.Equals(t, registrationv1alpha1.StatusCreated, tenantRequest.Status.State)
 	util.Equals(t, messageCreated, tenantRequest.Status.Message)
 }
 

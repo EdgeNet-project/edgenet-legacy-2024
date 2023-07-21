@@ -8,7 +8,7 @@ import (
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/EdgeNet-project/edgenet/pkg/node"
+	"github.com/EdgeNet-project/edgenet/pkg/multiprovider"
 	"k8s.io/apimachinery/pkg/api/errors"
 
 	corev1 "k8s.io/api/core/v1"
@@ -27,7 +27,7 @@ import (
 
 const controllerAgentName = "nodelabeler-controller"
 
-// The main structure of controller
+// Controller is the controller implementation
 type Controller struct {
 	kubeclientset    kubernetes.Interface
 	edgenetclientset clientset.Interface
@@ -45,8 +45,8 @@ type Controller struct {
 	// Kubernetes API.
 	recorder record.EventRecorder
 
-	maxmindUrl        string
-	maxmindAccountId  string
+	maxmindURL        string
+	maxmindAccountID  string
 	maxmindLicenseKey string
 }
 
@@ -55,8 +55,8 @@ func NewController(
 	kubeclientset kubernetes.Interface,
 	edgenetclientset clientset.Interface,
 	informer coreinformers.NodeInformer,
-	maxmindUrl string,
-	maxmindAccountId string,
+	maxmindURL string,
+	maxmindAccountID string,
 	maxmindLicenseKey string,
 ) *Controller {
 	// Create event broadcaster
@@ -74,8 +74,8 @@ func NewController(
 		synced:            informer.Informer().HasSynced,
 		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NodeLabeler"),
 		recorder:          recorder,
-		maxmindUrl:        maxmindUrl,
-		maxmindAccountId:  maxmindAccountId,
+		maxmindURL:        maxmindURL,
+		maxmindAccountID:  maxmindAccountID,
 		maxmindLicenseKey: maxmindLicenseKey,
 	}
 
@@ -85,18 +85,20 @@ func NewController(
 	informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueNodelabeler,
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			updated := node.CompareIPAddresses(oldObj.(*corev1.Node), newObj.(*corev1.Node))
+			updated := multiprovider.CompareIPAddresses(oldObj.(*corev1.Node), newObj.(*corev1.Node))
 			if updated {
 				controller.enqueueNodelabeler(newObj)
 			}
 		},
 	})
 
-	node.Clientset = kubeclientset
-
 	return controller
 }
 
+// Run will set up the event handlers for the types of node, as well
+// as syncing informer caches and starting workers. It will block until stopCh
+// is closed, at which point it will shutdown the workqueue and wait for
+// workers to finish processing their current work items.
 func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 	defer c.workqueue.ShutDown()
@@ -190,8 +192,10 @@ func (c *Controller) setNodeGeolocation(obj interface{}) {
 	klog.V(4).Infoln("Handler.ObjectCreated")
 	nodeObj := obj.(*corev1.Node)
 
-	internalIP, externalIP := node.GetNodeIPAddresses(nodeObj)
+	internalIP, externalIP := multiprovider.GetNodeIPAddresses(nodeObj)
 	result := false
+
+	multiproviderManager := multiprovider.NewManager(c.kubeclientset, nil, nil, nil)
 
 	// 1. Use the VPNPeer endpoint address if available.
 	peer, err := c.edgenetclientset.NetworkingV1alpha1().VPNPeers().Get(context.TODO(), nodeObj.Name, v1.GetOptions{})
@@ -203,9 +207,9 @@ func (c *Controller) setNodeGeolocation(obj interface{}) {
 		)
 	} else {
 		klog.V(4).Infof("VPNPeer endpoint IP: %s", *peer.Spec.EndpointAddress)
-		result = node.GetGeolocationByIP(
-			c.maxmindUrl,
-			c.maxmindAccountId,
+		result = multiproviderManager.GetGeolocationByIP(
+			c.maxmindURL,
+			c.maxmindAccountID,
 			c.maxmindLicenseKey,
 			nodeObj.Name,
 			*peer.Spec.EndpointAddress,
@@ -215,9 +219,9 @@ func (c *Controller) setNodeGeolocation(obj interface{}) {
 	// 2. Otherwise use the node external IP if available.
 	if externalIP != "" && !result {
 		klog.V(4).Infof("External IP: %s", externalIP)
-		result = node.GetGeolocationByIP(
-			c.maxmindUrl,
-			c.maxmindAccountId,
+		result = multiproviderManager.GetGeolocationByIP(
+			c.maxmindURL,
+			c.maxmindAccountID,
 			c.maxmindLicenseKey,
 			nodeObj.Name,
 			externalIP,
@@ -227,9 +231,9 @@ func (c *Controller) setNodeGeolocation(obj interface{}) {
 	// 3. Otherwise use the node internal IP if available.
 	if internalIP != "" && !result {
 		klog.V(4).Infof("Internal IP: %s", internalIP)
-		node.GetGeolocationByIP(
-			c.maxmindUrl,
-			c.maxmindAccountId,
+		multiproviderManager.GetGeolocationByIP(
+			c.maxmindURL,
+			c.maxmindAccountID,
 			c.maxmindLicenseKey,
 			nodeObj.Name,
 			internalIP,

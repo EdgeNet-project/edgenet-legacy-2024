@@ -16,6 +16,7 @@ limitations under the License.
 
 package notification
 
+// Content is the structure for the notification content
 type Content struct {
 	Cluster            string
 	User               string
@@ -27,17 +28,24 @@ type Content struct {
 	TenantRequest      *TenantRequest
 	ClusterRoleRequest *ClusterRoleRequest
 }
+
+// RoleRequest is the structure for the role request
 type RoleRequest struct {
 	Name      string
 	Namespace string
 }
+
+// ClusterRoleRequest is the structure for the cluster role request
 type ClusterRoleRequest struct {
 	Name string
 }
+
+// TenantRequest is the structure for the tenant request
 type TenantRequest struct {
 	Tenant string
 }
 
+// Init is the function to initialize info for the notification content
 func (c *Content) Init(firstname, lastname, email, subject, clusterUID string, recipient []string) {
 	c.Cluster = clusterUID
 	c.User = email
@@ -47,6 +55,7 @@ func (c *Content) Init(firstname, lastname, email, subject, clusterUID string, r
 	c.Recipient = recipient
 }
 
+// SendNotification is the function to send notification via email and slack
 func (c *Content) SendNotification(purpose string) error {
 	var err error
 	err = c.email(purpose)

@@ -18,13 +18,48 @@ package v1alpha1
 
 import (
 	"fmt"
+	"hash/adler32"
 	"strings"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+// Values of Status.State
+const (
+	StatusFailed         = "Failure"
+	StatusReconciliation = "Reconciliation"
+	// Slice claim
+	StatusPending   = "Pending"
+	StatusRequested = "Requested"
+	StatusEmployed  = "Employed"
+	// Slice
+	StatusBound       = "Bound" // Also used for slice claim
+	StatusReserved    = "Reserved"
+	StatusProvisioned = "Provisioned"
+	// Subnamespace
+	StatusPartitioned         = "Partitioned"
+	StatusSubnamespaceCreated = "Created"
+	StatusQuotaSet            = "Set"
+	// Tenant
+	StatusCoreNamespaceCreated = "Created"
+	StatusEstablished          = "Established" // Also used for subnamespace
+	// Tenant resource quota
+	StatusQuotaCreated = "Created"
+	StatusApplied      = "Applied"
+	// Node contribution
+	StatusAccessed = "Node Accessed"
+	StatusReady    = "Ready"
+)
+
+// Values of string constants subject to repetitive use
+const (
+	DynamicStr                        = "Dynamic"
+	TenantOwnerClusterRoleName        = "edgenet:tenant-owner"
+	TenantAdminClusterRoleName        = "edgenet:tenant-admin"
+	TenantCollaboratorClusterRoleName = "edgenet:tenant-collaborator"
 )
 
 // +genclient
@@ -60,6 +95,8 @@ type TenantSpec struct {
 	ClusterNetworkPolicy bool `json:"clusternetworkpolicy"`
 	// If the tenant is active then this field is true.
 	Enabled bool `json:"enabled"`
+	// Description provides additional information about the tenant.
+	Description string `json:"description"`
 }
 
 // Address describes postal address of tenant
@@ -94,6 +131,8 @@ type TenantStatus struct {
 	State string `json:"state"`
 	// Additional description can be located here.
 	Message string `json:"message"`
+	// Failed sets the backoff limit.
+	Failed int `json:"failed"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -108,6 +147,7 @@ type TenantList struct {
 	Items []Tenant `json:"items"`
 }
 
+// MakeOwnerReference creates an owner reference for the given object.
 func (t Tenant) MakeOwnerReference() metav1.OwnerReference {
 	return *metav1.NewControllerRef(&t.ObjectMeta, SchemeGroupVersion.WithKind("Tenant"))
 }
@@ -177,6 +217,10 @@ type SubNamespaceStatus struct {
 	State string `json:"state"`
 	// Message contains additional information.
 	Message string `json:"message"`
+	// Failed sets the backoff limit.
+	Failed int `json:"failed"`
+	// Child is the name of the child namespace.
+	Child *string `json:"child"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -192,67 +236,69 @@ type SubNamespaceList struct {
 	Items []SubNamespace `json:"items"`
 }
 
-// Retrieves quantity value from given resource name.
-func (s SubNamespace) RetrieveQuantity(key corev1.ResourceName) resource.Quantity {
+// MakeOwnerReference creates an owner reference for the given object.
+func (sn SubNamespace) MakeOwnerReference() metav1.OwnerReference {
+	return *metav1.NewControllerRef(&sn.ObjectMeta, SchemeGroupVersion.WithKind("SubNamespace"))
+}
+
+// RetrieveQuantity gets quantity value from given resource name.
+func (sn SubNamespace) RetrieveQuantity(key corev1.ResourceName) resource.Quantity {
 	var quantity resource.Quantity
-	if s.Spec.Workspace != nil {
-		if _, elementExists := s.Spec.Workspace.ResourceAllocation[key]; elementExists {
-			quantity = s.Spec.Workspace.ResourceAllocation[key]
+	if sn.Spec.Workspace != nil {
+		if _, elementExists := sn.Spec.Workspace.ResourceAllocation[key]; elementExists {
+			quantity = sn.Spec.Workspace.ResourceAllocation[key]
 		}
 	} else {
-		if _, elementExists := s.Spec.Subtenant.ResourceAllocation[key]; elementExists {
-			quantity = s.Spec.Subtenant.ResourceAllocation[key]
+		if _, elementExists := sn.Spec.Subtenant.ResourceAllocation[key]; elementExists {
+			quantity = sn.Spec.Subtenant.ResourceAllocation[key]
 		}
 	}
 	return quantity
 }
 
 // GenerateChildName forms a name for child according to the mode, Workspace or Subtenant.
-func (s SubNamespace) GenerateChildName(clusterUID string) string {
-	childName := s.GetName()
-	if s.Spec.Workspace != nil && s.Spec.Workspace.Scope == "federation" {
+func (sn SubNamespace) GenerateChildName(clusterUID string) string {
+	childName := sn.GetName()
+	if sn.Spec.Workspace != nil && sn.Spec.Workspace.Scope == "federation" {
 		childName = fmt.Sprintf("%s-%s", clusterUID, childName)
 	}
 
-	childNameHashed := util.Hash(s.GetNamespace(), childName)
+	childNameHashed := hash(sn.GetNamespace(), childName)
 	childName = strings.Join([]string{childName, childNameHashed}, "-")
 	return childName
 }
 
 // GetMode return the mode as workspace or subtenant.
-func (s SubNamespace) GetMode() string {
-	if s.Spec.Workspace != nil {
+func (sn SubNamespace) GetMode() string {
+	if sn.Spec.Workspace != nil {
 		return "workspace"
-	} else {
-		return "subtenant"
 	}
+	return "subtenant"
 }
 
 // GetResourceAllocation return the allocated resources at workspace or subtenant.
-func (s SubNamespace) GetResourceAllocation() map[corev1.ResourceName]resource.Quantity {
-	if s.Spec.Workspace != nil {
-		return s.Spec.Workspace.ResourceAllocation
-	} else {
-		return s.Spec.Subtenant.ResourceAllocation
+func (sn SubNamespace) GetResourceAllocation() map[corev1.ResourceName]resource.Quantity {
+	if sn.Spec.Workspace != nil {
+		return sn.Spec.Workspace.DeepCopy().ResourceAllocation
 	}
+	return sn.Spec.Subtenant.DeepCopy().ResourceAllocation
 }
 
 // SetResourceAllocation set the allocated resources at workspace or subtenant.
-func (s SubNamespace) SetResourceAllocation(resource map[corev1.ResourceName]resource.Quantity) {
-	if s.Spec.Workspace != nil {
-		s.Spec.Workspace.ResourceAllocation = resource
+func (sn SubNamespace) SetResourceAllocation(resource map[corev1.ResourceName]resource.Quantity) {
+	if sn.Spec.Workspace != nil {
+		sn.Spec.Workspace.ResourceAllocation = resource
 	} else {
-		s.Spec.Subtenant.ResourceAllocation = resource
+		sn.Spec.Subtenant.ResourceAllocation = resource
 	}
 }
 
 // GetSliceClaim return the assigned slice claim at workspace or subtenant.
-func (s SubNamespace) GetSliceClaim() *string {
-	if s.Spec.Workspace != nil {
-		return s.Spec.Workspace.SliceClaim
-	} else {
-		return s.Spec.Subtenant.SliceClaim
+func (sn SubNamespace) GetSliceClaim() *string {
+	if sn.Spec.Workspace != nil {
+		return sn.Spec.Workspace.SliceClaim
 	}
+	return sn.Spec.Subtenant.SliceClaim
 }
 
 // +genclient
@@ -303,6 +349,10 @@ type NodeContributionStatus struct {
 	State string `json:"state"`
 	// Message contains additional information.
 	Message string `json:"message"`
+	// Failed sets the backoff limit.
+	Failed int `json:"failed"`
+	// UpdateTimestamp is the last time the status was updated.
+	UpdateTimestamp *metav1.Time `json:"updateTimestamp"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -316,6 +366,11 @@ type NodeContributionList struct {
 	// NodeContributionList is a list of NodeContribution resources. This element contains
 	// NodeContribution resources.
 	Items []NodeContribution `json:"items"`
+}
+
+// MakeOwnerReference creates an owner reference for the given object.
+func (nc NodeContribution) MakeOwnerReference() metav1.OwnerReference {
+	return *metav1.NewControllerRef(&nc.ObjectMeta, SchemeGroupVersion.WithKind("NodeContribution"))
 }
 
 // +genclient
@@ -358,6 +413,8 @@ type TenantResourceQuotaStatus struct {
 	State string `json:"state"`
 	// Message contains additional information.
 	Message string `json:"message"`
+	// Failed sets the backoff limit.
+	Failed int `json:"failed"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -373,8 +430,8 @@ type TenantResourceQuotaList struct {
 	Items []TenantResourceQuota `json:"items"`
 }
 
-// Fetches the net value of the resources. For example, 1Gb memory is claimed and 100 milliCPU
-// are dropped. Then the function returns the net resources as '+1Gb', '-100m'.
+// Fetch as its name indicates, it fetches the net value of the resources. For example,
+// 1Gb memory is claimed and 100 milliCPU are dropped. Then the function returns the net resources as '+1Gb', '-100m'.
 func (t TenantResourceQuota) Fetch() map[corev1.ResourceName]resource.Quantity {
 	assignedQuota := make(map[corev1.ResourceName]resource.Quantity)
 	if len(t.Spec.Claim) > 0 {
@@ -453,6 +510,7 @@ type SliceSpec struct {
 	NodeSelector NodeSelector `json:"nodeselector"`
 }
 
+// NodeSelector is a selector for nodes to reserve.
 type NodeSelector struct {
 	// A label query over nodes to consider for choosing.
 	Selector corev1.NodeSelector `json:"selector"`
@@ -468,6 +526,8 @@ type SliceStatus struct {
 	State string `json:"state"`
 	// Message contains additional information.
 	Message string `json:"message"`
+	// Failed sets the backoff limit.
+	Failed int `json:"failed"`
 	// Expiration date of the slice.
 	Expiry *metav1.Time `json:"expiry"`
 }
@@ -485,6 +545,7 @@ type SliceList struct {
 	Items []Slice `json:"items"`
 }
 
+// MakeOwnerReference creates an owner reference for the given object.
 func (s Slice) MakeOwnerReference() metav1.OwnerReference {
 	return *metav1.NewControllerRef(&s.ObjectMeta, SchemeGroupVersion.WithKind("Slice"))
 }
@@ -522,6 +583,8 @@ type SliceClaimStatus struct {
 	State string `json:"state"`
 	// Message contains additional information.
 	Message string `json:"message"`
+	// Failed sets the backoff limit.
+	Failed int `json:"failed"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -537,6 +600,7 @@ type SliceClaimList struct {
 	Items []SliceClaim `json:"items"`
 }
 
+// MakeObjectReference creates an object reference for the given object.
 func (sc SliceClaim) MakeObjectReference() *corev1.ObjectReference {
 	objectReference := corev1.ObjectReference{}
 	groupVersionKind := SchemeGroupVersion.WithKind("SliceClaim")
@@ -548,6 +612,14 @@ func (sc SliceClaim) MakeObjectReference() *corev1.ObjectReference {
 	return &objectReference
 }
 
+// MakeOwnerReference creates an owner reference for the given object.
 func (sc SliceClaim) MakeOwnerReference() metav1.OwnerReference {
 	return *metav1.NewControllerRef(&sc.ObjectMeta, SchemeGroupVersion.WithKind("SliceClaim"))
+}
+
+// hash returns a hash of the strings passed in.
+func hash(strs ...string) string {
+	str := strings.Join(strs, "-")
+	adler32 := adler32.Checksum([]byte(str))
+	return fmt.Sprintf("%x", adler32)
 }

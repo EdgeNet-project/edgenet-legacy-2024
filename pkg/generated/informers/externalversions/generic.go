@@ -22,7 +22,9 @@ import (
 	"fmt"
 
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha1"
+	v1alpha2 "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha2"
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
+	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
 	networkingv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/networking/v1alpha1"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -59,6 +61,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	case v1alpha1.SchemeGroupVersion.WithResource("selectivedeployments"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha1().SelectiveDeployments().Informer()}, nil
 
+		// Group=apps.edgenet.io, Version=v1alpha2
+	case v1alpha2.SchemeGroupVersion.WithResource("selectivedeployments"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Apps().V1alpha2().SelectiveDeployments().Informer()}, nil
+
 		// Group=core.edgenet.io, Version=v1alpha1
 	case corev1alpha1.SchemeGroupVersion.WithResource("nodecontributions"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().NodeContributions().Informer()}, nil
@@ -72,6 +78,14 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().Tenants().Informer()}, nil
 	case corev1alpha1.SchemeGroupVersion.WithResource("tenantresourcequotas"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().TenantResourceQuotas().Informer()}, nil
+
+		// Group=federation.edgenet.io, Version=v1alpha1
+	case federationv1alpha1.SchemeGroupVersion.WithResource("clusters"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Federation().V1alpha1().Clusters().Informer()}, nil
+	case federationv1alpha1.SchemeGroupVersion.WithResource("managercaches"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Federation().V1alpha1().ManagerCaches().Informer()}, nil
+	case federationv1alpha1.SchemeGroupVersion.WithResource("selectivedeploymentanchors"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Federation().V1alpha1().SelectiveDeploymentAnchors().Informer()}, nil
 
 		// Group=networking.edgenet.io, Version=v1alpha1
 	case networkingv1alpha1.SchemeGroupVersion.WithResource("vpnpeers"):

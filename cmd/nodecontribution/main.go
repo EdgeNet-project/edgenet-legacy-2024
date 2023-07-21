@@ -19,9 +19,11 @@ import (
 func main() {
 	klog.InitFlags(nil)
 	flag.String("kubeconfig-path", bootstrap.GetDefaultKubeconfigPath(), "Path to the kubeconfig file's directory")
-	flag.String("ssh-path", "/edgenet/.ssh/id_rsa", "Path to the SSH keys")
+	flag.String("ssh-path", "/edgenet/.ssh", "Path to the SSH keys")
 	flag.String("configs-path", "/edgenet/configs", "Path to the config files")
 	flag.String("ca-path", "/etc/kubernetes/pki/ca.crt", "Path to the CA")
+	flag.String("aws-id-path", "/edgenet/aws/id", "Path to the AWS ID")
+	flag.String("aws-secret-path", "/edgenet/aws/secret", "Path to the AWS key")
 	flag.Parse()
 
 	stopCh := signals.SetupSignalHandler()
@@ -29,19 +31,24 @@ func main() {
 	if authentication = strings.TrimSpace(os.Getenv("AUTHENTICATION_STRATEGY")); authentication != "kubeconfig" {
 		authentication = "serviceaccount"
 	}
-	kubeclientset, err := bootstrap.CreateClientset(authentication)
+	config, err := bootstrap.GetRestConfig(authentication)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
-	edgenetclientset, err := bootstrap.CreateEdgeNetClientset(authentication)
+	kubeclientset, err := bootstrap.CreateKubeClientset(config)
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
+	edgenetclientset, err := bootstrap.CreateEdgeNetClientset(config)
 	if err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
 
 	// Start the controller to provide the functionalities of nodecontribution resource
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Second*30)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclientset, time.Hour*3)
 	edgenetInformerFactory := informers.NewSharedInformerFactory(edgenetclientset, 0)
 	hostedZone := strings.TrimSpace(os.Getenv("ROUTE53_HOSTED_ZONE"))
 	domain := strings.TrimSpace(os.Getenv("DOMAIN_NAME"))

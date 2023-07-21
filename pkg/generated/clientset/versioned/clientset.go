@@ -22,7 +22,9 @@ import (
 	"fmt"
 
 	appsv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha1"
+	appsv1alpha2 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha2"
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha1"
+	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/federation/v1alpha1"
 	networkingv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/networking/v1alpha1"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/registration/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
@@ -33,7 +35,9 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	AppsV1alpha1() appsv1alpha1.AppsV1alpha1Interface
+	AppsV1alpha2() appsv1alpha2.AppsV1alpha2Interface
 	CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface
+	FederationV1alpha1() federationv1alpha1.FederationV1alpha1Interface
 	NetworkingV1alpha1() networkingv1alpha1.NetworkingV1alpha1Interface
 	RegistrationV1alpha1() registrationv1alpha1.RegistrationV1alpha1Interface
 }
@@ -43,7 +47,9 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	appsV1alpha1         *appsv1alpha1.AppsV1alpha1Client
+	appsV1alpha2         *appsv1alpha2.AppsV1alpha2Client
 	coreV1alpha1         *corev1alpha1.CoreV1alpha1Client
+	federationV1alpha1   *federationv1alpha1.FederationV1alpha1Client
 	networkingV1alpha1   *networkingv1alpha1.NetworkingV1alpha1Client
 	registrationV1alpha1 *registrationv1alpha1.RegistrationV1alpha1Client
 }
@@ -53,9 +59,19 @@ func (c *Clientset) AppsV1alpha1() appsv1alpha1.AppsV1alpha1Interface {
 	return c.appsV1alpha1
 }
 
+// AppsV1alpha2 retrieves the AppsV1alpha2Client
+func (c *Clientset) AppsV1alpha2() appsv1alpha2.AppsV1alpha2Interface {
+	return c.appsV1alpha2
+}
+
 // CoreV1alpha1 retrieves the CoreV1alpha1Client
 func (c *Clientset) CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface {
 	return c.coreV1alpha1
+}
+
+// FederationV1alpha1 retrieves the FederationV1alpha1Client
+func (c *Clientset) FederationV1alpha1() federationv1alpha1.FederationV1alpha1Interface {
+	return c.federationV1alpha1
 }
 
 // NetworkingV1alpha1 retrieves the NetworkingV1alpha1Client
@@ -93,7 +109,15 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.appsV1alpha2, err = appsv1alpha2.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 	cs.coreV1alpha1, err = corev1alpha1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
+	cs.federationV1alpha1, err = federationv1alpha1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +142,9 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
 	cs.appsV1alpha1 = appsv1alpha1.NewForConfigOrDie(c)
+	cs.appsV1alpha2 = appsv1alpha2.NewForConfigOrDie(c)
 	cs.coreV1alpha1 = corev1alpha1.NewForConfigOrDie(c)
+	cs.federationV1alpha1 = federationv1alpha1.NewForConfigOrDie(c)
 	cs.networkingV1alpha1 = networkingv1alpha1.NewForConfigOrDie(c)
 	cs.registrationV1alpha1 = registrationv1alpha1.NewForConfigOrDie(c)
 
@@ -130,7 +156,9 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.appsV1alpha1 = appsv1alpha1.New(c)
+	cs.appsV1alpha2 = appsv1alpha2.New(c)
 	cs.coreV1alpha1 = corev1alpha1.New(c)
+	cs.federationV1alpha1 = federationv1alpha1.New(c)
 	cs.networkingV1alpha1 = networkingv1alpha1.New(c)
 	cs.registrationV1alpha1 = registrationv1alpha1.New(c)
 

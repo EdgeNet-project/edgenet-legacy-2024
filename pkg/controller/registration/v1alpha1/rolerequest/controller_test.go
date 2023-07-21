@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/EdgeNet-project/edgenet/pkg/access"
-	corev1alpha "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
+	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	registrationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	"github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenettestclient "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/fake"
 	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions"
+	multitenancy "github.com/EdgeNet-project/edgenet/pkg/multitenancy"
 	"github.com/EdgeNet-project/edgenet/pkg/signals"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 	"github.com/sirupsen/logrus"
@@ -28,7 +28,7 @@ import (
 )
 
 type TestGroup struct {
-	tenantObj      corev1alpha.Tenant
+	tenantObj      corev1alpha1.Tenant
 	roleRequestObj registrationv1alpha1.RoleRequest
 }
 
@@ -60,8 +60,8 @@ func TestMain(m *testing.M) {
 		}
 	}()
 
-	access.Clientset = kubeclientset
-	access.CreateClusterRoles()
+	multitenancyManager := multitenancy.NewManager(kubeclientset, edgenetclientset)
+	multitenancyManager.CreateClusterRoles()
 	kubeSystemNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}}
 	kubeclientset.CoreV1().Namespaces().Create(context.TODO(), kubeSystemNamespace, metav1.CreateOptions{})
 
@@ -73,7 +73,7 @@ func TestMain(m *testing.M) {
 
 // Init syncs the test group
 func (g *TestGroup) Init() {
-	tenantObj := corev1alpha.Tenant{
+	tenantObj := corev1alpha1.Tenant{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Tenant",
 			APIVersion: "apps.edgenet.io/v1alpha1",
@@ -81,17 +81,17 @@ func (g *TestGroup) Init() {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "edgenet",
 		},
-		Spec: corev1alpha.TenantSpec{
+		Spec: corev1alpha1.TenantSpec{
 			FullName:  "EdgeNet",
 			ShortName: "EdgeNet",
 			URL:       "https://www.edge-net.org",
-			Address: corev1alpha.Address{
+			Address: corev1alpha1.Address{
 				City:    "Paris - NY - CA",
 				Country: "France - US",
 				Street:  "4 place Jussieu, boite 169",
 				ZIP:     "75005",
 			},
-			Contact: corev1alpha.Contact{
+			Contact: corev1alpha1.Contact{
 				Email:     "joe.public@edge-net.org",
 				FirstName: "Joe",
 				LastName:  "Public",
@@ -115,7 +115,7 @@ func (g *TestGroup) Init() {
 			Email:     "john.smith@edge-net.org",
 			RoleRef: registrationv1alpha1.RoleRefSpec{
 				Kind: "ClusterRole",
-				Name: "edgenet:tenant-admin",
+				Name: corev1alpha1.TenantOwnerClusterRoleName,
 			},
 		},
 	}
@@ -149,7 +149,7 @@ func TestStartController(t *testing.T) {
 	util.Equals(t, expected.Month(), roleRequest.Status.Expiry.Month())
 	util.Equals(t, expected.Year(), roleRequest.Status.Expiry.Year())
 
-	util.Equals(t, statusPending, roleRequest.Status.State)
+	util.Equals(t, registrationv1alpha1.StatusPending, roleRequest.Status.State)
 	util.Equals(t, messagePending, roleRequest.Status.Message)
 
 	roleRequest.Spec.Approved = true
@@ -158,7 +158,7 @@ func TestStartController(t *testing.T) {
 	roleRequest, err = edgenetclientset.RegistrationV1alpha1().RoleRequests(roleRequestTest.GetNamespace()).Get(context.TODO(), roleRequestTest.GetName(), metav1.GetOptions{})
 
 	util.OK(t, err)
-	util.Equals(t, statusBound, roleRequest.Status.State)
+	util.Equals(t, registrationv1alpha1.StatusBound, roleRequest.Status.State)
 	util.Equals(t, messageRoleBound, roleRequest.Status.Message)
 }
 

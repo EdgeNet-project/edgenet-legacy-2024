@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	CLUSTER_ROLE_REQUEST_MADE = "kubectl patch clusterrolerequest %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./edgenet-kubeconfig.cfg"
-	ROLE_REQUEST_MADE         = "kubectl patch rolerequest %s -n %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./edgenet-kubeconfig.cfg"
-	TENANT_REQUEST_MADE       = "kubectl patch tenantrequest %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./admin.cfg"
+	clusterRoleRequestApproveCmd = "kubectl patch clusterrolerequest %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./edgenet-kubeconfig.cfg"
+	roleRequestApproveCmd        = "kubectl patch rolerequest %s -n %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./edgenet-kubeconfig.cfg"
+	tenantRequestApproveCmd      = "kubectl patch tenantrequest %s --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/approved\", \"value\":true}]' --kubeconfig ./admin.cfg"
 )
 
 func (c *Content) slack(purpose string) error {
@@ -22,15 +22,15 @@ func (c *Content) slack(purpose string) error {
 	if flag.Lookup("slack-token-path") != nil {
 		authTokenPath = flag.Lookup("slack-token-path").Value.(flag.Getter).Get().(string)
 	}
-	channelIdPath := "./channelid"
+	channelIDPath := "./channelid"
 	if flag.Lookup("slack-channel-id-path") != nil {
-		channelIdPath = flag.Lookup("slack-channel-id-path").Value.(flag.Getter).Get().(string)
+		channelIDPath = flag.Lookup("slack-channel-id-path").Value.(flag.Getter).Get().(string)
 	}
 	authToken, err := ioutil.ReadFile(authTokenPath)
 	if err != nil {
 		return err
 	}
-	channelId, err := ioutil.ReadFile(channelIdPath)
+	channelID, err := ioutil.ReadFile(channelIDPath)
 	if err != nil {
 		return err
 	}
@@ -78,16 +78,13 @@ func (c *Content) slack(purpose string) error {
 	}
 
 	_, timestamp, err := client.PostMessage(
-		strings.TrimSpace(string(channelId)),
+		strings.TrimSpace(string(channelID)),
 		slack.MsgOptionAttachments(attachment),
 	)
-
 	if err != nil {
 		return err
 	}
-
 	klog.V(4).Infof("Slack notification sent on %q", timestamp)
-
 	return nil
 }
 
@@ -103,11 +100,11 @@ func (c *Content) getRequestInformation() string {
 
 func (c *Content) getCommand(purpose string) (string, bool) {
 	if purpose == "clusterrole-request-made" {
-		return fmt.Sprintf(CLUSTER_ROLE_REQUEST_MADE, c.ClusterRoleRequest.Name), true
+		return fmt.Sprintf(clusterRoleRequestApproveCmd, c.ClusterRoleRequest.Name), true
 	} else if purpose == "rolerequest-made" {
-		return fmt.Sprintf(ROLE_REQUEST_MADE, c.RoleRequest.Name, c.RoleRequest.Namespace), true
+		return fmt.Sprintf(roleRequestApproveCmd, c.RoleRequest.Name, c.RoleRequest.Namespace), true
 	} else if purpose == "tenant-request-made" {
-		return fmt.Sprintf(TENANT_REQUEST_MADE, c.TenantRequest.Tenant), true
+		return fmt.Sprintf(tenantRequestApproveCmd, c.TenantRequest.Tenant), true
 	} else {
 		return "", false
 	}
