@@ -22,6 +22,7 @@ rules:
   - core.edgenet.io
   resources:
   - subnamespaces
+  - sliceclaims
   verbs:
   - '*'
 - apiGroups:
@@ -36,6 +37,12 @@ rules:
   - apps.edgenet.io
   resources:
   - selectivedeployments
+  verbs:
+  - '*'
+- apiGroups:
+  - registration.edgenet.io
+  resources:
+  - rolerequests
   verbs:
   - '*'
 - apiGroups:
@@ -202,10 +209,7 @@ spec:
                     owner:
                       type: object
                       required:
-                        - firstname
-                        - lastname
                         - email
-                        - phone
                       properties:
                         firstname:
                           type: string
@@ -284,7 +288,6 @@ spec:
                 - fullname
                 - shortname
                 - url
-                - address
                 - contact
                 - enabled
               properties:
@@ -296,11 +299,6 @@ spec:
                   type: string
                 address:
                   type: object
-                  required:
-                    - street
-                    - zip
-                    - city
-                    - country
                   properties:
                     street:
                       type: string
@@ -316,10 +314,7 @@ spec:
                 contact:
                   type: object
                   required:
-                    - firstname
-                    - lastname
                     - email
-                    - phone
                   properties:
                     firstname:
                       type: string
@@ -332,6 +327,8 @@ spec:
                 clusternetworkpolicy:
                   type: boolean
                   default: false
+                description:
+                  type: string
                 enabled:
                   type: boolean
             status:
@@ -396,7 +393,6 @@ spec:
                 - fullname
                 - shortname
                 - url
-                - address
                 - contact
               properties:
                 fullname:
@@ -407,11 +403,6 @@ spec:
                   type: string
                 address:
                   type: object
-                  required:
-                    - street
-                    - zip
-                    - city
-                    - country
                   properties:
                     street:
                       type: string
@@ -427,10 +418,7 @@ spec:
                 contact:
                   type: object
                   required:
-                    - firstname
-                    - lastname
                     - email
-                    - phone
                   properties:
                     firstname:
                       type: string
@@ -443,6 +431,8 @@ spec:
                 clusternetworkpolicy:
                   type: boolean
                   default: true
+                description:
+                  type: string
                 resourceallocation:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
@@ -868,7 +858,10 @@ metadata:
   name: edgenet:service:subnamespace
 rules:
 - apiGroups: ["core.edgenet.io"]
-  resources: ["subnamespaces", "subnamespaces/status"]
+  resources: ["subnamespaces", "subnamespaces/status", "sliceclaims"]
+  verbs: ["*"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["rolerequests"]
   verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenants"]
@@ -999,7 +992,10 @@ metadata:
   name: edgenet:service:tenant
 rules:
 - apiGroups: ["core.edgenet.io"]
-  resources: ["tenants", "tenants/status", "subnamespaces"]
+  resources: ["tenants", "tenants/status", "subnamespaces", "sliceclaims"]
+  verbs: ["*"]
+- apiGroups: ["registration.edgenet.io"]
+  resources: ["rolerequests"]
   verbs: ["*"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenantresourcequotas"]
@@ -1928,7 +1924,7 @@ metadata:
   name: edgenet:registration
 rules:
 - apiGroups: ["registration.edgenet.io"]
-  resources: ["tenantrequests", "userrequests"]
+  resources: ["tenantrequests", "rolerequests", "clusterrolerequests"]
   verbs: ["create"]
 - apiGroups: ["core.edgenet.io"]
   resources: ["tenants"]
@@ -1994,7 +1990,7 @@ spec:
     name: ca-root
     kind: ClusterIssuer
   secretName: api-server
-  duration: 2160h
+  duration: 4320h
   renewBefore: 360h
   dnsNames:
     - pod-bandwidth-mutate.edge-net.io
@@ -2023,7 +2019,7 @@ spec:
     name: ca-root
     kind: ClusterIssuer
   secretName: admission-control
-  duration: 2160h
+  duration: 4320h
   renewBefore: 360h
   dnsNames:
     - admission-control.edgenet.svc
@@ -2065,6 +2061,17 @@ spec:
               value: /tls/tls.crt
             - name: TLS_PRIVATE_KEY
               value: /tls/tls.key
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
       volumes:
         - name: cert
           secret:
@@ -2080,7 +2087,7 @@ spec:
     app: admission-control-webhook
   ports:
     - port: 443
-      targetPort: 443
+      targetPort: 8080
 ---
 kind: MutatingWebhookConfiguration
 apiVersion: admissionregistration.k8s.io/v1
