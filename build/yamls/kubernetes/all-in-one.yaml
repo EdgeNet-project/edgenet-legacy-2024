@@ -149,9 +149,152 @@ metadata:
 spec:
   group: apps.edgenet.io
   versions:
-    - name: v1alpha1
+    - name: v1alpha2
       served: true
       storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Ready
+          type: string
+          jsonPath: .status.ready
+        - name: Status
+          type: string
+          jsonPath: .status.state
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - workloads
+                - clusterAffinity
+              properties:
+                workloads:
+                  type: object
+                  properties:
+                    deployment:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-embedded-resource: true
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    daemonset:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-embedded-resource: true
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    statefulset:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-embedded-resource: true
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    job:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-embedded-resource: true
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                    cronjob:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-embedded-resource: true
+                        x-kubernetes-preserve-unknown-fields: true
+                      nullable: true
+                clusterAffinity:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      matchExpressions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            key:
+                              type: string
+                            operator:
+                              enum:
+                                - In
+                                - NotIn
+                                - Exists
+                                - DoesNotExist
+                              type: string
+                            values:
+                              type: array
+                              items:
+                                type: string
+                                pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                      matchLabels:
+                        x-kubernetes-preserve-unknown-fields: true
+                clusterReplicas:
+                  type: integer
+                  minimum: 1
+            status:
+              type: object
+              properties:
+                state:
+                  type: string
+                message:
+                  type: string
+                clusterRefs:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      uuid:
+                        type: string
+                      server:
+                        type: string
+                      location:
+                        type: string
+                      workloads:
+                        type: object
+                        properties:
+                          deployment:
+                            type: array
+                            items:
+                              type: object
+                              x-kubernetes-embedded-resource: true
+                              x-kubernetes-preserve-unknown-fields: true
+                          daemonset:
+                            type: array
+                            items:
+                              type: object
+                              x-kubernetes-embedded-resource: true
+                              x-kubernetes-preserve-unknown-fields: true
+                          statefulset:
+                            type: array
+                            items:
+                              type: object
+                              x-kubernetes-embedded-resource: true
+                              x-kubernetes-preserve-unknown-fields: true
+                          job:
+                            type: array
+                            items:
+                              type: object
+                              x-kubernetes-embedded-resource: true
+                              x-kubernetes-preserve-unknown-fields: true
+                          cronjob:
+                            type: array
+                            items:
+                              type: object
+                              x-kubernetes-embedded-resource: true
+                              x-kubernetes-preserve-unknown-fields: true
+    - name: v1alpha1
+      served: true
+      storage: false
       subresources:
         status: {}
       additionalPrinterColumns:
@@ -2559,3 +2702,252 @@ subjects:
 - kind: ServiceAccount
   name: edgenet-public
   namespace: kube-system
+---
+kind: ClusterIssuer
+apiVersion: cert-manager.io/v1
+metadata:
+  name: ca-bootstrap
+spec:
+  selfSigned: {}
+---
+kind: ClusterIssuer
+apiVersion: cert-manager.io/v1
+metadata:
+  name: ca-root
+spec:
+  ca:
+    secretName: ca-root
+---
+kind: Certificate
+apiVersion: cert-manager.io/v1
+metadata:
+  name: ca-root
+  namespace: cert-manager
+spec:
+  secretName: ca-root
+  isCA: true
+  commonName: ca-root
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  issuerRef:
+    kind: ClusterIssuer
+    name: ca-bootstrap
+---
+kind: Certificate
+apiVersion: cert-manager.io/v1
+metadata:
+  name: admission-control-webhook
+  namespace: edgenet
+spec:
+  issuerRef:
+    name: ca-root
+    kind: ClusterIssuer
+  secretName: admission-control
+  duration: 4320h
+  renewBefore: 360h
+  dnsNames:
+    - admission-control.edgenet.svc
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  usages:
+    - client auth
+    - server auth
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: admission-control-webhook
+  namespace: edgenet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admission-control-webhook
+  template:
+    metadata:
+      labels:
+        app: admission-control-webhook
+    spec:
+      containers:
+        - name: admission-control-webhook
+          image: edgenetio/admissioncontrol:v1.0.0-alpha.5
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 443
+          volumeMounts:
+            - name: cert
+              mountPath: /tls
+              readOnly: true
+          env:
+            - name: TLS_CERTIFICATE
+              value: /tls/tls.crt
+            - name: TLS_PRIVATE_KEY
+              value: /tls/tls.key
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node.kubernetes.io/unschedulable
+      volumes:
+        - name: cert
+          secret:
+            secretName: admission-control
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: admission-control
+  namespace: edgenet
+spec:
+  selector:
+    app: admission-control-webhook
+  ports:
+    - port: 443
+      targetPort: 8080
+---
+kind: MutatingWebhookConfiguration
+apiVersion: admissionregistration.k8s.io/v1
+metadata:
+  name: edgenet-admission-control
+  annotations:
+    cert-manager.io/inject-ca-from: edgenet/api-server-webhook
+webhooks:
+  - name: pod-bandwidth-mutate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /mutate/pod
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: NotIn
+        values: ["edgenet", "kube-system", "cert-manager"]
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        operations: ["CREATE"]
+        scope: Namespaced
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+---
+kind: ValidatingWebhookConfiguration
+apiVersion: admissionregistration.k8s.io/v1
+metadata:
+  name: edgenet-admission-control
+  annotations:
+    cert-manager.io/inject-ca-from: edgenet/api-server-webhook
+webhooks:
+  - name: pod-bandwidth-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/pod
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: NotIn
+        values: ["edgenet", "kube-system", "cert-manager"]
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        operations: ["CREATE", "UPDATE"]
+        scope: Namespaced
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+  - name: tenant-request-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/tenant-request
+    rules:
+      - apiGroups: ["registration.edgenet.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["tenantrequests"]
+        operations: ["CREATE"]
+        scope: Cluster
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+  - name: cluster-role-request-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/cluster-role-request
+    rules:
+      - apiGroups: ["registration.edgenet.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["clusterrolerequests"]
+        operations: ["CREATE"]
+        scope: Cluster
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+  - name: role-request-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/role-request
+    rules:
+      - apiGroups: ["registration.edgenet.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["rolerequests"]
+        operations: ["CREATE"]
+        scope: Namespaced
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+  - name: subnamespace-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/subnamespace
+    rules:
+      - apiGroups: ["core.edgenet.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["subnamespaces"]
+        operations: ["CREATE", "UPDATE"]
+        scope: Namespaced
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+  - name: slice-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/slice
+    rules:
+      - apiGroups: ["core.edgenet.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["slices"]
+        operations: ["UPDATE"]
+        scope: Cluster
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+  - name: slice-claim-validate.edge-net.io
+    clientConfig:
+      service:
+        namespace: edgenet
+        name: admission-control
+        path: /validate/slice-claim
+    rules:
+      - apiGroups: ["core.edgenet.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["sliceclaims"]
+        operations: ["UPDATE"]
+        scope: Namespaced
+    sideEffects: None
+    admissionReviewVersions: ["v1"]

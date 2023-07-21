@@ -179,7 +179,7 @@ spec:
                               x-kubernetes-preserve-unknown-fields: true
     - name: v1alpha1
       served: true
-      storage: true
+      storage: false
       subresources:
         status: {}
       additionalPrinterColumns:
