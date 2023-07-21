@@ -1,6 +1,6 @@
 # Installing Fedmanctl Command Line Tool
 
-This document describes how to install and use the command line tool fedmanctl designed for automating the federation procedure of worker and manager Kubernetes clusters.
+This document describes how to install and use the command line tool fedmanctl designed for automating the federation procedure of workload and manager Kubernetes clusters.
 
 ## Technologies you will use
 
