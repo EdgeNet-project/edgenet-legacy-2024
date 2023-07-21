@@ -18,7 +18,7 @@ var managerCmd = &cobra.Command{
 
 var managerFederateCmd = &cobra.Command{
 	Use:   "federate <token> <namespace>",
-	Short: "Federate a worker cluster with the generated token.",
+	Short: "Federate a workload cluster with the generated token and a namespace.",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
@@ -33,13 +33,13 @@ var managerFederateCmd = &cobra.Command{
 			panic(err.Error())
 		}
 
-		fmt.Println("Linked worker cluster")
+		fmt.Println("Federated workload cluster")
 	},
 }
 
 var managerSeparateCmd = &cobra.Command{
 	Use:   "separate <uid> <namespace>",
-	Short: "Separate a worker cluster with the uid.",
+	Short: "Separate a workload cluster with the uid and namespace.",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := fedmanctl.NewFedmanctl(kubeconfig, context, true)
@@ -59,7 +59,7 @@ var managerSeparateCmd = &cobra.Command{
 			panic(err.Error())
 		}
 
-		fmt.Println("Unlinked worker cluster")
+		fmt.Println("Sperated the workload cluster")
 	},
 }
 
@@ -80,7 +80,7 @@ var managerListCmd = &cobra.Command{
 		}
 
 		if len(clusters) == 0 {
-			fmt.Println("no worker clusters available")
+			fmt.Println("No workload clusters available")
 		} else {
 			w := tabwriter.NewWriter(os.Stdout, 20, 20, 1, ' ', 0)
 
