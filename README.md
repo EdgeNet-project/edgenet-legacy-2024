@@ -33,17 +33,7 @@ To create an EdgeNet cluster you need to have admin access to a Kubernetes clust
 
 EdgeNet uses [cert-manager](https://cert-manager.io/docs/installation/) to manage certificates. If you don't have `cert-manager` in your Kubernetes cluster please install it first. 
 
-Before installing, you need to specify a version of EdgeNet by setting the `RELEASE` variable to a branch name. The default branch name is `main`. Then you can deploy EdgeNet to your Kubernetes cluster using only the `kubectl apply` command. To enable or disable specific features please refer to the [advanced installation tutorial](/docs/tutorials/deploy_edgenet_to_kube.md).
-
-You can apply the following command to deploy EdgeNet to your Kubernetes cluster.
-
-```bash
-RELEASE=main
-
-kubectl apply -f https://raw.githubusercontent.com/EdgeNet-project/edgenet/$RELEASE/build/yamls/kubernetes/all-in-one.yaml
-```
-
-You are done! You just need to wait for Kubernetes to spin the EdgeNet controllers.
+To deploy EdgeNet features to your cluster refer to the [``advanced installation tutorial``](/docs/tutorials/deploy_edgenet_to_kube.md).
 
 # Tutorials and Documentation
 If you are planning to use EdgeNet software in your Kubernetes cluster, we highly encourage you to check out the [EdgeNet's documentation](/docs/README.md).
