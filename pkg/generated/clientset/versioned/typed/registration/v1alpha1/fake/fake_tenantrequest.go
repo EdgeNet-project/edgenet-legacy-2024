@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -35,9 +34,9 @@ type FakeTenantRequests struct {
 	Fake *FakeRegistrationV1alpha1
 }
 
-var tenantrequestsResource = schema.GroupVersionResource{Group: "registration.edgenet.io", Version: "v1alpha1", Resource: "tenantrequests"}
+var tenantrequestsResource = v1alpha1.SchemeGroupVersion.WithResource("tenantrequests")
 
-var tenantrequestsKind = schema.GroupVersionKind{Group: "registration.edgenet.io", Version: "v1alpha1", Kind: "TenantRequest"}
+var tenantrequestsKind = v1alpha1.SchemeGroupVersion.WithKind("TenantRequest")
 
 // Get takes name of the tenantRequest, and returns the corresponding tenantRequest object, and an error if there is any.
 func (c *FakeTenantRequests) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.TenantRequest, err error) {
@@ -110,7 +109,7 @@ func (c *FakeTenantRequests) UpdateStatus(ctx context.Context, tenantRequest *v1
 // Delete takes name of the tenantRequest and deletes it. Returns an error if one occurs.
 func (c *FakeTenantRequests) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(tenantrequestsResource, name), &v1alpha1.TenantRequest{})
+		Invokes(testing.NewRootDeleteActionWithOptions(tenantrequestsResource, name, opts), &v1alpha1.TenantRequest{})
 	return err
 }
 

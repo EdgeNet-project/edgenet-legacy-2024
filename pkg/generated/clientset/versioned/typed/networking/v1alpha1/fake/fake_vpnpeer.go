@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/networking/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -35,9 +34,9 @@ type FakeVPNPeers struct {
 	Fake *FakeNetworkingV1alpha1
 }
 
-var vpnpeersResource = schema.GroupVersionResource{Group: "networking.edgenet.io", Version: "v1alpha1", Resource: "vpnpeers"}
+var vpnpeersResource = v1alpha1.SchemeGroupVersion.WithResource("vpnpeers")
 
-var vpnpeersKind = schema.GroupVersionKind{Group: "networking.edgenet.io", Version: "v1alpha1", Kind: "VPNPeer"}
+var vpnpeersKind = v1alpha1.SchemeGroupVersion.WithKind("VPNPeer")
 
 // Get takes name of the vPNPeer, and returns the corresponding vPNPeer object, and an error if there is any.
 func (c *FakeVPNPeers) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.VPNPeer, err error) {
@@ -99,7 +98,7 @@ func (c *FakeVPNPeers) Update(ctx context.Context, vPNPeer *v1alpha1.VPNPeer, op
 // Delete takes name of the vPNPeer and deletes it. Returns an error if one occurs.
 func (c *FakeVPNPeers) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(vpnpeersResource, name), &v1alpha1.VPNPeer{})
+		Invokes(testing.NewRootDeleteActionWithOptions(vpnpeersResource, name, opts), &v1alpha1.VPNPeer{})
 	return err
 }
 

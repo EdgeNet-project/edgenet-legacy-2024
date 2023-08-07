@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -35,9 +34,9 @@ type FakeTenants struct {
 	Fake *FakeCoreV1alpha1
 }
 
-var tenantsResource = schema.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha1", Resource: "tenants"}
+var tenantsResource = v1alpha1.SchemeGroupVersion.WithResource("tenants")
 
-var tenantsKind = schema.GroupVersionKind{Group: "core.edgenet.io", Version: "v1alpha1", Kind: "Tenant"}
+var tenantsKind = v1alpha1.SchemeGroupVersion.WithKind("Tenant")
 
 // Get takes name of the tenant, and returns the corresponding tenant object, and an error if there is any.
 func (c *FakeTenants) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Tenant, err error) {
@@ -110,7 +109,7 @@ func (c *FakeTenants) UpdateStatus(ctx context.Context, tenant *v1alpha1.Tenant,
 // Delete takes name of the tenant and deletes it. Returns an error if one occurs.
 func (c *FakeTenants) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(tenantsResource, name), &v1alpha1.Tenant{})
+		Invokes(testing.NewRootDeleteActionWithOptions(tenantsResource, name, opts), &v1alpha1.Tenant{})
 	return err
 }
 

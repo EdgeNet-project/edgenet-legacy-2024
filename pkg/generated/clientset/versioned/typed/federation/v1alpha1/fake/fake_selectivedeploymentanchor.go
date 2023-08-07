@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakeSelectiveDeploymentAnchors struct {
 	ns   string
 }
 
-var selectivedeploymentanchorsResource = schema.GroupVersionResource{Group: "federation.edgenet.io", Version: "v1alpha1", Resource: "selectivedeploymentanchors"}
+var selectivedeploymentanchorsResource = v1alpha1.SchemeGroupVersion.WithResource("selectivedeploymentanchors")
 
-var selectivedeploymentanchorsKind = schema.GroupVersionKind{Group: "federation.edgenet.io", Version: "v1alpha1", Kind: "SelectiveDeploymentAnchor"}
+var selectivedeploymentanchorsKind = v1alpha1.SchemeGroupVersion.WithKind("SelectiveDeploymentAnchor")
 
 // Get takes name of the selectiveDeploymentAnchor, and returns the corresponding selectiveDeploymentAnchor object, and an error if there is any.
 func (c *FakeSelectiveDeploymentAnchors) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.SelectiveDeploymentAnchor, err error) {
@@ -117,7 +116,7 @@ func (c *FakeSelectiveDeploymentAnchors) UpdateStatus(ctx context.Context, selec
 // Delete takes name of the selectiveDeploymentAnchor and deletes it. Returns an error if one occurs.
 func (c *FakeSelectiveDeploymentAnchors) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(selectivedeploymentanchorsResource, c.ns, name), &v1alpha1.SelectiveDeploymentAnchor{})
+		Invokes(testing.NewDeleteActionWithOptions(selectivedeploymentanchorsResource, c.ns, name, opts), &v1alpha1.SelectiveDeploymentAnchor{})
 
 	return err
 }

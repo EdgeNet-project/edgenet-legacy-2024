@@ -483,6 +483,11 @@ func (in *SelectiveDeploymentAnchorSpec) DeepCopyInto(out *SelectiveDeploymentAn
 		*out = new(SelectedFederationManager)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.FederationUID != nil {
+		in, out := &in.FederationUID, &out.FederationUID
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 

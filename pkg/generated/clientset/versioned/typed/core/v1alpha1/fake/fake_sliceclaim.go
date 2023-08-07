@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakeSliceClaims struct {
 	ns   string
 }
 
-var sliceclaimsResource = schema.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha1", Resource: "sliceclaims"}
+var sliceclaimsResource = v1alpha1.SchemeGroupVersion.WithResource("sliceclaims")
 
-var sliceclaimsKind = schema.GroupVersionKind{Group: "core.edgenet.io", Version: "v1alpha1", Kind: "SliceClaim"}
+var sliceclaimsKind = v1alpha1.SchemeGroupVersion.WithKind("SliceClaim")
 
 // Get takes name of the sliceClaim, and returns the corresponding sliceClaim object, and an error if there is any.
 func (c *FakeSliceClaims) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.SliceClaim, err error) {
@@ -117,7 +116,7 @@ func (c *FakeSliceClaims) UpdateStatus(ctx context.Context, sliceClaim *v1alpha1
 // Delete takes name of the sliceClaim and deletes it. Returns an error if one occurs.
 func (c *FakeSliceClaims) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(sliceclaimsResource, c.ns, name), &v1alpha1.SliceClaim{})
+		Invokes(testing.NewDeleteActionWithOptions(sliceclaimsResource, c.ns, name, opts), &v1alpha1.SliceClaim{})
 
 	return err
 }
