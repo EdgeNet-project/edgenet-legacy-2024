@@ -1,6 +1,6 @@
 module github.com/EdgeNet-project/edgenet
 
-go 1.18
+go 1.21.3
 
 require (
 	antrea.io/antrea v1.5.0
