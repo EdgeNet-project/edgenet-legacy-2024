@@ -24,7 +24,7 @@ all:
 		./cmd/...
 
 bootstrap:
-	mkdir ${HOME}/.kube
+	mkdir -p ${HOME}/.kube
 	cp ./configs/public.cfg ${HOME}/.kube/config
 	cp ./configs/smtp_test_template.yaml ./configs/smtp_test.yaml
 	cp ./configs/headnode_template.yaml ./configs/headnode.yaml
