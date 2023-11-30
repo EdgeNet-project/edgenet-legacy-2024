@@ -23,6 +23,9 @@ bootstrap:
 fedmanctl:
 	$(GOMOD) install ./cmd/fedmanctl/fedmanctl.go  
 
+gen:
+	./hack/update-codegen.sh 
+	
 sync:
 	$(GOCLEAN) --modcache
 	$(GOMOD)
