@@ -12,10 +12,6 @@ GIT_VERSION:=$(or \
 )
 .PHONY: build
 
-sync:
-	$(GOCLEAN) --modcache
-	$(GOMOD)
-
 # This is for github actions, do not run this in a project.
 bootstrap:
 	mkdir -p ${HOME}/.kube
@@ -23,6 +19,13 @@ bootstrap:
 	cp ./configs/smtp_test_template.yaml ./configs/smtp_test.yaml
 	cp ./configs/headnode_template.yaml ./configs/headnode.yaml
 	cp ./configs/namecheap_template.yaml ./configs/namecheap.yaml
+
+fedmanctl:
+	$(GOMOD) install ./cmd/fedmanctl/fedmanctl.go  
+
+sync:
+	$(GOCLEAN) --modcache
+	$(GOMOD)
 
 test:
 	$(GOCLEAN) -testcache
