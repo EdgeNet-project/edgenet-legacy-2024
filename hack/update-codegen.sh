@@ -31,11 +31,11 @@ source "${CODEGEN_PKG}/kube_codegen.sh"
 kube::codegen::gen_helpers \
     --input-pkg-root github.com/EdgeNet-project/edgenet/pkg/apis \
     --output-base "$(dirname "${BASH_SOURCE[0]}")/../../../.." \
-    --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.go.txt"
+    --boilerplate "${SCRIPT_ROOT}/hack/custom-boilerplate.go.txt"
 
 kube::codegen::gen_client \
     --with-watch \
     --input-pkg-root github.com/EdgeNet-project/edgenet/pkg/apis \
     --output-pkg-root github.com/EdgeNet-project/edgenet/pkg/generated \
     --output-base "$(dirname "${BASH_SOURCE[0]}")/../../../.." \
-    --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.go.txt"
+    --boilerplate "${SCRIPT_ROOT}/hack/custom-boilerplate.go.txt"
