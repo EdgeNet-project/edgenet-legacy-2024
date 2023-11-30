@@ -21,7 +21,7 @@ bootstrap:
 	cp ./configs/namecheap_template.yaml ./configs/namecheap.yaml
 
 fedmanctl:
-	$(GOMOD) install ./cmd/fedmanctl/fedmanctl.go  
+	$(GOCMD) install ./cmd/fedmanctl/fedmanctl.go  
 
 gen:
 	./hack/update-codegen.sh 
