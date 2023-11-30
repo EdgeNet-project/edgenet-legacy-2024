@@ -5,7 +5,7 @@ services:
     container_name: nodelabeler
     restart: always
     build:
-      context: ../../
+      context: ./../../
       dockerfile: ./build/images/nodelabeler/Dockerfile
     image: nodelabeler:v1.0.0
     volumes:
@@ -14,7 +14,7 @@ services:
     container_name: selectivedeployment
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/selectivedeployment/Dockerfile
     image: selectivedeployment:v1.0.0
     volumes:
@@ -23,7 +23,7 @@ services:
     container_name: tenant
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/tenant/Dockerfile
     image: tenant:v1.0.0
     volumes:
@@ -32,7 +32,7 @@ services:
     container_name: tenantrequest
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/tenantrequest/Dockerfile
     image: tenantrequest:v1.0.0
     volumes:
@@ -41,7 +41,7 @@ services:
     container_name: rolerequest
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/rolerequest/Dockerfile
     image: rolerequest:v1.0.0
     volumes:
@@ -50,7 +50,7 @@ services:
     container_name: nodecontribution
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/nodecontribution/Dockerfile
     image: nodecontribution:v1.0.0
     volumes:
@@ -61,7 +61,7 @@ services:
     container_name: tenantresourcequota
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/tenantresourcequota/Dockerfile
     image: tenantresourcequota:v1.0.0
     volumes:
@@ -70,7 +70,7 @@ services:
     container_name: subnamespace
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/subnamespace/Dockerfile
     image: subnamespace:v1.0.0
     volumes:
@@ -79,7 +79,7 @@ services:
     container_name: vpnpeer
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/vpnpeer/Dockerfile
     image: vpnpeer:v1.0.0
     volumes:
@@ -91,7 +91,7 @@ services:
     container_name: notifier
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/notifier/Dockerfile
     image: notifier:v1.0.0
     volumes:
@@ -101,7 +101,7 @@ services:
     container_name: clusterrolerequest
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/clusterrolerequest/Dockerfile
     image: clusterrolerequest:v1.0.0
     volumes:
@@ -110,7 +110,7 @@ services:
     container_name: sliceclaim
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/sliceclaim/Dockerfile
     image: sliceclaim:v1.0.0
     volumes:
@@ -119,7 +119,7 @@ services:
     container_name: slice
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/slice/Dockerfile
     image: slice:v1.0.0
     volumes:
@@ -128,7 +128,7 @@ services:
     container_name: fedlet
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/fedlet/Dockerfile
     image: fedlet:v1.0.0
     volumes:
@@ -137,7 +137,7 @@ services:
     container_name: cluster
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/cluster/Dockerfile
     image: cluster:v1.0.0
     volumes:
@@ -146,7 +146,7 @@ services:
     container_name: managercache
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/managercache/Dockerfile
     image: managercache:v1.0.0
     volumes:
@@ -155,7 +155,7 @@ services:
     container_name: selectivedeploymentanchor
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/selectivedeploymentanchor/Dockerfile
     image: selectivedeploymentanchor:v1.0.0
     volumes:
@@ -164,7 +164,7 @@ services:
     container_name: fedscheduler
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/fedscheduler/Dockerfile
     image: fedscheduler:v1.0.0
     volumes:
@@ -173,7 +173,7 @@ services:
     container_name: clusterlabeler
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/clusterlabeler/Dockerfile
     image: clusterlabeler:v1.0.0
     volumes:
@@ -182,6 +182,6 @@ services:
     container_name: admissioncontrol
     restart: always
     build:
-      context: ../../
+      context: ./../..
       dockerfile: ./build/images/admissioncontrol/Dockerfile
     image: admissioncontrol:v1.0.0
