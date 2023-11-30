@@ -12,9 +12,9 @@ GIT_VERSION:=$(or \
 )
 .PHONY: build
 
-# sync:
-# 	$(GOCLEAN) --modcache
-# 	$(GOMOD)
+sync:
+	$(GOCLEAN) --modcache
+	$(GOMOD)
 
 # This is for github actions, do not run this in a project.
 bootstrap:
