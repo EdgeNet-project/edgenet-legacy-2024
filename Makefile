@@ -12,17 +12,9 @@ GIT_VERSION:=$(or \
 )
 .PHONY: build
 
-
 # sync:
 # 	$(GOCLEAN) --modcache
 # 	$(GOMOD)
-
-# all:
-# 	GO111MODULE=on GOBIN=${GOPATH}/bin go install -mod=vendor \
-# 		-gcflags="all=-trimpath=$GOPATH" \
-# 		-asmflags="all=-trimpath=$GOPATH" \
-# 		-ldflags="-X github.com/EdgeNet-Project/edgenet.CurrentVersion=$(GIT_VERSION)" \
-# 		./cmd/...
 
 # This is for github actions, do not run this in a project.
 bootstrap:
