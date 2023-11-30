@@ -1,3 +1,5 @@
+# When initially cloned the project, run make sync to download the libraries. 
+# Then run the 
 GOCMD=go
 GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
@@ -12,7 +14,8 @@ GIT_VERSION:=$(or \
 )
 .PHONY: build
 
-# This is for github actions, do not run this in a project.
+# DO NOT MAUALLY RUN
+# This is for github actions.
 bootstrap:
 	mkdir -p ${HOME}/.kube
 	cp ./configs/public.cfg ${HOME}/.kube/config
@@ -31,8 +34,11 @@ sync:
 	$(GOMOD)
 
 test:
+	cp ./configs/smtp_test_template.yaml ./configs/smtp_test.yaml
+	cp ./configs/headnode_template.yaml ./configs/headnode.yaml
+	cp ./configs/namecheap_template.yaml ./configs/namecheap.yaml
 	$(GOCLEAN) -testcache
-	$(GOTEST) -covermode atomic ./... -v
+	$(GOTEST) -covermode atomic ./...
 
 build:
 	docker-compose -f ./build/yamls/docker-compose.yaml build
