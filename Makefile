@@ -35,8 +35,6 @@ bootstrap:
 test:
 	$(GOCLEAN) -testcache
 	$(GOTEST) -covermode atomic ./... -v
-# 	find ./assets/certs ! -name 'README.md' -type f -exec rm -f {} +
-# 	find ./assets/kubeconfigs ! -name 'README.md' -type f -exec rm -f {} +
 
 build:
 	docker-compose -f ./build/yamls/docker-compose.yaml build
