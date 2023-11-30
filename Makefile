@@ -12,17 +12,19 @@ GIT_VERSION:=$(or \
 )
 .PHONY: build
 
-sync:
-	$(GOCLEAN) --modcache
-	$(GOMOD)
 
-all:
-	GO111MODULE=on GOBIN=${GOPATH}/bin go install -mod=vendor \
-		-gcflags="all=-trimpath=$GOPATH" \
-		-asmflags="all=-trimpath=$GOPATH" \
-		-ldflags="-X github.com/EdgeNet-Project/edgenet.CurrentVersion=$(GIT_VERSION)" \
-		./cmd/...
+# sync:
+# 	$(GOCLEAN) --modcache
+# 	$(GOMOD)
 
+# all:
+# 	GO111MODULE=on GOBIN=${GOPATH}/bin go install -mod=vendor \
+# 		-gcflags="all=-trimpath=$GOPATH" \
+# 		-asmflags="all=-trimpath=$GOPATH" \
+# 		-ldflags="-X github.com/EdgeNet-Project/edgenet.CurrentVersion=$(GIT_VERSION)" \
+# 		./cmd/...
+
+# This is for github actions, do not run this in a project.
 bootstrap:
 	mkdir -p ${HOME}/.kube
 	cp ./configs/public.cfg ${HOME}/.kube/config
@@ -31,27 +33,27 @@ bootstrap:
 	cp ./configs/namecheap_template.yaml ./configs/namecheap.yaml
 
 test:
-	$(GOCLEAN) -testcache ./...
+	$(GOCLEAN) -testcache
 	$(GOTEST) -covermode atomic ./... -v
-	find ./assets/certs ! -name 'README.md' -type f -exec rm -f {} +
-	find ./assets/kubeconfigs ! -name 'README.md' -type f -exec rm -f {} +
+# 	find ./assets/certs ! -name 'README.md' -type f -exec rm -f {} +
+# 	find ./assets/kubeconfigs ! -name 'README.md' -type f -exec rm -f {} +
 
 build:
-	docker-compose -f ./build/yamls/docker-compose.yml build
+	docker-compose -f ./build/yamls/docker-compose.yaml build
 
 rebuild: stop clean build start
 
 start: build
-	docker-compose -f ./build/yamls/docker-compose.yml up -d
+	docker-compose -f ./build/yamls/docker-compose.yaml up -d
 
 run:
-	docker-compose -f ./build/yamls/docker-compose.yml up -d
+	docker-compose -f ./build/yamls/docker-compose.yaml up -d
 
 stop:
-	docker-compose -f ./build/yamls/docker-compose.yml down
+	docker-compose -f ./build/yamls/docker-compose.yaml down
 
 clean:
-	docker-compose -f ./build/yamls/docker-compose.yml down --rmi all
+	docker-compose -f ./build/yamls/docker-compose.yaml down --rmi all
 	$(GOCLEAN)
 
 lint:
