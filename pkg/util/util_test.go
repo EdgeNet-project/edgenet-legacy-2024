@@ -22,6 +22,7 @@ func TestGenerateRandomString(t *testing.T) {
 				}
 			}
 		}
+
 		codes = append(codes, task)
 	}
 }
