@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"testing"
@@ -28,8 +28,8 @@ func TestMain(m *testing.M) {
 	flag.String("ca-path", "../../configs/ca_sample.crt", "Set CA path.")
 	flag.Parse()
 
-	log.SetOutput(ioutil.Discard)
-	logrus.SetOutput(ioutil.Discard)
+	log.SetOutput(io.Discard)
+	logrus.SetOutput(io.Discard)
 	os.Exit(m.Run())
 }
 

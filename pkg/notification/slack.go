@@ -3,7 +3,7 @@ package notification
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -26,11 +26,11 @@ func (c *Content) slack(purpose string) error {
 	if flag.Lookup("slack-channel-id-path") != nil {
 		channelIDPath = flag.Lookup("slack-channel-id-path").Value.(flag.Getter).Get().(string)
 	}
-	authToken, err := ioutil.ReadFile(authTokenPath)
+	authToken, err := os.ReadFile(authTokenPath)
 	if err != nil {
 		return err
 	}
-	channelID, err := ioutil.ReadFile(channelIDPath)
+	channelID, err := os.ReadFile(channelIDPath)
 	if err != nil {
 		return err
 	}

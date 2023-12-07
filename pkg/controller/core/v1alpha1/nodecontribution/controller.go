@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -495,7 +494,7 @@ func (c *Controller) processNodeContribution(nodecontributionCopy *corev1alpha1.
 				if flag.Lookup("aws-secret-path") != nil {
 					awsSecretPath = flag.Lookup("aws-secret-path").Value.(flag.Getter).Get().(string)
 				}
-				awsID, err := ioutil.ReadFile(awsIDPath)
+				awsID, err := os.ReadFile(awsIDPath)
 				if err != nil {
 					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
 					nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
@@ -503,7 +502,7 @@ func (c *Controller) processNodeContribution(nodecontributionCopy *corev1alpha1.
 					c.updateStatus(context.TODO(), nodecontributionCopy)
 					return
 				}
-				awsSecret, err := ioutil.ReadFile(awsSecretPath)
+				awsSecret, err := os.ReadFile(awsSecretPath)
 				if err != nil {
 					c.recorder.Event(nodecontributionCopy, corev1.EventTypeWarning, corev1alpha1.StatusFailed, messageDNSFailed)
 					nodecontributionCopy.Status.State = corev1alpha1.StatusFailed
@@ -677,7 +676,7 @@ func getSSHConfigurations() (ssh.Signer, ssh.HostKeyCallback, bool) {
 	if flag.Lookup("ssh-path") != nil {
 		sshPath = flag.Lookup("ssh-path").Value.(flag.Getter).Get().(string)
 	}
-	key, err := ioutil.ReadFile(fmt.Sprintf("%s/id_rsa", sshPath))
+	key, err := os.ReadFile(fmt.Sprintf("%s/id_rsa", sshPath))
 	if err != nil {
 		klog.Infoln(err)
 		return nil, nil, false

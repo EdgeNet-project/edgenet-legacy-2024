@@ -3,7 +3,7 @@ package clusterrolerequest
 import (
 	"context"
 	"flag"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"testing"
@@ -34,9 +34,9 @@ var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
 
 func TestMain(m *testing.M) {
-	klog.SetOutput(ioutil.Discard)
-	log.SetOutput(ioutil.Discard)
-	logrus.SetOutput(ioutil.Discard)
+	klog.SetOutput(io.Discard)
+	log.SetOutput(io.Discard)
+	logrus.SetOutput(io.Discard)
 
 	flag.String("dir", "../../../../..", "Override the directory.")
 	flag.String("smtp-path", "../../../../../configs/smtp_test.yaml", "Set SMTP path.")
