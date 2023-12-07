@@ -600,6 +600,7 @@ func TestCreate(t *testing.T) {
 		log.Println(workload)
 	}
 	sdCopy, err := edgenetclientset.AppsV1alpha1().SelectiveDeployments("create").Get(context.TODO(), sdObj.GetName(), metav1.GetOptions{})
+	time.Sleep(time.Millisecond * 500)
 	t.Run("status", func(t *testing.T) {
 		util.OK(t, err)
 		util.Equals(t, success, sdCopy.Status.State)
