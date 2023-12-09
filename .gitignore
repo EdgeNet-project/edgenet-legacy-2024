@@ -45,7 +45,6 @@ examples/selective-deployment/object/error-handling
 examples/*.txt
 examples/*/*.txt
 code-generator
-hack
 
 cmd/dnsrecords
 

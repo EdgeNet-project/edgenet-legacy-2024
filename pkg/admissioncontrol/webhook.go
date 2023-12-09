@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"reflect"
@@ -727,7 +727,7 @@ func admissionReviewFromRequest(r *http.Request, deserializer runtime.Decoder) (
 	if r.Body == nil {
 		return nil, errors.New("request body is empty")
 	}
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}

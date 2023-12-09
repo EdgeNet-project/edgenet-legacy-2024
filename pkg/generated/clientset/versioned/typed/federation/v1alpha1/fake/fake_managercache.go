@@ -1,5 +1,5 @@
 /*
-Copyright The Kubernetes Authors.
+Copyright 2023 Contributors to the EdgeNet project.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -35,9 +34,9 @@ type FakeManagerCaches struct {
 	Fake *FakeFederationV1alpha1
 }
 
-var managercachesResource = schema.GroupVersionResource{Group: "federation.edgenet.io", Version: "v1alpha1", Resource: "managercaches"}
+var managercachesResource = v1alpha1.SchemeGroupVersion.WithResource("managercaches")
 
-var managercachesKind = schema.GroupVersionKind{Group: "federation.edgenet.io", Version: "v1alpha1", Kind: "ManagerCache"}
+var managercachesKind = v1alpha1.SchemeGroupVersion.WithKind("ManagerCache")
 
 // Get takes name of the managerCache, and returns the corresponding managerCache object, and an error if there is any.
 func (c *FakeManagerCaches) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ManagerCache, err error) {
@@ -110,7 +109,7 @@ func (c *FakeManagerCaches) UpdateStatus(ctx context.Context, managerCache *v1al
 // Delete takes name of the managerCache and deletes it. Returns an error if one occurs.
 func (c *FakeManagerCaches) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(managercachesResource, name), &v1alpha1.ManagerCache{})
+		Invokes(testing.NewRootDeleteActionWithOptions(managercachesResource, name, opts), &v1alpha1.ManagerCache{})
 	return err
 }
 

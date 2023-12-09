@@ -1,4 +1,4 @@
-FROM golang:1.18.3-alpine AS build
+FROM golang:1.21.3-alpine AS build
 
 WORKDIR /edgenet
 
@@ -9,7 +9,7 @@ COPY . ./
 ENV CGO_ENABLED=0
 RUN go build -o selectivedeploymentanchor ./cmd/selectivedeploymentanchor/
 
-FROM alpine:3.16.2
+FROM alpine:3.18.4
 
 RUN adduser -D -u 8118 edgenet
 USER edgenet:edgenet

@@ -1,5 +1,5 @@
 /*
-Copyright The Kubernetes Authors.
+Copyright 2023 Contributors to the EdgeNet project.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -35,9 +34,9 @@ type FakeSlices struct {
 	Fake *FakeCoreV1alpha1
 }
 
-var slicesResource = schema.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha1", Resource: "slices"}
+var slicesResource = v1alpha1.SchemeGroupVersion.WithResource("slices")
 
-var slicesKind = schema.GroupVersionKind{Group: "core.edgenet.io", Version: "v1alpha1", Kind: "Slice"}
+var slicesKind = v1alpha1.SchemeGroupVersion.WithKind("Slice")
 
 // Get takes name of the slice, and returns the corresponding slice object, and an error if there is any.
 func (c *FakeSlices) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Slice, err error) {
@@ -110,7 +109,7 @@ func (c *FakeSlices) UpdateStatus(ctx context.Context, slice *v1alpha1.Slice, op
 // Delete takes name of the slice and deletes it. Returns an error if one occurs.
 func (c *FakeSlices) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(slicesResource, name), &v1alpha1.Slice{})
+		Invokes(testing.NewRootDeleteActionWithOptions(slicesResource, name, opts), &v1alpha1.Slice{})
 	return err
 }
 

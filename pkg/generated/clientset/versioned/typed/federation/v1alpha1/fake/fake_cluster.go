@@ -1,5 +1,5 @@
 /*
-Copyright The Kubernetes Authors.
+Copyright 2023 Contributors to the EdgeNet project.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/federation/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakeClusters struct {
 	ns   string
 }
 
-var clustersResource = schema.GroupVersionResource{Group: "federation.edgenet.io", Version: "v1alpha1", Resource: "clusters"}
+var clustersResource = v1alpha1.SchemeGroupVersion.WithResource("clusters")
 
-var clustersKind = schema.GroupVersionKind{Group: "federation.edgenet.io", Version: "v1alpha1", Kind: "Cluster"}
+var clustersKind = v1alpha1.SchemeGroupVersion.WithKind("Cluster")
 
 // Get takes name of the cluster, and returns the corresponding cluster object, and an error if there is any.
 func (c *FakeClusters) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Cluster, err error) {
@@ -117,7 +116,7 @@ func (c *FakeClusters) UpdateStatus(ctx context.Context, cluster *v1alpha1.Clust
 // Delete takes name of the cluster and deletes it. Returns an error if one occurs.
 func (c *FakeClusters) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(clustersResource, c.ns, name), &v1alpha1.Cluster{})
+		Invokes(testing.NewDeleteActionWithOptions(clustersResource, c.ns, name, opts), &v1alpha1.Cluster{})
 
 	return err
 }

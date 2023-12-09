@@ -3,7 +3,6 @@ package nodelabeler
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -36,15 +35,11 @@ var kubeclientset kubernetes.Interface = kubetestclient.NewSimpleClientset()
 var edgenetclientset clientset.Interface = edgenettestclient.NewSimpleClientset()
 
 func TestMain(m *testing.M) {
-	//klog.SetOutput(ioutil.Discard)
-	//log.SetOutput(ioutil.Discard)
-	//logrus.SetOutput(ioutil.Discard)
-
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s := strings.Split(r.URL.Path, "../../../../../configs/nodelabeler/")
 		// 1.2.3.4 -> 1-2-3-4.json
 		filename := strings.Replace(s[len(s)-1], ".", "-", -1) + ".json"
-		response, err := ioutil.ReadFile(fmt.Sprintf("../../../../../configs/nodelabeler/%s", filename))
+		response, err := os.ReadFile(fmt.Sprintf("../../../../../configs/nodelabeler/%s", filename))
 		if err != nil {
 			w.WriteHeader(400)
 			_, err := w.Write([]byte(err.Error()))

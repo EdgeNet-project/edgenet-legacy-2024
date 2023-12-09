@@ -1,5 +1,5 @@
 /*
-Copyright The Kubernetes Authors.
+Copyright 2023 Contributors to the EdgeNet project.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakeSubNamespaces struct {
 	ns   string
 }
 
-var subnamespacesResource = schema.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha1", Resource: "subnamespaces"}
+var subnamespacesResource = v1alpha1.SchemeGroupVersion.WithResource("subnamespaces")
 
-var subnamespacesKind = schema.GroupVersionKind{Group: "core.edgenet.io", Version: "v1alpha1", Kind: "SubNamespace"}
+var subnamespacesKind = v1alpha1.SchemeGroupVersion.WithKind("SubNamespace")
 
 // Get takes name of the subNamespace, and returns the corresponding subNamespace object, and an error if there is any.
 func (c *FakeSubNamespaces) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.SubNamespace, err error) {
@@ -117,7 +116,7 @@ func (c *FakeSubNamespaces) UpdateStatus(ctx context.Context, subNamespace *v1al
 // Delete takes name of the subNamespace and deletes it. Returns an error if one occurs.
 func (c *FakeSubNamespaces) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(subnamespacesResource, c.ns, name), &v1alpha1.SubNamespace{})
+		Invokes(testing.NewDeleteActionWithOptions(subnamespacesResource, c.ns, name, opts), &v1alpha1.SubNamespace{})
 
 	return err
 }
