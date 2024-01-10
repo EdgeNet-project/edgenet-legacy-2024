@@ -521,6 +521,7 @@ func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment) {
 	oldStatus := selectivedeploymentCopy.Status
 	statusUpdate := func() {
+		// If the status is different then update it afte this function.s
 		if !reflect.DeepEqual(oldStatus, selectivedeploymentCopy.Status) {
 			c.edgenetclientset.AppsV1alpha1().SelectiveDeployments(selectivedeploymentCopy.GetNamespace()).UpdateStatus(context.TODO(), selectivedeploymentCopy, metav1.UpdateOptions{})
 		}
