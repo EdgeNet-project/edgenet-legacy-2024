@@ -182,67 +182,6 @@ func NewController(
 		DeleteFunc: controller.recoverSelectiveDeployments,
 	})
 
-	/*deploymentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newDeployment := new.(*appsv1.Deployment)
-			oldDeployment := old.(*appsv1.Deployment)
-			if newDeployment.ResourceVersion == oldDeployment.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	daemonsetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newDaemonSet := new.(*appsv1.DaemonSet)
-			oldDaemonSet := old.(*appsv1.DaemonSet)
-			if newDaemonSet.ResourceVersion == oldDaemonSet.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	statefulsetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newStatefulSet := new.(*appsv1.StatefulSet)
-			oldStatefulSet := old.(*appsv1.StatefulSet)
-			if newStatefulSet.ResourceVersion == oldStatefulSet.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	jobInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newJob := new.(*batchv1.Job)
-			oldJob := old.(*batchv1.Job)
-			if newJob.ResourceVersion == oldJob.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	cronjobInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newCronJob := new.(*batchv1beta1.CronJob)
-			oldCronJob := old.(*batchv1beta1.CronJob)
-			if newCronJob.ResourceVersion == oldCronJob.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})*/
-
 	return controller
 }
 
@@ -361,58 +300,6 @@ func (c *Controller) enqueueSelectiveDeployment(obj interface{}) {
 		return
 	}
 	c.workqueue.Add(key)
-}
-
-// enqueueSelectiveDeploymentAfter takes a SelectiveDeployment resource and converts it into a namespace/name
-// string which is then put onto the work queue after the expiry date to be deleted. This method should *not* be
-// passed resources of any type other than SelectiveDeployment.
-func (c *Controller) enqueueSelectiveDeploymentAfter(obj interface{}, after time.Duration) {
-	var key string
-	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		utilruntime.HandleError(err)
-		return
-	}
-	c.workqueue.AddAfter(key, after)
-}
-
-// handleObject will take any resource implementing metav1.Object and attempt
-// to find the SelectiveDeployment resource that 'owns' it. It does this by looking at the
-// objects metadata.ownerReferences field for an appropriate OwnerReference.
-// It then enqueues that SelectiveDeployment resource to be processed. If the object does not
-// have an appropriate OwnerReference, it will simply be skipped.
-func (c *Controller) handleObject(obj interface{}) {
-	var object metav1.Object
-	var ok bool
-	if object, ok = obj.(metav1.Object); !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
-			return
-		}
-		object, ok = tombstone.Obj.(metav1.Object)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
-			return
-		}
-		klog.Infof("Recovered deleted object '%s' from tombstone", object.GetName())
-	}
-	klog.Infof("Processing object: %s", object.GetName())
-	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
-		if ownerRef.Kind != "SelectiveDeployment" {
-			return
-		}
-
-		selectivedeployment, err := c.selectivedeploymentsLister.SelectiveDeployments(object.GetNamespace()).Get(ownerRef.Name)
-		if err != nil {
-			klog.Infof("ignoring orphaned object '%s' of selectivedeployment '%s'", object.GetSelfLink(), ownerRef.Name)
-			return
-		}
-
-		//c.enqueueSelectiveDeploymentAfter(selectivedeployment, 5*time.Minute)
-		c.enqueueSelectiveDeployment(selectivedeployment)
-		return
-	}
 }
 
 func (c *Controller) recoverSelectiveDeployments(obj interface{}) {
