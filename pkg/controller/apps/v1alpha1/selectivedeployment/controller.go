@@ -182,66 +182,8 @@ func NewController(
 		DeleteFunc: controller.recoverSelectiveDeployments,
 	})
 
-	/*deploymentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newDeployment := new.(*appsv1.Deployment)
-			oldDeployment := old.(*appsv1.Deployment)
-			if newDeployment.ResourceVersion == oldDeployment.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	daemonsetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newDaemonSet := new.(*appsv1.DaemonSet)
-			oldDaemonSet := old.(*appsv1.DaemonSet)
-			if newDaemonSet.ResourceVersion == oldDaemonSet.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	statefulsetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newStatefulSet := new.(*appsv1.StatefulSet)
-			oldStatefulSet := old.(*appsv1.StatefulSet)
-			if newStatefulSet.ResourceVersion == oldStatefulSet.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	jobInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newJob := new.(*batchv1.Job)
-			oldJob := old.(*batchv1.Job)
-			if newJob.ResourceVersion == oldJob.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-	cronjobInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newCronJob := new.(*batchv1beta1.CronJob)
-			oldCronJob := old.(*batchv1beta1.CronJob)
-			if newCronJob.ResourceVersion == oldCronJob.ResourceVersion {
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})*/
+	// TODO: There used to be the informers of the workloads. Do we want to implement the functionality:
+	// if the Deployment is deleted, recreate it?
 
 	return controller
 }
