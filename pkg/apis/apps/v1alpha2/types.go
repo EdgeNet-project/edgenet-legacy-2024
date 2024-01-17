@@ -87,6 +87,7 @@ type SelectiveDeploymentStatus struct {
 	Failed int `json:"failed"`
 }
 
+// Denotes the status of an individual cluster
 type WorkloadClusterStatus struct {
 	Server    string         `json:"server"`
 	Location  string         `json:"location"`
