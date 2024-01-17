@@ -66,7 +66,9 @@ type Workloads struct {
 	CronJob []batchv1beta.CronJob `json:"cronjob"`
 }
 
-// Selector to define desired node filtering parameters
+// Selector to define desired node filtering parameters.
+// TODO: In the future we might want to add custom sectorization? this is already doable
+// with LabelSelector
 type Selector struct {
 	// Name of the selector. This can be City, State, Country, Continent, or Polygon
 	Name string `json:"name"`
