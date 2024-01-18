@@ -24,6 +24,7 @@ import (
 
 	appsv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha1"
 	appsv1alpha2 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha2"
+	appsv1alpha3 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/apps/v1alpha3"
 	corev1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/core/v1alpha1"
 	federationv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/federation/v1alpha1"
 	networkingv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/typed/networking/v1alpha1"
@@ -37,6 +38,7 @@ type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	AppsV1alpha1() appsv1alpha1.AppsV1alpha1Interface
 	AppsV1alpha2() appsv1alpha2.AppsV1alpha2Interface
+	AppsV1alpha3() appsv1alpha3.AppsV1alpha3Interface
 	CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface
 	FederationV1alpha1() federationv1alpha1.FederationV1alpha1Interface
 	NetworkingV1alpha1() networkingv1alpha1.NetworkingV1alpha1Interface
@@ -48,6 +50,7 @@ type Clientset struct {
 	*discovery.DiscoveryClient
 	appsV1alpha1         *appsv1alpha1.AppsV1alpha1Client
 	appsV1alpha2         *appsv1alpha2.AppsV1alpha2Client
+	appsV1alpha3         *appsv1alpha3.AppsV1alpha3Client
 	coreV1alpha1         *corev1alpha1.CoreV1alpha1Client
 	federationV1alpha1   *federationv1alpha1.FederationV1alpha1Client
 	networkingV1alpha1   *networkingv1alpha1.NetworkingV1alpha1Client
@@ -62,6 +65,11 @@ func (c *Clientset) AppsV1alpha1() appsv1alpha1.AppsV1alpha1Interface {
 // AppsV1alpha2 retrieves the AppsV1alpha2Client
 func (c *Clientset) AppsV1alpha2() appsv1alpha2.AppsV1alpha2Interface {
 	return c.appsV1alpha2
+}
+
+// AppsV1alpha3 retrieves the AppsV1alpha3Client
+func (c *Clientset) AppsV1alpha3() appsv1alpha3.AppsV1alpha3Interface {
+	return c.appsV1alpha3
 }
 
 // CoreV1alpha1 retrieves the CoreV1alpha1Client
@@ -136,6 +144,10 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 	if err != nil {
 		return nil, err
 	}
+	cs.appsV1alpha3, err = appsv1alpha3.NewForConfigAndClient(&configShallowCopy, httpClient)
+	if err != nil {
+		return nil, err
+	}
 	cs.coreV1alpha1, err = corev1alpha1.NewForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
 		return nil, err
@@ -175,6 +187,7 @@ func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.appsV1alpha1 = appsv1alpha1.New(c)
 	cs.appsV1alpha2 = appsv1alpha2.New(c)
+	cs.appsV1alpha3 = appsv1alpha3.New(c)
 	cs.coreV1alpha1 = corev1alpha1.New(c)
 	cs.federationV1alpha1 = federationv1alpha1.New(c)
 	cs.networkingV1alpha1 = networkingv1alpha1.New(c)

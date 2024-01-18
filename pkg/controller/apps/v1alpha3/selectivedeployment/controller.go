@@ -26,11 +26,11 @@ import (
 	"strings"
 	"time"
 
-	appsv1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha1"
+	appsv1alpha3 "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha3"
 	clientset "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned"
 	edgenetscheme "github.com/EdgeNet-project/edgenet/pkg/generated/clientset/versioned/scheme"
-	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha1"
-	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/apps/v1alpha1"
+	informers "github.com/EdgeNet-project/edgenet/pkg/generated/informers/externalversions/apps/v1alpha3"
+	listers "github.com/EdgeNet-project/edgenet/pkg/generated/listers/apps/v1alpha3"
 	"github.com/EdgeNet-project/edgenet/pkg/multiprovider"
 	"github.com/EdgeNet-project/edgenet/pkg/util"
 
@@ -160,8 +160,8 @@ func NewController(
 	selectivedeploymentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueSelectiveDeployment,
 		UpdateFunc: func(old, new interface{}) {
-			newSelectiveDeployment := new.(*appsv1alpha1.SelectiveDeployment)
-			oldSelectiveDeployment := old.(*appsv1alpha1.SelectiveDeployment)
+			newSelectiveDeployment := new.(*appsv1alpha3.SelectiveDeployment)
+			oldSelectiveDeployment := old.(*appsv1alpha3.SelectiveDeployment)
 			if newSelectiveDeployment.ResourceVersion == oldSelectiveDeployment.ResourceVersion {
 				return
 			}
@@ -181,9 +181,6 @@ func NewController(
 		},
 		DeleteFunc: controller.recoverSelectiveDeployments,
 	})
-
-	// TODO: There used to be the informers of the workloads. Do we want to implement the functionality:
-	// if the Deployment is deleted, recreate it?
 
 	return controller
 }
@@ -305,58 +302,6 @@ func (c *Controller) enqueueSelectiveDeployment(obj interface{}) {
 	c.workqueue.Add(key)
 }
 
-// enqueueSelectiveDeploymentAfter takes a SelectiveDeployment resource and converts it into a namespace/name
-// string which is then put onto the work queue after the expiry date to be deleted. This method should *not* be
-// passed resources of any type other than SelectiveDeployment.
-func (c *Controller) enqueueSelectiveDeploymentAfter(obj interface{}, after time.Duration) {
-	var key string
-	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		utilruntime.HandleError(err)
-		return
-	}
-	c.workqueue.AddAfter(key, after)
-}
-
-// handleObject will take any resource implementing metav1.Object and attempt
-// to find the SelectiveDeployment resource that 'owns' it. It does this by looking at the
-// objects metadata.ownerReferences field for an appropriate OwnerReference.
-// It then enqueues that SelectiveDeployment resource to be processed. If the object does not
-// have an appropriate OwnerReference, it will simply be skipped.
-func (c *Controller) handleObject(obj interface{}) {
-	var object metav1.Object
-	var ok bool
-	if object, ok = obj.(metav1.Object); !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
-			return
-		}
-		object, ok = tombstone.Obj.(metav1.Object)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
-			return
-		}
-		klog.Infof("Recovered deleted object '%s' from tombstone", object.GetName())
-	}
-	klog.Infof("Processing object: %s", object.GetName())
-	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
-		if ownerRef.Kind != "SelectiveDeployment" {
-			return
-		}
-
-		selectivedeployment, err := c.selectivedeploymentsLister.SelectiveDeployments(object.GetNamespace()).Get(ownerRef.Name)
-		if err != nil {
-			klog.Infof("ignoring orphaned object '%s' of selectivedeployment '%s'", object.GetSelfLink(), ownerRef.Name)
-			return
-		}
-
-		//c.enqueueSelectiveDeploymentAfter(selectivedeployment, 5*time.Minute)
-		c.enqueueSelectiveDeployment(selectivedeployment)
-		return
-	}
-}
-
 func (c *Controller) recoverSelectiveDeployments(obj interface{}) {
 	nodeCopy := obj.(*corev1.Node).DeepCopy()
 	if nodeCopy.GetDeletionTimestamp() != nil || multiprovider.GetConditionReadyStatus(nodeCopy) != trueStr || nodeCopy.Spec.Unschedulable {
@@ -460,12 +405,12 @@ func (c *Controller) getByNode(nodeName string) ([][]string, bool) {
 }
 
 // applyCriteria picks the nodes according to the selector
-func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment) {
+func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha3.SelectiveDeployment) {
 	oldStatus := selectivedeploymentCopy.Status
 	statusUpdate := func() {
 		// If the status is different then update it afte this function.s
 		if !reflect.DeepEqual(oldStatus, selectivedeploymentCopy.Status) {
-			c.edgenetclientset.AppsV1alpha1().SelectiveDeployments(selectivedeploymentCopy.GetNamespace()).UpdateStatus(context.TODO(), selectivedeploymentCopy, metav1.UpdateOptions{})
+			c.edgenetclientset.AppsV1alpha3().SelectiveDeployments(selectivedeploymentCopy.GetNamespace()).UpdateStatus(context.TODO(), selectivedeploymentCopy, metav1.UpdateOptions{})
 		}
 	}
 	defer statusUpdate()
@@ -727,7 +672,7 @@ func (c *Controller) applyCriteria(selectivedeploymentCopy *appsv1alpha1.Selecti
 }
 
 // configureWorkload converges the actual state to the desired state of the workloads defined in selective deployment
-func (c *Controller) configureWorkload(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment, actualPodTemplate, desiredPodTemplate corev1.PodTemplateSpec, ownerReferences []metav1.OwnerReference) (corev1.PodTemplateSpec, bool) {
+func (c *Controller) configureWorkload(selectivedeploymentCopy *appsv1alpha3.SelectiveDeployment, actualPodTemplate, desiredPodTemplate corev1.PodTemplateSpec, ownerReferences []metav1.OwnerReference) (corev1.PodTemplateSpec, bool) {
 	klog.Infoln("configureWorkload: start")
 
 	actualNodeSelectorTermList := corev1.NodeSelectorTerm{}
@@ -767,7 +712,7 @@ func (c *Controller) configureWorkload(selectivedeploymentCopy *appsv1alpha1.Sel
 }
 
 // setFilter generates the values in the predefined form and puts those into the node selection fields of the selectivedeployment object
-func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment, actualNodeSelectorTerm corev1.NodeSelectorTerm, event string) ([]corev1.NodeSelectorTerm, bool) {
+func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha3.SelectiveDeployment, actualNodeSelectorTerm corev1.NodeSelectorTerm, event string) ([]corev1.NodeSelectorTerm, bool) {
 	var nodeSelectorTermList []corev1.NodeSelectorTerm
 	isFailed := false
 
@@ -915,17 +860,17 @@ func (c *Controller) setFilter(selectivedeploymentCopy *appsv1alpha1.SelectiveDe
 }
 
 // SetAsOwnerReference returns the selectivedeployment as owner
-func SetAsOwnerReference(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment) []metav1.OwnerReference {
+func SetAsOwnerReference(selectivedeploymentCopy *appsv1alpha3.SelectiveDeployment) []metav1.OwnerReference {
 	// The following section makes selectivedeployment become the owner
 	ownerReferences := []metav1.OwnerReference{}
-	newRef := *metav1.NewControllerRef(selectivedeploymentCopy, appsv1alpha1.SchemeGroupVersion.WithKind("SelectiveDeployment"))
+	newRef := *metav1.NewControllerRef(selectivedeploymentCopy, appsv1alpha3.SchemeGroupVersion.WithKind("SelectiveDeployment"))
 	takeControl := true
 	newRef.Controller = &takeControl
 	ownerReferences = append(ownerReferences, newRef)
 	return ownerReferences
 }
 
-func checkOwnerReferences(selectivedeploymentCopy *appsv1alpha1.SelectiveDeployment, ownerReferences []metav1.OwnerReference) bool {
+func checkOwnerReferences(selectivedeploymentCopy *appsv1alpha3.SelectiveDeployment, ownerReferences []metav1.OwnerReference) bool {
 	underControl := false
 	for _, reference := range ownerReferences {
 		if reference.Kind == "SelectiveDeployment" && reference.UID != selectivedeploymentCopy.GetUID() {

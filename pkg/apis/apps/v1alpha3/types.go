@@ -1,5 +1,5 @@
 /*
-Copyright 2022 Contributors to the EdgeNet project.
+Copyright 2023 Contributors to the EdgeNet project.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,26 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha2
+package v1alpha3
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
+	batchv1beta "k8s.io/api/batch/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
-// Values of Status.State
-const (
-	StatusFailed         = "Failure"
-	StatusReconciliation = "Reconciliation"
-	// Selective Deployment
-	StatusSuccessful = "Successful"
-	StatusCreated    = "Created"
-)
-
-// Values of string constants subject to repetitive use
-const (
-	RemoteSelectiveDeploymentRole = "edgenet:federation:remoteselectivedeployment"
 )
 
 // +genclient
@@ -51,55 +39,58 @@ type SelectiveDeployment struct {
 	Status SelectiveDeploymentStatus `json:"status,omitempty"`
 }
 
-// SelectiveDeploymentSpec is the spec for a SelectiveDeployment resource
+// SelectiveDeploymentSpec is the spec for a SelectiveDeployment resource.
+// Selectors filter the nodes to be used for specified workloads.
 type SelectiveDeploymentSpec struct {
-	// Workload can be Deployment, Deamonset, StatefulSet, Job, or CronJob
+	// Workload can be Deployment, Deamonset, StatefulSet, Job, or CronJob.
 	Workloads Workloads `json:"workloads"`
-	// ClusterAffinity is the cluster affinity for the specified workloads
-	ClusterAffinity *metav1.LabelSelector `json:"clusterAffinity,omitempty"`
-	// ClusterReplicas is the number of clusters per location
-	ClusterReplicas int `json:"clusterReplicas,omitempty"`
+	// List of Selector resources. Each selector filters the nodes with the
+	// requested method.
+	Selector []Selector `json:"selector"`
+	// If true, selective deployment tries to find another suitable
+	// node to run the workload in case of a node goes down.
+	Recovery bool `json:"recovery"`
 }
 
-// Workloads indicates deployments, daemonsets, statefulsets, jobs, or cronjobs
+// Workloads indicates deployments, daemonsets, statefulsets, jobs, or cronjobs.
 type Workloads struct {
-	// Workload can have a list of Deployments
+	// Workload can have a list of Deployments.
 	Deployment []appsv1.Deployment `json:"deployment"`
-	// Workload can have a list of DaemonSets
+	// Workload can have a list of DaemonSets.
 	DaemonSet []appsv1.DaemonSet `json:"daemonset"`
-	// Workload can have a list of StatefulSets
+	// Workload can have a list of StatefulSets.
 	StatefulSet []appsv1.StatefulSet `json:"statefulset"`
-	// Workload can have a list of Jobs
+	// Workload can have a list of Jobs.
 	Job []batchv1.Job `json:"job"`
-	// Workload can have a list of CronJobs
-	CronJob []batchv1.CronJob `json:"cronjob"`
+	// Workload can have a list of CronJobs.
+	CronJob []batchv1beta.CronJob `json:"cronjob"`
+}
+
+// Selector to define desired node filtering parameters
+type Selector struct {
+	// Name of the selector. This can be City, State, Country, Continent, or Polygon
+	Name string `json:"name"`
+	// Value of the selector. For example; if the name of the selector is 'City'
+	// then the value can be the city name. For example; if the name of
+	// the selector is 'Polygon' then the value can be the GeoJSON representation of the polygon.
+	Value []string `json:"value"`
+	// Operator means basic mathematical operators such as 'In', 'NotIn', 'Exists', 'NotExsists' etc...
+	Operator corev1.NodeSelectorOperator `json:"operator"`
+	// Quantity represents number of nodes on which the workloads will be running.
+	Quantity int `json:"quantity"`
 }
 
 // SelectiveDeploymentStatus is the status for a SelectiveDeployment resource
 type SelectiveDeploymentStatus struct {
-	// Represents state of the selective deployment
+	// Ready string denotes number of workloads running filtered by the SelectiveDeployments.
+	// The string is 'x/y' if x instances are running and y instances are requested.
+	Ready string `json:"ready"`
+	// Represents state of the selective deployment. This can be 'Failure' if none
+	// of the workloads are deployed. 'Partial' if some of the the workloads
+	// are deployed. 'Success' if all of the workloads are deployed.
 	State string `json:"state"`
-	// Extended status message
+	// There can be multiple display messages for state description.
 	Message string `json:"message"`
-	// Clusters is the list of clusters where the workloads are deployed
-	Clusters map[string]WorkloadClusterStatus `json:"clusters"`
-	// Failed sets the backoff limit.
-	Failed int `json:"failed"`
-}
-
-// Denotes the status of an individual cluster
-type WorkloadClusterStatus struct {
-	Server    string         `json:"server"`
-	Location  string         `json:"location"`
-	Workloads WorkloadStatus `json:"workloads"`
-}
-
-type WorkloadStatus struct {
-	Deployment  map[string]string `json:"deployment"`
-	DaemonSet   map[string]string `json:"daemonset"`
-	StatefulSet map[string]string `json:"statefulset"`
-	Job         map[string]string `json:"job"`
-	CronJob     map[string]string `json:"cronjob"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -113,9 +104,4 @@ type SelectiveDeploymentList struct {
 	// SelectiveDeploymentList is a list of SelectiveDeployment resources thus,
 	// SelectiveDeployments are contained here.
 	Items []SelectiveDeployment `json:"items"`
-}
-
-// MakeOwnerReference creates an owner reference for the given object.
-func (s SelectiveDeployment) MakeOwnerReference() metav1.OwnerReference {
-	return *metav1.NewControllerRef(&s.ObjectMeta, SchemeGroupVersion.WithKind("SelectiveDeployment"))
 }
