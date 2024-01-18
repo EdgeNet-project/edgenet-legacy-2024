@@ -1,5 +1,5 @@
 /*
-Copyright The Kubernetes Authors.
+Copyright 2023 Contributors to the EdgeNet project.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/apps/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakeSelectiveDeployments struct {
 	ns   string
 }
 
-var selectivedeploymentsResource = schema.GroupVersionResource{Group: "apps.edgenet.io", Version: "v1alpha1", Resource: "selectivedeployments"}
+var selectivedeploymentsResource = v1alpha1.SchemeGroupVersion.WithResource("selectivedeployments")
 
-var selectivedeploymentsKind = schema.GroupVersionKind{Group: "apps.edgenet.io", Version: "v1alpha1", Kind: "SelectiveDeployment"}
+var selectivedeploymentsKind = v1alpha1.SchemeGroupVersion.WithKind("SelectiveDeployment")
 
 // Get takes name of the selectiveDeployment, and returns the corresponding selectiveDeployment object, and an error if there is any.
 func (c *FakeSelectiveDeployments) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.SelectiveDeployment, err error) {
@@ -117,7 +116,7 @@ func (c *FakeSelectiveDeployments) UpdateStatus(ctx context.Context, selectiveDe
 // Delete takes name of the selectiveDeployment and deletes it. Returns an error if one occurs.
 func (c *FakeSelectiveDeployments) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(selectivedeploymentsResource, c.ns, name), &v1alpha1.SelectiveDeployment{})
+		Invokes(testing.NewDeleteActionWithOptions(selectivedeploymentsResource, c.ns, name, opts), &v1alpha1.SelectiveDeployment{})
 
 	return err
 }

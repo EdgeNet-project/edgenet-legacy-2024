@@ -1,5 +1,5 @@
 /*
-Copyright The Kubernetes Authors.
+Copyright 2023 Contributors to the EdgeNet project.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/core/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -35,9 +34,9 @@ type FakeTenantResourceQuotas struct {
 	Fake *FakeCoreV1alpha1
 }
 
-var tenantresourcequotasResource = schema.GroupVersionResource{Group: "core.edgenet.io", Version: "v1alpha1", Resource: "tenantresourcequotas"}
+var tenantresourcequotasResource = v1alpha1.SchemeGroupVersion.WithResource("tenantresourcequotas")
 
-var tenantresourcequotasKind = schema.GroupVersionKind{Group: "core.edgenet.io", Version: "v1alpha1", Kind: "TenantResourceQuota"}
+var tenantresourcequotasKind = v1alpha1.SchemeGroupVersion.WithKind("TenantResourceQuota")
 
 // Get takes name of the tenantResourceQuota, and returns the corresponding tenantResourceQuota object, and an error if there is any.
 func (c *FakeTenantResourceQuotas) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.TenantResourceQuota, err error) {
@@ -110,7 +109,7 @@ func (c *FakeTenantResourceQuotas) UpdateStatus(ctx context.Context, tenantResou
 // Delete takes name of the tenantResourceQuota and deletes it. Returns an error if one occurs.
 func (c *FakeTenantResourceQuotas) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(tenantresourcequotasResource, name), &v1alpha1.TenantResourceQuota{})
+		Invokes(testing.NewRootDeleteActionWithOptions(tenantresourcequotasResource, name, opts), &v1alpha1.TenantResourceQuota{})
 	return err
 }
 

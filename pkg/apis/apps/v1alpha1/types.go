@@ -1,5 +1,5 @@
 /*
-Copyright 2021 Contributors to the EdgeNet project.
+Copyright 2023 Contributors to the EdgeNet project.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -66,7 +66,9 @@ type Workloads struct {
 	CronJob []batchv1beta.CronJob `json:"cronjob"`
 }
 
-// Selector to define desired node filtering parameters
+// Selector to define desired node filtering parameters.
+// TODO: In the future we might want to add custom sectorization? this is already doable
+// with LabelSelector
 type Selector struct {
 	// Name of the selector. This can be City, State, Country, Continent, or Polygon
 	Name string `json:"name"`

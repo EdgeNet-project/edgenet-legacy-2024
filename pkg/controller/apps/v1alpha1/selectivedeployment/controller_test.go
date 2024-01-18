@@ -2,7 +2,7 @@ package selectivedeployment
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"testing"
@@ -46,9 +46,9 @@ var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
 
 func TestMain(m *testing.M) {
-	klog.SetOutput(ioutil.Discard)
-	log.SetOutput(ioutil.Discard)
-	logrus.SetOutput(ioutil.Discard)
+	klog.SetOutput(io.Discard)
+	log.SetOutput(io.Discard)
+	logrus.SetOutput(io.Discard)
 
 	stopCh := signals.SetupSignalHandler()
 
@@ -600,6 +600,7 @@ func TestCreate(t *testing.T) {
 		log.Println(workload)
 	}
 	sdCopy, err := edgenetclientset.AppsV1alpha1().SelectiveDeployments("create").Get(context.TODO(), sdObj.GetName(), metav1.GetOptions{})
+	time.Sleep(time.Millisecond * 500)
 	t.Run("status", func(t *testing.T) {
 		util.OK(t, err)
 		util.Equals(t, success, sdCopy.Status.State)

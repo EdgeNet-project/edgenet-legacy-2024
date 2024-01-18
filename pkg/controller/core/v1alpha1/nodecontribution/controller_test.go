@@ -2,7 +2,7 @@ package nodecontribution
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"testing"
@@ -37,9 +37,9 @@ var kubeclientset kubernetes.Interface = testclient.NewSimpleClientset()
 var edgenetclientset versioned.Interface = edgenettestclient.NewSimpleClientset()
 
 func TestMain(m *testing.M) {
-	klog.SetOutput(ioutil.Discard)
-	log.SetOutput(ioutil.Discard)
-	logrus.SetOutput(ioutil.Discard)
+	klog.SetOutput(io.Discard)
+	log.SetOutput(io.Discard)
+	logrus.SetOutput(io.Discard)
 
 	stopCh := signals.SetupSignalHandler()
 

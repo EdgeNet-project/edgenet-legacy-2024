@@ -1,3 +1,5 @@
+# When initially cloned the project, run make sync to download the libraries. 
+# Then run the 
 GOCMD=go
 GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
@@ -12,46 +14,48 @@ GIT_VERSION:=$(or \
 )
 .PHONY: build
 
-sync:
-	$(GOCLEAN) --modcache
-	$(GOMOD)
-
-all:
-	GO111MODULE=on GOBIN=${GOPATH}/bin go install -mod=vendor \
-		-gcflags="all=-trimpath=$GOPATH" \
-		-asmflags="all=-trimpath=$GOPATH" \
-		-ldflags="-X github.com/EdgeNet-Project/edgenet.CurrentVersion=$(GIT_VERSION)" \
-		./cmd/...
-
+# DO NOT MAUALLY RUN
+# This is for github actions.
 bootstrap:
-	mkdir ${HOME}/.kube
+	mkdir -p ${HOME}/.kube
 	cp ./configs/public.cfg ${HOME}/.kube/config
 	cp ./configs/smtp_test_template.yaml ./configs/smtp_test.yaml
 	cp ./configs/headnode_template.yaml ./configs/headnode.yaml
 	cp ./configs/namecheap_template.yaml ./configs/namecheap.yaml
 
+fedmanctl:
+	$(GOCMD) install ./cmd/fedmanctl/fedmanctl.go  
+
+gen:
+	./hack/update-codegen.sh 
+	
+sync:
+	$(GOCLEAN) --modcache
+	$(GOMOD)
+
 test:
-	$(GOCLEAN) -testcache ./...
-	$(GOTEST) -covermode atomic ./... -v
-	find ./assets/certs ! -name 'README.md' -type f -exec rm -f {} +
-	find ./assets/kubeconfigs ! -name 'README.md' -type f -exec rm -f {} +
+	cp ./configs/smtp_test_template.yaml ./configs/smtp_test.yaml
+	cp ./configs/headnode_template.yaml ./configs/headnode.yaml
+	cp ./configs/namecheap_template.yaml ./configs/namecheap.yaml
+	$(GOCLEAN) -testcache
+	$(GOTEST) -covermode atomic ./...
 
 build:
-	docker-compose -f ./build/yamls/docker-compose.yml build
+	docker-compose -f ./build/yamls/docker-compose.yaml build
 
 rebuild: stop clean build start
 
 start: build
-	docker-compose -f ./build/yamls/docker-compose.yml up -d
+	docker-compose -f ./build/yamls/docker-compose.yaml up -d
 
 run:
-	docker-compose -f ./build/yamls/docker-compose.yml up -d
+	docker-compose -f ./build/yamls/docker-compose.yaml up -d
 
 stop:
-	docker-compose -f ./build/yamls/docker-compose.yml down
+	docker-compose -f ./build/yamls/docker-compose.yaml down
 
 clean:
-	docker-compose -f ./build/yamls/docker-compose.yml down --rmi all
+	docker-compose -f ./build/yamls/docker-compose.yaml down --rmi all
 	$(GOCLEAN)
 
 lint:

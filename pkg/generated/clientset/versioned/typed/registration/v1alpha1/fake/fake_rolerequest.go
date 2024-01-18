@@ -1,5 +1,5 @@
 /*
-Copyright The Kubernetes Authors.
+Copyright 2023 Contributors to the EdgeNet project.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/EdgeNet-project/edgenet/pkg/apis/registration/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakeRoleRequests struct {
 	ns   string
 }
 
-var rolerequestsResource = schema.GroupVersionResource{Group: "registration.edgenet.io", Version: "v1alpha1", Resource: "rolerequests"}
+var rolerequestsResource = v1alpha1.SchemeGroupVersion.WithResource("rolerequests")
 
-var rolerequestsKind = schema.GroupVersionKind{Group: "registration.edgenet.io", Version: "v1alpha1", Kind: "RoleRequest"}
+var rolerequestsKind = v1alpha1.SchemeGroupVersion.WithKind("RoleRequest")
 
 // Get takes name of the roleRequest, and returns the corresponding roleRequest object, and an error if there is any.
 func (c *FakeRoleRequests) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.RoleRequest, err error) {
@@ -117,7 +116,7 @@ func (c *FakeRoleRequests) UpdateStatus(ctx context.Context, roleRequest *v1alph
 // Delete takes name of the roleRequest and deletes it. Returns an error if one occurs.
 func (c *FakeRoleRequests) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(rolerequestsResource, c.ns, name), &v1alpha1.RoleRequest{})
+		Invokes(testing.NewDeleteActionWithOptions(rolerequestsResource, c.ns, name, opts), &v1alpha1.RoleRequest{})
 
 	return err
 }

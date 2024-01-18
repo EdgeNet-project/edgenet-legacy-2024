@@ -109,19 +109,26 @@ func (m *Manager) PrepareSecretForRemoteCluster(name, namespace, clusterUID, rem
 	return remoteSecret, false, nil
 }
 
-// GetServerAddress retrieves the server address of the cluster from a control plane node
+// GetServerAddress retrieves the server address of the cluster from a control plane node. The
+// node can be any node that responds with the location and ip address. Returns empty if cannot find.
+// address example "192.168.0.1:8443"
+// location example "France/Paris"
 func (m *Manager) GetClusterAddressWithLocation() (string, string) {
 	// TODO: This part needs to be changed to support multiple control plane nodes
 	var address string
 	var location string
+
+	// Retrieve all the control-plane nodes
 	nodeRaw, _ := m.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/control-plane"})
+
+	// Get the node
 	for _, node := range nodeRaw.Items {
 		if internal, external := GetNodeIPAddresses(node.DeepCopy()); external == "" && internal == "" {
 			continue
 		} else if external != "" {
-			address = external + ":8443"
+			address = external + ":8443" // TODO: The API server address might be different than this
 		} else {
-			address = internal + ":8443"
+			address = internal + ":8443" // TODO: The API server address might be different than this
 		}
 		labels := node.GetLabels()
 		location = fmt.Sprintf("%s/%s", labels["edge-net.io/country"], labels["edge-net.io/city"])
