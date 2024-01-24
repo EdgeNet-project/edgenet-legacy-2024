@@ -258,14 +258,17 @@ func (c *Controller) enqueueClusterAfter(obj interface{}, after time.Duration) {
 }
 
 func (c *Controller) processCluster(clusterCopy *federationv1alpha1.Cluster) {
-	// Crashloop backoff limit to avoid endless loop
+	// Crashloop backoff limit to avoid endless loop, do not process if the resource exceeds resource backup limit
 	if clusterCopy.Status.UpdateTimestamp != nil && clusterCopy.Status.UpdateTimestamp.Add(24*time.Hour).After(time.Now()) {
 		if exceedsBackoffLimit := clusterCopy.Status.Failed >= backoffLimit; exceedsBackoffLimit {
 			return
 		}
 	}
 
+	// Create a new multitenancy manager
 	multitenancyManager := multitenancy.NewManager(c.kubeclientset, c.edgenetclientset)
+
+	// Check if the namespace is imported from the remote cluster
 	permitted, _, namespaceLabels := multitenancyManager.EligibilityCheck(clusterCopy.GetNamespace())
 	if permitted {
 		propagationNamespace := fmt.Sprintf(federationv1alpha1.FederationManagerNamespace, namespaceLabels["edge-net.io/cluster-uid"])

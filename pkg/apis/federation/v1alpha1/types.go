@@ -72,12 +72,15 @@ type ClusterSpec struct {
 	UID string `json:"uid"`
 	// Role can be 'Workload', 'Manager', or 'Peer'
 	Role string `json:"role"`
-	// Server is the API server of the cluster
+	// Server is the API server of the cluster, only IPv4 is supported for now.
+	// TODO: This needs to be a list of ip addresses
 	Server string `json:"server"`
-	// Preferences is to empower resource owners to set allowlist and denylist
+	// Preferences is to empower resource owners to set allowlist and denylist. NOT USED
 	Preferences ClusterPreferences `json:"preferences"`
-	// Visibility can be 'Public' or 'Private'
+
+	// Visibility can be 'Public' or 'Private', NOT USED
 	Visibility string `json:"visibility"`
+
 	// SecretName is the name of the secret that contains the token to access the cluster
 	SecretName string `json:"secretName"`
 	// Enabled is to open or close the cluster to the federation
@@ -98,7 +101,13 @@ type ClusterStatus struct {
 	State string `json:"state"`
 	// Additional description can be located here.
 	Message string `json:"message"`
-	// RelativeResourceAvailability indicates the status of available resources in the cluster
+	// RelativeResourceAvailability indicates the status of available resources in the cluster.
+	// There are four levels of relative resource availability: abundant, normal, limited, scarce.
+	// The relative resource availability is calculated based on the ratio of consumed resources to capacity resources.
+	// 0%  - 15%  -> Scarce
+	// 15% - 35%  -> Limited
+	// 35% - 50%  -> Normal
+	// 50% - 100% -> Abundant
 	RelativeResourceAvailability string `json:"relativeResourceAvailability"`
 	// AllocatableResources is the list of grouped allocatable resources in the cluster
 	AllocatableResources []BundledAllocatableResources `json:"allocatableResources"`

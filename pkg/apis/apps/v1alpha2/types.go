@@ -75,9 +75,16 @@ type Workloads struct {
 	CronJob []batchv1.CronJob `json:"cronjob"`
 }
 
+// StatusFailed         = "Failure"
+// StatusReconciliation = "Reconciliation"
+// // Selective Deployment
+// StatusSuccessful = "Successful"
+// StatusCreated    = "Created"
+
 // SelectiveDeploymentStatus is the status for a SelectiveDeployment resource
 type SelectiveDeploymentStatus struct {
-	// Represents state of the selective deployment
+	// Represents state of the selective deployment, they can be
+	// "Failure", "Reconciliation", "Successful", "Created"
 	State string `json:"state"`
 	// Extended status message
 	Message string `json:"message"`

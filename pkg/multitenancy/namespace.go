@@ -49,7 +49,10 @@ func (m *Manager) EligibilityCheck(objNamespace string) (bool, *corev1.Namespace
 		return false, nil, nil
 	}
 	namespaceLabels := namespace.GetLabels()
+
+	// If the namespace contains the clster-id label
 	if namespaceLabels["edge-net.io/cluster-uid"] != "" {
+		// 
 		if systemNamespace.GetUID() == types.UID(namespaceLabels["edge-net.io/cluster-uid"]) {
 			tenant, err := m.edgenetclientset.CoreV1alpha1().Tenants().Get(context.TODO(), strings.ToLower(namespaceLabels["edge-net.io/tenant"]), metav1.GetOptions{})
 			if err != nil {
