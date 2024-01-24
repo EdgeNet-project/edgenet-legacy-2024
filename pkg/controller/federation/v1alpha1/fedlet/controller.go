@@ -216,12 +216,12 @@ func (c *Controller) updateClusterResourceStatus() {
 	overallCapacityResources := make(corev1.ResourceList)
 	// Below is the logic to calculate the total allocatable resources and total capacity resources of all nodes in the cluster.
 	// It also prepares the bundledAllocatableResourcesList.
-	nodeRaw, _ := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/access=public,edge-net.io/access-scope=federation"})
-	if len(nodeRaw.Items) == 0 {
+	nodesRaw, _ := c.kubeclientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "edge-net.io/access=public,edge-net.io/access-scope=federation"})
+	if len(nodesRaw.Items) == 0 {
 		return
 	}
-	for _, nodeRow := range nodeRaw.Items {
-		for key, value := range nodeRow.Status.Allocatable {
+	for _, nodeRaw := range nodesRaw.Items {
+		for key, value := range nodeRaw.Status.Allocatable {
 			if allocatableQuantity, ok := overallAllocatableResources[key]; ok {
 				allocatableQuantity.Add(value)
 				overallAllocatableResources[key] = *resource.NewQuantity(allocatableQuantity.Value(), value.Format)
@@ -231,17 +231,17 @@ func (c *Controller) updateClusterResourceStatus() {
 		}
 		if len(bundledAllocatableResourcesList) > 0 {
 			for key, bundledAllocatableResources := range bundledAllocatableResourcesList {
-				if reflect.DeepEqual(bundledAllocatableResources, nodeRow.Status.Allocatable) {
+				if reflect.DeepEqual(bundledAllocatableResources, nodeRaw.Status.Allocatable) {
 					bundledAllocatableResourcesList[key].Count++
 					break
 				} else {
-					bundledAllocatableResourcesList = append(bundledAllocatableResourcesList, federationv1alpha1.BundledAllocatableResources{Count: 1, ResourceList: nodeRow.Status.Allocatable})
+					bundledAllocatableResourcesList = append(bundledAllocatableResourcesList, federationv1alpha1.BundledAllocatableResources{Count: 1, ResourceList: nodeRaw.Status.Allocatable})
 				}
 			}
 		} else {
-			bundledAllocatableResourcesList = append(bundledAllocatableResourcesList, federationv1alpha1.BundledAllocatableResources{Count: 1, ResourceList: nodeRow.Status.Allocatable})
+			bundledAllocatableResourcesList = append(bundledAllocatableResourcesList, federationv1alpha1.BundledAllocatableResources{Count: 1, ResourceList: nodeRaw.Status.Allocatable})
 		}
-		for key, value := range nodeRow.Status.Capacity {
+		for key, value := range nodeRaw.Status.Capacity {
 			if capacityQuantity, ok := overallCapacityResources[key]; ok {
 				capacityQuantity.Add(value)
 				overallCapacityResources[key] = *resource.NewQuantity(capacityQuantity.Value(), value.Format)

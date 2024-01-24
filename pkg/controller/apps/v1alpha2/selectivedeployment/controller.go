@@ -412,7 +412,10 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 		switch selectivedeploymentCopy.Status.State {
 		case appsv1alpha2.StatusCreated:
 			annotations := selectivedeploymentCopy.GetAnnotations()
+
+			// If the selective deployment has the annotation as follower
 			if value, ok := annotations["edge-net.io/selective-deployment"]; ok && value == "follower" {
+				// Prepare the multi provider manager
 				multiproviderManager, _, ok := c.prepareMultiProviderManager(selectivedeploymentCopy.GetNamespace(), annotations["edge-net.io/origin-selective-deployment-uid"])
 				if !ok {
 					c.recorder.Event(selectivedeploymentCopy, corev1.EventTypeWarning, appsv1alpha2.StatusReconciliation, messageCredsFailed)
@@ -427,6 +430,7 @@ func (c *Controller) processSelectiveDeployment(selectivedeploymentCopy *appsv1a
 					c.updateStatus(context.TODO(), selectivedeploymentCopy, appsv1alpha2.StatusReconciliation, messageWorkloadDeploymentFailed)
 					return
 				}
+				// Get the address location
 				address, location := multiproviderManager.GetClusterAddressWithLocation()
 				workloadClusterStatus.Location = location
 				workloadClusterStatus.Server = address
