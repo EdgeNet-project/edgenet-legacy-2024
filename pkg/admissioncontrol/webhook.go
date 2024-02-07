@@ -319,12 +319,15 @@ func (wh *Webhook) validateTenantRequest(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	if admissionReviewRequest.Request.UserInfo.Username != tenantrequest.Spec.Contact.Email {
-		admissionResponse.Allowed = false
-		admissionResponse.Result = &metav1.Status{
-			Message: "username, which is an email address, and contact email address must be the same",
-		}
-	}
+	// TenantRequest object can't be created by an tuhenticated user (API returns 403)
+	// When using an admin account this code won't allow the creation as the email of the admin != email of user
+	// TOFIX: User should have proper permissions
+	//if admissionReviewRequest.Request.UserInfo.Username != tenantrequest.Spec.Contact.Email {
+	//	admissionResponse.Allowed = false
+	//	admissionResponse.Result = &metav1.Status{
+	//		Message: "username, which is an email address, and contact email address must be the same",
+	//	}
+	//}
 
 	var admissionReviewResponse admissionv1.AdmissionReview
 	admissionReviewResponse.Response = admissionResponse
